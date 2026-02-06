@@ -34,6 +34,17 @@ func (r *InmemUserRepository) SaveUser(ctx context.Context, user *model.User) er
 	return r.update(ctx, user)
 }
 
+func (r *InmemUserRepository) GetUser(ctx context.Context, id int64) (*model.User, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	u, ok := r.users[id]
+	if !ok {
+		return nil, nil
+	}
+	return u, nil
+}
+
 func (r *InmemUserRepository) create(_ context.Context, u *model.User) error {
 	u.ID = r.nextID
 	r.nextID++

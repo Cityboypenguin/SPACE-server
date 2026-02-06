@@ -1,13 +1,8 @@
-# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
-
 scalar DateTime
 
 type User {
   id: ID!
   name: String!
-  email: String!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -19,6 +14,7 @@ input signUpInput {
 type Query {
   hello: String!
   users: [User!]!
+  user(id: ID!): User
 }
 
 type Mutation {

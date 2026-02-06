@@ -23,8 +23,8 @@ func (r *mutationResolver) SignUp(ctx context.Context, in model.SignUpInput) (*m
 	return &model.User{
 		ID:        strconv.FormatInt(u.ID, 10),
 		Name:      u.Name,
-		CreatedAt: u.CreatedAt.String(),
-		UpdatedAt: u.CreatedAt.String(),
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
 	}, nil
 }
 
@@ -36,6 +36,25 @@ func (r *queryResolver) Hello(ctx context.Context) (string, error) {
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	panic(fmt.Errorf("not implemented: Users - users"))
+}
+
+// User is the resolver for the user field.
+func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
+	userID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %w", err)
+	}
+
+	u, err := r.GetUserUseCase.Execute(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+	return &model.User{
+		ID:        strconv.FormatInt(u.ID, 10),
+		Name:      u.Name,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}, nil
 }
 
 // Mutation returns MutationResolver implementation.
