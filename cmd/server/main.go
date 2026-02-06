@@ -1,15 +1,24 @@
 package main
 
 import (
+	"os"
+
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/Cityboypenguin/SPACE-server/graph"
+	"github.com/Cityboypenguin/SPACE-server/infra/inmem"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	e := echo.New()
 
 	// middleware
@@ -21,17 +30,28 @@ func main() {
 		return c.String(200, "test message: Hello from SPACE Server!")
 	})
 
+	userRepo := inmem.NewInmemUserRepository()
+	resolver := &graph.Resolver{
+		SignUpUseCase: &user.SignUpInteractor{
+			UserRepository: userRepo,
+		},
+	}
+
 	// GraphQL server
 	gqlServer := handler.NewDefaultServer(
 		graph.NewExecutableSchema(
 			graph.Config{
-				Resolvers: &graph.Resolver{},
+				Resolvers: resolver,
 			},
 		),
 	)
 
 	// GraphQL エンドポイント
 	e.POST("/query", func(c echo.Context) error {
+		gqlServer.ServeHTTP(c.Response(), c.Request())
+		return nil
+	})
+	e.GET("/query", func(c echo.Context) error {
 		gqlServer.ServeHTTP(c.Response(), c.Request())
 		return nil
 	})
@@ -44,7 +64,9 @@ func main() {
 	})
 
 	hub := sse.NewHub()
+
 	// SSE
 	e.GET("/events", sse.NewHandler(hub))
-	e.Logger.Fatal(e.Start(":8080"))
+
+	e.Logger.Fatal(e.Start(":" + port))
 }
