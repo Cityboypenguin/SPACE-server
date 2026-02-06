@@ -38,6 +38,9 @@ func main() {
 		GetUserUseCase: &user.GetUserInteractor{
 			UserRepository: userRepo,
 		},
+		GetUsersUseCase: &user.GetUsersInteractor{
+			UserRepository: userRepo,
+		},
 	}
 
 	// GraphQL server

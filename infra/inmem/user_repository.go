@@ -45,6 +45,17 @@ func (r *InmemUserRepository) GetUser(ctx context.Context, id int64) (*model.Use
 	return u, nil
 }
 
+func (r *InmemUserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	var userList []*model.User
+	for _, u := range r.users {
+		userList = append(userList, u)
+	}
+	return userList, nil
+}
+
 func (r *InmemUserRepository) create(_ context.Context, u *model.User) error {
 	u.ID = r.nextID
 	r.nextID++

@@ -8,6 +8,7 @@ import "github.com/Cityboypenguin/SPACE-server/usecase/user"
 // here.
 
 type Resolver struct {
-	SignUpUseCase  user.SignUpUseCase
-	GetUserUseCase user.GetUserUseCase
+	SignUpUseCase   user.SignUpUseCase
+	GetUserUseCase  user.GetUserUseCase
+	GetUsersUseCase user.GetUsersUseCase
 }

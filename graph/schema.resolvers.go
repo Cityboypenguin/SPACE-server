@@ -35,7 +35,21 @@ func (r *queryResolver) Hello(ctx context.Context) (string, error) {
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	panic(fmt.Errorf("not implemented: Users - users"))
+	users, err := r.GetUsersUseCase.Execute(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %w", err)
+	}
+
+	var result []*model.User
+	for _, u := range users {
+		result = append(result, &model.User{
+			ID:        strconv.FormatInt(u.ID, 10),
+			Name:      u.Name,
+			CreatedAt: u.CreatedAt,
+			UpdatedAt: u.UpdatedAt,
+		})
+	}
+	return result, nil
 }
 
 // User is the resolver for the user field.
