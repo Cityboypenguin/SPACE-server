@@ -16,6 +16,11 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
+	// テスト用エンドポイント
+	e.GET("/", func(c echo.Context) error {
+		return c.String(200, "test message: Hello from SPACE Server!")
+	})
+
 	// GraphQL server
 	gqlServer := handler.NewDefaultServer(
 		graph.NewExecutableSchema(
