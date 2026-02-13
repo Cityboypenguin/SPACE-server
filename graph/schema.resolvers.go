@@ -8,37 +8,95 @@ package graph
 import (
 	"context"
 	"fmt"
-	"math/rand"
 
 	"github.com/Cityboypenguin/SPACE-server/graph/model"
 )
 
-// ★修正1： mを1つにしました
-var usersMemory = []*model.User{}
-
+// CreateAccount is the resolver for the createAccount field.
 // CreateAccount is the resolver for the createAccount field.
 func (r *mutationResolver) CreateAccount(ctx context.Context, name string, email string) (*model.User, error) {
-	// 1. ユーザーの入れ物を作る
+	// 1. 新しいID番号を決める（今いる人数 + 1）
+	newIDNumber := len(usersMemory) + 1
+
+	// 2. IDを作る (U + 3桁の数字)
+	// %03d は「3桁になるように0埋めする」という意味
+	newID := fmt.Sprintf("U%03d", newIDNumber)
+
+	// 3. ユーザーの入れ物を作る
 	user := &model.User{
-		ID:    fmt.Sprintf("T%d", rand.Intn(10000)), // 適当なID (例: T1234)
+		ID:    newID, // ここに作ったIDを入れる
 		Name:  name,
 		Email: email,
 	}
 
-	// ★修正2： コメントアウト(//)を外して、mを1つにしました
+	// 4. メモリに保存する
 	usersMemory = append(usersMemory, user)
 
-	// 3. ログに出してみる（ターミナルで確認用）
-	fmt.Printf("ユーザーを作成しました: %s (Email: %s)\n", user.Name, user.Email)
+	// 5. ログに出してみる
+	fmt.Printf("ユーザーを作成しました: %s (ID: %s)\n", user.Name, user.ID)
 
-	// 4. 作ったユーザーを返す
 	return user, nil
+}
+
+// UpdateName is the resolver for the updateName field.
+func (r *mutationResolver) UpdateName(ctx context.Context, id string, newName string) (*model.User, error) {
+	// 1. usersMemoryの中から対象の人を探す
+	for _, u := range usersMemory {
+		if u.ID == id {
+			// 2. 見つかったら、名前を書き換える！
+			u.Name = newName
+
+			// 3. ログを出して確認
+			fmt.Printf("名前を更新しました: ID=%s, NewName=%s\n", id, newName)
+
+			// 4. 更新後のデータを返す
+			return u, nil
+		}
+	}
+
+	// 見つからなかった場合
+	return nil, fmt.Errorf("ユーザー（ID: %s）が見つからないため更新できませんでした", id)
+}
+
+// UpdateEmail is the resolver for the updateEmail field.
+func (r *mutationResolver) UpdateEmail(ctx context.Context, id string, newEmail string) (*model.User, error) {
+	// 1. usersMemoryの中から対象の人を探す
+	for _, u := range usersMemory {
+		if u.ID == id {
+			// 2. 見つかったら、名前を書き換える！
+			u.Email = newEmail
+
+			// 3. ログを出して確認
+			fmt.Printf("メールアドレスを更新しました: ID=%s, NewName=%s\n", id, newEmail)
+
+			// 4. 更新後のデータを返す
+			return u, nil
+		}
+	}
+
+	// 見つからなかった場合
+	return nil, fmt.Errorf("ユーザー（ID: %s）が見つからないため更新できませんでした", id)
 }
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	// ★ここも mは1つでOK
 	return usersMemory, nil
+}
+
+// User is the resolver for the user field.
+func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
+	// 1. usersMemory（冷蔵庫）を一人ずつ確認する
+	for _, u := range usersMemory {
+		// 2. もし、探しているIDと一致する人がいたら
+		if u.ID == id {
+			// その人を返して終了！
+			return u, nil
+		}
+	}
+
+	// 3. 全員見てもいなかったら、エラーを返す
+	return nil, fmt.Errorf("指定されたID（%s）のユーザーは見つかりませんでした", id)
 }
 
 // Mutation returns MutationResolver implementation.

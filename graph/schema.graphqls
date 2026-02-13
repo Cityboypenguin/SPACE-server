@@ -8,8 +8,12 @@ type User {
 
 type Query {
   users: [User!]!
+  #IDを渡すと、User(もしくはnil)を返す
+  user(id: ID!): User
 }
 
 type Mutation {
   createAccount(name: String!, email: String!): User!
+  updateName(id: ID!, newName: String!): User!
+  updateEmail(id: ID! newEmail: String!): User!
 }
