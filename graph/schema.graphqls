@@ -16,4 +16,6 @@ type Mutation {
   createAccount(name: String!, email: String!): User!
   updateName(id: ID!, newName: String!): User!
   updateEmail(id: ID! newEmail: String!): User!
+  #IDを渡すと、削除が成功or失敗を返す(Boolean)
+  deleteAccount(id: ID!): Boolean!
 }

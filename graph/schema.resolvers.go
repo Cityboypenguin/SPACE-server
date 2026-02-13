@@ -78,6 +78,34 @@ func (r *mutationResolver) UpdateEmail(ctx context.Context, id string, newEmail 
 	return nil, fmt.Errorf("ユーザー（ID: %s）が見つからないため更新できませんでした", id)
 }
 
+// DeleteAccount is the resolver for the deleteAccount field.
+// DeleteAccount is the resolver for the deleteAccount field.
+func (r *mutationResolver) DeleteAccount(ctx context.Context, id string) (bool, error) {
+	// 1. 今のリストから、削除したい人以外を残す「新しいリスト」を作る作戦
+	newUsersList := []*model.User{}
+	found := false
+
+	for _, u := range usersMemory {
+		if u.ID == id {
+			// 削除対象が見つかったら、追加せずにスルーする
+			found = true
+			continue
+		}
+		// 削除対象じゃない人は、新しいリストに加える
+		newUsersList = append(newUsersList, u)
+	}
+
+	if !found {
+		return false, fmt.Errorf("ユーザー（ID: %s）が見つかりませんでした", id)
+	}
+
+	// 2. 元のリストを、新しいリストに入れ替える
+	usersMemory = newUsersList
+
+	fmt.Printf("ユーザーを削除しました: ID=%s\n", id)
+	return true, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	// ★ここも mは1つでOK
