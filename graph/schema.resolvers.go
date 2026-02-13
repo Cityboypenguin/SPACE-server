@@ -7,68 +7,19 @@ package graph
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/Cityboypenguin/SPACE-server/graph/model"
 )
 
-// SignUp is the resolver for the signUp field.
-func (r *mutationResolver) SignUp(ctx context.Context, in model.SignUpInput) (*model.User, error) {
-	u, err := r.SignUpUseCase.Execute(ctx, in)
-	if err != nil {
-		return nil, errors.Join(err)
-	}
-	return &model.User{
-		ID:        strconv.FormatInt(u.ID, 10),
-		Name:      u.Name,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
-	}, nil
-}
-
-// Hello is the resolver for the hello field.
-func (r *queryResolver) Hello(ctx context.Context) (string, error) {
-	return "hello", nil
+// CreateAccount is the resolver for the createAccount field.
+func (r *mutationResolver) CreateAccount(ctx context.Context, name string, email string) (*model.User, error) {
+	panic(fmt.Errorf("not implemented: CreateAccount - createAccount"))
 }
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	users, err := r.GetUsersUseCase.Execute(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get users: %w", err)
-	}
-
-	var result []*model.User
-	for _, u := range users {
-		result = append(result, &model.User{
-			ID:        strconv.FormatInt(u.ID, 10),
-			Name:      u.Name,
-			CreatedAt: u.CreatedAt,
-			UpdatedAt: u.UpdatedAt,
-		})
-	}
-	return result, nil
-}
-
-// User is the resolver for the user field.
-func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
-	userID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %w", err)
-	}
-
-	u, err := r.GetUserUseCase.Execute(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-	return &model.User{
-		ID:        strconv.FormatInt(u.ID, 10),
-		Name:      u.Name,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
-	}, nil
+	panic(fmt.Errorf("not implemented: Users - users"))
 }
 
 // Mutation returns MutationResolver implementation.

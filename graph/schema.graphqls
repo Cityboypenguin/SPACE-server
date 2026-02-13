@@ -1,22 +1,15 @@
-scalar DateTime
+# graph/schema.graphqls
 
 type User {
   id: ID!
   name: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-input signUpInput {
-  name: String!
+  email: String!
 }
 
 type Query {
-  hello: String!
   users: [User!]!
-  user(id: ID!): User
 }
 
 type Mutation {
-  signUp(in: signUpInput!): User!
+  createAccount(name: String!, email: String!): User!
 }

@@ -27,7 +27,7 @@ func main() {
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
-		return c.String(200, "test message: Hello from SPACE Server!")
+		return c.String(200, "yukiブランチで開発中！")
 	})
 
 	userRepo := inmem.NewInmemUserRepository()
