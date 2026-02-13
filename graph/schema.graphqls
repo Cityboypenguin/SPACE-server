@@ -19,3 +19,18 @@ type Mutation {
   #IDを渡すと、削除が成功or失敗を返す(Boolean)
   deleteAccount(id: ID!): Boolean!
 }
+
+type Post{
+  id: ID!
+  content: String!
+  userId: ID!
+}
+
+extend type Query {
+  posts: [Post!]!
+}
+
+# 3. 既存のMutationに「投稿する」を追加
+extend type Mutation {
+  createPost(content: String!, userId: ID!): Post!
+}

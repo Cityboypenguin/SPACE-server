@@ -11,6 +11,8 @@ import (
 
 var usersMemory = []*model.User{}
 
+var postsMemory = []*model.Post{}
+
 type Resolver struct {
 	//SignUpUseCase   user.SignUpUseCase
 	//GetUserUseCase  user.GetUserUseCase

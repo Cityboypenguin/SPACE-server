@@ -106,6 +106,16 @@ func (r *mutationResolver) DeleteAccount(ctx context.Context, id string) (bool, 
 	return true, nil
 }
 
+// CreatePost is the resolver for the createPost field.
+func (r *mutationResolver) CreatePost(ctx context.Context, content string, userId string) (*model.Post, error) {
+	post := &model.Post{
+		ID:      fmt.Sprintf("P%03d", len(postsMemory)+1), // IDはP001, P002...
+		Content: content,
+		UserID:  userId,
+	}
+	postsMemory = append(postsMemory, post)
+	return post, nil
+}
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	// ★ここも mは1つでOK
@@ -125,6 +135,11 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 
 	// 3. 全員見てもいなかったら、エラーを返す
 	return nil, fmt.Errorf("指定されたID（%s）のユーザーは見つかりませんでした", id)
+}
+
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
+	return postsMemory, nil
 }
 
 // Mutation returns MutationResolver implementation.
