@@ -8,18 +8,37 @@ package graph
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
 	"github.com/Cityboypenguin/SPACE-server/graph/model"
 )
 
+// ★修正1： mを1つにしました
+var usersMemory = []*model.User{}
+
 // CreateAccount is the resolver for the createAccount field.
 func (r *mutationResolver) CreateAccount(ctx context.Context, name string, email string) (*model.User, error) {
-	panic(fmt.Errorf("not implemented: CreateAccount - createAccount"))
+	// 1. ユーザーの入れ物を作る
+	user := &model.User{
+		ID:    fmt.Sprintf("T%d", rand.Intn(10000)), // 適当なID (例: T1234)
+		Name:  name,
+		Email: email,
+	}
+
+	// ★修正2： コメントアウト(//)を外して、mを1つにしました
+	usersMemory = append(usersMemory, user)
+
+	// 3. ログに出してみる（ターミナルで確認用）
+	fmt.Printf("ユーザーを作成しました: %s (Email: %s)\n", user.Name, user.Email)
+
+	// 4. 作ったユーザーを返す
+	return user, nil
 }
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	panic(fmt.Errorf("not implemented: Users - users"))
+	// ★ここも mは1つでOK
+	return usersMemory, nil
 }
 
 // Mutation returns MutationResolver implementation.
