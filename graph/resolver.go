@@ -1,20 +1,10 @@
 package graph
 
-import (
-	"github.com/Cityboypenguin/SPACE-server/graph/model"
-)
+import "github.com/Cityboypenguin/SPACE-server/domain"
 
-// This file will not be regenerated automatically.
-//
-// It serves as dependency injection for your app, add any dependencies you require
-// here.
-
-var usersMemory = []*model.User{}
-
-var postsMemory = []*model.Post{}
+// 以前の var usersMemory, postsMemory は削除してください！
 
 type Resolver struct {
-	//SignUpUseCase   user.SignUpUseCase
-	//GetUserUseCase  user.GetUserUseCase
-	//GetUsersUseCase user.GetUsersUseCase
+	UserUsecase domain.UserUsecase
+	PostUsecase domain.PostUsecase // 追加
 }
