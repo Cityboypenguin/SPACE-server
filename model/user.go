@@ -17,7 +17,7 @@ type CreateUserParam struct {
 	UpdatedAt time.Time
 }
 
-func (u *User) Create(params CreateUserParam) error {
+func (u *User) CreateUser(params CreateUserParam) error {
 	u.Name = params.Name
 	u.CreatedAt = params.CreatedAt
 	u.UpdatedAt = params.UpdatedAt

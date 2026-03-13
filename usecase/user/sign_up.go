@@ -22,7 +22,7 @@ type SignUpInteractor struct {
 func (i *SignUpInteractor) Execute(ctx context.Context, in gqlmodel.SignUpInput) (*model.User, error) {
 	now := time.Now()
 	u := &model.User{}
-	err := u.Create(model.CreateUserParam{
+	err := u.CreateUser(model.CreateUserParam{
 		Name:      in.Name,
 		CreatedAt: now,
 		UpdatedAt: now,

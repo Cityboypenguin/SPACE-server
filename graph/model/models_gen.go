@@ -22,3 +22,17 @@ type User struct {
 type SignUpInput struct {
 	Name string `json:"name"`
 }
+
+type Post struct {
+	ID        string
+	Author    *User
+	Content   string
+	CreatedAt time.Time
+}
+
+type CreatePostInput struct {
+	Content string `json:"content"`
+	UserID  string `json:"userId"`
+	Title   string `json:"title"`
+	Author  *User  `json:"author"`
+}

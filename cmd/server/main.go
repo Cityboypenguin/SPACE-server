@@ -8,6 +8,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/inmem"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -32,6 +33,7 @@ func main() {
 	})
 
 	userRepo := inmem.NewInmemUserRepository()
+	postRepo := inmem.NewInmemPostRepository()
 	resolver := &graph.Resolver{
 		SignUpUseCase: &user.SignUpInteractor{
 			UserRepository: userRepo,
@@ -41,6 +43,15 @@ func main() {
 		},
 		GetUsersUseCase: &user.GetUsersInteractor{
 			UserRepository: userRepo,
+		},
+		MakePostUseCase: &post.SignUpInteractor{
+			PostRepository: postRepo,
+		},
+		GetPostUseCase: &post.GetPostInteractor{
+			PostRepository: postRepo,
+		},
+		GetPostsUseCase: &post.GetPostsInteractor{
+			PostRepository: postRepo,
 		},
 	}
 

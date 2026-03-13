@@ -15,8 +15,25 @@ type Query {
   hello: String!
   users: [User!]!
   user(id: ID!): User
+  posts: [Post!]!      # 全ての投稿を取得
+  post(id: ID!): Post  # 特定の投稿を取得
 }
 
 type Mutation {
   signUp(in: signUpInput!): User!
+  createPost(in: createPostInput!): Post!
+}
+
+# 投稿を表す型
+type Post {
+  id: ID!
+  content: String!
+  author: User!        # 投稿者（User型とリレーション）
+  createdAt: DateTime!
+}
+
+# 投稿作成のための入力型
+input createPostInput {
+  content: String!
+  userId: ID!          # 誰の投稿かを受け取る
 }
