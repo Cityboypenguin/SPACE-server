@@ -9,6 +9,14 @@ import (
 type Mutation struct {
 }
 
+type Post struct {
+	ID        string    `json:"id"`
+	Author    *User     `json:"author"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type Query struct {
 }
 
@@ -17,6 +25,11 @@ type User struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type CreatePostInput struct {
+	AuthorID string `json:"authorId"`
+	Content  string `json:"content"`
 }
 
 type SignUpInput struct {

@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/Cityboypenguin/SPACE-server/graph/model"
+	domainmodel "github.com/Cityboypenguin/SPACE-server/model"
 )
 
 // SignUp is the resolver for the signUp field.
@@ -26,6 +27,32 @@ func (r *mutationResolver) SignUp(ctx context.Context, in model.SignUpInput) (*m
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}, nil
+}
+
+// CreatePost is the resolver for the createPost field.
+func (r *mutationResolver) CreatePost(ctx context.Context, in model.CreatePostInput) (*model.Post, error) {
+	authorID, err := strconv.ParseInt(in.AuthorID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid author id: %w", err)
+	}
+
+	p, err := r.CreatePostUseCase.Execute(ctx, domainmodel.CreatePostParam{
+		AuthorID: authorID,
+		Content:  in.Content,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create post: %w", err)
+	}
+
+	author, err := r.GetUserUseCase.Execute(ctx, p.AuthorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get author: %w", err)
+	}
+	if author == nil {
+		return nil, errors.New("author not found")
+	}
+
+	return toGraphQLPost(p, author), nil
 }
 
 // Hello is the resolver for the hello field.
@@ -69,6 +96,48 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}, nil
+}
+
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
+	posts, err := r.GetPostsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts: %w", err)
+	}
+
+	result := make([]*model.Post, 0, len(posts))
+	for _, p := range posts {
+		author, err := r.GetUserUseCase.Execute(ctx, p.AuthorID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get author: %w", err)
+		}
+		if author == nil {
+			return nil, errors.New("author not found")
+		}
+
+		result = append(result, toGraphQLPost(p, author))
+	}
+
+	return result, nil
+}
+
+func toGraphQLPost(p *domainmodel.Post, author *domainmodel.User) *model.Post {
+	return &model.Post{
+		ID:        strconv.FormatInt(p.ID, 10),
+		Author:    toGraphQLUser(author),
+		Content:   p.Content,
+		CreatedAt: p.CreatedAt,
+		UpdatedAt: p.UpdatedAt,
+	}
+}
+
+func toGraphQLUser(u *domainmodel.User) *model.User {
+	return &model.User{
+		ID:        strconv.FormatInt(u.ID, 10),
+		Name:      u.Name,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
 }
 
 // Mutation returns MutationResolver implementation.

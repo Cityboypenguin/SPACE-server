@@ -7,16 +7,31 @@ type User {
   updatedAt: DateTime!
 }
 
+type Post {
+  id: ID!
+  author: User!
+  content: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 input signUpInput {
   name: String!
+}
+
+input createPostInput {
+  authorId: ID!
+  content: String!
 }
 
 type Query {
   hello: String!
   users: [User!]!
   user(id: ID!): User
+  posts: [Post!]!
 }
 
 type Mutation {
   signUp(in: signUpInput!): User!
+  createPost(in: createPostInput!): Post!
 }

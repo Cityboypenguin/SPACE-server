@@ -1,6 +1,9 @@
 package graph
 
-import "github.com/Cityboypenguin/SPACE-server/usecase/user"
+import (
+	"github.com/Cityboypenguin/SPACE-server/usecase/post"
+	"github.com/Cityboypenguin/SPACE-server/usecase/user"
+)
 
 // This file will not be regenerated automatically.
 //
@@ -8,7 +11,9 @@ import "github.com/Cityboypenguin/SPACE-server/usecase/user"
 // here.
 
 type Resolver struct {
-	SignUpUseCase   user.SignUpUseCase
-	GetUserUseCase  user.GetUserUseCase
-	GetUsersUseCase user.GetUsersUseCase
+	SignUpUseCase     user.SignUpUseCase
+	GetUserUseCase    user.GetUserUseCase
+	GetUsersUseCase   user.GetUsersUseCase
+	CreatePostUseCase post.CreatePostUseCase
+	GetPostsUseCase   post.GetPostsUseCase
 }
