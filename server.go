@@ -12,6 +12,9 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/Cityboypenguin/SPACE-server/infra/inmem"
+	postUsecases "github.com/Cityboypenguin/SPACE-server/usecase/post"
+	userUsecases "github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
 const defaultPort = "8080"
@@ -22,7 +25,21 @@ func main() {
 		port = defaultPort
 	}
 
-	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+	// Initialize repositories
+	userRepo := inmem.NewUserRepository()
+	postRepo := inmem.NewPostRepository()
+
+	// Initialize usecases
+	resolver := &graph.Resolver{
+		SignUpUseCase:     &userUsecases.SignUpInteractor{UserRepository: userRepo},
+		GetUserUseCase:    &userUsecases.GetUserInteractor{UserRepository: userRepo},
+		GetUsersUseCase:   &userUsecases.GetUsersInteractor{UserRepository: userRepo},
+		CreatePostUseCase: &postUsecases.CreatePostInteractor{PostRepository: postRepo},
+		GetPostUseCase:    &postUsecases.GetPostInteractor{PostRepository: postRepo},
+		GetPostsUseCase:   &postUsecases.GetPostsInteractor{PostRepository: postRepo},
+	}
+
+	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: resolver}))
 
 	srv.AddTransport(transport.Options{})
 	srv.AddTransport(transport.GET{})

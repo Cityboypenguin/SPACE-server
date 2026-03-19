@@ -57,6 +57,17 @@ func (r *InmemPostRepository) GetPostsByAuthorID(ctx context.Context, authorID i
 	return postList, nil
 }
 
+func (r *InmemPostRepository) GetAllPosts(ctx context.Context) ([]*model.Post, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	var postList []*model.Post
+	for _, p := range r.posts {
+		postList = append(postList, p)
+	}
+	return postList, nil
+}
+
 func (r *InmemPostRepository) create(_ context.Context, p *model.Post) error {
 	p.ID = r.nextID
 	r.nextID++
