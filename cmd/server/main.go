@@ -48,6 +48,9 @@ func main() {
 		CreatePostUseCase: &post.CreatePostInteractor{
             PostRepository: postRepo,
         },
+		UpdatePostUseCase: &post.UpdatePostInteractor{
+			PostRepository: postRepo,
+		}
 		GetPostUseCase: &post.GetPostInteractor{
 			PostRepository: postRepo,
 		},

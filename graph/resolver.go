@@ -14,6 +14,7 @@ type Resolver struct {
 	GetUsersUseCase user.GetUsersUseCase
 
 	CreatePostUseCase post.CreatePostUseCase
+	UpdatePostUseCase post.UpdatePostUseCase
 	GetPostUseCase    post.GetPostUseCase
 	GetPostsUseCase   post.GetPostsUseCase
 }

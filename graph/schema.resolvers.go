@@ -48,6 +48,27 @@ func (r *mutationResolver) CreatePost(ctx context.Context, in model.CreatePostIn
 	}, nil
 }
 
+// UpdatePost is the resolver for the updatePost field.
+func (r *mutationResolver) UpdatePost(ctx context.Context, id string, in model.UpdatePostInput) (*model.Post, error) {
+	postID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id: %w", err)
+	}
+
+	p, err := r.UpdatePostUseCase.Execute(ctx, postID, in.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update post: %w", err)
+	}
+	return &model.Post{
+		ID:        strconv.FormatInt(p.ID, 10),
+		AuthorID:  strconv.FormatInt(p.AuthorID, 10),
+		Content:   p.Content,
+		CreatedAt: p.CreatedAt,
+		UpdatedAt: p.UpdatedAt,
+	}, nil
+
+}
+
 // Hello is the resolver for the hello field.
 func (r *queryResolver) Hello(ctx context.Context) (string, error) {
 	return "hello", nil

@@ -35,3 +35,7 @@ type CreatePostInput struct {
 type SignUpInput struct {
 	Name string `json:"name"`
 }
+
+type UpdatePostInput struct {
+	Content string `json:"content"`
+}
