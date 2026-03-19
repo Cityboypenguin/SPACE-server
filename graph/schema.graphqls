@@ -23,6 +23,11 @@ type Mutation {
   createPost(in: createPostInput!): Post!
 }
 
+input createPostInput {
+  author: User!
+  content: String!
+}
+
 type Post {
   id: ID!
   author: User!
