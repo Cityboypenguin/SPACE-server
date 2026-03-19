@@ -25,6 +25,8 @@ type Mutation {
 
 type Post {
   id: ID!
+  author: User!
   content: String!
   createdAt: DateTime!
+  updatedAt: DateTime!
 }
