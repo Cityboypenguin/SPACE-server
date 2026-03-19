@@ -15,8 +15,16 @@ type Query {
   hello: String!
   users: [User!]!
   user(id: ID!): User
+  posts: [Post!]!
 }
 
 type Mutation {
   signUp(in: signUpInput!): User!
+  createPost(in: createPostInput!): Post!
+}
+
+type Post {
+  id: ID!
+  content: String!
+  createdAt: DateTime!
 }
