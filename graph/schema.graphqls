@@ -24,13 +24,13 @@ type Mutation {
 }
 
 input createPostInput {
-  author: User!
+  authorId: String!
   content: String!
 }
 
 type Post {
   id: ID!
-  author: User!
+  authorId: ID!
   content: String!
   createdAt: DateTime!
   updatedAt: DateTime!
