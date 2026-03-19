@@ -21,11 +21,7 @@ type Query {
 type Mutation {
   signUp(in: signUpInput!): User!
   createPost(in: createPostInput!): Post!
-}
-
-input createPostInput {
-  authorId: ID!
-  content: String!
+  updatePost(id: ID!, in: updatePostInput!): Post!
 }
 
 type Post {
@@ -34,4 +30,13 @@ type Post {
   content: String!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+input createPostInput {
+  authorId: ID!
+  content: String!
+}
+
+input updatePostInput {
+  content: String!
 }
