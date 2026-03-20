@@ -8,11 +8,11 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-type UpdatepostUseCase interface {
+type UpdatePostUseCase interface {
 	Execute(context.Context, int64, string) (*model.Post, error)
 }
 
-var _ UpdatepostUseCase = &UpdatePostInteractor{}
+var _ UpdatePostUseCase = &UpdatePostInteractor{}
 
 type UpdatePostInteractor struct {
 	PostRepository repository.PostRepository

@@ -66,7 +66,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, id string, in model.U
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
 	}, nil
-
 }
 
 // Hello is the resolver for the hello field.

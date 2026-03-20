@@ -26,8 +26,8 @@ func main() {
 	}
 
 	// Initialize repositories
-	userRepo := inmem.NewUserRepository()
-	postRepo := inmem.NewPostRepository()
+	userRepo := inmem.NewInmemUserRepository()
+	postRepo := inmem.NewInmemPostRepository()
 
 	// Initialize usecases
 	resolver := &graph.Resolver{
@@ -35,6 +35,7 @@ func main() {
 		GetUserUseCase:    &userUsecases.GetUserInteractor{UserRepository: userRepo},
 		GetUsersUseCase:   &userUsecases.GetUsersInteractor{UserRepository: userRepo},
 		CreatePostUseCase: &postUsecases.CreatePostInteractor{PostRepository: postRepo},
+		UpdatePostUseCase: &postUsecases.UpdatePostInteractor{PostRepository: postRepo},
 		GetPostUseCase:    &postUsecases.GetPostInteractor{PostRepository: postRepo},
 		GetPostsUseCase:   &postUsecases.GetPostsInteractor{PostRepository: postRepo},
 	}

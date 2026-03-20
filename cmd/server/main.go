@@ -50,7 +50,7 @@ func main() {
         },
 		UpdatePostUseCase: &post.UpdatePostInteractor{
 			PostRepository: postRepo,
-		}
+		},
 		GetPostUseCase: &post.GetPostInteractor{
 			PostRepository: postRepo,
 		},
