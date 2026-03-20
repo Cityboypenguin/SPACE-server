@@ -2,6 +2,7 @@ package inmem
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -33,25 +34,43 @@ func (r *InmemPostRepository) SavePost(ctx context.Context, post *model.Post) er
 	return r.update(ctx, post)
 }
 
+func (r *InmemPostRepository) GetPost(ctx context.Context, id int64) (*model.Post, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	p, ok := r.posts[id]
+	if !ok {
+		return nil, nil
+	}
+	copy := *p
+	return &copy, nil
+}
+
 func (r *InmemPostRepository) GetPosts(ctx context.Context) ([]*model.Post, error) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
-	var postList []*model.Post
+	postList := make([]*model.Post, 0, len(r.posts))
 	for _, p := range r.posts {
-		postList = append(postList, p)
+		copy := *p
+		postList = append(postList, &copy)
 	}
+	sort.Slice(postList, func(i, j int) bool {
+		return postList[i].ID < postList[j].ID
+	})
 	return postList, nil
 }
 
 func (r *InmemPostRepository) create(_ context.Context, p *model.Post) error {
 	p.ID = r.nextID
 	r.nextID++
-	r.posts[p.ID] = p
+	stored := *p
+	r.posts[p.ID] = &stored
 	return nil
 }
 
 func (r *InmemPostRepository) update(_ context.Context, p *model.Post) error {
-	r.posts[p.ID] = p
+	stored := *p
+	r.posts[p.ID] = &stored
 	return nil
 }

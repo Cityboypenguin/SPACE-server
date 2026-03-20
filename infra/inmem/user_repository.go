@@ -2,7 +2,7 @@ package inmem
 
 import (
 	"context"
-
+	"sort"
 	"sync"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -42,28 +42,49 @@ func (r *InmemUserRepository) GetUser(ctx context.Context, id int64) (*model.Use
 	if !ok {
 		return nil, nil
 	}
-	return u, nil
+	copy := *u
+	return &copy, nil
+}
+
+func (r *InmemUserRepository) GetUsersByIDs(ctx context.Context, ids []int64) ([]*model.User, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	result := make([]*model.User, 0, len(ids))
+	for _, id := range ids {
+		if u, ok := r.users[id]; ok {
+			copy := *u
+			result = append(result, &copy)
+		}
+	}
+	return result, nil
 }
 
 func (r *InmemUserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
-	var userList []*model.User
+	userList := make([]*model.User, 0, len(r.users))
 	for _, u := range r.users {
-		userList = append(userList, u)
+		copy := *u
+		userList = append(userList, &copy)
 	}
+	sort.Slice(userList, func(i, j int) bool {
+		return userList[i].ID < userList[j].ID
+	})
 	return userList, nil
 }
 
 func (r *InmemUserRepository) create(_ context.Context, u *model.User) error {
 	u.ID = r.nextID
 	r.nextID++
-	r.users[u.ID] = u
+	stored := *u
+	r.users[u.ID] = &stored
 	return nil
 }
 
 func (r *InmemUserRepository) update(_ context.Context, u *model.User) error {
-	r.users[u.ID] = u
+	stored := *u
+	r.users[u.ID] = &stored
 	return nil
 }

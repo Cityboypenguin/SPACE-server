@@ -1,8 +1,6 @@
 package model
 
-import (
-	"time"
-)
+import "time"
 
 type User struct {
 	ID        int64     `json:"id"`
@@ -17,10 +15,10 @@ type CreateUserParam struct {
 	UpdatedAt time.Time
 }
 
-func (u *User) Create(params CreateUserParam) error {
-	u.Name = params.Name
-	u.CreatedAt = params.CreatedAt
-	u.UpdatedAt = params.UpdatedAt
-
-	return nil
+func NewUser(param CreateUserParam) *User {
+	return &User{
+		Name:      param.Name,
+		CreatedAt: param.CreatedAt,
+		UpdatedAt: param.UpdatedAt,
+	}
 }

@@ -11,9 +11,10 @@ import (
 // here.
 
 type Resolver struct {
-	SignUpUseCase     user.SignUpUseCase
-	GetUserUseCase    user.GetUserUseCase
-	GetUsersUseCase   user.GetUsersUseCase
-	CreatePostUseCase post.CreatePostUseCase
-	GetPostsUseCase   post.GetPostsUseCase
+	SignUpUseCase        user.SignUpUseCase
+	GetUserUseCase       user.GetUserUseCase
+	GetUsersByIDsUseCase user.GetUsersByIDsUseCase
+	GetUsersUseCase      user.GetUsersUseCase
+	CreatePostUseCase    post.CreatePostUseCase
+	GetPostsUseCase      post.GetPostsUseCase
 }

@@ -34,11 +34,15 @@ func main() {
 
 	userRepo := inmem.NewInmemUserRepository()
 	postRepo := inmem.NewInmemPostRepository()
+
 	resolver := &graph.Resolver{
 		SignUpUseCase: &user.SignUpInteractor{
 			UserRepository: userRepo,
 		},
 		GetUserUseCase: &user.GetUserInteractor{
+			UserRepository: userRepo,
+		},
+		GetUsersByIDsUseCase: &user.GetUsersByIDsInteractor{
 			UserRepository: userRepo,
 		},
 		GetUsersUseCase: &user.GetUsersInteractor{

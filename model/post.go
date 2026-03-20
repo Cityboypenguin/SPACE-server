@@ -17,11 +17,16 @@ type CreatePostParam struct {
 	UpdatedAt time.Time
 }
 
-func (p *Post) Create(params CreatePostParam) error {
-	p.AuthorID = params.AuthorID
-	p.Content = params.Content
-	p.CreatedAt = params.CreatedAt
-	p.UpdatedAt = params.UpdatedAt
+type UpdatePostParam struct {
+	ID      int64
+	Content string
+}
 
-	return nil
+func NewPost(param CreatePostParam) *Post {
+	return &Post{
+		AuthorID:  param.AuthorID,
+		Content:   param.Content,
+		CreatedAt: param.CreatedAt,
+		UpdatedAt: param.UpdatedAt,
+	}
 }

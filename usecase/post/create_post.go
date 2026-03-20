@@ -10,8 +10,13 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
+type CreatePostResult struct {
+	Post   *model.Post
+	Author *model.User
+}
+
 type CreatePostUseCase interface {
-	Execute(context.Context, model.CreatePostParam) (*model.Post, error)
+	Execute(context.Context, model.CreatePostParam) (*CreatePostResult, error)
 }
 
 var _ CreatePostUseCase = &CreatePostInteractor{}
@@ -21,7 +26,7 @@ type CreatePostInteractor struct {
 	UserRepository repository.UserRepository
 }
 
-func (i *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam) (*model.Post, error) {
+func (i *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam) (*CreatePostResult, error) {
 	if strings.TrimSpace(param.Content) == "" {
 		return nil, errors.New("content is required")
 	}
@@ -38,16 +43,11 @@ func (i *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePo
 	param.CreatedAt = now
 	param.UpdatedAt = now
 
-	post := &model.Post{}
-	err = post.Create(param)
-	if err != nil {
+	post := model.NewPost(param)
+
+	if err := i.PostRepository.SavePost(ctx, post); err != nil {
 		return nil, err
 	}
 
-	err = i.PostRepository.SavePost(ctx, post)
-	if err != nil {
-		return nil, err
-	}
-
-	return post, nil
+	return &CreatePostResult{Post: post, Author: author}, nil
 }

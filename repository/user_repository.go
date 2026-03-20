@@ -9,5 +9,6 @@ import (
 type UserRepository interface {
 	SaveUser(ctx context.Context, user *model.User) error
 	GetUser(ctx context.Context, id int64) (*model.User, error)
+	GetUsersByIDs(ctx context.Context, ids []int64) ([]*model.User, error)
 	GetUsers(ctx context.Context) ([]*model.User, error)
 }
