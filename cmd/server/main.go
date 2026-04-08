@@ -1,8 +1,11 @@
 package main
 
 import (
+	"log"
+
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/labstack/echo/v4"
@@ -10,6 +13,12 @@ import (
 )
 
 func main() {
+	database, err := mysql.New()
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer database.Close()
+
 	e := echo.New()
 
 	// middleware
