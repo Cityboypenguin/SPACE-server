@@ -2,8 +2,27 @@
 #
 # https://gqlgen.com/getting-started/
 type Query {
-  hello: String!
+  users: [User!]!
+  user(userID: ID!): User
 }
 
-# type Mutation {
-# }
+type User {
+  ID: ID!
+  userID: String!
+  name: String!
+  email: String!
+  role: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User!
+}
+
+input CreateUserInput {
+  name: String!
+  email: String!
+  password: String!
+}
