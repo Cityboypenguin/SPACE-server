@@ -39,9 +39,9 @@ func (r *MySQLUserRepository) SaveUser(ctx context.Context, u *model.User) error
 
 func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
-		WHERE user_id = ?
+		WHERE id = ?
 	`
 
 	row := r.DB.QueryRowContext(ctx, query, id)
@@ -49,6 +49,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	var u model.User
 	if err := row.Scan(
 		&u.ID,
+		&u.UserID,
 		&u.Name,
 		&u.Email,
 		&u.HashedPassword,
@@ -66,12 +67,12 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	return &u, nil
 }
 
-func (r *MySQLUserRepository) DleteUser(ctx context.Context, id int64) error {
+func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) error {
 	query := `
 		DELETE FROM users
-		WHERE user_id = ?
+		WHERE id = ?
 	`
-	
+
 	_, err := r.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (r *MySQLUserRepository) DleteUser(ctx context.Context, id int64) error {
 
 func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
 	query := `
-		SELECT user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 	`
 
@@ -96,6 +97,7 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 		var u model.User
 		if err := rows.Scan(
 			&u.ID,
+			&u.UserID,
 			&u.Name,
 			&u.Email,
 			&u.HashedPassword,
@@ -116,7 +118,7 @@ func (r *MySQLUserRepository) update(ctx context.Context, u *model.User) error {
 	query := `
 		UPDATE users
 		SET name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
-		WHERE user_id = ?
+		WHERE id = ?
 	`
 
 	_, err := r.DB.ExecContext(ctx, query,
@@ -126,7 +128,7 @@ func (r *MySQLUserRepository) update(ctx context.Context, u *model.User) error {
 		u.Role,
 		u.Status,
 		u.UpdatedAt,
-		u.UserID,
+		u.ID,
 	)
 	return err
 }

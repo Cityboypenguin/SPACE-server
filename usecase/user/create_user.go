@@ -17,11 +17,11 @@ type CreateUserInteractor struct {
 	userRepo repository.UserRepository
 }
 
-// func NewCreateUserUseCase(userRepo repository.UserRepository) CreateUserUseCase {
-// 	return &CreateUserInterractor{
-// 		userRepo: userRepo,
-// 	}
-// }
+func NewCreateUserUseCase(userRepo repository.UserRepository) CreateUserUseCase {
+	return &CreateUserInteractor{
+		userRepo: userRepo,
+	}
+}
 
 func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error) {
 	user := &model.User{}

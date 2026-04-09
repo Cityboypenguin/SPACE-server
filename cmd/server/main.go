@@ -5,9 +5,10 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	"github.com/Cityboypenguin/SPACE-server/graph"
+	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -20,6 +21,15 @@ func main() {
 	defer database.Close()
 
 	e := echo.New()
+
+	userRepository := mysql.NewMySQLUserRepository(database)
+	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
+	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
+
+	resolver := &graph.Resolver{
+		CreateUserUseCase: createUserUseCase,
+		ListUsersUseCase:  listUsersUseCase,
+	}
 
 	// middleware
 	e.Use(middleware.RequestLogger())
@@ -34,7 +44,7 @@ func main() {
 	gqlServer := handler.NewDefaultServer(
 		graph.NewExecutableSchema(
 			graph.Config{
-				Resolvers: &graph.Resolver{},
+				Resolvers: resolver,
 			},
 		),
 	)

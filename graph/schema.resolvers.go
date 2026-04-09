@@ -16,6 +16,7 @@ import (
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
+		UserID:   input.UserID,
 		Name:     input.Name,
 		Email:    input.Email,
 		Password: input.Password,
@@ -27,17 +28,38 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 	}
 
 	return &gqlmodel.User{
-    UserID:         user.UserID,        // ID → UserID に変更
-    Name:           user.Name,
-    Email:          user.Email,
-    Role:           user.Role,
-    Status:         user.Status,
-}, nil
+		ID:        fmt.Sprintf("%d", user.ID),
+		UserID:    user.UserID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+	}, nil
 }
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
-	panic(fmt.Errorf("not implemented: Users - users"))
+	users, err := r.ListUsersUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlUsers []*gqlmodel.User
+	for _, user := range users {
+		gqlUsers = append(gqlUsers, &gqlmodel.User{
+			ID:        fmt.Sprintf("%d", user.ID),
+			UserID:    user.UserID,
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Status:    user.Status,
+			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		})
+	}
+	return gqlUsers, nil
 }
 
 // User is the resolver for the user field.

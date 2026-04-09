@@ -3,6 +3,7 @@
 package model
 
 type CreateUserInput struct {
+	UserID   string `json:"userID"`
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -15,6 +16,7 @@ type Query struct {
 }
 
 type User struct {
+	ID        string `json:"ID"`
 	UserID    string `json:"userID"`
 	Name      string `json:"name"`
 	Email     string `json:"email"`

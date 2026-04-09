@@ -19,6 +19,7 @@ type User struct {
 }
 
 type CreateUserParam struct {
+	UserID    string    `json:"user_id"`
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Password  string    `json:"password"`
@@ -40,6 +41,7 @@ func (u *User) CreateUser(param CreateUserParam) error {
 		return err
 	}
 
+	u.UserID = param.UserID
 	u.Name = param.Name
 	u.Email = param.Email
 	u.HashedPassword = hashedPassword
