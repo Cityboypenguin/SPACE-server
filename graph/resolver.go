@@ -7,7 +7,9 @@ import "github.com/Cityboypenguin/SPACE-server/usecase/user"
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	CreateUserUseCase user.CreateUserUseCase
-	ListUsersUseCase  user.ListUsersUseCase
-	DeleteUserUseCase user.DeleteUserUseCase
+	GetUserByIDUseCase user.GetUserByIDUseCase
+	CreateUserUseCase  user.CreateUserUseCase
+	ListUsersUseCase   user.ListUsersUseCase
+	DeleteUserUseCase  user.DeleteUserUseCase
+	UpdateUserUseCase  user.UpdateUserUseCase
 }

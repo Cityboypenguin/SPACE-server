@@ -20,6 +20,7 @@ type User {
 type Mutation {
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
+  updateUser(input: UpdateUserInput!): User!
 }
 
 input CreateUserInput {
@@ -27,4 +28,12 @@ input CreateUserInput {
   name: String!
   email: String!
   password: String!
+}
+
+input UpdateUserInput {
+  ID: ID!
+  userID: String
+  name: String
+  email: String
+  password: String
 }

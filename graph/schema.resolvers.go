@@ -55,6 +55,42 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 	return deleted, nil
 }
 
+// UpdateUser is the resolver for the updateUser field.
+func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
+	numericID, err := strconv.ParseInt(input.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %s", input.ID)
+	}
+
+	// Validate that the user exists before updating
+	_, err = r.GetUserByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %s", input.ID)
+	}
+
+	param := model.UpdateUserParam{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: input.Password,
+	}
+
+	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.User{
+		ID:        fmt.Sprintf("%d", user.ID),
+		UserID:    user.UserID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+	}, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	users, err := r.ListUsersUseCase.Execute(ctx)

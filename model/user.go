@@ -27,6 +27,14 @@ type CreateUserParam struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type UpdateUserParam struct {
+	Name     *string `json:"name,omitempty"`
+	Email    *string `json:"email,omitempty"`
+	Password *string `json:"password,omitempty"`
+	Role     *string `json:"role,omitempty"`
+	Status   *string `json:"status,omitempty"`
+}
+
 func hashPassword(password string) (string, error) {
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -48,5 +56,29 @@ func (u *User) CreateUser(param CreateUserParam) error {
 	u.CreatedAt = param.CreatedAt.Unix()
 	u.UpdatedAt = param.UpdatedAt.Unix()
 
+	return nil
+}
+
+func (u *User) UpdateUser(param UpdateUserParam) error {
+	if param.Name != nil {
+		u.Name = *param.Name
+	}
+	if param.Email != nil {
+		u.Email = *param.Email
+	}
+	if param.Password != nil {
+		hashedPassword, err := hashPassword(*param.Password)
+		if err != nil {
+			return err
+		}
+		u.HashedPassword = hashedPassword
+	}
+	if param.Role != nil {
+		u.Role = *param.Role
+	}
+	if param.Status != nil {
+		u.Status = *param.Status
+	}
+	u.UpdatedAt = time.Now().Unix()
 	return nil
 }

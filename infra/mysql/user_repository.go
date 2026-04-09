@@ -22,14 +22,14 @@ func (r *MySQLUserRepository) SaveUser(ctx context.Context, u *model.User) error
 
 	if u.ID == 0 {
 		u.CreatedAt = now
-		id, err := r.create(ctx, u)
+		id, err := r.CreateUser(ctx, u)
 		if err != nil {
 			return err
 		}
 
 		u.ID = id
 	} else {
-		if err := r.update(ctx, u); err != nil {
+		if err := r.UpdateUser(ctx, u); err != nil {
 			return err
 		}
 	}
@@ -120,7 +120,7 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 	return users, nil
 }
 
-func (r *MySQLUserRepository) update(ctx context.Context, u *model.User) error {
+func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) error {
 	query := `
 		UPDATE users
 		SET name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
@@ -139,7 +139,7 @@ func (r *MySQLUserRepository) update(ctx context.Context, u *model.User) error {
 	return err
 }
 
-func (r *MySQLUserRepository) create(ctx context.Context, u *model.User) (int64, error) {
+func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (int64, error) {
 	query := `
 		INSERT INTO users (user_id, name, email, hashed_password, role, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
