@@ -9,4 +9,5 @@ import "github.com/Cityboypenguin/SPACE-server/usecase/user"
 type Resolver struct {
 	CreateUserUseCase user.CreateUserUseCase
 	ListUsersUseCase  user.ListUsersUseCase
+	DeleteUserUseCase user.DeleteUserUseCase
 }

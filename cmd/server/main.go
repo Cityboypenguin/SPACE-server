@@ -25,10 +25,12 @@ func main() {
 	userRepository := mysql.NewMySQLUserRepository(database)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
+	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
 
 	resolver := &graph.Resolver{
 		CreateUserUseCase: createUserUseCase,
 		ListUsersUseCase:  listUsersUseCase,
+		DeleteUserUseCase: deleteUserUsecase,
 	}
 
 	// middleware

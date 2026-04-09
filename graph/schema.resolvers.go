@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -37,6 +38,21 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
 	}, nil
+}
+
+// DeleteUser is the resolver for the deleteUser field.
+func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, error) {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid user id: %s", id)
+	}
+
+	deleted, err := r.DeleteUserUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
 }
 
 // Users is the resolver for the users field.

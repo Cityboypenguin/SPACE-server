@@ -67,17 +67,23 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	return &u, nil
 }
 
-func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) error {
+func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, error) {
 	query := `
 		DELETE FROM users
 		WHERE id = ?
 	`
 
-	_, err := r.DB.ExecContext(ctx, query, id)
+	result, err := r.DB.ExecContext(ctx, query, id)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return nil
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected > 0, nil
 }
 
 func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
