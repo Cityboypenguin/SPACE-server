@@ -120,6 +120,41 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 	return users, nil
 }
 
+func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string) ([]*model.User, error) {
+	query := `
+		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users
+		WHERE name LIKE ?
+	`
+
+	rows, err := r.DB.QueryContext(ctx, query, "%"+name+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(
+			&u.ID,
+			&u.UserID,
+			&u.Name,
+			&u.Email,
+			&u.HashedPassword,
+			&u.Role,
+			&u.Status,
+			&u.CreatedAt,
+			&u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, &u)
+	}
+
+	return users, nil
+}
+
 func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) error {
 	query := `
 		UPDATE users

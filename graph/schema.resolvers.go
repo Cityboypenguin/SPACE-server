@@ -114,9 +114,51 @@ func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	return gqlUsers, nil
 }
 
-// User is the resolver for the user field.
-func (r *queryResolver) User(ctx context.Context, userID string) (*gqlmodel.User, error) {
-	panic(fmt.Errorf("not implemented: User - user"))
+// GetUserByID is the resolver for the getUserByID field.
+func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.User, error) {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %s", id)
+	}
+
+	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.User{
+		ID:        fmt.Sprintf("%d", user.ID),
+		UserID:    user.UserID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+	}, nil
+}
+
+// SearchUsers is the resolver for the searchUsers field.
+func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
+	users, err := r.SearchUsersUseCase.Execute(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlUsers []*gqlmodel.User
+	for _, user := range users {
+		gqlUsers = append(gqlUsers, &gqlmodel.User{
+			ID:        fmt.Sprintf("%d", user.ID),
+			UserID:    user.UserID,
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Status:    user.Status,
+			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		})
+	}
+	return gqlUsers, nil
 }
 
 // Mutation returns MutationResolver implementation.
@@ -127,3 +169,34 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *queryResolver) User(ctx context.Context, id string) (*gqlmodel.User, error) {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %s", id)
+	}
+
+	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.User{
+		ID:        fmt.Sprintf("%d", user.ID),
+		UserID:    user.UserID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+	}, nil
+}
+*/

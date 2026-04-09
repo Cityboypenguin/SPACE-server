@@ -12,4 +12,5 @@ type Resolver struct {
 	ListUsersUseCase   user.ListUsersUseCase
 	DeleteUserUseCase  user.DeleteUserUseCase
 	UpdateUserUseCase  user.UpdateUserUseCase
+	SearchUsersUseCase user.SearchUsersUseCase
 }

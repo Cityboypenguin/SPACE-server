@@ -12,4 +12,5 @@ type UserRepository interface {
 	DeleteUser(ctx context.Context, id int64) (bool, error)
 	ListUsers(ctx context.Context) ([]*model.User, error)
 	UpdateUser(ctx context.Context, u *model.User) error
+	SearchUsersByName(ctx context.Context, name string) ([]*model.User, error)
 }

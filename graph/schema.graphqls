@@ -3,7 +3,8 @@
 # https://gqlgen.com/getting-started/
 type Query {
   users: [User!]!
-  user(userID: ID!): User
+  getUserByID(id: ID!): User
+  searchUsers(name: String!): [User!]!
 }
 
 type User {
