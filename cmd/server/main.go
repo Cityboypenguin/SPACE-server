@@ -72,6 +72,12 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
+	// CORS設定:フロントエンド(localhost:5173)からの通信を許可
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+	}))
+
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
 		return c.String(200, "test message: Hello from SPACE Server!")
