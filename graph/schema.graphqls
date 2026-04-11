@@ -18,10 +18,26 @@ type User {
   updatedAt: String!
 }
 
+type Administrator {
+  ID: ID!
+  name: String!
+  password: String!
+  email: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
 type Mutation {
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
   updateUser(input: UpdateUserInput!): User!
+  createAdministrator(input: CreateAdministratorInput!): Administrator!
+}
+
+input CreateAdministratorInput {
+  name: String!
+  email: String!
+  password: String!
 }
 
 input CreateUserInput {

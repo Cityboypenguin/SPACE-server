@@ -91,6 +91,29 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}, nil
 }
 
+// CreateAdministrator is the resolver for the createAdministrator field.
+func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
+	param := model.CreateAdministratorParam{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: input.Password,
+	}
+
+	administrator, err := r.CreateAdministratorUseCase.Execute(ctx, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.Administrator{
+		ID:        fmt.Sprintf("%d", administrator.ID),
+		Name:      administrator.Name,
+		Email:     administrator.Email,
+		Password:  administrator.HashedPassword,
+		CreatedAt: fmt.Sprintf("%d", administrator.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", administrator.UpdatedAt),
+	}, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	users, err := r.ListUsersUseCase.Execute(ctx)
@@ -169,34 +192,3 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
-/*
-	func (r *queryResolver) User(ctx context.Context, id string) (*gqlmodel.User, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", id)
-	}
-
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-	}, nil
-}
-*/

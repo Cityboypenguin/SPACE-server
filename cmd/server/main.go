@@ -8,6 +8,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -23,20 +24,23 @@ func main() {
 	e := echo.New()
 
 	userRepository := mysql.NewMySQLUserRepository(database)
+	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
 	updateUserUsecase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
+	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 
 	resolver := &graph.Resolver{
-		CreateUserUseCase:  createUserUseCase,
-		ListUsersUseCase:   listUsersUseCase,
-		DeleteUserUseCase:  deleteUserUsecase,
-		UpdateUserUseCase:  updateUserUsecase,
-		GetUserByIDUseCase: getUserByIDUsecase,
-		SearchUsersUseCase: searchUsersUseCase,
+		CreateUserUseCase:          createUserUseCase,
+		ListUsersUseCase:           listUsersUseCase,
+		DeleteUserUseCase:          deleteUserUsecase,
+		UpdateUserUseCase:          updateUserUsecase,
+		GetUserByIDUseCase:         getUserByIDUsecase,
+		SearchUsersUseCase:         searchUsersUseCase,
+		CreateAdministratorUseCase: createAdministratorUseCase,
 	}
 
 	// middleware

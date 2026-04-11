@@ -2,6 +2,21 @@
 
 package model
 
+type Administrator struct {
+	ID        string `json:"ID"`
+	Name      string `json:"name"`
+	Password  string `json:"password"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type CreateAdministratorInput struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type CreateUserInput struct {
 	UserID   string `json:"userID"`
 	Name     string `json:"name"`
