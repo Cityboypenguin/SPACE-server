@@ -7,6 +7,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
+	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -34,17 +35,27 @@ func main() {
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+	redisClient, err := infraredis.New()
+	if err != nil {
+		log.Fatalf("failed to connect to redis: %v", err)
+	}
+	defer redisClient.Close()
+	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
+	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
 	resolver := &graph.Resolver{
-		CreateUserUseCase:          createUserUseCase,
-		ListUsersUseCase:           listUsersUseCase,
-		DeleteUserUseCase:          deleteUserUsecase,
-		UpdateUserUseCase:          updateUserUsecase,
-		GetUserByIDUseCase:         getUserByIDUsecase,
-		SearchUsersUseCase:         searchUsersUseCase,
-		LoginUserUseCase:           loginUserUseCase,
-		CreateAdministratorUseCase: createAdministratorUseCase,
-		LoginAdministratorUseCase:  loginAdministratorUseCase,
+		CreateUserUseCase:           createUserUseCase,
+		ListUsersUseCase:            listUsersUseCase,
+		DeleteUserUseCase:           deleteUserUsecase,
+		UpdateUserUseCase:           updateUserUsecase,
+		GetUserByIDUseCase:          getUserByIDUsecase,
+		SearchUsersUseCase:          searchUsersUseCase,
+		LoginUserUseCase:            loginUserUseCase,
+		LogoutUserUseCase:           logoutUserUseCase,
+		CreateAdministratorUseCase:  createAdministratorUseCase,
+		LoginAdministratorUseCase:   loginAdministratorUseCase,
+		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
 	}
 
 	// middleware

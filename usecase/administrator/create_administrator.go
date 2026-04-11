@@ -24,13 +24,12 @@ func NewCreateAdministratorUseCase(adminRepo repository.AdministratorRepository)
 }
 
 func (uc *CreateAdministratorInteractor) Execute(ctx context.Context, param model.CreateAdministratorParam) (*model.Administrator, error) {
-	admin := &model.Administrator{
-		Name:           param.Name,
-		Email:          param.Email,
-		HashedPassword: param.Password,
+	admin := &model.Administrator{}
+	if err := admin.CreateAdministrator(param); err != nil {
+		return nil, err
 	}
-	err := uc.adminRepo.SaveAdministrator(ctx, admin)
-	if err != nil {
+
+	if err := uc.adminRepo.SaveAdministrator(ctx, admin); err != nil {
 		return nil, err
 	}
 	return admin, nil

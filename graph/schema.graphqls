@@ -47,8 +47,10 @@ type Mutation {
   deleteUser(id: ID!): Boolean!
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
+  logoutUser(token: String!): Boolean!
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
+  logoutAdministrator(token: String!): Boolean!
 }
 
 input CreateAdministratorInput {

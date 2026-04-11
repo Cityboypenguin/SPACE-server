@@ -16,7 +16,9 @@ type Resolver struct {
 	DeleteUserUseCase           user.DeleteUserUseCase
 	UpdateUserUseCase           user.UpdateUserUseCase
 	SearchUsersUseCase          user.SearchUsersUseCase
-	LoginUserUseCase            user.LoginUserUseCase
-	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
-	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
+	LoginUserUseCase             user.LoginUserUseCase
+	LogoutUserUseCase            user.LogoutUserUseCase
+	CreateAdministratorUseCase   administrator.CreateAdministratorUseCase
+	LoginAdministratorUseCase    administrator.LoginAdministratorUseCase
+	LogoutAdministratorUseCase   administrator.LogoutAdministratorUseCase
 }

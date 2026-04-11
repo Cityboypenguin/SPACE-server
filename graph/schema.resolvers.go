@@ -113,6 +113,14 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 	}, nil
 }
 
+// LogoutUser is the resolver for the logoutUser field.
+func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, error) {
+	if err := r.LogoutUserUseCase.Execute(ctx, token); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
 	param := model.CreateAdministratorParam{
@@ -154,6 +162,14 @@ func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmode
 			UpdatedAt: fmt.Sprintf("%d", result.Administrator.UpdatedAt),
 		},
 	}, nil
+}
+
+// LogoutAdministrator is the resolver for the logoutAdministrator field.
+func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string) (bool, error) {
+	if err := r.LogoutAdministratorUseCase.Execute(ctx, token); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Users is the resolver for the users field.
