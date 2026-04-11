@@ -10,11 +10,13 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	GetUserByIDUseCase         user.GetUserByIDUseCase
-	CreateUserUseCase          user.CreateUserUseCase
-	ListUsersUseCase           user.ListUsersUseCase
-	DeleteUserUseCase          user.DeleteUserUseCase
-	UpdateUserUseCase          user.UpdateUserUseCase
-	SearchUsersUseCase         user.SearchUsersUseCase
-	CreateAdministratorUseCase administrator.CreateAdministratorUseCase
+	GetUserByIDUseCase          user.GetUserByIDUseCase
+	CreateUserUseCase           user.CreateUserUseCase
+	ListUsersUseCase            user.ListUsersUseCase
+	DeleteUserUseCase           user.DeleteUserUseCase
+	UpdateUserUseCase           user.UpdateUserUseCase
+	SearchUsersUseCase          user.SearchUsersUseCase
+	LoginUserUseCase            user.LoginUserUseCase
+	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
+	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
 }

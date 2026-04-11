@@ -91,6 +91,28 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}, nil
 }
 
+// LoginUser is the resolver for the loginUser field.
+func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginInput) (*gqlmodel.UserAuthPayload, error) {
+	result, err := r.LoginUserUseCase.Execute(ctx, input.Email, input.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.UserAuthPayload{
+		Token: result.Token,
+		User: &gqlmodel.User{
+			ID:        fmt.Sprintf("%d", result.User.ID),
+			UserID:    result.User.UserID,
+			Name:      result.User.Name,
+			Email:     result.User.Email,
+			Role:      result.User.Role,
+			Status:    result.User.Status,
+			CreatedAt: fmt.Sprintf("%d", result.User.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", result.User.UpdatedAt),
+		},
+	}, nil
+}
+
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
 	param := model.CreateAdministratorParam{
@@ -111,6 +133,26 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 		Password:  administrator.HashedPassword,
 		CreatedAt: fmt.Sprintf("%d", administrator.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%d", administrator.UpdatedAt),
+	}, nil
+}
+
+// LoginAdministrator is the resolver for the loginAdministrator field.
+func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmodel.LoginInput) (*gqlmodel.AdministratorAuthPayload, error) {
+	result, err := r.LoginAdministratorUseCase.Execute(ctx, input.Email, input.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.AdministratorAuthPayload{
+		Token: result.Token,
+		Administrator: &gqlmodel.Administrator{
+			ID:        fmt.Sprintf("%d", result.Administrator.ID),
+			Name:      result.Administrator.Name,
+			Email:     result.Administrator.Email,
+			Password:  result.Administrator.HashedPassword,
+			CreatedAt: fmt.Sprintf("%d", result.Administrator.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", result.Administrator.UpdatedAt),
+		},
 	}, nil
 }
 

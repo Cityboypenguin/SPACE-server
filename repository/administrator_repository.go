@@ -9,6 +9,7 @@ import (
 type AdministratorRepository interface {
 	SaveAdministrator(ctx context.Context, a *model.Administrator) error
 	GetAdministratorByID(ctx context.Context, id int64) (*model.Administrator, error)
+	FindByEmail(ctx context.Context, email string) (*model.Administrator, error)
 	DeleteAdministrator(ctx context.Context, id int64) (bool, error)
 	ListAdministrators(ctx context.Context) ([]*model.Administrator, error)
 	UpdateAdministrator(ctx context.Context, a *model.Administrator) error

@@ -119,6 +119,34 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) (
 	return administrators, nil
 }
 
+func (r *MySQLAdministratorRepository) FindByEmail(ctx context.Context, email string) (*model.Administrator, error) {
+	query := `
+		SELECT id, name, email, hashed_password, created_at, updated_at
+		FROM administrators
+		WHERE email = ?
+		LIMIT 1
+	`
+
+	row := r.db.QueryRowContext(ctx, query, email)
+
+	var a model.Administrator
+	if err := row.Scan(
+		&a.ID,
+		&a.Name,
+		&a.Email,
+		&a.HashedPassword,
+		&a.CreatedAt,
+		&a.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &a, nil
+}
+
 func (r *MySQLAdministratorRepository) UpdateAdministrator(ctx context.Context, a *model.Administrator) error {
 	now := time.Now().Unix()
 	a.UpdatedAt = now

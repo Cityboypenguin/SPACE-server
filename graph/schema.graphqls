@@ -27,11 +27,28 @@ type Administrator {
   updatedAt: String!
 }
 
+type UserAuthPayload {
+  token: String!
+  user: User!
+}
+
+type AdministratorAuthPayload {
+  token: String!
+  administrator: Administrator!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
 type Mutation {
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
   updateUser(input: UpdateUserInput!): User!
+  loginUser(input: LoginInput!): UserAuthPayload!
   createAdministrator(input: CreateAdministratorInput!): Administrator!
+  loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
 }
 
 input CreateAdministratorInput {

@@ -11,6 +11,11 @@ type Administrator struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
+type AdministratorAuthPayload struct {
+	Token         string         `json:"token"`
+	Administrator *Administrator `json:"administrator"`
+}
+
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -20,6 +25,11 @@ type CreateAdministratorInput struct {
 type CreateUserInput struct {
 	UserID   string `json:"userID"`
 	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -47,4 +57,9 @@ type User struct {
 	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type UserAuthPayload struct {
+	Token string `json:"token"`
+	User  *User  `json:"user"`
 }

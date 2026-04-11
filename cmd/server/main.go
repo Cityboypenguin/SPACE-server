@@ -31,7 +31,9 @@ func main() {
 	updateUserUsecase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
+	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
+	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
 	resolver := &graph.Resolver{
 		CreateUserUseCase:          createUserUseCase,
@@ -40,7 +42,9 @@ func main() {
 		UpdateUserUseCase:          updateUserUsecase,
 		GetUserByIDUseCase:         getUserByIDUsecase,
 		SearchUsersUseCase:         searchUsersUseCase,
+		LoginUserUseCase:           loginUserUseCase,
 		CreateAdministratorUseCase: createAdministratorUseCase,
+		LoginAdministratorUseCase:  loginAdministratorUseCase,
 	}
 
 	// middleware
