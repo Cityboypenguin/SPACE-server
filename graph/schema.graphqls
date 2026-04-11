@@ -5,6 +5,9 @@ type Query {
   users: [User!]!
   getUserByID(id: ID!): User
   searchUsers(name: String!): [User!]!
+  administrators: [Administrator!]!
+  getAdministratorByID(id: ID!): Administrator
+  searchAdministrators(name: String!): [Administrator!]!
 }
 
 type User {
@@ -49,6 +52,8 @@ type Mutation {
   loginUser(input: LoginInput!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
   createAdministrator(input: CreateAdministratorInput!): Administrator!
+  deleteAdministrator(id: ID!): Boolean!
+  updateAdministrator(input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
 }
@@ -57,6 +62,13 @@ input CreateAdministratorInput {
   name: String!
   email: String!
   password: String!
+}
+
+input UpdateAdministratorInput {
+  ID: ID!
+  name: String
+  email: String
+  password: String
 }
 
 input CreateUserInput {

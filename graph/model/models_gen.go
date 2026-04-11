@@ -40,6 +40,13 @@ type Mutation struct {
 type Query struct {
 }
 
+type UpdateAdministratorInput struct {
+	ID       string  `json:"ID"`
+	Name     *string `json:"name,omitempty"`
+	Email    *string `json:"email,omitempty"`
+	Password *string `json:"password,omitempty"`
+}
+
 type UpdateUserInput struct {
 	ID       string  `json:"ID"`
 	UserID   *string `json:"userID,omitempty"`

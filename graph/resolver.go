@@ -10,15 +10,21 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	GetUserByIDUseCase          user.GetUserByIDUseCase
-	CreateUserUseCase           user.CreateUserUseCase
-	ListUsersUseCase            user.ListUsersUseCase
-	DeleteUserUseCase           user.DeleteUserUseCase
-	UpdateUserUseCase           user.UpdateUserUseCase
-	SearchUsersUseCase          user.SearchUsersUseCase
-	LoginUserUseCase             user.LoginUserUseCase
-	LogoutUserUseCase            user.LogoutUserUseCase
-	CreateAdministratorUseCase   administrator.CreateAdministratorUseCase
-	LoginAdministratorUseCase    administrator.LoginAdministratorUseCase
-	LogoutAdministratorUseCase   administrator.LogoutAdministratorUseCase
+	GetUserByIDUseCase user.GetUserByIDUseCase
+	CreateUserUseCase  user.CreateUserUseCase
+	ListUsersUseCase   user.ListUsersUseCase
+	DeleteUserUseCase  user.DeleteUserUseCase
+	UpdateUserUseCase  user.UpdateUserUseCase
+	SearchUsersUseCase user.SearchUsersUseCase
+	LoginUserUseCase   user.LoginUserUseCase
+	LogoutUserUseCase  user.LogoutUserUseCase
+
+	GetAdministratorByIDUseCase administrator.GetAdministratorByIDUseCase
+	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
+	ListAdministratorsUseCase   administrator.ListAdministratorsUseCase
+	DeleteAdministratorUseCase  administrator.DeleteAdministratorUseCase
+	UpdateAdministratorUseCase  administrator.UpdateAdministratorUseCase
+	SearchAdministratorsUseCase administrator.SearchAdministratorsUseCase
+	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
+	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
 }

@@ -7,6 +7,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.15.0
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/vektah/gqlparser/v2 v2.5.32
 	golang.org/x/crypto v0.48.0
 )
@@ -23,7 +24,6 @@ require (
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/redis/go-redis/v9 v9.18.0 // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect

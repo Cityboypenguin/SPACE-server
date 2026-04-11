@@ -34,6 +34,11 @@ func main() {
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
+	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
+	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
+	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository)
+	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
+	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 	redisClient, err := infraredis.New()
 	if err != nil {
@@ -54,6 +59,11 @@ func main() {
 		LoginUserUseCase:            loginUserUseCase,
 		LogoutUserUseCase:           logoutUserUseCase,
 		CreateAdministratorUseCase:  createAdministratorUseCase,
+		GetAdministratorByIDUseCase: getAdministratorByIDUseCase,
+		ListAdministratorsUseCase:   listAdministratorsUseCase,
+		DeleteAdministratorUseCase:  deleteAdministratorUseCase,
+		UpdateAdministratorUseCase:  updateAdministratorUseCase,
+		SearchAdministratorsUseCase: searchAdministratorsUseCase,
 		LoginAdministratorUseCase:   loginAdministratorUseCase,
 		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
 	}

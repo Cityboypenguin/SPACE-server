@@ -144,6 +144,49 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 	}, nil
 }
 
+// DeleteAdministrator is the resolver for the deleteAdministrator field.
+func (r *mutationResolver) DeleteAdministrator(ctx context.Context, id string) (bool, error) {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid administrator id: %s", id)
+	}
+
+	deleted, err := r.DeleteAdministratorUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
+}
+
+// UpdateAdministrator is the resolver for the updateAdministrator field.
+func (r *mutationResolver) UpdateAdministrator(ctx context.Context, input gqlmodel.UpdateAdministratorInput) (*gqlmodel.Administrator, error) {
+	numericID, err := strconv.ParseInt(input.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid administrator id: %s", input.ID)
+	}
+
+	param := model.UpdateAdministratorParam{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: input.Password,
+	}
+
+	admin, err := r.UpdateAdministratorUseCase.Execute(ctx, numericID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.Administrator{
+		ID:        fmt.Sprintf("%d", admin.ID),
+		Name:      admin.Name,
+		Email:     admin.Email,
+		Password:  admin.HashedPassword,
+		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+	}, nil
+}
+
 // LoginAdministrator is the resolver for the loginAdministrator field.
 func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmodel.LoginInput) (*gqlmodel.AdministratorAuthPayload, error) {
 	result, err := r.LoginAdministratorUseCase.Execute(ctx, input.Email, input.Password)
@@ -240,6 +283,70 @@ func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmod
 		})
 	}
 	return gqlUsers, nil
+}
+
+// Administrators is the resolver for the administrators field.
+func (r *queryResolver) Administrators(ctx context.Context) ([]*gqlmodel.Administrator, error) {
+	admins, err := r.ListAdministratorsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlAdmins []*gqlmodel.Administrator
+	for _, admin := range admins {
+		gqlAdmins = append(gqlAdmins, &gqlmodel.Administrator{
+			ID:        fmt.Sprintf("%d", admin.ID),
+			Name:      admin.Name,
+			Email:     admin.Email,
+			Password:  admin.HashedPassword,
+			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+		})
+	}
+	return gqlAdmins, nil
+}
+
+// GetAdministratorByID is the resolver for the getAdministratorByID field.
+func (r *queryResolver) GetAdministratorByID(ctx context.Context, id string) (*gqlmodel.Administrator, error) {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid administrator id: %s", id)
+	}
+
+	admin, err := r.GetAdministratorByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.Administrator{
+		ID:        fmt.Sprintf("%d", admin.ID),
+		Name:      admin.Name,
+		Email:     admin.Email,
+		Password:  admin.HashedPassword,
+		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+	}, nil
+}
+
+// SearchAdministrators is the resolver for the searchAdministrators field.
+func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) ([]*gqlmodel.Administrator, error) {
+	admins, err := r.SearchAdministratorsUseCase.Execute(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlAdmins []*gqlmodel.Administrator
+	for _, admin := range admins {
+		gqlAdmins = append(gqlAdmins, &gqlmodel.Administrator{
+			ID:        fmt.Sprintf("%d", admin.ID),
+			Name:      admin.Name,
+			Email:     admin.Email,
+			Password:  admin.HashedPassword,
+			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+		})
+	}
+	return gqlAdmins, nil
 }
 
 // Mutation returns MutationResolver implementation.
