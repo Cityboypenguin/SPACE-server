@@ -85,3 +85,5 @@ input UpdateUserInput {
   email: String
   password: String
 }
+
+#柴田 プロフィール作成
