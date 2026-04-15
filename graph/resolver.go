@@ -2,6 +2,7 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -18,8 +19,8 @@ type Resolver struct {
 	SearchUsersUseCase user.SearchUsersUseCase
 	LoginUserUseCase   user.LoginUserUseCase
 	LogoutUserUseCase  user.LogoutUserUseCase
-	UpdateProfileUseCase profile.UpdateProfileUseCase
-	GetProfileUseCase    profile.GetProfileUseCase
+	UpdateProfileUseCase profileusecase.UpdateProfileUseCase
+	GetProfileUseCase    profileusecase.GetProfileUseCase
 
 	GetAdministratorByIDUseCase administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
