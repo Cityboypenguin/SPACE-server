@@ -18,6 +18,8 @@ type Resolver struct {
 	SearchUsersUseCase user.SearchUsersUseCase
 	LoginUserUseCase   user.LoginUserUseCase
 	LogoutUserUseCase  user.LogoutUserUseCase
+	UpdateProfileUseCase profile.UpdateProfileUseCase
+	GetProfileUseCase    profile.GetProfileUseCase
 
 	GetAdministratorByIDUseCase administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase

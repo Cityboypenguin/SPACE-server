@@ -215,6 +215,34 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 	return true, nil
 }
 
+// UpdateProfile is the resolver for the updateProfile field.
+func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
+	// 1. GraphQLの入力を、現場監督用の「箱」に詰め替える
+	param := model.UpdateProfileParam{
+		Username: input.Username,
+		Bio:      input.Bio,
+		Grade:    input.Grade,
+		Image:    input.Image,
+	}
+
+	// 2. 現場監督にお願いする
+	p, err := r.UpdateProfileUseCase.Execute(ctx, input.UserID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 結果をGraphQL用の「箱」に詰め替えて返す
+	return &gqlmodel.Profile{
+		UserID:    p.UserID,
+		Username:  p.Username,
+		Bio:       &p.Bio,
+		Grade:     &p.Grade,
+		Image:     &p.Image,
+		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+	}, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	users, err := r.ListUsersUseCase.Execute(ctx)
@@ -347,6 +375,31 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 		})
 	}
 	return gqlAdmins, nil
+}
+
+// GetProfileByUserID is the resolver for the getProfileByUserID field.
+func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
+	// 1. 現場監督にお願いしてデータを取ってくる
+	p, err := r.GetProfileUseCase.Execute(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// まだプロフィールが作られていない場合は空っぽを返す
+	if p == nil {
+		return nil, nil
+	}
+
+	// 2. 結果をGraphQL用の「箱」に詰め替えて返す
+	return &gqlmodel.Profile{
+		UserID:    p.UserID,
+		Username:  p.Username,
+		Bio:       &p.Bio,
+		Grade:     &p.Grade,
+		Image:     &p.Image,
+		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+	}, nil
 }
 
 // Mutation returns MutationResolver implementation.
