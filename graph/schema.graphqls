@@ -8,6 +8,7 @@ type Query {
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
+  getProfileByUserID(userID: String!): Profile
 }
 
 type User {
@@ -56,6 +57,7 @@ type Mutation {
   updateAdministrator(input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
+  updateProfile(input: UpdateProfileInput!): Profile!
 }
 
 input CreateAdministratorInput {
@@ -86,4 +88,20 @@ input UpdateUserInput {
   password: String
 }
 
-#柴田 プロフィール作成
+type Profile {
+  userID: String!
+  username: String!
+  bio: String
+  grade: String
+  image: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+input UpdateProfileInput {
+  userID: String!
+  username: String
+  bio: String
+  grade: String
+  image: String
+}

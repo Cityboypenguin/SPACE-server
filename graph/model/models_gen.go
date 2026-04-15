@@ -37,6 +37,16 @@ type LoginInput struct {
 type Mutation struct {
 }
 
+type Profile struct {
+	UserID    string  `json:"userID"`
+	Username  string  `json:"username"`
+	Bio       *string `json:"bio,omitempty"`
+	Grade     *string `json:"grade,omitempty"`
+	Image     *string `json:"image,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
+}
+
 type Query struct {
 }
 
@@ -45,6 +55,14 @@ type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
+}
+
+type UpdateProfileInput struct {
+	UserID   string  `json:"userID"`
+	Username *string `json:"username,omitempty"`
+	Bio      *string `json:"bio,omitempty"`
+	Grade    *string `json:"grade,omitempty"`
+	Image    *string `json:"image,omitempty"`
 }
 
 type UpdateUserInput struct {
