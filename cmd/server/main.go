@@ -10,6 +10,7 @@ import (
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -69,6 +70,8 @@ func main() {
 		SearchAdministratorsUseCase: searchAdministratorsUseCase,
 		LoginAdministratorUseCase:   loginAdministratorUseCase,
 		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
+		GetProfileUseCase:           getProfileUseCase,
+		UpdateProfileUseCase:        updateProfileUseCase,
 	}
 
 	// middleware
