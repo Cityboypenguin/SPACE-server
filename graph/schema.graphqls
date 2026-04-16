@@ -85,3 +85,45 @@ input UpdateUserInput {
   email: String
   password: String
 }
+
+type Room {
+  ID: ID!
+  name: String!
+  description: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Message {
+  ID: ID!
+  roomID: ID!
+  userID: ID!
+  content: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input CreateRoomInput {
+  name: String!
+  description: String!
+}
+
+input UpdateRoomInput {
+  ID: ID!
+  name: String
+  description: String
+}
+
+input AddUserToRoomInput {
+  roomID: ID!
+  userID: ID!
+}
+
+input RemoveUserFromRoomInput {
+  roomID: ID!
+  userID: ID!
+}
+
+type Subscription {
+  messageAdded(roomID: ID!): Message!
+}
