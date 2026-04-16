@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS room_users (
     created_at  BIGINT       NOT NULL,
     updated_at  BIGINT       NOT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY unique_room_user (room_id, user_id),
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
