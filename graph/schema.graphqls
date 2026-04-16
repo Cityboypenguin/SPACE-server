@@ -90,6 +90,7 @@ type Room {
   ID: ID!
   name: String!
   type: String!
+  user: [User!]!
   description: String!
   createdAt: String!
   updatedAt: String!
@@ -98,7 +99,9 @@ type Room {
 type Message {
   ID: ID!
   roomID: ID!
+  room: Room!
   userID: ID!
+  user: User!
   content: String!
   createdAt: String!
   updatedAt: String!
