@@ -20,3 +20,20 @@ type UpdateRoomParam struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 }
+
+func (r *Room) CreateRoom(param CreateRoomParam) {
+	r.Name = param.Name
+	r.Type = "group"
+	r.Description = param.Description
+	r.CreatedAt = param.CreatedAt
+	r.UpdatedAt = param.UpdatedAt
+}
+
+func (r *Room) UpdateRoom(param UpdateRoomParam) {
+	if param.Name != nil {
+		r.Name = *param.Name
+	}
+	if param.Description != nil {
+		r.Description = *param.Description
+	}
+}
