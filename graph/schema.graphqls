@@ -90,9 +90,10 @@ input UpdateUserInput {
 
 type Profile {
   userID: String!
+  user: User!
   username: String!
   bio: String
-  grade: String
+  grade: Int
   image: String
   createdAt: String!
   updatedAt: String!
@@ -102,6 +103,6 @@ input UpdateProfileInput {
   userID: String!
   username: String
   bio: String
-  grade: String
+  grade: Int
   image: String
 }

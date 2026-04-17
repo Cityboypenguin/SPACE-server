@@ -7,6 +7,6 @@ import (
 )
 
 type ProfileRepository interface {
-	GetProfileByUserID(ctx context.Context, userID string) (*model.Profile, error)
+	GetProfileByUserID(ctx context.Context, userID int64) (*model.Profile, error)
 	SaveProfile(ctx context.Context, profile *model.Profile) error
 }

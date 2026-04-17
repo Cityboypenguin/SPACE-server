@@ -70,6 +70,7 @@ type ComplexityRoot struct {
 		Grade     func(childComplexity int) int
 		Image     func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
+		User      func(childComplexity int) int
 		UserID    func(childComplexity int) int
 		Username  func(childComplexity int) int
 	}
@@ -340,6 +341,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Profile.UpdatedAt(childComplexity), true
+	case "Profile.user":
+		if e.ComplexityRoot.Profile.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Profile.User(childComplexity), true
 	case "Profile.userID":
 		if e.ComplexityRoot.Profile.UserID == nil {
 			break
@@ -1590,6 +1597,8 @@ func (ec *executionContext) fieldContext_Mutation_updateProfile(ctx context.Cont
 			switch field.Name {
 			case "userID":
 				return ec.fieldContext_Profile_userID(ctx, field)
+			case "user":
+				return ec.fieldContext_Profile_user(ctx, field)
 			case "username":
 				return ec.fieldContext_Profile_username(ctx, field)
 			case "bio":
@@ -1644,6 +1653,53 @@ func (ec *executionContext) fieldContext_Profile_userID(_ context.Context, field
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Profile_user(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Profile_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalNUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Profile_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Profile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_User_ID(ctx, field)
+			case "userID":
+				return ec.fieldContext_User_userID(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "role":
+				return ec.fieldContext_User_role(ctx, field)
+			case "status":
+				return ec.fieldContext_User_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
 	}
 	return fc, nil
@@ -1717,7 +1773,7 @@ func (ec *executionContext) _Profile_grade(ctx context.Context, field graphql.Co
 			return obj.Grade, nil
 		},
 		nil,
-		ec.marshalOString2ᚖstring,
+		ec.marshalOInt2ᚖint32,
 		true,
 		false,
 	)
@@ -1730,7 +1786,7 @@ func (ec *executionContext) fieldContext_Profile_grade(_ context.Context, field 
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2168,6 +2224,8 @@ func (ec *executionContext) fieldContext_Query_getProfileByUserID(ctx context.Co
 			switch field.Name {
 			case "userID":
 				return ec.fieldContext_Profile_userID(ctx, field)
+			case "user":
+				return ec.fieldContext_Profile_user(ctx, field)
 			case "username":
 				return ec.fieldContext_Profile_username(ctx, field)
 			case "bio":
@@ -4284,7 +4342,7 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 			it.Bio = data
 		case "grade":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("grade"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalOInt2ᚖint32(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4607,6 +4665,11 @@ func (ec *executionContext) _Profile(ctx context.Context, sel ast.SelectionSet, 
 			out.Values[i] = graphql.MarshalString("Profile")
 		case "userID":
 			out.Values[i] = ec._Profile_userID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "user":
+			out.Values[i] = ec._Profile_user(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -5657,6 +5720,24 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint32(ctx context.Context, v any) (*int32, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt32(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint32(ctx context.Context, sel ast.SelectionSet, v *int32) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalInt32(*v)
 	return res
 }
 

@@ -217,24 +217,46 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 
 // UpdateProfile is the resolver for the updateProfile field.
 func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
-	// 1. GraphQLの入力を、現場監督用の「箱」に詰め替える
-	param := model.UpdateProfileParam{
-		Username: input.Username,
-		Bio:      input.Bio,
-		Grade:    input.Grade,
-		Image:    input.Image,
+	// 1. 文字列のIDを数値(int64)に変換する
+	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format")
 	}
 
-	// 2. 現場監督にお願いする
-	p, err := r.UpdateProfileUseCase.Execute(ctx, input.UserID, param)
+	param := model.UpdateProfileParam{
+		Bio:   input.Bio,
+		Grade: input.Grade,
+		Image: input.Image,
+	}
+
+	// 2. 数値に変換した numericUserID を渡す
+	p, err := r.UpdateProfileUseCase.Execute(ctx, numericUserID, param)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 結果をGraphQL用の「箱」に詰め替えて返す
+	users, _ := r.ListUsersUseCase.Execute(ctx)
+	var targetUser *gqlmodel.User
+	for _, u := range users {
+		// 3. ユーザーの内部ID(int64)同士で比較する
+		if u.ID == p.UserID {
+			targetUser = &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID, // これは "shibata_test" などのログインID
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			}
+			break
+		}
+	}
+
 	return &gqlmodel.Profile{
-		UserID:    p.UserID,
-		Username:  p.Username,
+		UserID:    fmt.Sprintf("%d", p.UserID), // GraphQLに返す時は文字列に戻す
+		User:      targetUser,
 		Bio:       &p.Bio,
 		Grade:     &p.Grade,
 		Image:     &p.Image,
@@ -379,21 +401,41 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 
 // GetProfileByUserID is the resolver for the getProfileByUserID field.
 func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
-	// 1. 現場監督にお願いしてデータを取ってくる
-	p, err := r.GetProfileUseCase.Execute(ctx, userID)
+	// 1. 文字列のIDを数値(int64)に変換する
+	numericUserID, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format")
+	}
+
+	p, err := r.GetProfileUseCase.Execute(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
-
-	// まだプロフィールが作られていない場合は空っぽを返す
 	if p == nil {
 		return nil, nil
 	}
 
-	// 2. 結果をGraphQL用の「箱」に詰め替えて返す
+	users, _ := r.ListUsersUseCase.Execute(ctx)
+	var targetUser *gqlmodel.User
+	for _, u := range users {
+		if u.ID == p.UserID {
+			targetUser = &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID,
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			}
+			break
+		}
+	}
+
 	return &gqlmodel.Profile{
-		UserID:    p.UserID,
-		Username:  p.Username,
+		UserID:    fmt.Sprintf("%d", p.UserID),
+		User:      targetUser,
 		Bio:       &p.Bio,
 		Grade:     &p.Grade,
 		Image:     &p.Image,

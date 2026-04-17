@@ -8,7 +8,7 @@ import (
 )
 
 type GetProfileUseCase interface {
-	Execute(ctx context.Context, userID string) (*model.Profile, error)
+	Execute(ctx context.Context, userID int64) (*model.Profile, error)
 }
 
 type GetProfileInteractor struct {
@@ -21,7 +21,7 @@ func NewGetProfileUseCase(profileRepo repository.ProfileRepository) GetProfileUs
 	}
 }
 
-func (uc *GetProfileInteractor) Execute(ctx context.Context, userID string) (*model.Profile, error) {
+func (uc *GetProfileInteractor) Execute(ctx context.Context, userID int64) (*model.Profile, error) {
 	// 取得はシンプルに、倉庫係から取り出したデータをそのまま返すだけです
 	return uc.profileRepo.GetProfileByUserID(ctx, userID)
 }
