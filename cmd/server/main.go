@@ -27,6 +27,8 @@ func main() {
 
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
+	profileRepository := mysql.NewMySQLProfileRepository(database)
+
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
@@ -34,9 +36,10 @@ func main() {
 	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
-	profileRepository := mysql.NewMySQLProfileRepository(database)
+
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
+
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
@@ -44,6 +47,7 @@ func main() {
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+
 	redisClient, err := infraredis.New()
 	if err != nil {
 		log.Fatalf("failed to connect to redis: %v", err)
@@ -72,8 +76,6 @@ func main() {
 		SearchAdministratorsUseCase: searchAdministratorsUseCase,
 		LoginAdministratorUseCase:   loginAdministratorUseCase,
 		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
-		GetProfileUseCase:           getProfileUseCase,
-		UpdateProfileUseCase:        updateProfileUseCase,
 	}
 
 	// middleware
