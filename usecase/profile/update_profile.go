@@ -9,7 +9,7 @@ import (
 )
 
 type UpdateProfileUseCase interface {
-	Execute(ctx context.Context, userID string, param model.UpdateProfileParam) (*model.Profile, error)
+	Execute(ctx context.Context, userID int64, param model.UpdateProfileParam) (*model.Profile, error)
 }
 
 type UpdateProfileInteractor struct {
@@ -22,7 +22,7 @@ func NewUpdateProfileUseCase(profileRepo repository.ProfileRepository) UpdatePro
 	}
 }
 
-func (uc *UpdateProfileInteractor) Execute(ctx context.Context, userID string, param model.UpdateProfileParam) (*model.Profile, error) {
+func (uc *UpdateProfileInteractor) Execute(ctx context.Context, userID int64, param model.UpdateProfileParam) (*model.Profile, error) {
 	// 1. 倉庫係に「この人のプロフィール、もうデータベースにある？」と確認する
 	profile, err := uc.profileRepo.GetProfileByUserID(ctx, userID)
 	if err != nil {

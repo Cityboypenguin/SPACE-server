@@ -62,6 +62,8 @@ func main() {
 		SearchUsersUseCase:          searchUsersUseCase,
 		LoginUserUseCase:            loginUserUseCase,
 		LogoutUserUseCase:           logoutUserUseCase,
+		GetProfileUseCase:           getProfileUseCase,
+		UpdateProfileUseCase:        updateProfileUseCase,
 		CreateAdministratorUseCase:  createAdministratorUseCase,
 		GetAdministratorByIDUseCase: getAdministratorByIDUseCase,
 		ListAdministratorsUseCase:   listAdministratorsUseCase,
