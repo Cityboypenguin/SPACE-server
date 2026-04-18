@@ -2,6 +2,11 @@
 
 package model
 
+type AddUserToRoomInput struct {
+	RoomID string `json:"roomID"`
+	UserID string `json:"userID"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
@@ -22,6 +27,11 @@ type CreateAdministratorInput struct {
 	Password string `json:"password"`
 }
 
+type CreateRoomInput struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 type CreateUserInput struct {
 	UserID   string `json:"userID"`
 	Name     string `json:"name"`
@@ -34,10 +44,39 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+type Message struct {
+	ID        string `json:"ID"`
+	RoomID    string `json:"roomID"`
+	Room      *Room  `json:"room"`
+	UserID    string `json:"userID"`
+	User      *User  `json:"user"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type Mutation struct {
 }
 
 type Query struct {
+}
+
+type RemoveUserFromRoomInput struct {
+	RoomID string `json:"roomID"`
+	UserID string `json:"userID"`
+}
+
+type Room struct {
+	ID          string  `json:"ID"`
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	User        []*User `json:"user"`
+	Description string  `json:"description"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+type Subscription struct {
 }
 
 type UpdateAdministratorInput struct {
@@ -45,6 +84,12 @@ type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
+}
+
+type UpdateRoomInput struct {
+	ID          string  `json:"ID"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 type UpdateUserInput struct {

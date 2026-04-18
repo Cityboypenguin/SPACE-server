@@ -1,7 +1,10 @@
 package graph
 
 import (
+	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -27,4 +30,14 @@ type Resolver struct {
 	SearchAdministratorsUseCase administrator.SearchAdministratorsUseCase
 	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
 	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
+
+	SendMessageUseCase       messageusecase.SendMessageUseCase
+	ListMessagesUseCase      messageusecase.ListMessagesUseCase
+	CreateRoomUseCase        roomusecase.CreateRoomUseCase
+	GetRoomUseCase           roomusecase.GetRoomUseCase
+	GetOrCreateDMRoomUseCase roomusecase.GetOrCreateDMRoomUseCase
+	AddUserToRoomUseCase     roomusecase.AddUserToRoomUseCase
+	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
+
+	PubSub *pubsub.PubSub
 }

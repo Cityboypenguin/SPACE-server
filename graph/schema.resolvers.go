@@ -215,6 +215,136 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 	return true, nil
 }
 
+// SendMessage is the resolver for the sendMessage field.
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, userID string, content string) (*gqlmodel.Message, error) {
+	rid, err := strconv.ParseInt(roomID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid userID: %s", userID)
+	}
+
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, uid, content)
+	if err != nil {
+		return nil, err
+	}
+
+	user, _ := r.GetUserByIDUseCase.Execute(ctx, uid)
+	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
+
+	gqlMsg := &gqlmodel.Message{
+		ID:        fmt.Sprintf("%d", msg.ID),
+		RoomID:    fmt.Sprintf("%d", msg.RoomID),
+		UserID:    fmt.Sprintf("%d", msg.UserID),
+		Content:   msg.Content,
+		CreatedAt: fmt.Sprintf("%d", msg.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", msg.UpdatedAt),
+	}
+	if user != nil {
+		gqlMsg.User = &gqlmodel.User{
+			ID:        fmt.Sprintf("%d", user.ID),
+			UserID:    user.UserID,
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Status:    user.Status,
+			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		}
+	}
+	if room != nil {
+		gqlMsg.Room = &gqlmodel.Room{
+			ID:          fmt.Sprintf("%d", room.ID),
+			Name:        room.Name,
+			Type:        room.Type,
+			Description: room.Description,
+			CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
+			UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+		}
+	}
+
+	r.PubSub.Publish(roomID, gqlMsg)
+	return gqlMsg, nil
+}
+
+// CreateRoom is the resolver for the createRoom field.
+func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
+	room, err := r.CreateRoomUseCase.Execute(ctx, model.CreateRoomParam{
+		Name:        input.Name,
+		Description: input.Description,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.Room{
+		ID:          fmt.Sprintf("%d", room.ID),
+		Name:        room.Name,
+		Type:        room.Type,
+		Description: room.Description,
+		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
+		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+	}, nil
+}
+
+// GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
+func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, currentUserID string, targetUserID string) (*gqlmodel.Room, error) {
+	cid, err := strconv.ParseInt(currentUserID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid currentUserID: %s", currentUserID)
+	}
+	tid, err := strconv.ParseInt(targetUserID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid targetUserID: %s", targetUserID)
+	}
+
+	room, err := r.GetOrCreateDMRoomUseCase.Execute(ctx, cid, tid)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.Room{
+		ID:          fmt.Sprintf("%d", room.ID),
+		Name:        room.Name,
+		Type:        room.Type,
+		Description: room.Description,
+		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
+		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+	}, nil
+}
+
+// AddUserToRoom is the resolver for the addUserToRoom field.
+func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.AddUserToRoomInput) (bool, error) {
+	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
+	}
+	uid, err := strconv.ParseInt(input.UserID, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid userID: %s", input.UserID)
+	}
+	if err := r.AddUserToRoomUseCase.Execute(ctx, rid, uid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// RemoveUserFromRoom is the resolver for the removeUserFromRoom field.
+func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmodel.RemoveUserFromRoomInput) (bool, error) {
+	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
+	}
+	uid, err := strconv.ParseInt(input.UserID, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid userID: %s", input.UserID)
+	}
+	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, rid, uid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	users, err := r.ListUsersUseCase.Execute(ctx)
@@ -349,11 +479,111 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 	return gqlAdmins, nil
 }
 
+// Messages is the resolver for the messages field.
+func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmodel.Message, error) {
+	rid, err := strconv.ParseInt(roomID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+	}
+
+	msgs, err := r.ListMessagesUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*gqlmodel.Message
+	for _, msg := range msgs {
+		gqlMsg := &gqlmodel.Message{
+			ID:        fmt.Sprintf("%d", msg.ID),
+			RoomID:    fmt.Sprintf("%d", msg.RoomID),
+			UserID:    fmt.Sprintf("%d", msg.UserID),
+			Content:   msg.Content,
+			CreatedAt: fmt.Sprintf("%d", msg.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", msg.UpdatedAt),
+		}
+		if u, _ := r.GetUserByIDUseCase.Execute(ctx, msg.UserID); u != nil {
+			gqlMsg.User = &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID,
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			}
+		}
+		if rm, _ := r.GetRoomUseCase.Execute(ctx, msg.RoomID); rm != nil {
+			gqlMsg.Room = &gqlmodel.Room{
+				ID:          fmt.Sprintf("%d", rm.ID),
+				Name:        rm.Name,
+				Type:        rm.Type,
+				Description: rm.Description,
+				CreatedAt:   fmt.Sprintf("%d", rm.CreatedAt),
+				UpdatedAt:   fmt.Sprintf("%d", rm.UpdatedAt),
+			}
+		}
+		result = append(result, gqlMsg)
+	}
+	return result, nil
+}
+
+// Room is the resolver for the room field.
+func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, error) {
+	rid, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid id: %s", id)
+	}
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.Room{
+		ID:          fmt.Sprintf("%d", room.ID),
+		Name:        room.Name,
+		Type:        room.Type,
+		Description: room.Description,
+		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
+		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+	}, nil
+}
+
+// MessageAdded is the resolver for the messageAdded field.
+func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
+	ch := make(chan *gqlmodel.Message, 1)
+	sub := r.PubSub.Subscribe(roomID)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(roomID, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					close(ch)
+					return
+				}
+				if msg, ok := data.(*gqlmodel.Message); ok {
+					ch <- msg
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+// Subscription returns SubscriptionResolver implementation.
+func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
+
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }

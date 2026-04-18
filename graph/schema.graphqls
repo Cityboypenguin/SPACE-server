@@ -8,6 +8,8 @@ type Query {
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
+  messages(roomID: ID!): [Message!]!
+  room(id: ID!): Room
 }
 
 type User {
@@ -56,6 +58,11 @@ type Mutation {
   updateAdministrator(input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
+  sendMessage(roomID: ID!, userID: ID!, content: String!): Message!
+  createRoom(input: CreateRoomInput!): Room!
+  getOrCreateDMRoom(currentUserID: ID!, targetUserID: ID!): Room!
+  addUserToRoom(input: AddUserToRoomInput!): Boolean!
+  removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
 }
 
 input CreateAdministratorInput {
