@@ -16,10 +16,38 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type Comment struct {
+	ID        string `json:"ID"`
+	UserID    string `json:"user_id"`
+	PostID    string `json:"post_id"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type CreateCommentInput struct {
+	UserID  string `json:"user_id"`
+	PostID  string `json:"post_id"`
+	Content string `json:"content"`
+}
+
+type CreateFavoriteInput struct {
+	UserID string `json:"user_id"`
+	PostID string `json:"post_id"`
+}
+
+type CreatePostInput struct {
+	UserID    string  `json:"user_id"`
+	Content   string  `json:"content"`
+	Picture   *string `json:"picture,omitempty"`
+	Movie     *string `json:"movie,omitempty"`
+	Hyperlink *string `json:"hyperlink,omitempty"`
 }
 
 type CreateUserInput struct {
@@ -27,6 +55,13 @@ type CreateUserInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type Favorite struct {
+	ID        string `json:"ID"`
+	UserID    string `json:"user_id"`
+	PostID    string `json:"post_id"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type LoginInput struct {
@@ -37,6 +72,18 @@ type LoginInput struct {
 type Mutation struct {
 }
 
+type Post struct {
+	ID            string  `json:"ID"`
+	UserID        string  `json:"user_id"`
+	Content       string  `json:"content"`
+	Picture       *string `json:"picture,omitempty"`
+	Movie         *string `json:"movie,omitempty"`
+	Hyperlink     *string `json:"hyperlink,omitempty"`
+	FavoriteCount int32   `json:"favorite_count"`
+	CreatedAt     string  `json:"createdAt"`
+	UpdatedAt     string  `json:"updatedAt"`
+}
+
 type Query struct {
 }
 
@@ -45,6 +92,22 @@ type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
+}
+
+type UpdateCommentInput struct {
+	ID      string  `json:"ID"`
+	UserID  *string `json:"user_id,omitempty"`
+	PostID  *string `json:"post_id,omitempty"`
+	Content *string `json:"content,omitempty"`
+}
+
+type UpdatePostInput struct {
+	ID        string  `json:"ID"`
+	UserID    *string `json:"user_id,omitempty"`
+	Content   *string `json:"content,omitempty"`
+	Picture   *string `json:"picture,omitempty"`
+	Movie     *string `json:"movie,omitempty"`
+	Hyperlink *string `json:"hyperlink,omitempty"`
 }
 
 type UpdateUserInput struct {

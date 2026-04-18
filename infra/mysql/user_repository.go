@@ -17,7 +17,7 @@ func NewMySQLUserRepository(db *sql.DB) *MySQLUserRepository {
 }
 
 func (r *MySQLUserRepository) SaveUser(ctx context.Context, u *model.User) error {
-	now := time.Now().Unix()
+	now := time.Now()
 	u.UpdatedAt = now
 
 	if u.ID == 0 {

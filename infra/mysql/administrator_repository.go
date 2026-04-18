@@ -21,7 +21,7 @@ func NewMySQLAdministratorRepository(db *sql.DB) repository.AdministratorReposit
 
 // Implement the methods of the AdministratorRepository interface here
 func (r *MySQLAdministratorRepository) SaveAdministrator(ctx context.Context, a *model.Administrator) error {
-	now := time.Now().Unix()
+	now := time.Now()
 
 	if a.ID == 0 {
 		a.CreatedAt = now
@@ -148,7 +148,7 @@ func (r *MySQLAdministratorRepository) FindByEmail(ctx context.Context, email st
 }
 
 func (r *MySQLAdministratorRepository) UpdateAdministrator(ctx context.Context, a *model.Administrator) error {
-	now := time.Now().Unix()
+	now := time.Now()
 	a.UpdatedAt = now
 
 	query := `

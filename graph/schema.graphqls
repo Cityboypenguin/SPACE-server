@@ -8,6 +8,9 @@ type Query {
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
+  posts: [Post!]!
+  getPostByID(id: ID!): Post
+  searchPosts(content: String!): [Post!]!
 }
 
 type User {
@@ -26,6 +29,34 @@ type Administrator {
   name: String!
   password: String!
   email: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Post {
+  ID: ID!
+  user_id: ID!
+  content: String!
+  picture: String #画像のURL
+  movie: String #動画のURL
+  hyperlink: String
+  favorite_count: Int!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Favorite {
+  ID: ID!
+  user_id: ID!
+  post_id: ID!
+  createdAt: String!
+}
+
+type Comment {
+  ID: ID!
+  user_id: ID!
+  post_id: ID!
+  content: String!
   createdAt: String!
   updatedAt: String!
 }
@@ -56,6 +87,14 @@ type Mutation {
   updateAdministrator(input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
+  createPost(input: CreatePostInput!): Post!
+  deletePost(id: ID!): Boolean!
+  updatePost(input: UpdatePostInput!): Post!
+  createFavorite(input: CreateFavoriteInput!): Favorite!
+  deleteFavorite(id: ID!): Boolean!
+  createComment(input: CreateCommentInput!): Comment!
+  deleteComment(id: ID!): Boolean!
+  updateComment(input: UpdateCommentInput!): Comment!
 }
 
 input CreateAdministratorInput {
@@ -84,4 +123,39 @@ input UpdateUserInput {
   name: String
   email: String
   password: String
+}
+
+input CreatePostInput {
+  user_id: ID!
+  content: String!
+  picture: String
+  movie: String
+  hyperlink: String
+}
+
+input UpdatePostInput {
+  ID: ID!
+  user_id: ID
+  content: String
+  picture: String
+  movie: String
+  hyperlink: String
+}
+
+input CreateFavoriteInput {
+  user_id: ID!
+  post_id: ID!
+}
+
+input CreateCommentInput {
+  user_id: ID!
+  post_id: ID!
+  content: String!
+}
+
+input UpdateCommentInput {
+  ID: ID!
+  user_id: ID
+  post_id: ID
+  content: String
 }

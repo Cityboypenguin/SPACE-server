@@ -215,6 +215,46 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 	return true, nil
 }
 
+// CreatePost is the resolver for the createPost field.
+func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.CreatePostInput) (*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: CreatePost - createPost"))
+}
+
+// DeletePost is the resolver for the deletePost field.
+func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeletePost - deletePost"))
+}
+
+// UpdatePost is the resolver for the updatePost field.
+func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.UpdatePostInput) (*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: UpdatePost - updatePost"))
+}
+
+// CreateFavorite is the resolver for the createFavorite field.
+func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.CreateFavoriteInput) (*gqlmodel.Favorite, error) {
+	panic(fmt.Errorf("not implemented: CreateFavorite - createFavorite"))
+}
+
+// DeleteFavorite is the resolver for the deleteFavorite field.
+func (r *mutationResolver) DeleteFavorite(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteFavorite - deleteFavorite"))
+}
+
+// CreateComment is the resolver for the createComment field.
+func (r *mutationResolver) CreateComment(ctx context.Context, input gqlmodel.CreateCommentInput) (*gqlmodel.Comment, error) {
+	panic(fmt.Errorf("not implemented: CreateComment - createComment"))
+}
+
+// DeleteComment is the resolver for the deleteComment field.
+func (r *mutationResolver) DeleteComment(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteComment - deleteComment"))
+}
+
+// UpdateComment is the resolver for the updateComment field.
+func (r *mutationResolver) UpdateComment(ctx context.Context, input gqlmodel.UpdateCommentInput) (*gqlmodel.Comment, error) {
+	panic(fmt.Errorf("not implemented: UpdateComment - updateComment"))
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	users, err := r.ListUsersUseCase.Execute(ctx)
@@ -347,6 +387,21 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 		})
 	}
 	return gqlAdmins, nil
+}
+
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: Posts - posts"))
+}
+
+// GetPostByID is the resolver for the getPostByID field.
+func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: GetPostByID - getPostByID"))
+}
+
+// SearchPosts is the resolver for the searchPosts field.
+func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: SearchPosts - searchPosts"))
 }
 
 // Mutation returns MutationResolver implementation.
