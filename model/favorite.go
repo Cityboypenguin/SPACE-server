@@ -3,20 +3,19 @@ package model
 import "time"
 
 type Favorite struct {
-	ID        int64     `json:"ID"`
-	UserID    string    `json:"user_id"`
-	PostID    string    `json:"post_id"`
+	User      *User     `json:"user"`
+	Post      *Post     `json:"post"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
 type CreateFavoriteParam struct {
-	UserID    string    `json:"user_id"`
-	PostID    string    `json:"post_id"`
+	UserID    int64     `json:"user_id"`
+	PostID    int64     `json:"post_id"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
 func (f *Favorite) CreateFavorite(param CreateFavoriteParam) {
-	f.UserID = param.UserID
-	f.PostID = param.PostID
+	f.User = &User{ID: param.UserID}
+	f.Post = &Post{ID: param.PostID}
 	f.CreatedAt = param.CreatedAt
 }

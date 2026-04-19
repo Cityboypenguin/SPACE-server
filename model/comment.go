@@ -4,16 +4,16 @@ import "time"
 
 type Comment struct {
 	ID        int64     `json:"ID"`
-	UserID    string    `json:"user_id"`
-	PostID    string    `json:"post_id"`
+	User      *User     `json:"user"`
+	Post      *Post     `json:"post"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type CreateCommentParam struct {
-	UserID    string    `json:"user_id"`
-	PostID    string    `json:"post_id"`
+	UserID    int64     `json:"user_id"`
+	PostID    int64     `json:"post_id"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -24,8 +24,8 @@ type UpdateCommentParam struct {
 }
 
 func (c *Comment) CreateComment(param CreateCommentParam) {
-	c.UserID = param.UserID
-	c.PostID = param.PostID
+	c.User = &User{ID: param.UserID}
+	c.Post = &Post{ID: param.PostID}
 	c.Content = param.Content
 	c.CreatedAt = param.CreatedAt
 	c.UpdatedAt = param.UpdatedAt
