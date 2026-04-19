@@ -29,7 +29,7 @@ func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64)
 	return &favorite, nil
 }
 
-func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, favorite *model.Favorite) (*model.Favorite, error) {
+func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, favorite *model.Favorite) error {
 	now := time.Now()
 	favorite.CreatedAt = now
 
@@ -43,22 +43,31 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, favorite *
 		favorite.CreatedAt,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	favorite.ID = id
 
-	return favorite, nil
+	return nil
 }
 
-func (r *MySQLFavoriteRepository) DeleteFavorite(ctx context.Context, id int64) error {
+func (r *MySQLFavoriteRepository) DeleteFavorite(ctx context.Context, id int64) (bool, error) {
 	query := `DELETE FROM favorites WHERE id = ?`
-	_, err := r.DB.ExecContext(ctx, query, id)
-	return err
+	result, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected > 0, nil
 }
 
 func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, postID int64) ([]*model.Favorite, error) {
@@ -74,6 +83,27 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 		var favorite model.Favorite
 		favorite.Post = &model.Post{ID: postID}
 		if err := rows.Scan(&favorite.ID, &favorite.User, &favorite.CreatedAt); err != nil {
+			return nil, err
+		}
+		favorites = append(favorites, &favorite)
+	}
+
+	return favorites, nil
+}
+
+func (r *MySQLFavoriteRepository) GetFavoritesByUserID(ctx context.Context, userID int64) ([]*model.Favorite, error) {
+	query := `SELECT id, post_id, created_at FROM favorites WHERE user_id = ?`
+	rows, err := r.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var favorites []*model.Favorite
+	for rows.Next() {
+		var favorite model.Favorite
+		favorite.User = &model.User{ID: userID}
+		if err := rows.Scan(&favorite.ID, &favorite.Post, &favorite.CreatedAt); err != nil {
 			return nil, err
 		}
 		favorites = append(favorites, &favorite)

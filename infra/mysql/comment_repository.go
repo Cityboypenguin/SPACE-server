@@ -90,10 +90,20 @@ func (r *MySQLCommentRepository) GetCommentsByPostID(ctx context.Context, postID
 	return comments, nil
 }
 
-func (r *MySQLCommentRepository) DeleteComment(ctx context.Context, id int64) error {
-	query := `DELETE FROM comments WHERE id = ?`
-	_, err := r.DB.ExecContext(ctx, query, id)
-	return err
+func (r *MySQLCommentRepository) DeleteComment(ctx context.Context, id int64) (bool, error) {
+	query := `
+		DELETE FROM comments
+		WHERE id = ?
+	`
+	result, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
 }
 
 func (r *MySQLCommentRepository) UpdateComment(ctx context.Context, c *model.Comment) error {

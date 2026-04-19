@@ -92,13 +92,20 @@ func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) err
 	return err
 }
 
-func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) error {
+func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, error) {
 	query := `
 		DELETE FROM posts
 		WHERE id = ?
 	`
-	_, err := r.DB.ExecContext(ctx, query, id)
-	return err
+	result, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
 }
 
 func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error) {
