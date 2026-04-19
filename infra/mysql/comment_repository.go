@@ -26,7 +26,7 @@ func (r *MySQLCommentRepository) GetCommentByID(ctx context.Context, id int64) (
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var c model.Comment
-	if err := row.Scan(&c.ID, &c.PostID, &c.UserID, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Post, &c.User, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +59,7 @@ func (r *MySQLCommentRepository) CreateComment(ctx context.Context, c *model.Com
 		INSERT INTO comments (post_id, user_id, content, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
-	result, err := r.DB.ExecContext(ctx, query, c.PostID, c.UserID, c.Content, c.CreatedAt, c.UpdatedAt)
+	result, err := r.DB.ExecContext(ctx, query, c.Post, c.User, c.Content, c.CreatedAt, c.UpdatedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -81,7 +81,7 @@ func (r *MySQLCommentRepository) GetCommentsByPostID(ctx context.Context, postID
 	var comments []*model.Comment
 	for rows.Next() {
 		var c model.Comment
-		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Post, &c.User, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		comments = append(comments, &c)
@@ -102,6 +102,6 @@ func (r *MySQLCommentRepository) UpdateComment(ctx context.Context, c *model.Com
 		SET post_id = ?, user_id = ?, content = ?, updated_at = ?
 		WHERE id = ?
 	`
-	_, err := r.DB.ExecContext(ctx, query, c.PostID, c.UserID, c.Content, c.UpdatedAt, c.ID)
+	_, err := r.DB.ExecContext(ctx, query, c.Post, c.User, c.Content, c.UpdatedAt, c.ID)
 	return err
 }

@@ -22,7 +22,7 @@ func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64)
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var favorite model.Favorite
-	if err := row.Scan(&favorite.ID, &favorite.PostID, &favorite.UserID, &favorite.CreatedAt); err != nil {
+	if err := row.Scan(&favorite.ID, &favorite.Post, &favorite.User, &favorite.CreatedAt); err != nil {
 		return nil, err
 	}
 
@@ -38,8 +38,8 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, favorite *
 		VALUES (?, ?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
-		favorite.PostID,
-		favorite.UserID,
+		favorite.Post,
+		favorite.User,
 		favorite.CreatedAt,
 	)
 	if err != nil {
@@ -72,8 +72,8 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 	var favorites []*model.Favorite
 	for rows.Next() {
 		var favorite model.Favorite
-		favorite.PostID = postID
-		if err := rows.Scan(&favorite.ID, &favorite.UserID, &favorite.CreatedAt); err != nil {
+		favorite.Post = &model.Post{ID: postID}
+		if err := rows.Scan(&favorite.ID, &favorite.User, &favorite.CreatedAt); err != nil {
 			return nil, err
 		}
 		favorites = append(favorites, &favorite)

@@ -3,6 +3,7 @@ package model
 import "time"
 
 type Favorite struct {
+	ID        int64     `json:"ID"`
 	User      *User     `json:"user"`
 	Post      *Post     `json:"post"`
 	CreatedAt time.Time `json:"createdAt"`

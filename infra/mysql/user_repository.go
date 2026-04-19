@@ -49,7 +49,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	var u model.User
 	if err := row.Scan(
 		&u.ID,
-		&u.UserID,
+		&u.AccountID,
 		&u.Name,
 		&u.Email,
 		&u.HashedPassword,
@@ -103,7 +103,7 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 		var u model.User
 		if err := rows.Scan(
 			&u.ID,
-			&u.UserID,
+			&u.AccountID,
 			&u.Name,
 			&u.Email,
 			&u.HashedPassword,
@@ -138,7 +138,7 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 		var u model.User
 		if err := rows.Scan(
 			&u.ID,
-			&u.UserID,
+			&u.AccountID,
 			&u.Name,
 			&u.Email,
 			&u.HashedPassword,
@@ -168,7 +168,7 @@ func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*m
 	var u model.User
 	if err := row.Scan(
 		&u.ID,
-		&u.UserID,
+		&u.AccountID,
 		&u.Name,
 		&u.Email,
 		&u.HashedPassword,
@@ -212,7 +212,7 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 	`
 
 	result, err := r.DB.ExecContext(ctx, query,
-		u.UserID,
+		u.AccountID,
 		u.Name,
 		u.Email,
 		u.HashedPassword,
