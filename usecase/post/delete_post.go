@@ -7,7 +7,7 @@ import (
 )
 
 type DeletePostUseCase interface {
-	Execute(ctx context.Context, id int64) error
+	Execute(ctx context.Context, id int64) (bool, error)
 }
 
 var _ DeletePostUseCase = &DeletePostInteractor{}

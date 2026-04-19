@@ -13,4 +13,5 @@ type PostRepository interface {
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
 	ListPosts(ctx context.Context) ([]*model.Post, error)
 	UpdatePost(ctx context.Context, post *model.Post) error
+	SearchPosts(ctx context.Context, query string) ([]*model.Post, error)
 }

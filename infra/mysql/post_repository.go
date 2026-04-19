@@ -154,3 +154,31 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 
 	return posts, nil
 }
+
+func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
+	searchQuery := `
+		SELECT id, user_id, content, created_at, updated_at
+		FROM posts
+		WHERE content LIKE ?
+	`
+	rows, err := r.DB.QueryContext(ctx, searchQuery, "%"+query+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []*model.Post
+	for rows.Next() {
+		var p model.Post
+		if err := rows.Scan(&p.ID, &p.User.ID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		posts = append(posts, &p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}

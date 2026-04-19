@@ -2,6 +2,9 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	"github.com/Cityboypenguin/SPACE-server/usecase/comment"
+	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -27,4 +30,22 @@ type Resolver struct {
 	SearchAdministratorsUseCase administrator.SearchAdministratorsUseCase
 	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
 	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
+
+	GetPostByIDUseCase post.GetPostByIDUseCase
+	CreatePostUseCase  post.CreatePostUseCase
+	ListPostsUseCase   post.ListPostsUseCase
+	DeletePostUseCase  post.DeletePostUseCase
+	UpdatePostUseCase  post.UpdatePostUseCase
+	SearchPostsUseCase post.SearchPostsUseCase
+
+	GetCommentByIDUseCase      comment.GetCommentByIDUseCase
+	CreateCommentUseCase       comment.CreateCommentUseCase
+	DeleteCommentUseCase       comment.DeleteCommentUseCase
+	UpdateCommentUseCase       comment.UpdateCommentUseCase
+	GetCommentsByPostIDUseCase comment.GetCommentsByPostIDUseCase
+
+	GetFavoriteByIDUseCase         favorite.GetFavoriteByIDUseCase
+	CreateFavoriteUseCase          favorite.CreateFavoriteUseCase
+	DeleteFavoriteUseCase          favorite.DeleteFavoriteUseCase
+	GetFavoritesByPostIDInteractor favorite.GetFavoritesByPostIDUseCase
 }

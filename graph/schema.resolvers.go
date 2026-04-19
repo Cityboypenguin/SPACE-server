@@ -35,8 +35,8 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 	}, nil
 }
 
@@ -86,8 +86,8 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 	}, nil
 }
 
@@ -107,8 +107,8 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 			Email:     result.User.Email,
 			Role:      result.User.Role,
 			Status:    result.User.Status,
-			CreatedAt: fmt.Sprintf("%d", result.User.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", result.User.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", result.User.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", result.User.UpdatedAt),
 		},
 	}, nil
 }
@@ -139,8 +139,8 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 		Name:      administrator.Name,
 		Email:     administrator.Email,
 		Password:  administrator.HashedPassword,
-		CreatedAt: fmt.Sprintf("%d", administrator.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", administrator.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", administrator.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", administrator.UpdatedAt),
 	}, nil
 }
 
@@ -182,8 +182,8 @@ func (r *mutationResolver) UpdateAdministrator(ctx context.Context, input gqlmod
 		Name:      admin.Name,
 		Email:     admin.Email,
 		Password:  admin.HashedPassword,
-		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", admin.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", admin.UpdatedAt),
 	}, nil
 }
 
@@ -201,8 +201,8 @@ func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmode
 			Name:      result.Administrator.Name,
 			Email:     result.Administrator.Email,
 			Password:  result.Administrator.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", result.Administrator.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", result.Administrator.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", result.Administrator.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", result.Administrator.UpdatedAt),
 		},
 	}, nil
 }
@@ -271,8 +271,8 @@ func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 			Email:     user.Email,
 			Role:      user.Role,
 			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 		})
 	}
 	return gqlUsers, nil
@@ -297,8 +297,8 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 	}, nil
 }
 
@@ -318,8 +318,8 @@ func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmod
 			Email:     user.Email,
 			Role:      user.Role,
 			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 		})
 	}
 	return gqlUsers, nil
@@ -339,8 +339,8 @@ func (r *queryResolver) Administrators(ctx context.Context) ([]*gqlmodel.Adminis
 			Name:      admin.Name,
 			Email:     admin.Email,
 			Password:  admin.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", admin.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", admin.UpdatedAt),
 		})
 	}
 	return gqlAdmins, nil
@@ -363,8 +363,8 @@ func (r *queryResolver) GetAdministratorByID(ctx context.Context, id string) (*g
 		Name:      admin.Name,
 		Email:     admin.Email,
 		Password:  admin.HashedPassword,
-		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+		CreatedAt: fmt.Sprintf("%s", admin.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", admin.UpdatedAt),
 	}, nil
 }
 
@@ -382,8 +382,8 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 			Name:      admin.Name,
 			Email:     admin.Email,
 			Password:  admin.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+			CreatedAt: fmt.Sprintf("%s", admin.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%s", admin.UpdatedAt),
 		})
 	}
 	return gqlAdmins, nil
