@@ -7,8 +7,8 @@ import (
 )
 
 type FavoriteRepository interface {
-	GeteFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
+	GeteFavoriteByID(ctx context.Context, id int64) (*model.Favorite, error)
 	CreateFavorite(ctx context.Context, favorite *model.Favorite) (*model.Favorite, error)
-	DeleteFavorite(ctx context.Context, id string) error
-	GetFavoritesByPostID(ctx context.Context, postID string) ([]*model.Favorite, error)
+	DeleteFavorite(ctx context.Context, id int64) error
+	GetFavoritesByPostID(ctx context.Context, postID int64) ([]*model.Favorite, error)
 }

@@ -7,7 +7,7 @@ import (
 )
 
 type PostRepository interface {
-	SavePost(ctx context.Context, post *model.Post) (*model.Post, error)
+	SavePost(ctx context.Context, post *model.Post) error
 	DeletePost(ctx context.Context, id int64) error
 	GetPostByID(ctx context.Context, id int64) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)

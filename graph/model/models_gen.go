@@ -18,8 +18,8 @@ type AdministratorAuthPayload struct {
 
 type Comment struct {
 	ID        string `json:"ID"`
-	UserID    string `json:"user_id"`
-	PostID    string `json:"post_id"`
+	User      *User  `json:"user"`
+	Post      *Post  `json:"post"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
@@ -51,16 +51,16 @@ type CreatePostInput struct {
 }
 
 type CreateUserInput struct {
-	UserID   string `json:"userID"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	AccountID string `json:"accountID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
 }
 
 type Favorite struct {
 	ID        string `json:"ID"`
-	UserID    string `json:"user_id"`
-	PostID    string `json:"post_id"`
+	User      *User  `json:"user"`
+	Post      *Post  `json:"post"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -74,7 +74,7 @@ type Mutation struct {
 
 type Post struct {
 	ID            string  `json:"ID"`
-	UserID        string  `json:"user_id"`
+	User          *User   `json:"user"`
 	Content       string  `json:"content"`
 	Picture       *string `json:"picture,omitempty"`
 	Movie         *string `json:"movie,omitempty"`
@@ -96,14 +96,11 @@ type UpdateAdministratorInput struct {
 
 type UpdateCommentInput struct {
 	ID      string  `json:"ID"`
-	UserID  *string `json:"user_id,omitempty"`
-	PostID  *string `json:"post_id,omitempty"`
 	Content *string `json:"content,omitempty"`
 }
 
 type UpdatePostInput struct {
 	ID        string  `json:"ID"`
-	UserID    *string `json:"user_id,omitempty"`
 	Content   *string `json:"content,omitempty"`
 	Picture   *string `json:"picture,omitempty"`
 	Movie     *string `json:"movie,omitempty"`
@@ -111,16 +108,16 @@ type UpdatePostInput struct {
 }
 
 type UpdateUserInput struct {
-	ID       string  `json:"ID"`
-	UserID   *string `json:"userID,omitempty"`
-	Name     *string `json:"name,omitempty"`
-	Email    *string `json:"email,omitempty"`
-	Password *string `json:"password,omitempty"`
+	ID        string  `json:"ID"`
+	AccountID *string `json:"accountID,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	Password  *string `json:"password,omitempty"`
 }
 
 type User struct {
 	ID        string `json:"ID"`
-	UserID    string `json:"userID"`
+	AccountID string `json:"accountID"`
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`

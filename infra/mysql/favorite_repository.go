@@ -17,7 +17,7 @@ func NewMySQLFavoriteRepository(db *sql.DB) repository.FavoriteRepository {
 	return &MySQLFavoriteRepository{DB: db}
 }
 
-func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error) {
+func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64) (*model.Favorite, error) {
 	query := `SELECT id, post_id, user_id, created_at FROM favorites WHERE id = ?`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
@@ -55,13 +55,13 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, favorite *
 	return favorite, nil
 }
 
-func (r *MySQLFavoriteRepository) DeleteFavorite(ctx context.Context, id string) error {
+func (r *MySQLFavoriteRepository) DeleteFavorite(ctx context.Context, id int64) error {
 	query := `DELETE FROM favorites WHERE id = ?`
 	_, err := r.DB.ExecContext(ctx, query, id)
 	return err
 }
 
-func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, postID string) ([]*model.Favorite, error) {
+func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, postID int64) ([]*model.Favorite, error) {
 	query := `SELECT id, user_id, created_at FROM favorites WHERE post_id = ?`
 	rows, err := r.DB.QueryContext(ctx, query, postID)
 	if err != nil {

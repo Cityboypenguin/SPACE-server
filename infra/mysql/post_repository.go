@@ -78,5 +78,72 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 }
 
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
+	query := `
+		UPDATE posts
+		SET user_id = ?, title = ?, content = ?, updated_at = ?
+		WHERE id = ?
+	`
+	_, err := r.DB.ExecContext(ctx, query,
+		p.UserID,
+		p.Content,
+		p.UpdatedAt,
+		p.ID,
+	)
+	return err
+}
 
+func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) error {
+	query := `
+		DELETE FROM posts
+		WHERE id = ?
+	`
+	_, err := r.DB.ExecContext(ctx, query, id)
+	return err
+}
+
+func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error) {
+	query := `
+		SELECT id, user_id, title, content, created_at, updated_at
+		FROM posts
+		WHERE user_id = ?
+	`
+	rows, err := r.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []*model.Post
+	for rows.Next() {
+		var p model.Post
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		posts = append(posts, &p)
+	}
+
+	return posts, nil
+}
+
+func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
+	query := `
+		SELECT id, user_id, title, content, created_at, updated_at
+		FROM posts
+	`
+	rows, err := r.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []*model.Post
+	for rows.Next() {
+		var p model.Post
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		posts = append(posts, &p)
+	}
+
+	return posts, nil
 }

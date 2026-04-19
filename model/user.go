@@ -8,7 +8,7 @@ import (
 
 type User struct {
 	ID             int64     `json:"id"`
-	UserID         string    `json:"user_id"`
+	AccountID      string    `json:"account_id"`
 	Name           string    `json:"name"`
 	Email          string    `json:"email"`
 	HashedPassword string    `json:"hashed_password"`
@@ -19,7 +19,7 @@ type User struct {
 }
 
 type CreateUserParam struct {
-	UserID    string    `json:"user_id"`
+	AccountID string    `json:"account_id"`
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Password  string    `json:"password"`
@@ -49,7 +49,7 @@ func (u *User) CreateUser(param CreateUserParam) error {
 		return err
 	}
 
-	u.UserID = param.UserID
+	u.AccountID = param.AccountID
 	u.Name = param.Name
 	u.Email = param.Email
 	u.HashedPassword = hashedPassword

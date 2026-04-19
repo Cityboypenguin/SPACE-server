@@ -4,7 +4,7 @@ import "time"
 
 type Post struct {
 	ID        int64       `json:"ID"`
-	UserID    string      `json:"user_id"`
+	User      User        `json:"user"`
 	Content   string      `json:"content"`
 	Picture   *string     `json:"picture,omitempty"`
 	Movie     *string     `json:"movie,omitempty"`
@@ -16,13 +16,13 @@ type Post struct {
 }
 
 type CreatePostParam struct {
-	UserID    string    `json:"user_id"`
-	Content   string    `json:"content"`
-	Picture   *string   `json:"picture,omitempty"`
-	Movie     *string   `json:"movie,omitempty"`
-	Hyperlink *string   `json:"hyperlink,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	UserID    int64   `json:"userId"`
+	Content   string  `json:"content"`
+	Picture   *string `json:"picture,omitempty"`
+	Movie     *string `json:"movie,omitempty"`
+	Hyperlink *string `json:"hyperlink,omitempty"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UpdatePostParam struct {
@@ -33,7 +33,7 @@ type UpdatePostParam struct {
 }
 
 func (p *Post) CreatePost(param CreatePostParam) {
-	p.UserID = param.UserID
+	p.User = User{ID: param.UserID}
 	p.Content = param.Content
 	p.Picture = param.Picture
 	p.Movie = param.Movie

@@ -17,10 +17,10 @@ import (
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
-		UserID:   input.UserID,
-		Name:     input.Name,
-		Email:    input.Email,
-		Password: input.Password,
+		AccountID: input.AccountID,
+		Name:      input.Name,
+		Email:     input.Email,
+		Password:  input.Password,
 	}
 
 	user, err := r.CreateUserUseCase.Execute(ctx, param)
@@ -30,7 +30,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 
 	return &gqlmodel.User{
 		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
+		AccountID: user.AccountID,
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      user.Role,
@@ -81,7 +81,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 
 	return &gqlmodel.User{
 		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
+		AccountID: user.AccountID,
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      user.Role,
@@ -102,7 +102,7 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 		Token: result.Token,
 		User: &gqlmodel.User{
 			ID:        fmt.Sprintf("%d", result.User.ID),
-			UserID:    result.User.UserID,
+			AccountID: result.User.AccountID,
 			Name:      result.User.Name,
 			Email:     result.User.Email,
 			Role:      result.User.Role,
@@ -266,7 +266,7 @@ func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	for _, user := range users {
 		gqlUsers = append(gqlUsers, &gqlmodel.User{
 			ID:        fmt.Sprintf("%d", user.ID),
-			UserID:    user.UserID,
+			AccountID: user.AccountID,
 			Name:      user.Name,
 			Email:     user.Email,
 			Role:      user.Role,
@@ -292,7 +292,7 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 
 	return &gqlmodel.User{
 		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
+		AccountID: user.AccountID,
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      user.Role,
@@ -313,7 +313,7 @@ func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmod
 	for _, user := range users {
 		gqlUsers = append(gqlUsers, &gqlmodel.User{
 			ID:        fmt.Sprintf("%d", user.ID),
-			UserID:    user.UserID,
+			AccountID: user.AccountID,
 			Name:      user.Name,
 			Email:     user.Email,
 			Role:      user.Role,

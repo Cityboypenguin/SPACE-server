@@ -15,7 +15,7 @@ type Query {
 
 type User {
   ID: ID!
-  userID: String!
+  accountID: String!
   name: String!
   email: String!
   role: String!
@@ -35,7 +35,7 @@ type Administrator {
 
 type Post {
   ID: ID!
-  user_id: ID!
+  user: User!
   content: String!
   picture: String #画像のURL
   movie: String #動画のURL
@@ -47,15 +47,15 @@ type Post {
 
 type Favorite {
   ID: ID!
-  user_id: ID!
-  post_id: ID!
+  user: User!
+  post: Post!
   createdAt: String!
 }
 
 type Comment {
   ID: ID!
-  user_id: ID!
-  post_id: ID!
+  user: User!
+  post: Post!
   content: String!
   createdAt: String!
   updatedAt: String!
@@ -111,7 +111,7 @@ input UpdateAdministratorInput {
 }
 
 input CreateUserInput {
-  userID: String!
+  accountID: String!
   name: String!
   email: String!
   password: String!
@@ -119,7 +119,7 @@ input CreateUserInput {
 
 input UpdateUserInput {
   ID: ID!
-  userID: String
+  accountID: String
   name: String
   email: String
   password: String
@@ -135,7 +135,6 @@ input CreatePostInput {
 
 input UpdatePostInput {
   ID: ID!
-  user_id: ID
   content: String
   picture: String
   movie: String
@@ -155,7 +154,5 @@ input CreateCommentInput {
 
 input UpdateCommentInput {
   ID: ID!
-  user_id: ID
-  post_id: ID
   content: String
 }
