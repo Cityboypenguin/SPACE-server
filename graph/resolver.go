@@ -44,8 +44,8 @@ type Resolver struct {
 	UpdateCommentUseCase       comment.UpdateCommentUseCase
 	GetCommentsByPostIDUseCase comment.GetCommentsByPostIDUseCase
 
-	GetFavoriteByIDUseCase         favorite.GetFavoriteByIDUseCase
-	CreateFavoriteUseCase          favorite.CreateFavoriteUseCase
-	DeleteFavoriteUseCase          favorite.DeleteFavoriteUseCase
-	GetFavoritesByPostIDInteractor favorite.GetFavoritesByPostIDUseCase
+	GetFavoriteByIDUseCase      favorite.GetFavoriteByIDUseCase
+	CreateFavoriteUseCase       favorite.CreateFavoriteUseCase
+	DeleteFavoriteUseCase       favorite.DeleteFavoriteUseCase
+	GetFavoritesByPostIDUseCase favorite.GetFavoritesByPostIDUseCase
 }

@@ -10,6 +10,9 @@ import (
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	commentusecase "github.com/Cityboypenguin/SPACE-server/usecase/comment"
+	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -26,6 +29,9 @@ func main() {
 
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
+	postRepository := mysql.NewMySQLPostRepository(database)
+	commentRepository := mysql.NewMySQLCommentRepository(database)
+	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
@@ -40,6 +46,24 @@ func main() {
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+	createPostUsecase := postusecase.NewCreatePostUseCase(postRepository)
+	updatePostUsecase := postusecase.NewUpdatePostUseCase(postRepository)
+	deletePostUsecase := postusecase.NewDeletePostUseCase(postRepository)
+	getPostByIDUsecase := postusecase.NewGetPostByIDUseCase(postRepository)
+	listPostsUsecase := postusecase.NewListPostsUseCase(postRepository)
+	searchPostsUsecase := postusecase.NewSearchPostsUseCase(postRepository)
+
+	createCommentUsecase := commentusecase.NewCreateCommentUseCase(commentRepository)
+	updateCommentUsecase := commentusecase.NewUpdateCommentUseCase(commentRepository)
+	deleteCommentUsecase := commentusecase.NewDeleteCommentUseCase(commentRepository)
+	getCommentByIDUsecase := commentusecase.NewGetCommentByIDUseCase(commentRepository)
+	getCommentByPostIDUsecase := commentusecase.NewGetCommentsByPostIDUseCase(commentRepository)
+
+	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository)
+	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository)
+	getFavoriteByIDUsecase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
+	getFavoritesByPostIDUsecase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
+
 	redisClient, err := infraredis.New()
 	if err != nil {
 		log.Fatalf("failed to connect to redis: %v", err)
@@ -66,6 +90,21 @@ func main() {
 		SearchAdministratorsUseCase: searchAdministratorsUseCase,
 		LoginAdministratorUseCase:   loginAdministratorUseCase,
 		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
+		CreatePostUseCase:           createPostUsecase,
+		UpdatePostUseCase:           updatePostUsecase,
+		DeletePostUseCase:           deletePostUsecase,
+		GetPostByIDUseCase:          getPostByIDUsecase,
+		ListPostsUseCase:            listPostsUsecase,
+		SearchPostsUseCase:          searchPostsUsecase,
+		CreateCommentUseCase:        createCommentUsecase,
+		UpdateCommentUseCase:        updateCommentUsecase,
+		DeleteCommentUseCase:        deleteCommentUsecase,
+		GetCommentByIDUseCase:       getCommentByIDUsecase,
+		GetCommentsByPostIDUseCase:  getCommentByPostIDUsecase,
+		CreateFavoriteUseCase:       createFavoriteUsecase,
+		DeleteFavoriteUseCase:       deleteFavoriteUsecase,
+		GetFavoriteByIDUseCase:      getFavoriteByIDUsecase,
+		GetFavoritesByPostIDUseCase: getFavoritesByPostIDUsecase,
 	}
 
 	// middleware

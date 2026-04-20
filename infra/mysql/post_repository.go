@@ -19,7 +19,7 @@ func NewMySQLPostRepository(db *sql.DB) repository.PostRepository {
 
 func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
-		SELECT id, user_id, title, content, created_at, updated_at
+		SELECT id, user_id, content, created_at, updated_at
 		FROM posts
 		WHERE id = ?
 	`
@@ -56,14 +56,14 @@ func (r *MySQLPostRepository) SavePost(ctx context.Context, p *model.Post) error
 
 func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (int64, error) {
 	query := `
-		INSERT INTO posts (user_id, title, content, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO posts (user_id, content, created_at, updated_at)
+		VALUES (?, ?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
-		p.User,
+		p.User.ID,
 		p.Content,
-		p.CreatedAt,
-		p.UpdatedAt,
+		p.CreatedAt.Unix(),
+		p.UpdatedAt.Unix(),
 	)
 	if err != nil {
 		return 0, err
@@ -80,13 +80,13 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
 	query := `
 		UPDATE posts
-		SET user_id = ?, title = ?, content = ?, updated_at = ?
+		SET user_id = ?, content = ?, updated_at = ?
 		WHERE id = ?
 	`
 	_, err := r.DB.ExecContext(ctx, query,
 		p.User,
 		p.Content,
-		p.UpdatedAt,
+		p.UpdatedAt.Unix(),
 		p.ID,
 	)
 	return err
@@ -110,7 +110,7 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 
 func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error) {
 	query := `
-		SELECT id, user_id, title, content, created_at, updated_at
+		SELECT id, user_id, content, created_at, updated_at
 		FROM posts
 		WHERE user_id = ?
 	`
@@ -134,7 +134,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID strin
 
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
-		SELECT id, user_id, title, content, created_at, updated_at
+		SELECT id, user_id, content, created_at, updated_at
 		FROM posts
 	`
 	rows, err := r.DB.QueryContext(ctx, query)

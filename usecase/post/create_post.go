@@ -8,7 +8,7 @@ import (
 )
 
 type CreatePostUseCase interface {
-	Execute(ctx context.Context, post *model.Post) error
+	Execute(ctx context.Context, param model.CreatePostParam) (*model.Post, error)
 }
 
 var _ CreatePostUseCase = &CreatePostInteractor{}
@@ -23,6 +23,14 @@ func NewCreatePostUseCase(postRepo repository.PostRepository) CreatePostUseCase 
 	}
 }
 
-func (uc *CreatePostInteractor) Execute(ctx context.Context, post *model.Post) error {
-	return uc.postRepo.SavePost(ctx, post)
+func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam) (*model.Post, error) {
+	post := &model.Post{}
+	post.CreatePost(param)
+
+	err := uc.postRepo.SavePost(ctx, post)
+	if err != nil {
+		return nil, err
+	}
+
+	return post, nil
 }

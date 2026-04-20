@@ -39,7 +39,7 @@ func (r *MySQLUserRepository) SaveUser(ctx context.Context, u *model.User) error
 
 func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE id = ?
 	`
@@ -88,7 +88,7 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 
 func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
 	query := `
-		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 	`
 
@@ -122,7 +122,7 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 
 func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string) ([]*model.User, error) {
 	query := `
-		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE name LIKE ?
 	`
@@ -157,7 +157,7 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 
 func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
-		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE email = ?
 		LIMIT 1
@@ -207,7 +207,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 
 func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (int64, error) {
 	query := `
-		INSERT INTO users (user_id, name, email, hashed_password, role, status, created_at, updated_at)
+		INSERT INTO users (account_id, name, email, hashed_password, role, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -218,8 +218,8 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 		u.HashedPassword,
 		u.Role,
 		u.Status,
-		u.CreatedAt,
-		u.UpdatedAt,
+		u.CreatedAt.Unix(),
+		u.UpdatedAt.Unix(),
 	)
 	if err != nil {
 		return 0, err
