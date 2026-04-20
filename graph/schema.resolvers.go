@@ -236,7 +236,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 
 	return &gqlmodel.Post{
 		ID:        fmt.Sprintf("%d", post.ID),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 		Content:   post.Content,
 		Picture:   post.Picture,
 		Movie:     post.Movie,
@@ -282,7 +282,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 
 	return &gqlmodel.Post{
 		ID:        fmt.Sprintf("%d", post.ID),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 		Content:   post.Content,
 		Picture:   post.Picture,
 		Movie:     post.Movie,
@@ -556,7 +556,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 	for _, post := range posts {
 		gqlPosts = append(gqlPosts, &gqlmodel.Post{
 			ID:        fmt.Sprintf("%d", post.ID),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 			Content:   post.Content,
 			Picture:   post.Picture,
 			Movie:     post.Movie,
@@ -582,7 +582,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 
 	return &gqlmodel.Post{
 		ID:        fmt.Sprintf("%d", post.ID),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 		Content:   post.Content,
 		Picture:   post.Picture,
 		Movie:     post.Movie,
@@ -603,7 +603,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 	for _, post := range posts {
 		gqlPosts = append(gqlPosts, &gqlmodel.Post{
 			ID:        fmt.Sprintf("%d", post.ID),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 			Content:   post.Content,
 			Picture:   post.Picture,
 			Movie:     post.Movie,

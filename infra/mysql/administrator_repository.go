@@ -45,7 +45,7 @@ func (r *MySQLAdministratorRepository) CreateAdministrator(ctx context.Context, 
 		INSERT INTO administrators (name, email, hashed_password, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
-	result, err := r.db.ExecContext(ctx, query, a.Name, a.Email, a.HashedPassword, a.CreatedAt, a.UpdatedAt)
+	result, err := r.db.ExecContext(ctx, query, a.Name, a.Email, a.HashedPassword, a.CreatedAt.Unix(), a.UpdatedAt.Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -61,16 +61,20 @@ func (r *MySQLAdministratorRepository) GetAdministratorByID(ctx context.Context,
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	var a model.Administrator
+	var createdAtUnix, updatedAtUnix int64
 	if err := row.Scan(
 		&a.ID,
 		&a.Name,
 		&a.Email,
 		&a.HashedPassword,
-		&a.CreatedAt,
-		&a.UpdatedAt,
+		&createdAtUnix,
+		&updatedAtUnix,
 	); err != nil {
 		return nil, err
 	}
+	a.CreatedAt = time.Unix(createdAtUnix, 0)
+	a.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
 	return &a, nil
 }
 
@@ -83,11 +87,12 @@ func (r *MySQLAdministratorRepository) DeleteAdministrator(ctx context.Context, 
 	if err != nil {
 		return false, err
 	}
-	rowsAffected, err := result.RowsAffected()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return false, err
 	}
-	return rowsAffected > 0, nil
+
+	return affected > 0, nil
 }
 
 func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) ([]*model.Administrator, error) {
@@ -104,16 +109,19 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) (
 	var administrators []*model.Administrator
 	for rows.Next() {
 		var a model.Administrator
+		var createdAtUnix, updatedAtUnix int64
 		if err := rows.Scan(
 			&a.ID,
 			&a.Name,
 			&a.Email,
 			&a.HashedPassword,
-			&a.CreatedAt,
-			&a.UpdatedAt,
+			&createdAtUnix,
+			&updatedAtUnix,
 		); err != nil {
 			return nil, err
 		}
+		a.CreatedAt = time.Unix(createdAtUnix, 0)
+		a.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		administrators = append(administrators, &a)
 	}
 	return administrators, nil
@@ -126,30 +134,31 @@ func (r *MySQLAdministratorRepository) FindByEmail(ctx context.Context, email st
 		WHERE email = ?
 		LIMIT 1
 	`
-
 	row := r.db.QueryRowContext(ctx, query, email)
 
 	var a model.Administrator
+	var createdAtUnix, updatedAtUnix int64
 	if err := row.Scan(
 		&a.ID,
 		&a.Name,
 		&a.Email,
 		&a.HashedPassword,
-		&a.CreatedAt,
-		&a.UpdatedAt,
+		&createdAtUnix,
+		&updatedAtUnix,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	a.CreatedAt = time.Unix(createdAtUnix, 0)
+	a.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &a, nil
 }
 
 func (r *MySQLAdministratorRepository) UpdateAdministrator(ctx context.Context, a *model.Administrator) error {
-	now := time.Now()
-	a.UpdatedAt = now
+	a.UpdatedAt = time.Now()
 
 	query := `
 		UPDATE administrators
@@ -162,7 +171,7 @@ func (r *MySQLAdministratorRepository) UpdateAdministrator(ctx context.Context, 
 		a.Name,
 		a.Email,
 		a.HashedPassword,
-		a.UpdatedAt,
+		a.UpdatedAt.Unix(),
 		a.ID,
 	)
 	return err
@@ -183,16 +192,19 @@ func (r *MySQLAdministratorRepository) SearchAdministratorsByName(ctx context.Co
 	var administrators []*model.Administrator
 	for rows.Next() {
 		var a model.Administrator
+		var createdAtUnix, updatedAtUnix int64
 		if err := rows.Scan(
 			&a.ID,
 			&a.Name,
 			&a.Email,
 			&a.HashedPassword,
-			&a.CreatedAt,
-			&a.UpdatedAt,
+			&createdAtUnix,
+			&updatedAtUnix,
 		); err != nil {
 			return nil, err
 		}
+		a.CreatedAt = time.Unix(createdAtUnix, 0)
+		a.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		administrators = append(administrators, &a)
 	}
 	return administrators, nil

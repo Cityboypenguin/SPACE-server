@@ -26,7 +26,7 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var p model.Post
-	if err := row.Scan(&p.ID, &p.User, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +60,7 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		VALUES (?, ?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
-		p.User.ID,
+		p.UserID,
 		p.Content,
 		p.CreatedAt.Unix(),
 		p.UpdatedAt.Unix(),
@@ -78,13 +78,15 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 }
 
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
+	p.UpdatedAt = time.Now()
+
 	query := `
 		UPDATE posts
 		SET user_id = ?, content = ?, updated_at = ?
 		WHERE id = ?
 	`
 	_, err := r.DB.ExecContext(ctx, query,
-		p.User,
+		p.UserID,
 		p.Content,
 		p.UpdatedAt.Unix(),
 		p.ID,
@@ -123,9 +125,12 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID strin
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		if err := rows.Scan(&p.ID, &p.User, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		var createdAtUnix, updatedAtUnix int64
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		posts = append(posts, &p)
 	}
 
@@ -146,9 +151,12 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		if err := rows.Scan(&p.ID, &p.User, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		var createdAtUnix, updatedAtUnix int64
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		posts = append(posts, &p)
 	}
 
@@ -170,9 +178,12 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		if err := rows.Scan(&p.ID, &p.User.ID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		var createdAtUnix, updatedAtUnix int64
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		posts = append(posts, &p)
 	}
 

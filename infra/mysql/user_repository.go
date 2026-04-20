@@ -47,6 +47,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var u model.User
+	var createdAtUnix, updatedAtUnix int64
 	if err := row.Scan(
 		&u.ID,
 		&u.AccountID,
@@ -55,14 +56,16 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 		&u.HashedPassword,
 		&u.Role,
 		&u.Status,
-		&u.CreatedAt,
-		&u.UpdatedAt,
+		&createdAtUnix,
+		&updatedAtUnix,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	u.CreatedAt = time.Unix(createdAtUnix, 0)
+	u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &u, nil
 }
@@ -72,12 +75,10 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 		DELETE FROM users
 		WHERE id = ?
 	`
-
 	result, err := r.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
 	}
-
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return false, err
@@ -91,7 +92,6 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 	`
-
 	rows, err := r.DB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -101,6 +101,7 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 	var users []*model.User
 	for rows.Next() {
 		var u model.User
+		var createdAtUnix, updatedAtUnix int64
 		if err := rows.Scan(
 			&u.ID,
 			&u.AccountID,
@@ -109,11 +110,13 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 			&u.HashedPassword,
 			&u.Role,
 			&u.Status,
-			&u.CreatedAt,
-			&u.UpdatedAt,
+			&createdAtUnix,
+			&updatedAtUnix,
 		); err != nil {
 			return nil, err
 		}
+		u.CreatedAt = time.Unix(createdAtUnix, 0)
+		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
 
@@ -136,6 +139,7 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 	var users []*model.User
 	for rows.Next() {
 		var u model.User
+		var createdAtUnix, updatedAtUnix int64
 		if err := rows.Scan(
 			&u.ID,
 			&u.AccountID,
@@ -144,11 +148,13 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 			&u.HashedPassword,
 			&u.Role,
 			&u.Status,
-			&u.CreatedAt,
-			&u.UpdatedAt,
+			&createdAtUnix,
+			&updatedAtUnix,
 		); err != nil {
 			return nil, err
 		}
+		u.CreatedAt = time.Unix(createdAtUnix, 0)
+		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
 
@@ -162,10 +168,10 @@ func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*m
 		WHERE email = ?
 		LIMIT 1
 	`
-
 	row := r.DB.QueryRowContext(ctx, query, email)
 
 	var u model.User
+	var createdAtUnix, updatedAtUnix int64
 	if err := row.Scan(
 		&u.ID,
 		&u.AccountID,
@@ -174,19 +180,23 @@ func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*m
 		&u.HashedPassword,
 		&u.Role,
 		&u.Status,
-		&u.CreatedAt,
-		&u.UpdatedAt,
+		&createdAtUnix,
+		&updatedAtUnix,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	u.CreatedAt = time.Unix(createdAtUnix, 0)
+	u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &u, nil
 }
 
 func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) error {
+	u.UpdatedAt = time.Now()
+
 	query := `
 		UPDATE users
 		SET name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
@@ -199,7 +209,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 		u.HashedPassword,
 		u.Role,
 		u.Status,
-		u.UpdatedAt,
+		u.UpdatedAt.Unix(),
 		u.ID,
 	)
 	return err
