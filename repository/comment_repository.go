@@ -12,4 +12,5 @@ type CommentRepository interface {
 	GetCommentByID(ctx context.Context, id int64) (*model.Comment, error)
 	GetCommentsByPostID(ctx context.Context, postID int64) ([]*model.Comment, error)
 	UpdateComment(ctx context.Context, comment *model.Comment) error
+	ListComments(ctx context.Context) ([]*model.Comment, error)
 }

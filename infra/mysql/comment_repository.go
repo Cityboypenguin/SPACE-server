@@ -26,7 +26,12 @@ func (r *MySQLCommentRepository) GetCommentByID(ctx context.Context, id int64) (
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var c model.Comment
-	if err := row.Scan(&c.ID, &c.Post, &c.User, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	var createdAtUnix, updatedAtUnix int64
+
+	c.Post = &model.Post{}
+	c.User = &model.User{}
+
+	if err := row.Scan(&c.ID, &c.Post.ID, &c.User.ID, &c.Content, &createdAtUnix, &updatedAtUnix); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +64,7 @@ func (r *MySQLCommentRepository) CreateComment(ctx context.Context, c *model.Com
 		INSERT INTO comments (post_id, user_id, content, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
-	result, err := r.DB.ExecContext(ctx, query, c.Post, c.User, c.Content, c.CreatedAt, c.UpdatedAt)
+	result, err := r.DB.ExecContext(ctx, query, c.Post.ID, c.User.ID, c.Content, c.CreatedAt.Unix(), c.UpdatedAt.Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -81,9 +86,16 @@ func (r *MySQLCommentRepository) GetCommentsByPostID(ctx context.Context, postID
 	var comments []*model.Comment
 	for rows.Next() {
 		var c model.Comment
-		if err := rows.Scan(&c.ID, &c.Post, &c.User, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		var createdAtUnix, updatedAtUnix int64
+
+		c.Post = &model.Post{}
+		c.User = &model.User{}
+
+		if err := rows.Scan(&c.ID, &c.Post.ID, &c.User.ID, &c.Content, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
+		c.CreatedAt = time.Unix(createdAtUnix, 0)
+		c.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		comments = append(comments, &c)
 	}
 
@@ -112,6 +124,35 @@ func (r *MySQLCommentRepository) UpdateComment(ctx context.Context, c *model.Com
 		SET post_id = ?, user_id = ?, content = ?, updated_at = ?
 		WHERE id = ?
 	`
-	_, err := r.DB.ExecContext(ctx, query, c.Post, c.User, c.Content, c.UpdatedAt, c.ID)
+	_, err := r.DB.ExecContext(ctx, query, c.Post.ID, c.User.ID, c.Content, c.UpdatedAt.Unix(), c.ID)
 	return err
+}
+
+func (r *MySQLCommentRepository) ListComments(ctx context.Context) ([]*model.Comment, error) {
+	query := `
+		SELECT id, post_id, user_id, content, created_at, updated_at
+		FROM comments
+	`
+	rows, err := r.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []*model.Comment
+	for rows.Next() {
+		var c model.Comment
+		var createdAtUnix, updatedAtUnix int64
+
+		c.Post = &model.Post{}
+		c.User = &model.User{}
+		if err := rows.Scan(&c.ID, &c.Post.ID, &c.User.ID, &c.Content, &createdAtUnix, &updatedAtUnix); err != nil {
+			return nil, err
+		}
+		c.CreatedAt = time.Unix(createdAtUnix, 0)
+		c.UpdatedAt = time.Unix(updatedAtUnix, 0)
+		comments = append(comments, &c)
+	}
+
+	return comments, nil
 }

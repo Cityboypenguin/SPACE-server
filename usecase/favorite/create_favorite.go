@@ -27,7 +27,7 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 	favorite := &model.Favorite{}
 	favorite.CreateFavorite(param)
 
-	err := uc.favoriteRepo.CreateFavorite(ctx, favorite)
+	_, err := uc.favoriteRepo.CreateFavorite(ctx, favorite)
 	if err != nil {
 		return nil, err
 	}

@@ -59,11 +59,13 @@ func main() {
 	deleteCommentUsecase := commentusecase.NewDeleteCommentUseCase(commentRepository)
 	getCommentByIDUsecase := commentusecase.NewGetCommentByIDUseCase(commentRepository)
 	getCommentByPostIDUsecase := commentusecase.NewGetCommentsByPostIDUseCase(commentRepository)
+	listCommentsUsecase := commentusecase.NewListCommentsUseCase(commentRepository)
 
 	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository)
 	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository)
 	getFavoriteByIDUsecase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
 	getFavoritesByPostIDUsecase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
+	listFavoritesUsecase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
 	if err != nil {
@@ -103,10 +105,12 @@ func main() {
 		DeleteCommentUseCase:        deleteCommentUsecase,
 		GetCommentByIDUseCase:       getCommentByIDUsecase,
 		GetCommentsByPostIDUseCase:  getCommentByPostIDUsecase,
+		ListCommentsUseCase:         listCommentsUsecase,
 		CreateFavoriteUseCase:       createFavoriteUsecase,
 		DeleteFavoriteUseCase:       deleteFavoriteUsecase,
 		GetFavoriteByIDUseCase:      getFavoriteByIDUsecase,
 		GetFavoritesByPostIDUseCase: getFavoritesByPostIDUsecase,
+		ListFavoritesUseCase:        listFavoritesUsecase,
 	}
 
 	// middleware

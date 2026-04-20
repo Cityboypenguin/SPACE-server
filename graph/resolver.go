@@ -44,9 +44,11 @@ type Resolver struct {
 	DeleteCommentUseCase       comment.DeleteCommentUseCase
 	UpdateCommentUseCase       comment.UpdateCommentUseCase
 	GetCommentsByPostIDUseCase comment.GetCommentsByPostIDUseCase
+	ListCommentsUseCase        comment.ListCommentsUseCase
 
 	GetFavoriteByIDUseCase      favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase       favorite.CreateFavoriteUseCase
 	DeleteFavoriteUseCase       favorite.DeleteFavoriteUseCase
 	GetFavoritesByPostIDUseCase favorite.GetFavoritesByPostIDUseCase
+	ListFavoritesUseCase        favorite.ListFavoritesUseCase
 }
