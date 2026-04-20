@@ -3,16 +3,17 @@ package model
 import "time"
 
 type Post struct {
-	ID        int64       `json:"ID"`
-	UserID    int64       `json:"userId"`
-	Content   string      `json:"content"`
-	Picture   *string     `json:"picture,omitempty"`
-	Movie     *string     `json:"movie,omitempty"`
-	Hyperlink *string     `json:"hyperlink,omitempty"`
-	CreatedAt time.Time   `json:"createdAt"`
-	UpdatedAt time.Time   `json:"updatedAt"`
-	Comments  []*Comment  `json:"comments,omitempty"`
-	Favorites []*Favorite `json:"favorites,omitempty"`
+	ID            int64       `json:"ID"`
+	UserID        int64       `json:"userId"`
+	Content       string      `json:"content"`
+	Picture       *string     `json:"picture,omitempty"`
+	Movie         *string     `json:"movie,omitempty"`
+	Hyperlink     *string     `json:"hyperlink,omitempty"`
+	FavoriteCount int64       `json:"favoriteCount"`
+	CreatedAt     time.Time   `json:"createdAt"`
+	UpdatedAt     time.Time   `json:"updatedAt"`
+	Comments      []*Comment  `json:"comments,omitempty"`
+	Favorites     []*Favorite `json:"favorites,omitempty"`
 }
 
 type CreatePostParam struct {

@@ -11,6 +11,7 @@ type Query {
   posts: [Post!]!
   getPostByID(id: ID!): Post
   searchPosts(content: String!): [Post!]!
+  getPostByUserID(user_id: ID!): [Post!]!
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
   comments: [Comment!]!

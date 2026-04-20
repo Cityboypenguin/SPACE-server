@@ -52,6 +52,7 @@ func main() {
 	getPostByIDUsecase := postusecase.NewGetPostByIDUseCase(postRepository)
 	listPostsUsecase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUsecase := postusecase.NewSearchPostsUseCase(postRepository)
+	getPostsByUserIDUsecase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 
 	createCommentUsecase := commentusecase.NewCreateCommentUseCase(commentRepository)
 	updateCommentUsecase := commentusecase.NewUpdateCommentUseCase(commentRepository)
@@ -96,6 +97,7 @@ func main() {
 		GetPostByIDUseCase:          getPostByIDUsecase,
 		ListPostsUseCase:            listPostsUsecase,
 		SearchPostsUseCase:          searchPostsUsecase,
+		GetPostsByUserIDUseCase:     getPostsByUserIDUsecase,
 		CreateCommentUseCase:        createCommentUsecase,
 		UpdateCommentUseCase:        updateCommentUsecase,
 		DeleteCommentUseCase:        deleteCommentUsecase,

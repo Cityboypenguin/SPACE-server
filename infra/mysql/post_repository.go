@@ -19,16 +19,19 @@ func NewMySQLPostRepository(db *sql.DB) repository.PostRepository {
 
 func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
-		SELECT id, user_id, content, created_at, updated_at
+		SELECT id, user_id, content, picture, movie, hyperlink, favorite_count, created_at, updated_at
 		FROM posts
 		WHERE id = ?
 	`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var p model.Post
-	if err := row.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	var createdAtUnix, updatedAtUnix int64
+	if err := row.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 		return nil, err
 	}
+	p.CreatedAt = time.Unix(createdAtUnix, 0)
+	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &p, nil
 }
@@ -56,12 +59,15 @@ func (r *MySQLPostRepository) SavePost(ctx context.Context, p *model.Post) error
 
 func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (int64, error) {
 	query := `
-		INSERT INTO posts (user_id, content, created_at, updated_at)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO posts (user_id, content, picture, movie, hyperlink, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
 		p.UserID,
 		p.Content,
+		p.Picture,
+		p.Movie,
+		p.Hyperlink,
 		p.CreatedAt.Unix(),
 		p.UpdatedAt.Unix(),
 	)
@@ -82,12 +88,15 @@ func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) err
 
 	query := `
 		UPDATE posts
-		SET user_id = ?, content = ?, updated_at = ?
+		SET user_id = ?, content = ?, picture = ?, movie = ?, hyperlink = ?, updated_at = ?
 		WHERE id = ?
 	`
 	_, err := r.DB.ExecContext(ctx, query,
 		p.UserID,
 		p.Content,
+		p.Picture,
+		p.Movie,
+		p.Hyperlink,
 		p.UpdatedAt.Unix(),
 		p.ID,
 	)
@@ -110,9 +119,9 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 	return affected > 0, nil
 }
 
-func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error) {
+func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64) ([]*model.Post, error) {
 	query := `
-		SELECT id, user_id, content, created_at, updated_at
+		SELECT id, user_id, content, picture, movie, hyperlink, favorite_count, created_at, updated_at
 		FROM posts
 		WHERE user_id = ?
 	`
@@ -126,7 +135,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID strin
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -139,7 +148,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID strin
 
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
-		SELECT id, user_id, content, created_at, updated_at
+		SELECT id, user_id, content, picture, movie, hyperlink, favorite_count, created_at, updated_at
 		FROM posts
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
@@ -152,7 +161,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -165,7 +174,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 
 func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
 	searchQuery := `
-		SELECT id, user_id, content, created_at, updated_at
+		SELECT id, user_id, content, picture, movie, hyperlink, favorite_count, created_at, updated_at
 		FROM posts
 		WHERE content LIKE ?
 	`
@@ -179,16 +188,12 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		posts = append(posts, &p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 
 	return posts, nil
