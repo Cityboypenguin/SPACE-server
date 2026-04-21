@@ -641,12 +641,13 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
 				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
+			Content:       post.Content,
+			Picture:       post.Picture,
+			Movie:         post.Movie,
+			Hyperlink:     post.Hyperlink,
+			FavoriteCount: int32(post.FavoriteCount),
+			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
+			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
 		})
 	}
 	return gqlPosts, nil
@@ -681,12 +682,13 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 			CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
 			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 		},
-		Content:   post.Content,
-		Picture:   post.Picture,
-		Movie:     post.Movie,
-		Hyperlink: post.Hyperlink,
-		CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
+		Content:       post.Content,
+		Picture:       post.Picture,
+		Movie:         post.Movie,
+		Hyperlink:     post.Hyperlink,
+		FavoriteCount: int32(post.FavoriteCount),
+		CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
+		UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
 	}, nil
 }
 
@@ -716,12 +718,13 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
 				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
+			Content:       post.Content,
+			Picture:       post.Picture,
+			Movie:         post.Movie,
+			Hyperlink:     post.Hyperlink,
+			FavoriteCount: int32(post.FavoriteCount),
+			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
+			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
 		})
 	}
 	return gqlPosts, nil
@@ -758,12 +761,13 @@ func (r *queryResolver) GetPostByUserID(ctx context.Context, userID string) ([]*
 				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
 				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
+			Content:       post.Content,
+			Picture:       post.Picture,
+			Movie:         post.Movie,
+			Hyperlink:     post.Hyperlink,
+			FavoriteCount: int32(post.FavoriteCount),
+			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
+			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
 		})
 	}
 	return gqlPosts, nil

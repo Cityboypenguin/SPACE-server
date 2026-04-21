@@ -61,8 +61,8 @@ func main() {
 	getCommentByPostIDUsecase := commentusecase.NewGetCommentsByPostIDUseCase(commentRepository)
 	listCommentsUsecase := commentusecase.NewListCommentsUseCase(commentRepository)
 
-	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository)
-	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository)
+	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
+	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
 	getFavoriteByIDUsecase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
 	getFavoritesByPostIDUsecase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
 	listFavoritesUsecase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)

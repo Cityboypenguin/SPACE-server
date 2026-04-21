@@ -14,4 +14,6 @@ type PostRepository interface {
 	ListPosts(ctx context.Context) ([]*model.Post, error)
 	UpdatePost(ctx context.Context, post *model.Post) error
 	SearchPosts(ctx context.Context, query string) ([]*model.Post, error)
+	IncrementPostFavoriteCount(ctx context.Context, postID int64) error
+	DecrementPostFavoriteCount(ctx context.Context, postID int64) error
 }

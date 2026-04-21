@@ -198,3 +198,25 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 
 	return posts, nil
 }
+
+func (r *MySQLPostRepository) IncrementPostFavoriteCount(ctx context.Context, id int64) error {
+	query := `
+		UPDATE posts
+		SET favorite_count = favorite_count + 1
+		WHERE id = ?
+	`
+	_, err := r.DB.ExecContext(ctx, query, id)
+
+	return err
+}
+
+func (r *MySQLPostRepository) DecrementPostFavoriteCount(ctx context.Context, id int64) error {
+	query := `
+		UPDATE posts
+		SET favorite_count = GREATEST(favorite_count - 1, 0)
+		WHERE id = ?
+	`
+
+	_, err := r.DB.ExecContext(ctx, query, id)
+	return err
+}

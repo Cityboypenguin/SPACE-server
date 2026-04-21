@@ -15,11 +15,13 @@ var _ CreateFavoriteUseCase = &CreateFavoriteInteractor{}
 
 type CreateFavoriteInteractor struct {
 	favoriteRepo repository.FavoriteRepository
+	postRepo     repository.PostRepository
 }
 
-func NewCreateFavoriteUseCase(favoriteRepo repository.FavoriteRepository) CreateFavoriteUseCase {
+func NewCreateFavoriteUseCase(favoriteRepo repository.FavoriteRepository, postRepo repository.PostRepository) CreateFavoriteUseCase {
 	return &CreateFavoriteInteractor{
 		favoriteRepo: favoriteRepo,
+		postRepo:     postRepo,
 	}
 }
 
@@ -28,6 +30,11 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 	favorite.CreateFavorite(param)
 
 	_, err := uc.favoriteRepo.CreateFavorite(ctx, favorite)
+	if err != nil {
+		return nil, err
+	}
+
+	err = uc.postRepo.IncrementPostFavoriteCount(ctx, favorite.Post.ID)
 	if err != nil {
 		return nil, err
 	}
