@@ -234,7 +234,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +294,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		return nil, err
 	}
 
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -624,7 +624,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		user, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+		user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -632,7 +632,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 		gqlPosts = append(gqlPosts, &gqlmodel.Post{
 			ID: fmt.Sprintf("%d", post.ID),
 			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.UserID),
+				ID:        fmt.Sprintf("%d", post.User.ID),
 				AccountID: user.AccountID,
 				Name:      user.Name,
 				Email:     user.Email,
@@ -665,7 +665,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 		return nil, err
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -673,7 +673,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 	return &gqlmodel.Post{
 		ID: fmt.Sprintf("%d", post.ID),
 		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", post.UserID),
+			ID:        fmt.Sprintf("%d", post.User.ID),
 			AccountID: user.AccountID,
 			Name:      user.Name,
 			Email:     user.Email,
@@ -699,7 +699,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 		return nil, err
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, posts[0].UserID)
+	user, err := r.GetUserByIDUseCase.Execute(ctx, posts[0].User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -709,7 +709,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 		gqlPosts = append(gqlPosts, &gqlmodel.Post{
 			ID: fmt.Sprintf("%d", post.ID),
 			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.UserID),
+				ID:        fmt.Sprintf("%d", post.User.ID),
 				AccountID: user.AccountID,
 				Name:      user.Name,
 				Email:     user.Email,
@@ -752,7 +752,7 @@ func (r *queryResolver) GetPostByUserID(ctx context.Context, userID string) ([]*
 		gqlPosts = append(gqlPosts, &gqlmodel.Post{
 			ID: fmt.Sprintf("%d", post.ID),
 			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.UserID),
+				ID:        fmt.Sprintf("%d", post.User.ID),
 				AccountID: user.AccountID,
 				Name:      user.Name,
 				Email:     user.Email,
@@ -792,7 +792,7 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 			return nil, err
 		}
 
-		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -856,7 +856,7 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 		return nil, err
 	}
 
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -916,7 +916,7 @@ func (r *queryResolver) Comments(ctx context.Context) ([]*gqlmodel.Comment, erro
 			return nil, err
 		}
 
-		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -980,7 +980,7 @@ func (r *queryResolver) GetCommentByID(ctx context.Context, id string) (*gqlmode
 		return nil, err
 	}
 
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.UserID)
+	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
 	if err != nil {
 		return nil, err
 	}

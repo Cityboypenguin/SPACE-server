@@ -26,8 +26,9 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var p model.Post
+	p.User = &model.User{}
 	var createdAtUnix, updatedAtUnix int64
-	if err := row.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
+	if err := row.Scan(&p.ID, &p.User.ID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 		return nil, err
 	}
 	p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -63,7 +64,7 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
-		p.UserID,
+		p.User.ID,
 		p.Content,
 		p.Picture,
 		p.Movie,
@@ -92,7 +93,7 @@ func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) err
 		WHERE id = ?
 	`
 	_, err := r.DB.ExecContext(ctx, query,
-		p.UserID,
+		p.User.ID,
 		p.Content,
 		p.Picture,
 		p.Movie,
@@ -134,8 +135,9 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
+		p.User = &model.User{}
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.User.ID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -160,8 +162,9 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
+		p.User = &model.User{}
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.User.ID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -187,8 +190,9 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
+		p.User = &model.User{}
 		var createdAtUnix, updatedAtUnix int64
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
+		if err := rows.Scan(&p.ID, &p.User.ID, &p.Content, &p.Picture, &p.Movie, &p.Hyperlink, &p.FavoriteCount, &createdAtUnix, &updatedAtUnix); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
