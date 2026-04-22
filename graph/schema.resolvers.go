@@ -215,6 +215,56 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 	return true, nil
 }
 
+// UpdateProfile is the resolver for the updateProfile field.
+func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
+	// 1. 文字列のIDを数値(int64)に変換する
+	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format")
+	}
+
+	param := model.UpdateProfileParam{
+		Bio:   input.Bio,
+		Grade: input.Grade,
+		Image: input.Image,
+	}
+
+	// 2. 数値に変換した numericUserID を渡す
+	p, err := r.UpdateProfileUseCase.Execute(ctx, numericUserID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	users, _ := r.ListUsersUseCase.Execute(ctx)
+	var targetUser *gqlmodel.User
+	for _, u := range users {
+		// 3. ユーザーの内部ID(int64)同士で比較する
+		if u.ID == p.UserID {
+			targetUser = &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID, // これは "shibata_test" などのログインID
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			}
+			break
+		}
+	}
+
+	return &gqlmodel.Profile{
+		UserID:    fmt.Sprintf("%d", p.UserID), // GraphQLに返す時は文字列に戻す
+		User:      targetUser,
+		Bio:       &p.Bio,
+		Grade:     &p.Grade,
+		Image:     &p.Image,
+		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+	}, nil
+}
+
 // SendMessage is the resolver for the sendMessage field.
 func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, userID string, content string) (*gqlmodel.Message, error) {
 	rid, err := strconv.ParseInt(roomID, 10, 64)
@@ -477,6 +527,51 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 		})
 	}
 	return gqlAdmins, nil
+}
+
+// GetProfileByUserID is the resolver for the getProfileByUserID field.
+func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
+	// 1. 文字列のIDを数値(int64)に変換する
+	numericUserID, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format")
+	}
+
+	p, err := r.GetProfileUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
+	}
+
+	users, _ := r.ListUsersUseCase.Execute(ctx)
+	var targetUser *gqlmodel.User
+	for _, u := range users {
+		if u.ID == p.UserID {
+			targetUser = &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID,
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			}
+			break
+		}
+	}
+
+	return &gqlmodel.Profile{
+		UserID:    fmt.Sprintf("%d", p.UserID),
+		User:      targetUser,
+		Bio:       &p.Bio,
+		Grade:     &p.Grade,
+		Image:     &p.Image,
+		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+	}, nil
 }
 
 // Messages is the resolver for the messages field.

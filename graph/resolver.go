@@ -4,6 +4,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
@@ -22,6 +23,9 @@ type Resolver struct {
 	LoginUserUseCase   user.LoginUserUseCase
 	LogoutUserUseCase  user.LogoutUserUseCase
 
+	UpdateProfileUseCase profile.UpdateProfileUseCase
+	GetProfileUseCase    profile.GetProfileUseCase
+
 	GetAdministratorByIDUseCase administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
 	ListAdministratorsUseCase   administrator.ListAdministratorsUseCase
@@ -31,12 +35,12 @@ type Resolver struct {
 	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
 	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
 
-	SendMessageUseCase       messageusecase.SendMessageUseCase
-	ListMessagesUseCase      messageusecase.ListMessagesUseCase
-	CreateRoomUseCase        roomusecase.CreateRoomUseCase
-	GetRoomUseCase           roomusecase.GetRoomUseCase
-	GetOrCreateDMRoomUseCase roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase     roomusecase.AddUserToRoomUseCase
+	SendMessageUseCase        messageusecase.SendMessageUseCase
+	ListMessagesUseCase       messageusecase.ListMessagesUseCase
+	CreateRoomUseCase         roomusecase.CreateRoomUseCase
+	GetRoomUseCase            roomusecase.GetRoomUseCase
+	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
+	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
 
 	PubSub *pubsub.PubSub

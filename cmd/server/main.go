@@ -16,6 +16,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
@@ -34,6 +35,8 @@ func main() {
 
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
+	profileRepository := mysql.NewMySQLProfileRepository(database)
+
 	messageRepository := mysql.NewMySQLMessageRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
@@ -45,6 +48,10 @@ func main() {
 	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
+
+	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
+	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
+
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
@@ -81,6 +88,8 @@ func main() {
 		SearchUsersUseCase:          searchUsersUseCase,
 		LoginUserUseCase:            loginUserUseCase,
 		LogoutUserUseCase:           logoutUserUseCase,
+		GetProfileUseCase:           getProfileUseCase,
+		UpdateProfileUseCase:        updateProfileUseCase,
 		CreateAdministratorUseCase:  createAdministratorUseCase,
 		GetAdministratorByIDUseCase: getAdministratorByIDUseCase,
 		ListAdministratorsUseCase:   listAdministratorsUseCase,
