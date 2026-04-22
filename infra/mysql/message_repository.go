@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -15,7 +16,7 @@ type MySQLMessageRepository struct {
 
 // UpdateMessage implements [repository.MessageRepository].
 func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Message) error {
-	panic("unimplemented")
+	return fmt.Errorf("UpdateMessage: not implemented")
 }
 
 func NewMySQLMessageRepository(db *sql.DB) repository.MessageRepository {
@@ -76,6 +77,9 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 			return nil, err
 		}
 		messages = append(messages, &m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return messages, nil
 }

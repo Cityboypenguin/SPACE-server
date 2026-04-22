@@ -71,6 +71,9 @@ func (r *MySQLRoomRepository) ListRooms(ctx context.Context) ([]*model.Room, err
 		}
 		rooms = append(rooms, &room)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return rooms, nil
 }
 

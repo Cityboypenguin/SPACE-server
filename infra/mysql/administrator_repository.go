@@ -69,6 +69,9 @@ func (r *MySQLAdministratorRepository) GetAdministratorByID(ctx context.Context,
 		&a.CreatedAt,
 		&a.UpdatedAt,
 	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &a, nil
@@ -115,6 +118,9 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) (
 			return nil, err
 		}
 		administrators = append(administrators, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return administrators, nil
 }
@@ -194,6 +200,9 @@ func (r *MySQLAdministratorRepository) SearchAdministratorsByName(ctx context.Co
 			return nil, err
 		}
 		administrators = append(administrators, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return administrators, nil
 }

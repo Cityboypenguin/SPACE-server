@@ -116,6 +116,9 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 		}
 		users = append(users, &u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return users, nil
 }
@@ -150,6 +153,9 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 			return nil, err
 		}
 		users = append(users, &u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return users, nil

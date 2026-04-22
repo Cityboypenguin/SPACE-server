@@ -184,7 +184,7 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 		ID:        fmt.Sprintf("%d", administrator.ID),
 		Name:      administrator.Name,
 		Email:     administrator.Email,
-		Password:  administrator.HashedPassword,
+		Password:  "",
 		CreatedAt: fmt.Sprintf("%d", administrator.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%d", administrator.UpdatedAt),
 	}, nil

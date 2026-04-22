@@ -74,7 +74,7 @@ func main() {
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
-	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomRepository, roomUserRepository)
+	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
 	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
 

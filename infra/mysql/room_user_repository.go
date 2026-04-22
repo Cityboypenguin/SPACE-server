@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -47,6 +48,9 @@ func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID
 		}
 		ids = append(ids, id)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return ids, nil
 }
 
@@ -69,4 +73,68 @@ func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userI
 		return nil, err
 	}
 	return &room, nil
+}
+
+// FindOrCreateDMRoom は2ユーザー間のDMルームをSERIALIZABLEトランザクション内で
+// 検索または作成する。並行リクエストによる重複作成を防ぐ。
+func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error) {
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	findQuery := `
+		SELECT r.id, r.name, r.type, r.description, r.created_at, r.updated_at
+		FROM rooms r
+		JOIN room_users ru1 ON r.id = ru1.room_id AND ru1.user_id = ?
+		JOIN room_users ru2 ON r.id = ru2.room_id AND ru2.user_id = ?
+		WHERE r.type = 'dm'
+		LIMIT 1
+	`
+	row := tx.QueryRowContext(ctx, findQuery, userID1, userID2)
+	var room model.Room
+	err = row.Scan(&room.ID, &room.Name, &room.Type, &room.Description, &room.CreatedAt, &room.UpdatedAt)
+	if err == nil {
+		_ = tx.Commit()
+		return &room, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	now := time.Now().Unix()
+	name := fmt.Sprintf("dm-%d-%d", userID1, userID2)
+	result, err := tx.ExecContext(ctx,
+		"INSERT INTO rooms (name, type, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		name, "dm", "Direct Message", now, now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	roomID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	insertMember := "INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)"
+	if _, err = tx.ExecContext(ctx, insertMember, roomID, userID1, now, now); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, insertMember, roomID, userID2, now, now); err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &model.Room{
+		ID:          roomID,
+		Name:        name,
+		Type:        "dm",
+		Description: "Direct Message",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, nil
 }
