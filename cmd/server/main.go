@@ -14,6 +14,7 @@ import (
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
@@ -105,12 +106,14 @@ func main() {
 		GetOrCreateDMRoomUseCase:    getOrCreateDMRoomUseCase,
 		AddUserToRoomUseCase:        addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase:   removeUserFromRoomUseCase,
+		RoomUserRepository:          roomUserRepository,
 		PubSub:                      ps,
 	}
 
 	// middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository))
 
 	// CORS設定:フロントエンド(localhost:5173)からの通信を許可
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -142,7 +145,7 @@ func main() {
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
-				return origin == "http://localhost:5173" || origin == ""
+				return origin == "http://localhost:5173"
 			},
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,

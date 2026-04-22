@@ -60,7 +60,7 @@ type Mutation {
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
   updateProfile(input: UpdateProfileInput!): Profile!
-  sendMessage(roomID: ID!, userID: ID!, content: String!): Message!
+  sendMessage(roomID: ID!, content: String!): Message!
   createRoom(input: CreateRoomInput!): Room!
   getOrCreateDMRoom(currentUserID: ID!, targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!

@@ -17,7 +17,7 @@ type Claims struct {
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "changeme-secret-key"
+		panic("JWT_SECRET environment variable must be set")
 	}
 	return []byte(secret)
 }

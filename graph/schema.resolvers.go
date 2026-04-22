@@ -7,12 +7,42 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
+
+func requireAuth(ctx context.Context) (*auth.Claims, error) {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+	return claims, nil
+}
+
+func requireAdminAuth(ctx context.Context) (*auth.Claims, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Role != "admin" {
+		return nil, errors.New("forbidden")
+	}
+	return claims, nil
+}
+
+func containsInt64(slice []int64, val int64) bool {
+	for _, v := range slice {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
@@ -42,6 +72,10 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 
 // DeleteUser is the resolver for the deleteUser field.
 func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+
 	numericID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return false, fmt.Errorf("invalid user id: %s", id)
@@ -57,12 +91,20 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	numericID, err := strconv.ParseInt(input.ID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", input.ID)
 	}
 
-	// Validate that the user exists before updating
+	if claims.ID != numericID && claims.Role != "admin" {
+		return nil, errors.New("forbidden")
+	}
+
 	_, err = r.GetUserByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", input.ID)
@@ -123,6 +165,10 @@ func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, 
 
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	param := model.CreateAdministratorParam{
 		Name:     input.Name,
 		Email:    input.Email,
@@ -146,6 +192,10 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 
 // DeleteAdministrator is the resolver for the deleteAdministrator field.
 func (r *mutationResolver) DeleteAdministrator(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+
 	numericID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return false, fmt.Errorf("invalid administrator id: %s", id)
@@ -161,6 +211,10 @@ func (r *mutationResolver) DeleteAdministrator(ctx context.Context, id string) (
 
 // UpdateAdministrator is the resolver for the updateAdministrator field.
 func (r *mutationResolver) UpdateAdministrator(ctx context.Context, input gqlmodel.UpdateAdministratorInput) (*gqlmodel.Administrator, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	numericID, err := strconv.ParseInt(input.ID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid administrator id: %s", input.ID)
@@ -217,10 +271,18 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 
 // UpdateProfile is the resolver for the updateProfile field.
 func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
-	// 1. 文字列のIDを数値(int64)に変換する
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id format")
+	}
+
+	if claims.ID != numericUserID {
+		return nil, errors.New("forbidden")
 	}
 
 	param := model.UpdateProfileParam{
@@ -229,7 +291,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 		Image: input.Image,
 	}
 
-	// 2. 数値に変換した numericUserID を渡す
 	p, err := r.UpdateProfileUseCase.Execute(ctx, numericUserID, param)
 	if err != nil {
 		return nil, err
@@ -238,11 +299,10 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 	users, _ := r.ListUsersUseCase.Execute(ctx)
 	var targetUser *gqlmodel.User
 	for _, u := range users {
-		// 3. ユーザーの内部ID(int64)同士で比較する
 		if u.ID == p.UserID {
 			targetUser = &gqlmodel.User{
 				ID:        fmt.Sprintf("%d", u.ID),
-				UserID:    u.UserID, // これは "shibata_test" などのログインID
+				UserID:    u.UserID,
 				Name:      u.Name,
 				Email:     u.Email,
 				Role:      u.Role,
@@ -255,7 +315,7 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 	}
 
 	return &gqlmodel.Profile{
-		UserID:    fmt.Sprintf("%d", p.UserID), // GraphQLに返す時は文字列に戻す
+		UserID:    fmt.Sprintf("%d", p.UserID),
 		User:      targetUser,
 		Bio:       &p.Bio,
 		Grade:     &p.Grade,
@@ -266,22 +326,31 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 }
 
 // SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, userID string, content string) (*gqlmodel.Message, error) {
-	rid, err := strconv.ParseInt(roomID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid roomID: %s", roomID)
-	}
-	uid, err := strconv.ParseInt(userID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid userID: %s", userID)
-	}
-
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, uid, content)
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string) (*gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	user, _ := r.GetUserByIDUseCase.Execute(ctx, uid)
+	rid, err := strconv.ParseInt(roomID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+	}
+
+	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content)
+	if err != nil {
+		return nil, err
+	}
+
+	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
 	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
 
 	gqlMsg := &gqlmodel.Message{
@@ -321,6 +390,10 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, userI
 
 // CreateRoom is the resolver for the createRoom field.
 func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	room, err := r.CreateRoomUseCase.Execute(ctx, model.CreateRoomParam{
 		Name:        input.Name,
 		Description: input.Description,
@@ -340,16 +413,17 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 
 // GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
 func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, currentUserID string, targetUserID string) (*gqlmodel.Room, error) {
-	cid, err := strconv.ParseInt(currentUserID, 10, 64)
+	claims, err := requireAuth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid currentUserID: %s", currentUserID)
+		return nil, err
 	}
+
 	tid, err := strconv.ParseInt(targetUserID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid targetUserID: %s", targetUserID)
 	}
 
-	room, err := r.GetOrCreateDMRoomUseCase.Execute(ctx, cid, tid)
+	room, err := r.GetOrCreateDMRoomUseCase.Execute(ctx, claims.ID, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +439,10 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, currentUserID 
 
 // AddUserToRoom is the resolver for the addUserToRoom field.
 func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.AddUserToRoomInput) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+
 	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
 	if err != nil {
 		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
@@ -381,6 +459,10 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 
 // RemoveUserFromRoom is the resolver for the removeUserFromRoom field.
 func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmodel.RemoveUserFromRoomInput) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+
 	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
 	if err != nil {
 		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
@@ -531,7 +613,6 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 
 // GetProfileByUserID is the resolver for the getProfileByUserID field.
 func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
-	// 1. 文字列のIDを数値(int64)に変換する
 	numericUserID, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id format")
@@ -576,9 +657,22 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 
 // Messages is the resolver for the messages field.
 func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	rid, err := strconv.ParseInt(roomID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+	}
+
+	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
 	}
 
 	msgs, err := r.ListMessagesUseCase.Execute(ctx, rid)
@@ -645,6 +739,24 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 
 // MessageAdded is the resolver for the messageAdded field.
 func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := strconv.ParseInt(roomID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+	}
+
+	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
 	ch := make(chan *gqlmodel.Message, 1)
 	sub := r.PubSub.Subscribe(roomID)
 

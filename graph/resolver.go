@@ -2,6 +2,7 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
@@ -42,6 +43,7 @@ type Resolver struct {
 	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
 	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
+	RoomUserRepository        repository.RoomUserRepository
 
 	PubSub *pubsub.PubSub
 }

@@ -75,7 +75,7 @@ type ComplexityRoot struct {
 		LogoutAdministrator func(childComplexity int, token string) int
 		LogoutUser          func(childComplexity int, token string) int
 		RemoveUserFromRoom  func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		SendMessage         func(childComplexity int, roomID string, userID string, content string) int
+		SendMessage         func(childComplexity int, roomID string, content string) int
 		UpdateAdministrator func(childComplexity int, input model.UpdateAdministratorInput) int
 		UpdateProfile       func(childComplexity int, input model.UpdateProfileInput) int
 		UpdateUser          func(childComplexity int, input model.UpdateUserInput) int
@@ -147,7 +147,7 @@ type MutationResolver interface {
 	LoginAdministrator(ctx context.Context, input model.LoginInput) (*model.AdministratorAuthPayload, error)
 	LogoutAdministrator(ctx context.Context, token string) (bool, error)
 	UpdateProfile(ctx context.Context, input model.UpdateProfileInput) (*model.Profile, error)
-	SendMessage(ctx context.Context, roomID string, userID string, content string) (*model.Message, error)
+	SendMessage(ctx context.Context, roomID string, content string) (*model.Message, error)
 	CreateRoom(ctx context.Context, input model.CreateRoomInput) (*model.Room, error)
 	GetOrCreateDMRoom(ctx context.Context, currentUserID string, targetUserID string) (*model.Room, error)
 	AddUserToRoom(ctx context.Context, input model.AddUserToRoomInput) (bool, error)
@@ -423,7 +423,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["userID"].(string), args["content"].(string)), true
+		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string)), true
 	case "Mutation.updateAdministrator":
 		if e.ComplexityRoot.Mutation.UpdateAdministrator == nil {
 			break
@@ -2251,7 +2251,7 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 		ec.fieldContext_Mutation_sendMessage,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["userID"].(string), fc.Args["content"].(string))
+			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string))
 		},
 		nil,
 		ec.marshalNMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage,
