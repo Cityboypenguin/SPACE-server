@@ -11,38 +11,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
-
-func requireAuth(ctx context.Context) (*auth.Claims, error) {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if !ok {
-		return nil, errors.New("unauthorized")
-	}
-	return claims, nil
-}
-
-func requireAdminAuth(ctx context.Context) (*auth.Claims, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role != "admin" {
-		return nil, errors.New("forbidden")
-	}
-	return claims, nil
-}
-
-func containsInt64(slice []int64, val int64) bool {
-	for _, v := range slice {
-		if v == val {
-			return true
-		}
-	}
-	return false
-}
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
@@ -96,18 +67,12 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	numericID, err := strconv.ParseInt(input.ID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", input.ID)
-	}
-
-	if claims.ID != numericID && claims.Role != "admin" {
-		return nil, errors.New("forbidden")
-	}
+	// ユーザーは自分の情報のみ更新可能
+	numericID := claims.ID
 
 	_, err = r.GetUserByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", input.ID)
+		return nil, fmt.Errorf("invalid user id: %d", numericID)
 	}
 
 	param := model.UpdateUserParam{
@@ -210,14 +175,14 @@ func (r *mutationResolver) DeleteAdministrator(ctx context.Context, id string) (
 }
 
 // UpdateAdministrator is the resolver for the updateAdministrator field.
-func (r *mutationResolver) UpdateAdministrator(ctx context.Context, input gqlmodel.UpdateAdministratorInput) (*gqlmodel.Administrator, error) {
+func (r *mutationResolver) UpdateAdministrator(ctx context.Context, id string, input gqlmodel.UpdateAdministratorInput) (*gqlmodel.Administrator, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	numericID, err := strconv.ParseInt(input.ID, 10, 64)
+	numericID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid administrator id: %s", input.ID)
+		return nil, fmt.Errorf("invalid administrator id: %s", id)
 	}
 
 	param := model.UpdateAdministratorParam{
@@ -412,7 +377,7 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 }
 
 // GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
-func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, currentUserID string, targetUserID string) (*gqlmodel.Room, error) {
+func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID string) (*gqlmodel.Room, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -439,7 +404,8 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, currentUserID 
 
 // AddUserToRoom is the resolver for the addUserToRoom field.
 func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.AddUserToRoomInput) (bool, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return false, err
 	}
 
@@ -451,6 +417,15 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 	if err != nil {
 		return false, fmt.Errorf("invalid userID: %s", input.UserID)
 	}
+
+	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	if err != nil {
+		return false, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return false, errors.New("forbidden: not a member of this room")
+	}
+
 	if err := r.AddUserToRoomUseCase.Execute(ctx, rid, uid); err != nil {
 		return false, err
 	}
@@ -459,7 +434,8 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 
 // RemoveUserFromRoom is the resolver for the removeUserFromRoom field.
 func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmodel.RemoveUserFromRoomInput) (bool, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return false, err
 	}
 
@@ -471,6 +447,11 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 	if err != nil {
 		return false, fmt.Errorf("invalid userID: %s", input.UserID)
 	}
+
+	if claims.ID != uid {
+		return false, errors.New("forbidden: can only remove yourself from a room")
+	}
+
 	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, rid, uid); err != nil {
 		return false, err
 	}
@@ -794,3 +775,10 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.

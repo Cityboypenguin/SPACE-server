@@ -91,7 +91,6 @@ type Subscription struct {
 }
 
 type UpdateAdministratorInput struct {
-	ID       string  `json:"ID"`
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
@@ -106,14 +105,11 @@ type UpdateProfileInput struct {
 }
 
 type UpdateRoomInput struct {
-	ID          string  `json:"ID"`
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 }
 
 type UpdateUserInput struct {
-	ID       string  `json:"ID"`
-	UserID   *string `json:"userID,omitempty"`
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`

@@ -69,14 +69,14 @@ type ComplexityRoot struct {
 		CreateUser          func(childComplexity int, input model.CreateUserInput) int
 		DeleteAdministrator func(childComplexity int, id string) int
 		DeleteUser          func(childComplexity int, id string) int
-		GetOrCreateDMRoom   func(childComplexity int, currentUserID string, targetUserID string) int
+		GetOrCreateDMRoom   func(childComplexity int, targetUserID string) int
 		LoginAdministrator  func(childComplexity int, input model.LoginInput) int
 		LoginUser           func(childComplexity int, input model.LoginInput) int
 		LogoutAdministrator func(childComplexity int, token string) int
 		LogoutUser          func(childComplexity int, token string) int
 		RemoveUserFromRoom  func(childComplexity int, input model.RemoveUserFromRoomInput) int
 		SendMessage         func(childComplexity int, roomID string, content string) int
-		UpdateAdministrator func(childComplexity int, input model.UpdateAdministratorInput) int
+		UpdateAdministrator func(childComplexity int, id string, input model.UpdateAdministratorInput) int
 		UpdateProfile       func(childComplexity int, input model.UpdateProfileInput) int
 		UpdateUser          func(childComplexity int, input model.UpdateUserInput) int
 	}
@@ -143,13 +143,13 @@ type MutationResolver interface {
 	LogoutUser(ctx context.Context, token string) (bool, error)
 	CreateAdministrator(ctx context.Context, input model.CreateAdministratorInput) (*model.Administrator, error)
 	DeleteAdministrator(ctx context.Context, id string) (bool, error)
-	UpdateAdministrator(ctx context.Context, input model.UpdateAdministratorInput) (*model.Administrator, error)
+	UpdateAdministrator(ctx context.Context, id string, input model.UpdateAdministratorInput) (*model.Administrator, error)
 	LoginAdministrator(ctx context.Context, input model.LoginInput) (*model.AdministratorAuthPayload, error)
 	LogoutAdministrator(ctx context.Context, token string) (bool, error)
 	UpdateProfile(ctx context.Context, input model.UpdateProfileInput) (*model.Profile, error)
 	SendMessage(ctx context.Context, roomID string, content string) (*model.Message, error)
 	CreateRoom(ctx context.Context, input model.CreateRoomInput) (*model.Room, error)
-	GetOrCreateDMRoom(ctx context.Context, currentUserID string, targetUserID string) (*model.Room, error)
+	GetOrCreateDMRoom(ctx context.Context, targetUserID string) (*model.Room, error)
 	AddUserToRoom(ctx context.Context, input model.AddUserToRoomInput) (bool, error)
 	RemoveUserFromRoom(ctx context.Context, input model.RemoveUserFromRoomInput) (bool, error)
 }
@@ -357,7 +357,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.GetOrCreateDMRoom(childComplexity, args["currentUserID"].(string), args["targetUserID"].(string)), true
+		return e.ComplexityRoot.Mutation.GetOrCreateDMRoom(childComplexity, args["targetUserID"].(string)), true
 	case "Mutation.loginAdministrator":
 		if e.ComplexityRoot.Mutation.LoginAdministrator == nil {
 			break
@@ -434,7 +434,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.UpdateAdministrator(childComplexity, args["input"].(model.UpdateAdministratorInput)), true
+		return e.ComplexityRoot.Mutation.UpdateAdministrator(childComplexity, args["id"].(string), args["input"].(model.UpdateAdministratorInput)), true
 	case "Mutation.updateProfile":
 		if e.ComplexityRoot.Mutation.UpdateProfile == nil {
 			break
@@ -913,16 +913,11 @@ func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, 
 func (ec *executionContext) field_Mutation_getOrCreateDMRoom_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "currentUserID", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "targetUserID", ec.unmarshalNID2string)
 	if err != nil {
 		return nil, err
 	}
-	args["currentUserID"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "targetUserID", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["targetUserID"] = arg1
+	args["targetUserID"] = arg0
 	return args, nil
 }
 
@@ -989,27 +984,27 @@ func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context,
 		return nil, err
 	}
 	args["roomID"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "userID", ec.unmarshalNID2string)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "content", ec.unmarshalNString2string)
 	if err != nil {
 		return nil, err
 	}
-	args["userID"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "content", ec.unmarshalNString2string)
-	if err != nil {
-		return nil, err
-	}
-	args["content"] = arg2
+	args["content"] = arg1
 	return args, nil
 }
 
 func (ec *executionContext) field_Mutation_updateAdministrator_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateAdministratorInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
 	if err != nil {
 		return nil, err
 	}
-	args["input"] = arg0
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateAdministratorInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
 	return args, nil
 }
 
@@ -2049,7 +2044,7 @@ func (ec *executionContext) _Mutation_updateAdministrator(ctx context.Context, f
 		ec.fieldContext_Mutation_updateAdministrator,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateAdministrator(ctx, fc.Args["input"].(model.UpdateAdministratorInput))
+			return ec.Resolvers.Mutation().UpdateAdministrator(ctx, fc.Args["id"].(string), fc.Args["input"].(model.UpdateAdministratorInput))
 		},
 		nil,
 		ec.marshalNAdministrator2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministrator,
@@ -2367,7 +2362,7 @@ func (ec *executionContext) _Mutation_getOrCreateDMRoom(ctx context.Context, fie
 		ec.fieldContext_Mutation_getOrCreateDMRoom,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().GetOrCreateDMRoom(ctx, fc.Args["currentUserID"].(string), fc.Args["targetUserID"].(string))
+			return ec.Resolvers.Mutation().GetOrCreateDMRoom(ctx, fc.Args["targetUserID"].(string))
 		},
 		nil,
 		ec.marshalNRoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom,
@@ -5637,20 +5632,13 @@ func (ec *executionContext) unmarshalInputUpdateAdministratorInput(ctx context.C
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"ID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"name", "email", "password"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "ID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ID"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ID = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -5746,20 +5734,13 @@ func (ec *executionContext) unmarshalInputUpdateRoomInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"ID", "name", "description"}
+	fieldsInOrder := [...]string{"name", "description"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "ID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ID"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ID = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -5790,27 +5771,13 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"ID", "userID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"name", "email", "password"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "ID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ID"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ID = data
-		case "userID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.UserID = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)

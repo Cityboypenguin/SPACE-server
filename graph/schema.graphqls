@@ -56,13 +56,13 @@ type Mutation {
   logoutUser(token: String!): Boolean!
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!
-  updateAdministrator(input: UpdateAdministratorInput!): Administrator!
+  updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
   updateProfile(input: UpdateProfileInput!): Profile!
   sendMessage(roomID: ID!, content: String!): Message!
   createRoom(input: CreateRoomInput!): Room!
-  getOrCreateDMRoom(currentUserID: ID!, targetUserID: ID!): Room!
+  getOrCreateDMRoom(targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!
   removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
 }
@@ -74,7 +74,6 @@ input CreateAdministratorInput {
 }
 
 input UpdateAdministratorInput {
-  ID: ID!
   name: String
   email: String
   password: String
@@ -88,8 +87,6 @@ input CreateUserInput {
 }
 
 input UpdateUserInput {
-  ID: ID!
-  userID: String
   name: String
   email: String
   password: String
@@ -141,7 +138,6 @@ input CreateRoomInput {
 }
 
 input UpdateRoomInput {
-  ID: ID!
   name: String
   description: String
 }

@@ -96,7 +96,9 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	var room model.Room
 	err = row.Scan(&room.ID, &room.Name, &room.Type, &room.Description, &room.CreatedAt, &room.UpdatedAt)
 	if err == nil {
-		_ = tx.Commit()
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
 		return &room, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
