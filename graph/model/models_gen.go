@@ -17,6 +17,7 @@ type Administrator struct {
 
 type AdministratorAuthPayload struct {
 	Token         string         `json:"token"`
+	RefreshToken  string         `json:"refreshToken"`
 	Administrator *Administrator `json:"administrator"`
 }
 
@@ -126,6 +127,7 @@ type User struct {
 }
 
 type UserAuthPayload struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refreshToken"`
+	User         *User  `json:"user"`
 }

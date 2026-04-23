@@ -76,6 +76,8 @@ func main() {
 	}
 	defer redisClient.Close()
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
+	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
@@ -91,35 +93,37 @@ func main() {
 	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
-		CreateUserUseCase:           createUserUseCase,
-		ListUsersUseCase:            listUsersUseCase,
-		DeleteUserUseCase:           deleteUserUsecase,
-		UpdateUserUseCase:           updateUserUsecase,
-		GetUserByIDUseCase:          getUserByIDUsecase,
-		SearchUsersUseCase:          searchUsersUseCase,
-		LoginUserUseCase:            loginUserUseCase,
-		LogoutUserUseCase:           logoutUserUseCase,
-		GetProfileUseCase:           getProfileUseCase,
-		UpdateProfileUseCase:        updateProfileUseCase,
-		CreateAdministratorUseCase:  createAdministratorUseCase,
-		GetAdministratorByIDUseCase: getAdministratorByIDUseCase,
-		ListAdministratorsUseCase:   listAdministratorsUseCase,
-		DeleteAdministratorUseCase:  deleteAdministratorUseCase,
-		UpdateAdministratorUseCase:  updateAdministratorUseCase,
-		SearchAdministratorsUseCase: searchAdministratorsUseCase,
-		LoginAdministratorUseCase:   loginAdministratorUseCase,
-		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
-		SendMessageUseCase:          sendMessageUseCase,
-		ListMessagesUseCase:         listMessagesUseCase,
-		CreateRoomUseCase:           createRoomUseCase,
-		GetRoomUseCase:              getRoomUseCase,
-		ListMyDMRoomsUseCase:        listMyDMRoomsUseCase,
-		GetOrCreateDMRoomUseCase:    getOrCreateDMRoomUseCase,
-		AddUserToRoomUseCase:        addUserToRoomUseCase,
-		RemoveUserFromRoomUseCase:   removeUserFromRoomUseCase,
-		RoomUserRepository:          roomUserRepository,
-		UserRepository:              userRepository,
-		PubSub:                      ps,
+		CreateUserUseCase:                createUserUseCase,
+		ListUsersUseCase:                 listUsersUseCase,
+		DeleteUserUseCase:                deleteUserUsecase,
+		UpdateUserUseCase:                updateUserUsecase,
+		GetUserByIDUseCase:               getUserByIDUsecase,
+		SearchUsersUseCase:               searchUsersUseCase,
+		LoginUserUseCase:                 loginUserUseCase,
+		RefreshUserTokenUseCase:          refreshUserTokenUseCase,
+		LogoutUserUseCase:                logoutUserUseCase,
+		GetProfileUseCase:                getProfileUseCase,
+		UpdateProfileUseCase:             updateProfileUseCase,
+		CreateAdministratorUseCase:       createAdministratorUseCase,
+		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
+		ListAdministratorsUseCase:        listAdministratorsUseCase,
+		DeleteAdministratorUseCase:       deleteAdministratorUseCase,
+		UpdateAdministratorUseCase:       updateAdministratorUseCase,
+		SearchAdministratorsUseCase:      searchAdministratorsUseCase,
+		LoginAdministratorUseCase:        loginAdministratorUseCase,
+		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
+		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
+		SendMessageUseCase:               sendMessageUseCase,
+		ListMessagesUseCase:              listMessagesUseCase,
+		CreateRoomUseCase:                createRoomUseCase,
+		GetRoomUseCase:                   getRoomUseCase,
+		ListMyDMRoomsUseCase:             listMyDMRoomsUseCase,
+		GetOrCreateDMRoomUseCase:         getOrCreateDMRoomUseCase,
+		AddUserToRoomUseCase:             addUserToRoomUseCase,
+		RemoveUserFromRoomUseCase:        removeUserFromRoomUseCase,
+		RoomUserRepository:               roomUserRepository,
+		UserRepository:                   userRepository,
+		PubSub:                           ps,
 	}
 
 	// middleware

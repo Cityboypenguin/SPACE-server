@@ -21,7 +21,7 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository) echo.Middleware
 			}
 
 			tokenStr := strings.TrimPrefix(header, "Bearer ")
-			claims, err := auth.ValidateToken(tokenStr)
+			claims, err := auth.ValidateAccessToken(tokenStr)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
 			}

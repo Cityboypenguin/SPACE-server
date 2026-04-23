@@ -47,6 +47,7 @@ type ComplexityRoot struct {
 
 	AdministratorAuthPayload struct {
 		Administrator func(childComplexity int) int
+		RefreshToken  func(childComplexity int) int
 		Token         func(childComplexity int) int
 	}
 
@@ -62,22 +63,24 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddUserToRoom       func(childComplexity int, input model.AddUserToRoomInput) int
-		CreateAdministrator func(childComplexity int, input model.CreateAdministratorInput) int
-		CreateRoom          func(childComplexity int, input model.CreateRoomInput) int
-		CreateUser          func(childComplexity int, input model.CreateUserInput) int
-		DeleteAdministrator func(childComplexity int, id string) int
-		DeleteUser          func(childComplexity int, id string) int
-		GetOrCreateDMRoom   func(childComplexity int, targetUserID string) int
-		LoginAdministrator  func(childComplexity int, input model.LoginInput) int
-		LoginUser           func(childComplexity int, input model.LoginInput) int
-		LogoutAdministrator func(childComplexity int, token string) int
-		LogoutUser          func(childComplexity int, token string) int
-		RemoveUserFromRoom  func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		SendMessage         func(childComplexity int, roomID string, content string) int
-		UpdateAdministrator func(childComplexity int, id string, input model.UpdateAdministratorInput) int
-		UpdateProfile       func(childComplexity int, input model.UpdateProfileInput) int
-		UpdateUser          func(childComplexity int, input model.UpdateUserInput) int
+		AddUserToRoom             func(childComplexity int, input model.AddUserToRoomInput) int
+		CreateAdministrator       func(childComplexity int, input model.CreateAdministratorInput) int
+		CreateRoom                func(childComplexity int, input model.CreateRoomInput) int
+		CreateUser                func(childComplexity int, input model.CreateUserInput) int
+		DeleteAdministrator       func(childComplexity int, id string) int
+		DeleteUser                func(childComplexity int, id string) int
+		GetOrCreateDMRoom         func(childComplexity int, targetUserID string) int
+		LoginAdministrator        func(childComplexity int, input model.LoginInput) int
+		LoginUser                 func(childComplexity int, input model.LoginInput) int
+		LogoutAdministrator       func(childComplexity int, token string) int
+		LogoutUser                func(childComplexity int, token string) int
+		RefreshAdministratorToken func(childComplexity int, refreshToken string) int
+		RefreshUserToken          func(childComplexity int, refreshToken string) int
+		RemoveUserFromRoom        func(childComplexity int, input model.RemoveUserFromRoomInput) int
+		SendMessage               func(childComplexity int, roomID string, content string) int
+		UpdateAdministrator       func(childComplexity int, id string, input model.UpdateAdministratorInput) int
+		UpdateProfile             func(childComplexity int, input model.UpdateProfileInput) int
+		UpdateUser                func(childComplexity int, input model.UpdateUserInput) int
 	}
 
 	Profile struct {
@@ -132,8 +135,9 @@ type ComplexityRoot struct {
 	}
 
 	UserAuthPayload struct {
-		Token func(childComplexity int) int
-		User  func(childComplexity int) int
+		RefreshToken func(childComplexity int) int
+		Token        func(childComplexity int) int
+		User         func(childComplexity int) int
 	}
 }
 
@@ -142,11 +146,13 @@ type MutationResolver interface {
 	DeleteUser(ctx context.Context, id string) (bool, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
 	LoginUser(ctx context.Context, input model.LoginInput) (*model.UserAuthPayload, error)
+	RefreshUserToken(ctx context.Context, refreshToken string) (*model.UserAuthPayload, error)
 	LogoutUser(ctx context.Context, token string) (bool, error)
 	CreateAdministrator(ctx context.Context, input model.CreateAdministratorInput) (*model.Administrator, error)
 	DeleteAdministrator(ctx context.Context, id string) (bool, error)
 	UpdateAdministrator(ctx context.Context, id string, input model.UpdateAdministratorInput) (*model.Administrator, error)
 	LoginAdministrator(ctx context.Context, input model.LoginInput) (*model.AdministratorAuthPayload, error)
+	RefreshAdministratorToken(ctx context.Context, refreshToken string) (*model.AdministratorAuthPayload, error)
 	LogoutAdministrator(ctx context.Context, token string) (bool, error)
 	UpdateProfile(ctx context.Context, input model.UpdateProfileInput) (*model.Profile, error)
 	SendMessage(ctx context.Context, roomID string, content string) (*model.Message, error)
@@ -224,6 +230,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdministratorAuthPayload.Administrator(childComplexity), true
+	case "AdministratorAuthPayload.refreshToken":
+		if e.ComplexityRoot.AdministratorAuthPayload.RefreshToken == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdministratorAuthPayload.RefreshToken(childComplexity), true
 	case "AdministratorAuthPayload.token":
 		if e.ComplexityRoot.AdministratorAuthPayload.Token == nil {
 			break
@@ -401,6 +413,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.LogoutUser(childComplexity, args["token"].(string)), true
+	case "Mutation.refreshAdministratorToken":
+		if e.ComplexityRoot.Mutation.RefreshAdministratorToken == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_refreshAdministratorToken_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RefreshAdministratorToken(childComplexity, args["refreshToken"].(string)), true
+	case "Mutation.refreshUserToken":
+		if e.ComplexityRoot.Mutation.RefreshUserToken == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_refreshUserToken_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RefreshUserToken(childComplexity, args["refreshToken"].(string)), true
 	case "Mutation.removeUserFromRoom":
 		if e.ComplexityRoot.Mutation.RemoveUserFromRoom == nil {
 			break
@@ -719,6 +753,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.User.UserID(childComplexity), true
 
+	case "UserAuthPayload.refreshToken":
+		if e.ComplexityRoot.UserAuthPayload.RefreshToken == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserAuthPayload.RefreshToken(childComplexity), true
 	case "UserAuthPayload.token":
 		if e.ComplexityRoot.UserAuthPayload.Token == nil {
 			break
@@ -979,6 +1019,28 @@ func (ec *executionContext) field_Mutation_logoutUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["token"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_refreshAdministratorToken_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "refreshToken", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["refreshToken"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_refreshUserToken_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "refreshToken", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["refreshToken"] = arg0
 	return args, nil
 }
 
@@ -1360,6 +1422,35 @@ func (ec *executionContext) _AdministratorAuthPayload_token(ctx context.Context,
 }
 
 func (ec *executionContext) fieldContext_AdministratorAuthPayload_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdministratorAuthPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdministratorAuthPayload_refreshToken(ctx context.Context, field graphql.CollectedField, obj *model.AdministratorAuthPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AdministratorAuthPayload_refreshToken,
+		func(ctx context.Context) (any, error) {
+			return obj.RefreshToken, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AdministratorAuthPayload_refreshToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "AdministratorAuthPayload",
 		Field:      field,
@@ -1865,6 +1956,8 @@ func (ec *executionContext) fieldContext_Mutation_loginUser(ctx context.Context,
 			switch field.Name {
 			case "token":
 				return ec.fieldContext_UserAuthPayload_token(ctx, field)
+			case "refreshToken":
+				return ec.fieldContext_UserAuthPayload_refreshToken(ctx, field)
 			case "user":
 				return ec.fieldContext_UserAuthPayload_user(ctx, field)
 			}
@@ -1879,6 +1972,55 @@ func (ec *executionContext) fieldContext_Mutation_loginUser(ctx context.Context,
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_loginUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_refreshUserToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_refreshUserToken,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RefreshUserToken(ctx, fc.Args["refreshToken"].(string))
+		},
+		nil,
+		ec.marshalNUserAuthPayload2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserAuthPayload,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_refreshUserToken(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "token":
+				return ec.fieldContext_UserAuthPayload_token(ctx, field)
+			case "refreshToken":
+				return ec.fieldContext_UserAuthPayload_refreshToken(ctx, field)
+			case "user":
+				return ec.fieldContext_UserAuthPayload_user(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserAuthPayload", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_refreshUserToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2100,6 +2242,8 @@ func (ec *executionContext) fieldContext_Mutation_loginAdministrator(ctx context
 			switch field.Name {
 			case "token":
 				return ec.fieldContext_AdministratorAuthPayload_token(ctx, field)
+			case "refreshToken":
+				return ec.fieldContext_AdministratorAuthPayload_refreshToken(ctx, field)
 			case "administrator":
 				return ec.fieldContext_AdministratorAuthPayload_administrator(ctx, field)
 			}
@@ -2114,6 +2258,55 @@ func (ec *executionContext) fieldContext_Mutation_loginAdministrator(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_loginAdministrator_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_refreshAdministratorToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_refreshAdministratorToken,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RefreshAdministratorToken(ctx, fc.Args["refreshToken"].(string))
+		},
+		nil,
+		ec.marshalNAdministratorAuthPayload2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorAuthPayload,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_refreshAdministratorToken(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "token":
+				return ec.fieldContext_AdministratorAuthPayload_token(ctx, field)
+			case "refreshToken":
+				return ec.fieldContext_AdministratorAuthPayload_refreshToken(ctx, field)
+			case "administrator":
+				return ec.fieldContext_AdministratorAuthPayload_administrator(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AdministratorAuthPayload", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_refreshAdministratorToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -3988,6 +4181,35 @@ func (ec *executionContext) _UserAuthPayload_token(ctx context.Context, field gr
 }
 
 func (ec *executionContext) fieldContext_UserAuthPayload_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserAuthPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserAuthPayload_refreshToken(ctx context.Context, field graphql.CollectedField, obj *model.UserAuthPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UserAuthPayload_refreshToken,
+		func(ctx context.Context) (any, error) {
+			return obj.RefreshToken, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UserAuthPayload_refreshToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "UserAuthPayload",
 		Field:      field,
@@ -6002,6 +6224,11 @@ func (ec *executionContext) _AdministratorAuthPayload(ctx context.Context, sel a
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "refreshToken":
+			out.Values[i] = ec._AdministratorAuthPayload_refreshToken(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "administrator":
 			out.Values[i] = ec._AdministratorAuthPayload_administrator(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -6151,6 +6378,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "refreshUserToken":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_refreshUserToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "logoutUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_logoutUser(ctx, field)
@@ -6182,6 +6416,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "loginAdministrator":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_loginAdministrator(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "refreshAdministratorToken":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_refreshAdministratorToken(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -6798,6 +7039,11 @@ func (ec *executionContext) _UserAuthPayload(ctx context.Context, sel ast.Select
 			out.Values[i] = graphql.MarshalString("UserAuthPayload")
 		case "token":
 			out.Values[i] = ec._UserAuthPayload_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "refreshToken":
+			out.Values[i] = ec._UserAuthPayload_refreshToken(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

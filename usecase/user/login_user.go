@@ -11,8 +11,9 @@ import (
 )
 
 type LoginUserResult struct {
-	Token string
-	User  *model.User
+	AccessToken  string
+	RefreshToken string
+	User         *model.User
 }
 
 type LoginUserUseCase interface {
@@ -42,10 +43,15 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, errors.New("invalid email or password")
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Role)
+	accessToken, err := auth.GenerateAccessToken(user.ID, user.Role)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoginUserResult{Token: token, User: user}, nil
+	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Role)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: user}, nil
 }

@@ -87,8 +87,23 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 	}
 
 	return &gqlmodel.UserAuthPayload{
-		Token: result.Token,
-		User:  toGraphUser(result.User),
+		Token:        result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		User:         toGraphUser(result.User),
+	}, nil
+}
+
+// RefreshUserToken is the resolver for the refreshUserToken field.
+func (r *mutationResolver) RefreshUserToken(ctx context.Context, refreshToken string) (*gqlmodel.UserAuthPayload, error) {
+	result, err := r.RefreshUserTokenUseCase.Execute(ctx, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.UserAuthPayload{
+		Token:        result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		User:         toGraphUser(result.User),
 	}, nil
 }
 
@@ -172,7 +187,22 @@ func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmode
 	}
 
 	return &gqlmodel.AdministratorAuthPayload{
-		Token:         result.Token,
+		Token:         result.AccessToken,
+		RefreshToken:  result.RefreshToken,
+		Administrator: toGraphAdministrator(result.Administrator),
+	}, nil
+}
+
+// RefreshAdministratorToken is the resolver for the refreshAdministratorToken field.
+func (r *mutationResolver) RefreshAdministratorToken(ctx context.Context, refreshToken string) (*gqlmodel.AdministratorAuthPayload, error) {
+	result, err := r.RefreshAdministratorTokenUseCase.Execute(ctx, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.AdministratorAuthPayload{
+		Token:         result.AccessToken,
+		RefreshToken:  result.RefreshToken,
 		Administrator: toGraphAdministrator(result.Administrator),
 	}, nil
 }
@@ -704,4 +734,3 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
-

@@ -6,14 +6,13 @@ services:
     volumes:
       - .:/app
     environment:
-      DB_USER: root
-      DB_PASSWORD: password
-      DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: space
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: local-dev-jwt-secret
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      JWT_REFRESH_EXPIRATION_MINUTES: ${JWT_REFRESH_EXPIRATION_MINUTES:-20160}
       INIT_ADMIN_NAME: ${INIT_ADMIN_NAME:-}
       INIT_ADMIN_EMAIL: ${INIT_ADMIN_EMAIL:-}
       INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
@@ -29,7 +28,7 @@ services:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: space
     ports:
-      - "3306:3306"
+      - "3306:3306" # 後悔する時に消す
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d
