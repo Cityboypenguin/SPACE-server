@@ -125,6 +125,8 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository))
+	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.GraphQLAudit())
 
 	// CORS設定:フロントエンド(localhost:5173)からの通信を許可
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{

@@ -3,6 +3,7 @@ package profile
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -22,6 +23,9 @@ func NewGetProfileUseCase(profileRepo repository.ProfileRepository) GetProfileUs
 }
 
 func (uc *GetProfileInteractor) Execute(ctx context.Context, userID int64) (*model.Profile, error) {
-	// 取得はシンプルに、倉庫係から取り出したデータをそのまま返すだけです
+	if _, err := authz.RequireSelfOrAdmin(ctx, userID); err != nil {
+		return nil, err
+	}
+
 	return uc.profileRepo.GetProfileByUserID(ctx, userID)
 }

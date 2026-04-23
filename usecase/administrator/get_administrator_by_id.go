@@ -3,6 +3,7 @@ package administrator
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -24,5 +25,9 @@ func NewGetAdministratorByIDUseCase(adminRepo repository.AdministratorRepository
 }
 
 func (uc *GetAdministratorByIDInteractor) Execute(ctx context.Context, id int64) (*model.Administrator, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	return uc.adminRepo.GetAdministratorByID(ctx, id)
 }

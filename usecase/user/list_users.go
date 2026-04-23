@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -24,5 +25,9 @@ func NewListUsersUseCase(userRepo repository.UserRepository) ListUsersUseCase {
 }
 
 func (uc *ListUsersInteractor) Execute(ctx context.Context) ([]*model.User, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	return uc.userRepo.ListUsers(ctx)
 }

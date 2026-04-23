@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -29,16 +28,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-	}, nil
+	return toGraphUser(user), nil
 }
 
 // DeleteUser is the resolver for the deleteUser field.
@@ -47,9 +37,9 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 		return false, err
 	}
 
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "user", id)
 	if err != nil {
-		return false, fmt.Errorf("invalid user id: %s", id)
+		return false, fmt.Errorf("invalid user id")
 	}
 
 	deleted, err := r.DeleteUserUseCase.Execute(ctx, numericID)
@@ -86,16 +76,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	return &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-	}, nil
+	return toGraphUser(user), nil
 }
 
 // LoginUser is the resolver for the loginUser field.
@@ -107,16 +88,7 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 
 	return &gqlmodel.UserAuthPayload{
 		Token: result.Token,
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", result.User.ID),
-			UserID:    result.User.UserID,
-			Name:      result.User.Name,
-			Email:     result.User.Email,
-			Role:      result.User.Role,
-			Status:    result.User.Status,
-			CreatedAt: fmt.Sprintf("%d", result.User.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", result.User.UpdatedAt),
-		},
+		User:  toGraphUser(result.User),
 	}, nil
 }
 
@@ -145,14 +117,7 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 		return nil, err
 	}
 
-	return &gqlmodel.Administrator{
-		ID:        fmt.Sprintf("%d", administrator.ID),
-		Name:      administrator.Name,
-		Email:     administrator.Email,
-		Password:  "",
-		CreatedAt: fmt.Sprintf("%d", administrator.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", administrator.UpdatedAt),
-	}, nil
+	return toGraphAdministrator(administrator), nil
 }
 
 // DeleteAdministrator is the resolver for the deleteAdministrator field.
@@ -161,9 +126,9 @@ func (r *mutationResolver) DeleteAdministrator(ctx context.Context, id string) (
 		return false, err
 	}
 
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "administrator", id)
 	if err != nil {
-		return false, fmt.Errorf("invalid administrator id: %s", id)
+		return false, fmt.Errorf("invalid administrator id")
 	}
 
 	deleted, err := r.DeleteAdministratorUseCase.Execute(ctx, numericID)
@@ -180,9 +145,9 @@ func (r *mutationResolver) UpdateAdministrator(ctx context.Context, id string, i
 		return nil, err
 	}
 
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "administrator", id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid administrator id: %s", id)
+		return nil, fmt.Errorf("invalid administrator id")
 	}
 
 	param := model.UpdateAdministratorParam{
@@ -196,14 +161,7 @@ func (r *mutationResolver) UpdateAdministrator(ctx context.Context, id string, i
 		return nil, err
 	}
 
-	return &gqlmodel.Administrator{
-		ID:        fmt.Sprintf("%d", admin.ID),
-		Name:      admin.Name,
-		Email:     admin.Email,
-		Password:  admin.HashedPassword,
-		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
-	}, nil
+	return toGraphAdministrator(admin), nil
 }
 
 // LoginAdministrator is the resolver for the loginAdministrator field.
@@ -214,15 +172,8 @@ func (r *mutationResolver) LoginAdministrator(ctx context.Context, input gqlmode
 	}
 
 	return &gqlmodel.AdministratorAuthPayload{
-		Token: result.Token,
-		Administrator: &gqlmodel.Administrator{
-			ID:        fmt.Sprintf("%d", result.Administrator.ID),
-			Name:      result.Administrator.Name,
-			Email:     result.Administrator.Email,
-			Password:  result.Administrator.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", result.Administrator.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", result.Administrator.UpdatedAt),
-		},
+		Token:         result.Token,
+		Administrator: toGraphAdministrator(result.Administrator),
 	}, nil
 }
 
@@ -236,18 +187,18 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 
 // UpdateProfile is the resolver for the updateProfile field.
 func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
-	claims, err := requireAuth(ctx)
+	_, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
+	numericUserID, err := decodeGraphID(ctx, "user", input.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id format")
 	}
 
-	if claims.ID != numericUserID {
-		return nil, errors.New("forbidden")
+	if _, err := requireSelfOrAdmin(ctx, numericUserID, "update_profile"); err != nil {
+		return nil, err
 	}
 
 	param := model.UpdateProfileParam{
@@ -261,27 +212,11 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 		return nil, err
 	}
 
-	users, _ := r.ListUsersUseCase.Execute(ctx)
-	var targetUser *gqlmodel.User
-	for _, u := range users {
-		if u.ID == p.UserID {
-			targetUser = &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", u.ID),
-				UserID:    u.UserID,
-				Name:      u.Name,
-				Email:     u.Email,
-				Role:      u.Role,
-				Status:    u.Status,
-				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
-			}
-			break
-		}
-	}
+	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
 
 	return &gqlmodel.Profile{
-		UserID:    fmt.Sprintf("%d", p.UserID),
-		User:      targetUser,
+		UserID:    encodeGraphID("user", p.UserID),
+		User:      toGraphUser(targetUser),
 		Bio:       &p.Bio,
 		Grade:     &p.Grade,
 		Image:     &p.Image,
@@ -297,9 +232,9 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, err
 	}
 
-	rid, err := strconv.ParseInt(roomID, 10, 64)
+	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+		return nil, fmt.Errorf("invalid room id")
 	}
 
 	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
@@ -318,35 +253,12 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
 	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
 
-	gqlMsg := &gqlmodel.Message{
-		ID:        fmt.Sprintf("%d", msg.ID),
-		RoomID:    fmt.Sprintf("%d", msg.RoomID),
-		UserID:    fmt.Sprintf("%d", msg.UserID),
-		Content:   msg.Content,
-		CreatedAt: fmt.Sprintf("%d", msg.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", msg.UpdatedAt),
-	}
+	gqlMsg := toGraphMessage(msg)
 	if user != nil {
-		gqlMsg.User = &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", user.ID),
-			UserID:    user.UserID,
-			Name:      user.Name,
-			Email:     user.Email,
-			Role:      user.Role,
-			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-		}
+		gqlMsg.User = toGraphUser(user)
 	}
 	if room != nil {
-		gqlMsg.Room = &gqlmodel.Room{
-			ID:          fmt.Sprintf("%d", room.ID),
-			Name:        room.Name,
-			Type:        room.Type,
-			Description: room.Description,
-			CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-			UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
-		}
+		gqlMsg.Room = toGraphRoom(room)
 	}
 
 	r.PubSub.Publish(roomID, gqlMsg)
@@ -372,14 +284,7 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return &gqlmodel.Room{
-		ID:          fmt.Sprintf("%d", room.ID),
-		Name:        room.Name,
-		Type:        room.Type,
-		Description: room.Description,
-		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
-	}, nil
+	return toGraphRoom(room), nil
 }
 
 // GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
@@ -389,9 +294,9 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 		return nil, err
 	}
 
-	tid, err := strconv.ParseInt(targetUserID, 10, 64)
+	tid, err := decodeGraphID(ctx, "user", targetUserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid targetUserID: %s", targetUserID)
+		return nil, fmt.Errorf("invalid target user id")
 	}
 
 	room, err := r.GetOrCreateDMRoomUseCase.Execute(ctx, claims.ID, tid)
@@ -407,14 +312,7 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 		return nil, err
 	}
 
-	return &gqlmodel.Room{
-		ID:          fmt.Sprintf("%d", room.ID),
-		Name:        room.Name,
-		Type:        room.Type,
-		Description: room.Description,
-		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
-	}, nil
+	return toGraphRoom(room), nil
 }
 
 // AddUserToRoom is the resolver for the addUserToRoom field.
@@ -424,13 +322,13 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 		return false, err
 	}
 
-	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
+	rid, err := decodeGraphID(ctx, "room", input.RoomID)
 	if err != nil {
-		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
+		return false, fmt.Errorf("invalid room id")
 	}
-	uid, err := strconv.ParseInt(input.UserID, 10, 64)
+	uid, err := decodeGraphID(ctx, "user", input.UserID)
 	if err != nil {
-		return false, fmt.Errorf("invalid userID: %s", input.UserID)
+		return false, fmt.Errorf("invalid user id")
 	}
 
 	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
@@ -454,13 +352,13 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 		return false, err
 	}
 
-	rid, err := strconv.ParseInt(input.RoomID, 10, 64)
+	rid, err := decodeGraphID(ctx, "room", input.RoomID)
 	if err != nil {
-		return false, fmt.Errorf("invalid roomID: %s", input.RoomID)
+		return false, fmt.Errorf("invalid room id")
 	}
-	uid, err := strconv.ParseInt(input.UserID, 10, 64)
+	uid, err := decodeGraphID(ctx, "user", input.UserID)
 	if err != nil {
-		return false, fmt.Errorf("invalid userID: %s", input.UserID)
+		return false, fmt.Errorf("invalid user id")
 	}
 
 	if claims.ID != uid {
@@ -475,6 +373,10 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	users, err := r.ListUsersUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
@@ -482,25 +384,35 @@ func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 
 	var gqlUsers []*gqlmodel.User
 	for _, user := range users {
-		gqlUsers = append(gqlUsers, &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", user.ID),
-			UserID:    user.UserID,
-			Name:      user.Name,
-			Email:     user.Email,
-			Role:      user.Role,
-			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-		})
+		gqlUsers = append(gqlUsers, toGraphUser(user))
 	}
 	return gqlUsers, nil
 }
 
+// Me is the resolver for the me field.
+func (r *queryResolver) Me(ctx context.Context) (*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphUser(user), nil
+}
+
 // GetUserByID is the resolver for the getUserByID field.
 func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.User, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "user", id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", id)
+		return nil, fmt.Errorf("invalid user id")
 	}
 
 	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
@@ -508,20 +420,15 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 		return nil, err
 	}
 
-	return &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", user.ID),
-		UserID:    user.UserID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-	}, nil
+	return toGraphUser(user), nil
 }
 
 // SearchUsers is the resolver for the searchUsers field.
 func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	users, err := r.SearchUsersUseCase.Execute(ctx, name)
 	if err != nil {
 		return nil, err
@@ -529,22 +436,17 @@ func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmod
 
 	var gqlUsers []*gqlmodel.User
 	for _, user := range users {
-		gqlUsers = append(gqlUsers, &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", user.ID),
-			UserID:    user.UserID,
-			Name:      user.Name,
-			Email:     user.Email,
-			Role:      user.Role,
-			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
-		})
+		gqlUsers = append(gqlUsers, toGraphUser(user))
 	}
 	return gqlUsers, nil
 }
 
 // Administrators is the resolver for the administrators field.
 func (r *queryResolver) Administrators(ctx context.Context) ([]*gqlmodel.Administrator, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	admins, err := r.ListAdministratorsUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
@@ -552,23 +454,20 @@ func (r *queryResolver) Administrators(ctx context.Context) ([]*gqlmodel.Adminis
 
 	var gqlAdmins []*gqlmodel.Administrator
 	for _, admin := range admins {
-		gqlAdmins = append(gqlAdmins, &gqlmodel.Administrator{
-			ID:        fmt.Sprintf("%d", admin.ID),
-			Name:      admin.Name,
-			Email:     admin.Email,
-			Password:  admin.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
-		})
+		gqlAdmins = append(gqlAdmins, toGraphAdministrator(admin))
 	}
 	return gqlAdmins, nil
 }
 
 // GetAdministratorByID is the resolver for the getAdministratorByID field.
 func (r *queryResolver) GetAdministratorByID(ctx context.Context, id string) (*gqlmodel.Administrator, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "administrator", id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid administrator id: %s", id)
+		return nil, fmt.Errorf("invalid administrator id")
 	}
 
 	admin, err := r.GetAdministratorByIDUseCase.Execute(ctx, numericID)
@@ -576,18 +475,15 @@ func (r *queryResolver) GetAdministratorByID(ctx context.Context, id string) (*g
 		return nil, err
 	}
 
-	return &gqlmodel.Administrator{
-		ID:        fmt.Sprintf("%d", admin.ID),
-		Name:      admin.Name,
-		Email:     admin.Email,
-		Password:  admin.HashedPassword,
-		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
-	}, nil
+	return toGraphAdministrator(admin), nil
 }
 
 // SearchAdministrators is the resolver for the searchAdministrators field.
 func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) ([]*gqlmodel.Administrator, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	admins, err := r.SearchAdministratorsUseCase.Execute(ctx, name)
 	if err != nil {
 		return nil, err
@@ -595,23 +491,20 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 
 	var gqlAdmins []*gqlmodel.Administrator
 	for _, admin := range admins {
-		gqlAdmins = append(gqlAdmins, &gqlmodel.Administrator{
-			ID:        fmt.Sprintf("%d", admin.ID),
-			Name:      admin.Name,
-			Email:     admin.Email,
-			Password:  admin.HashedPassword,
-			CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
-		})
+		gqlAdmins = append(gqlAdmins, toGraphAdministrator(admin))
 	}
 	return gqlAdmins, nil
 }
 
 // GetProfileByUserID is the resolver for the getProfileByUserID field.
 func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
-	numericUserID, err := strconv.ParseInt(userID, 10, 64)
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id format")
+	}
+
+	if _, err := requireSelfOrAdmin(ctx, numericUserID, "get_profile_by_user_id"); err != nil {
+		return nil, err
 	}
 
 	p, err := r.GetProfileUseCase.Execute(ctx, numericUserID)
@@ -622,27 +515,11 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 		return nil, nil
 	}
 
-	users, _ := r.ListUsersUseCase.Execute(ctx)
-	var targetUser *gqlmodel.User
-	for _, u := range users {
-		if u.ID == p.UserID {
-			targetUser = &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", u.ID),
-				UserID:    u.UserID,
-				Name:      u.Name,
-				Email:     u.Email,
-				Role:      u.Role,
-				Status:    u.Status,
-				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
-			}
-			break
-		}
-	}
+	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
 
 	return &gqlmodel.Profile{
-		UserID:    fmt.Sprintf("%d", p.UserID),
-		User:      targetUser,
+		UserID:    encodeGraphID("user", p.UserID),
+		User:      toGraphUser(targetUser),
 		Bio:       &p.Bio,
 		Grade:     &p.Grade,
 		Image:     &p.Image,
@@ -658,9 +535,9 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 		return nil, err
 	}
 
-	rid, err := strconv.ParseInt(roomID, 10, 64)
+	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+		return nil, fmt.Errorf("invalid room id")
 	}
 
 	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
@@ -678,35 +555,12 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 
 	var result []*gqlmodel.Message
 	for _, msg := range msgs {
-		gqlMsg := &gqlmodel.Message{
-			ID:        fmt.Sprintf("%d", msg.ID),
-			RoomID:    fmt.Sprintf("%d", msg.RoomID),
-			UserID:    fmt.Sprintf("%d", msg.UserID),
-			Content:   msg.Content,
-			CreatedAt: fmt.Sprintf("%d", msg.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", msg.UpdatedAt),
-		}
+		gqlMsg := toGraphMessage(msg)
 		if u, _ := r.GetUserByIDUseCase.Execute(ctx, msg.UserID); u != nil {
-			gqlMsg.User = &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", u.ID),
-				UserID:    u.UserID,
-				Name:      u.Name,
-				Email:     u.Email,
-				Role:      u.Role,
-				Status:    u.Status,
-				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
-			}
+			gqlMsg.User = toGraphUser(u)
 		}
 		if rm, _ := r.GetRoomUseCase.Execute(ctx, msg.RoomID); rm != nil {
-			gqlMsg.Room = &gqlmodel.Room{
-				ID:          fmt.Sprintf("%d", rm.ID),
-				Name:        rm.Name,
-				Type:        rm.Type,
-				Description: rm.Description,
-				CreatedAt:   fmt.Sprintf("%d", rm.CreatedAt),
-				UpdatedAt:   fmt.Sprintf("%d", rm.UpdatedAt),
-			}
+			gqlMsg.Room = toGraphRoom(rm)
 		}
 		result = append(result, gqlMsg)
 	}
@@ -715,13 +569,26 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 
 // Room is the resolver for the room field.
 func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, error) {
-	rid, err := strconv.ParseInt(id, 10, 64)
+	claims, err := requireAuth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %s", id)
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
 	}
 	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, err
+	}
+
+	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
 	}
 
 	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, []int64{rid})
@@ -732,27 +599,12 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	users := usersByRoomID[rid]
 	members := make([]*gqlmodel.User, 0, len(users))
 	for _, u := range users {
-		members = append(members, &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", u.ID),
-			UserID:    u.UserID,
-			Name:      u.Name,
-			Email:     u.Email,
-			Role:      u.Role,
-			Status:    u.Status,
-			CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
-		})
+		members = append(members, toGraphUser(u))
 	}
 
-	return &gqlmodel.Room{
-		ID:          fmt.Sprintf("%d", room.ID),
-		Name:        room.Name,
-		Type:        room.Type,
-		User:        members,
-		Description: room.Description,
-		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
-	}, nil
+	gqlRoom := toGraphRoom(room)
+	gqlRoom.User = members
+	return gqlRoom, nil
 }
 
 // MyDMRooms is the resolver for the myDMRooms field.
@@ -782,27 +634,12 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 		users := usersByRoomID[room.ID]
 		members := make([]*gqlmodel.User, 0, len(users))
 		for _, u := range users {
-			members = append(members, &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", u.ID),
-				UserID:    u.UserID,
-				Name:      u.Name,
-				Email:     u.Email,
-				Role:      u.Role,
-				Status:    u.Status,
-				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
-			})
+			members = append(members, toGraphUser(u))
 		}
 
-		result = append(result, &gqlmodel.Room{
-			ID:          fmt.Sprintf("%d", room.ID),
-			Name:        room.Name,
-			Type:        room.Type,
-			User:        members,
-			Description: room.Description,
-			CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-			UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
-		})
+		gqlRoom := toGraphRoom(room)
+		gqlRoom.User = members
+		result = append(result, gqlRoom)
 	}
 
 	return result, nil
@@ -815,9 +652,9 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		return nil, err
 	}
 
-	rid, err := strconv.ParseInt(roomID, 10, 64)
+	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid roomID: %s", roomID)
+		return nil, fmt.Errorf("invalid room id")
 	}
 
 	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
