@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
@@ -162,13 +164,37 @@ func main() {
 	gqlServer.AddTransport(transport.Websocket{
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				origin := r.Header.Get("Origin")
-				return origin == "http://localhost:5173"
+				// origin := r.Header.Get("Origin")
+				// return origin == "http://localhost:5173"
+				return true // 開発環境では全てのオリジンを許可
 			},
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
 		KeepAlivePingInterval: 10 * time.Second,
+		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
+			authHeader, ok := initPayload["Authorization"].(string)
+			if !ok {
+				return ctx, nil, nil
+			}
+
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := auth.ValidateAccessToken(tokenStr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid token")
+			}
+
+			revoked, err := revokedTokenRepository.IsRevoked(ctx, tokenStr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to verify token")
+			}
+			if revoked {
+				return nil, nil, fmt.Errorf("token has been revoked")
+			}
+
+			ctx = auth.WithClaims(ctx, claims)
+			return ctx, nil, nil
+		},
 	})
 	gqlServer.AddTransport(transport.Options{})
 	gqlServer.AddTransport(transport.GET{})
