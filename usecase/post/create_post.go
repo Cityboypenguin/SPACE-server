@@ -27,10 +27,12 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 	post := &model.Post{}
 	post.CreatePost(param)
 
-	err := uc.postRepo.SavePost(ctx, post)
+	id, err := uc.postRepo.CreatePost(ctx, post)
 	if err != nil {
 		return nil, err
 	}
+
+	post.ID = id
 
 	return post, nil
 }

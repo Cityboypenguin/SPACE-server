@@ -2,7 +2,6 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
-	"github.com/Cityboypenguin/SPACE-server/usecase/comment"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -38,13 +37,6 @@ type Resolver struct {
 	DeletePostUseCase       post.DeletePostUseCase
 	UpdatePostUseCase       post.UpdatePostUseCase
 	SearchPostsUseCase      post.SearchPostsUseCase
-
-	GetCommentByIDUseCase      comment.GetCommentByIDUseCase
-	CreateCommentUseCase       comment.CreateCommentUseCase
-	DeleteCommentUseCase       comment.DeleteCommentUseCase
-	UpdateCommentUseCase       comment.UpdateCommentUseCase
-	GetCommentsByPostIDUseCase comment.GetCommentsByPostIDUseCase
-	ListCommentsUseCase        comment.ListCommentsUseCase
 
 	GetFavoriteByIDUseCase      favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase       favorite.CreateFavoriteUseCase

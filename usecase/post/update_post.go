@@ -31,7 +31,7 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, id int64, param mod
 
 	post.UpdatePost(param)
 
-	err = uc.postRepo.SavePost(ctx, post)
+	err = uc.postRepo.UpdatePost(ctx, post)
 	if err != nil {
 		return nil, err
 	}

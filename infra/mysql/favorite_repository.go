@@ -142,3 +142,22 @@ func (r *MySQLFavoriteRepository) GetFavoritesByUserID(ctx context.Context, user
 
 	return favorites, nil
 }
+
+func (r *MySQLFavoriteRepository) GetFavoriteByUserIDAndPostID(ctx context.Context, userID int64, postID int64) (*model.Favorite, error) {
+	query := `SELECT id, created_at FROM favorites WHERE user_id = ? AND post_id = ?`
+	row := r.DB.QueryRowContext(ctx, query, userID, postID)
+
+	var favorite model.Favorite
+	var createdAtUnix int64
+
+	favorite.User = &model.User{ID: userID}
+	favorite.Post = &model.Post{ID: postID}
+
+	if err := row.Scan(&favorite.ID, &createdAtUnix); err != nil {
+		return nil, err
+	}
+
+	favorite.CreatedAt = time.Unix(createdAtUnix, 0)
+
+	return &favorite, nil
+}

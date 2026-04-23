@@ -25,7 +25,7 @@ func NewDeleteFavoriteUseCase(favoriteRepo repository.FavoriteRepository, postRe
 }
 
 func (uc *DeleteFavoriteInteractor) Execute(ctx context.Context, id int64) (bool, error) {
-	favorite, err := uc.favoriteRepo.GetFavoriteByID(ctx, id)
+	_, err := uc.favoriteRepo.GetFavoriteByID(ctx, id)
 	if err != nil {
 		return false, err
 	}
@@ -33,13 +33,6 @@ func (uc *DeleteFavoriteInteractor) Execute(ctx context.Context, id int64) (bool
 	deleted, err := uc.favoriteRepo.DeleteFavorite(ctx, id)
 	if err != nil {
 		return false, err
-	}
-
-	if deleted {
-		err = uc.postRepo.DecrementPostFavoriteCount(ctx, favorite.Post.ID)
-		if err != nil {
-			return false, err
-		}
 	}
 
 	return deleted, nil

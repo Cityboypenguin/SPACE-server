@@ -16,25 +16,10 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
-type Comment struct {
-	ID        string `json:"ID"`
-	User      *User  `json:"user"`
-	Post      *Post  `json:"post"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-}
-
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
-}
-
-type CreateCommentInput struct {
-	UserID  string `json:"user_id"`
-	PostID  string `json:"post_id"`
-	Content string `json:"content"`
 }
 
 type CreateFavoriteInput struct {
@@ -43,11 +28,9 @@ type CreateFavoriteInput struct {
 }
 
 type CreatePostInput struct {
-	UserID    string  `json:"user_id"`
-	Content   string  `json:"content"`
-	Picture   *string `json:"picture,omitempty"`
-	Movie     *string `json:"movie,omitempty"`
-	Hyperlink *string `json:"hyperlink,omitempty"`
+	UserID   string  `json:"user_id"`
+	Content  string  `json:"content"`
+	ParentID *string `json:"parent_id,omitempty"`
 }
 
 type CreateUserInput struct {
@@ -73,15 +56,14 @@ type Mutation struct {
 }
 
 type Post struct {
-	ID            string  `json:"ID"`
-	User          *User   `json:"user"`
-	Content       string  `json:"content"`
-	Picture       *string `json:"picture,omitempty"`
-	Movie         *string `json:"movie,omitempty"`
-	Hyperlink     *string `json:"hyperlink,omitempty"`
-	FavoriteCount int32   `json:"favorite_count"`
-	CreatedAt     string  `json:"createdAt"`
-	UpdatedAt     string  `json:"updatedAt"`
+	ID        string      `json:"ID"`
+	Content   string      `json:"content"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
+	User      *User       `json:"user"`
+	Favorites []*Favorite `json:"favorites"`
+	Parent    *Post       `json:"parent,omitempty"`
+	Replies   []*Post     `json:"replies"`
 }
 
 type Query struct {
@@ -94,17 +76,9 @@ type UpdateAdministratorInput struct {
 	Password *string `json:"password,omitempty"`
 }
 
-type UpdateCommentInput struct {
+type UpdatePostInput struct {
 	ID      string  `json:"ID"`
 	Content *string `json:"content,omitempty"`
-}
-
-type UpdatePostInput struct {
-	ID        string  `json:"ID"`
-	Content   *string `json:"content,omitempty"`
-	Picture   *string `json:"picture,omitempty"`
-	Movie     *string `json:"movie,omitempty"`
-	Hyperlink *string `json:"hyperlink,omitempty"`
 }
 
 type UpdateUserInput struct {
@@ -116,14 +90,16 @@ type UpdateUserInput struct {
 }
 
 type User struct {
-	ID        string `json:"ID"`
-	AccountID string `json:"accountID"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Role      string `json:"role"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID        string      `json:"ID"`
+	AccountID string      `json:"accountID"`
+	Name      string      `json:"name"`
+	Email     string      `json:"email"`
+	Role      string      `json:"role"`
+	Status    string      `json:"status"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
+	Posts     []*Post     `json:"posts"`
+	Favorites []*Favorite `json:"favorites"`
 }
 
 type UserAuthPayload struct {

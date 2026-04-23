@@ -217,47 +217,7 @@ func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string
 
 // CreatePost is the resolver for the createPost field.
 func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.CreatePostInput) (*gqlmodel.Post, error) {
-	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	param := model.CreatePostParam{
-		UserID:    numericUserID,
-		Content:   input.Content,
-		Picture:   input.Picture,
-		Movie:     input.Movie,
-		Hyperlink: input.Hyperlink,
-	}
-
-	post, err := r.CreatePostUseCase.Execute(ctx, param)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Post{
-		ID: fmt.Sprintf("%d", post.ID),
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", user.ID),
-			AccountID: user.AccountID,
-			Name:      user.Name,
-			Email:     user.Email,
-			Role:      user.Role,
-			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
-		},
-		Content:   post.Content,
-		Picture:   post.Picture,
-		Movie:     post.Movie,
-		Hyperlink: post.Hyperlink,
-		CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-	}, nil
+	panic("not implemented: CreatePost - createPost")
 }
 
 // DeletePost is the resolver for the deletePost field.
@@ -283,10 +243,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 	}
 
 	param := model.UpdatePostParam{
-		Content:   input.Content,
-		Picture:   input.Picture,
-		Movie:     input.Movie,
-		Hyperlink: input.Hyperlink,
+		Content: input.Content,
 	}
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, param)
@@ -312,9 +269,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 		},
 		Content:   post.Content,
-		Picture:   post.Picture,
-		Movie:     post.Movie,
-		Hyperlink: post.Hyperlink,
 		CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
 	}, nil
@@ -322,74 +276,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 
 // CreateFavorite is the resolver for the createFavorite field.
 func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.CreateFavoriteInput) (*gqlmodel.Favorite, error) {
-	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", input.UserID)
-	}
-
-	numericPostID, err := strconv.ParseInt(input.PostID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", input.PostID)
-	}
-
-	param := model.CreateFavoriteParam{
-		UserID: numericUserID,
-		PostID: numericPostID,
-	}
-
-	favorite, err := r.CreateFavoriteUseCase.Execute(ctx, param)
-	if err != nil {
-		return nil, err
-	}
-
-	favoritingUser, err := r.GetUserByIDUseCase.Execute(ctx, favorite.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	post, err := r.GetPostByIDUseCase.Execute(ctx, favorite.Post.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Favorite{
-		ID: fmt.Sprintf("%d", favorite.ID),
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", favorite.User.ID),
-			AccountID: favoritingUser.AccountID,
-			Name:      favoritingUser.Name,
-			Email:     favoritingUser.Email,
-			Role:      favoritingUser.Role,
-			Status:    favoritingUser.Status,
-			CreatedAt: fmt.Sprintf("%s", favoritingUser.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", favoritingUser.UpdatedAt),
-		},
-		Post: &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", favorite.Post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", postAuthor.ID),
-				AccountID: postAuthor.AccountID,
-				Name:      postAuthor.Name,
-				Email:     postAuthor.Email,
-				Role:      postAuthor.Role,
-				Status:    postAuthor.Status,
-				CreatedAt: fmt.Sprintf("%s", postAuthor.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", postAuthor.UpdatedAt),
-			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-		},
-		CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
-	}, nil
+	panic("not implemented: CreateFavorite - createFavorite")
 }
 
 // DeleteFavorite is the resolver for the deleteFavorite field.
@@ -405,80 +292,6 @@ func (r *mutationResolver) DeleteFavorite(ctx context.Context, id string) (bool,
 	}
 
 	return deleted, nil
-}
-
-// CreateComment is the resolver for the createComment field.
-func (r *mutationResolver) CreateComment(ctx context.Context, input gqlmodel.CreateCommentInput) (*gqlmodel.Comment, error) {
-	numericUserID, err := strconv.ParseInt(input.UserID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", input.UserID)
-	}
-
-	numericPostID, err := strconv.ParseInt(input.PostID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", input.PostID)
-	}
-
-	param := model.CreateCommentParam{
-		UserID:  numericUserID,
-		PostID:  numericPostID,
-		Content: input.Content,
-	}
-
-	comment, err := r.CreateCommentUseCase.Execute(ctx, param)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Comment{
-		ID:        fmt.Sprintf("%d", comment.ID),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", comment.User.ID)},
-		Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", comment.Post.ID)},
-		Content:   comment.Content,
-		CreatedAt: fmt.Sprintf("%s", comment.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%s", comment.UpdatedAt),
-	}, nil
-}
-
-// DeleteComment is the resolver for the deleteComment field.
-func (r *mutationResolver) DeleteComment(ctx context.Context, id string) (bool, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return false, fmt.Errorf("invalid comment id: %s", id)
-	}
-
-	deleted, err := r.DeleteCommentUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return false, err
-	}
-
-	return deleted, nil
-}
-
-// UpdateComment is the resolver for the updateComment field.
-func (r *mutationResolver) UpdateComment(ctx context.Context, input gqlmodel.UpdateCommentInput) (*gqlmodel.Comment, error) {
-	numericID, err := strconv.ParseInt(input.ID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid comment id: %s", input.ID)
-	}
-
-	param := model.UpdateCommentParam{
-		Content: input.Content,
-	}
-
-	comment, err := r.UpdateCommentUseCase.Execute(ctx, numericID, param)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Comment{
-		ID:        fmt.Sprintf("%d", comment.ID),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", comment.User.ID)},
-		Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", comment.Post.ID)},
-		Content:   comment.Content,
-		CreatedAt: fmt.Sprintf("%s", comment.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%s", comment.UpdatedAt),
-	}, nil
 }
 
 // Users is the resolver for the users field.
@@ -617,409 +430,32 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
-	posts, err := r.ListPostsUseCase.Execute(ctx)
-	if err != nil {
-		return nil, err
-	}
+	panic(fmt.Errorf("not implemented: Posts - posts"))
+}
 
-	var gqlPosts []*gqlmodel.Post
-	for _, post := range posts {
-		user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.User.ID),
-				AccountID: user.AccountID,
-				Name:      user.Name,
-				Email:     user.Email,
-				Role:      user.Role,
-				Status:    user.Status,
-				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
-			},
-			Content:       post.Content,
-			Picture:       post.Picture,
-			Movie:         post.Movie,
-			Hyperlink:     post.Hyperlink,
-			FavoriteCount: int32(post.FavoriteCount),
-			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
-		})
-	}
-	return gqlPosts, nil
+// TopLevelPosts is the resolver for the topLevelPosts field.
+func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: TopLevelPosts - topLevelPosts"))
 }
 
 // GetPostByID is the resolver for the getPostByID field.
 func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.Post, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", id)
-	}
-
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Post{
-		ID: fmt.Sprintf("%d", post.ID),
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", post.User.ID),
-			AccountID: user.AccountID,
-			Name:      user.Name,
-			Email:     user.Email,
-			Role:      user.Role,
-			Status:    user.Status,
-			CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
-		},
-		Content:       post.Content,
-		Picture:       post.Picture,
-		Movie:         post.Movie,
-		Hyperlink:     post.Hyperlink,
-		FavoriteCount: int32(post.FavoriteCount),
-		CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
-		UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
-	}, nil
+	panic(fmt.Errorf("not implemented: GetPostByID - getPostByID"))
 }
 
 // SearchPosts is the resolver for the searchPosts field.
 func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
-	posts, err := r.SearchPostsUseCase.Execute(ctx, content)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := r.GetUserByIDUseCase.Execute(ctx, posts[0].User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlPosts []*gqlmodel.Post
-	for _, post := range posts {
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.User.ID),
-				AccountID: user.AccountID,
-				Name:      user.Name,
-				Email:     user.Email,
-				Role:      user.Role,
-				Status:    user.Status,
-				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
-			},
-			Content:       post.Content,
-			Picture:       post.Picture,
-			Movie:         post.Movie,
-			Hyperlink:     post.Hyperlink,
-			FavoriteCount: int32(post.FavoriteCount),
-			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
-		})
-	}
-	return gqlPosts, nil
-}
-
-// GetPostByUserID is the resolver for the getPostByUserID field.
-func (r *queryResolver) GetPostByUserID(ctx context.Context, userID string) ([]*gqlmodel.Post, error) {
-	numericUserID, err := strconv.ParseInt(userID, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %s", userID)
-	}
-
-	posts, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlPosts []*gqlmodel.Post
-	for _, post := range posts {
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", post.User.ID),
-				AccountID: user.AccountID,
-				Name:      user.Name,
-				Email:     user.Email,
-				Role:      user.Role,
-				Status:    user.Status,
-				CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
-			},
-			Content:       post.Content,
-			Picture:       post.Picture,
-			Movie:         post.Movie,
-			Hyperlink:     post.Hyperlink,
-			FavoriteCount: int32(post.FavoriteCount),
-			CreatedAt:     fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt:     fmt.Sprintf("%s", post.UpdatedAt),
-		})
-	}
-	return gqlPosts, nil
+	panic(fmt.Errorf("not implemented: SearchPosts - searchPosts"))
 }
 
 // Favorites is the resolver for the favorites field.
 func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, error) {
-	favorites, err := r.ListFavoritesUseCase.Execute(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlFavorites []*gqlmodel.Favorite
-	for _, favorite := range favorites {
-		favoritingUser, err := r.GetUserByIDUseCase.Execute(ctx, favorite.User.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		post, err := r.GetPostByIDUseCase.Execute(ctx, favorite.Post.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID: fmt.Sprintf("%d", favorite.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", favorite.User.ID),
-				AccountID: favoritingUser.AccountID,
-				Name:      favoritingUser.Name,
-				Email:     favoritingUser.Email,
-				Role:      favoritingUser.Role,
-				Status:    favoritingUser.Status,
-				CreatedAt: fmt.Sprintf("%s", favoritingUser.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", favoritingUser.UpdatedAt),
-			},
-			Post: &gqlmodel.Post{
-				ID: fmt.Sprintf("%d", favorite.Post.ID),
-				User: &gqlmodel.User{
-					ID:        fmt.Sprintf("%d", postAuthor.ID),
-					AccountID: postAuthor.AccountID,
-					Name:      postAuthor.Name,
-					Email:     postAuthor.Email,
-					Role:      postAuthor.Role,
-					Status:    postAuthor.Status,
-					CreatedAt: fmt.Sprintf("%s", postAuthor.CreatedAt),
-					UpdatedAt: fmt.Sprintf("%s", postAuthor.UpdatedAt),
-				},
-				Content:   post.Content,
-				Picture:   post.Picture,
-				Movie:     post.Movie,
-				Hyperlink: post.Hyperlink,
-				CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-			},
-			CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
-		})
-	}
-	return gqlFavorites, nil
+	panic(fmt.Errorf("not implemented: Favorites - favorites"))
 }
 
 // GetFavoriteByID is the resolver for the getFavoriteByID field.
 func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmodel.Favorite, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid favorite id: %s", id)
-	}
-
-	favorite, err := r.GetFavoriteByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-
-	favoritingUser, err := r.GetUserByIDUseCase.Execute(ctx, favorite.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	post, err := r.GetPostByIDUseCase.Execute(ctx, favorite.Post.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Favorite{
-		ID: fmt.Sprintf("%d", favorite.ID),
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", favorite.User.ID),
-			AccountID: favoritingUser.AccountID,
-			Name:      favoritingUser.Name,
-			Email:     favoritingUser.Email,
-			Role:      favoritingUser.Role,
-			Status:    favoritingUser.Status,
-			CreatedAt: fmt.Sprintf("%s", favoritingUser.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", favoritingUser.UpdatedAt),
-		},
-		Post: &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", favorite.Post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", postAuthor.ID),
-				AccountID: postAuthor.AccountID,
-				Name:      postAuthor.Name,
-				Email:     postAuthor.Email,
-				Role:      postAuthor.Role,
-				Status:    postAuthor.Status,
-				CreatedAt: fmt.Sprintf("%s", postAuthor.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", postAuthor.UpdatedAt),
-			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-		},
-		CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
-	}, nil
-}
-
-// Comments is the resolver for the comments field.
-func (r *queryResolver) Comments(ctx context.Context) ([]*gqlmodel.Comment, error) {
-	comments, err := r.ListCommentsUseCase.Execute(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlComments []*gqlmodel.Comment
-	for _, comment := range comments {
-
-		commentedUser, err := r.GetUserByIDUseCase.Execute(ctx, comment.User.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		post, err := r.GetPostByIDUseCase.Execute(ctx, comment.Post.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		gqlComments = append(gqlComments, &gqlmodel.Comment{
-			ID: fmt.Sprintf("%d", comment.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", commentedUser.ID),
-				AccountID: commentedUser.AccountID,
-				Name:      commentedUser.Name,
-				Email:     commentedUser.Email,
-				Role:      commentedUser.Role,
-				Status:    commentedUser.Status,
-				CreatedAt: fmt.Sprintf("%s", commentedUser.CreatedAt),
-			},
-			Post: &gqlmodel.Post{
-				ID: fmt.Sprintf("%d", post.ID),
-				User: &gqlmodel.User{
-					ID:        fmt.Sprintf("%d", postAuthor.ID),
-					AccountID: postAuthor.AccountID,
-					Name:      postAuthor.Name,
-					Email:     postAuthor.Email,
-					Role:      postAuthor.Role,
-					Status:    postAuthor.Status,
-					CreatedAt: fmt.Sprintf("%s", postAuthor.CreatedAt),
-				},
-				Content:   post.Content,
-				Picture:   post.Picture,
-				Movie:     post.Movie,
-				Hyperlink: post.Hyperlink,
-				CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-			},
-			Content:   comment.Content,
-			CreatedAt: fmt.Sprintf("%s", comment.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", comment.UpdatedAt),
-		})
-	}
-	return gqlComments, nil
-}
-
-// GetCommentByID is the resolver for the getCommentByID field.
-func (r *queryResolver) GetCommentByID(ctx context.Context, id string) (*gqlmodel.Comment, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid comment id: %s", id)
-	}
-
-	comment, err := r.GetCommentByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-
-	commentedUser, err := r.GetUserByIDUseCase.Execute(ctx, comment.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	post, err := r.GetPostByIDUseCase.Execute(ctx, comment.Post.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	postAuthor, err := r.GetUserByIDUseCase.Execute(ctx, post.User.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &gqlmodel.Comment{
-		ID: fmt.Sprintf("%d", comment.ID),
-		User: &gqlmodel.User{
-			ID:        fmt.Sprintf("%d", commentedUser.ID),
-			AccountID: commentedUser.AccountID,
-			Name:      commentedUser.Name,
-			Email:     commentedUser.Email,
-			Role:      commentedUser.Role,
-			Status:    commentedUser.Status,
-			CreatedAt: fmt.Sprintf("%s", commentedUser.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", commentedUser.UpdatedAt),
-		},
-		Post: &gqlmodel.Post{
-			ID: fmt.Sprintf("%d", post.ID),
-			User: &gqlmodel.User{
-				ID:        fmt.Sprintf("%d", postAuthor.ID),
-				AccountID: postAuthor.AccountID,
-				Name:      postAuthor.Name,
-				Email:     postAuthor.Email,
-				Role:      postAuthor.Role,
-				Status:    postAuthor.Status,
-				CreatedAt: fmt.Sprintf("%s", postAuthor.CreatedAt),
-				UpdatedAt: fmt.Sprintf("%s", postAuthor.UpdatedAt),
-			},
-			Content:   post.Content,
-			Picture:   post.Picture,
-			Movie:     post.Movie,
-			Hyperlink: post.Hyperlink,
-			CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
-			UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
-		},
-		Content:   comment.Content,
-		CreatedAt: fmt.Sprintf("%s", comment.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%s", comment.UpdatedAt),
-	}, nil
+	panic(fmt.Errorf("not implemented: GetFavoriteByID - getFavoriteByID"))
 }
 
 // Mutation returns MutationResolver implementation.

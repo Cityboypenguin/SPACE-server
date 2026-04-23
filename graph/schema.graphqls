@@ -9,13 +9,11 @@ type Query {
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
   posts: [Post!]!
+  topLevelPosts: [Post!]!
   getPostByID(id: ID!): Post
   searchPosts(content: String!): [Post!]!
-  getPostByUserID(user_id: ID!): [Post!]!
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
-  comments: [Comment!]!
-  getCommentByID(id: ID!): Comment
 }
 
 type User {
@@ -27,6 +25,8 @@ type User {
   status: String!
   createdAt: String!
   updatedAt: String!
+  posts: [Post!]!
+  favorites: [Favorite!]!
 }
 
 type Administrator {
@@ -40,14 +40,13 @@ type Administrator {
 
 type Post {
   ID: ID!
-  user: User!
   content: String!
-  picture: String #画像のURL
-  movie: String #動画のURL
-  hyperlink: String
-  favorite_count: Int!
   createdAt: String!
   updatedAt: String!
+  user: User!
+  favorites: [Favorite!]!
+  parent: Post
+  replies: [Post!]!
 }
 
 type Favorite {
@@ -55,15 +54,6 @@ type Favorite {
   user: User!
   post: Post!
   createdAt: String!
-}
-
-type Comment {
-  ID: ID!
-  user: User!
-  post: Post!
-  content: String!
-  createdAt: String!
-  updatedAt: String!
 }
 
 type UserAuthPayload {
@@ -97,9 +87,6 @@ type Mutation {
   updatePost(input: UpdatePostInput!): Post!
   createFavorite(input: CreateFavoriteInput!): Favorite!
   deleteFavorite(id: ID!): Boolean!
-  createComment(input: CreateCommentInput!): Comment!
-  deleteComment(id: ID!): Boolean!
-  updateComment(input: UpdateCommentInput!): Comment!
 }
 
 input CreateAdministratorInput {
@@ -133,31 +120,15 @@ input UpdateUserInput {
 input CreatePostInput {
   user_id: ID!
   content: String!
-  picture: String
-  movie: String
-  hyperlink: String
+  parent_id: ID
 }
 
 input UpdatePostInput {
   ID: ID!
   content: String
-  picture: String
-  movie: String
-  hyperlink: String
 }
 
 input CreateFavoriteInput {
   user_id: ID!
   post_id: ID!
-}
-
-input CreateCommentInput {
-  user_id: ID!
-  post_id: ID!
-  content: String!
-}
-
-input UpdateCommentInput {
-  ID: ID!
-  content: String
 }

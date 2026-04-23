@@ -10,7 +10,6 @@ import (
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
-	commentusecase "github.com/Cityboypenguin/SPACE-server/usecase/comment"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -30,7 +29,6 @@ func main() {
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
 	postRepository := mysql.NewMySQLPostRepository(database)
-	commentRepository := mysql.NewMySQLCommentRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
@@ -53,13 +51,6 @@ func main() {
 	listPostsUsecase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUsecase := postusecase.NewSearchPostsUseCase(postRepository)
 	getPostsByUserIDUsecase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
-
-	createCommentUsecase := commentusecase.NewCreateCommentUseCase(commentRepository)
-	updateCommentUsecase := commentusecase.NewUpdateCommentUseCase(commentRepository)
-	deleteCommentUsecase := commentusecase.NewDeleteCommentUseCase(commentRepository)
-	getCommentByIDUsecase := commentusecase.NewGetCommentByIDUseCase(commentRepository)
-	getCommentByPostIDUsecase := commentusecase.NewGetCommentsByPostIDUseCase(commentRepository)
-	listCommentsUsecase := commentusecase.NewListCommentsUseCase(commentRepository)
 
 	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
@@ -100,12 +91,6 @@ func main() {
 		ListPostsUseCase:            listPostsUsecase,
 		SearchPostsUseCase:          searchPostsUsecase,
 		GetPostsByUserIDUseCase:     getPostsByUserIDUsecase,
-		CreateCommentUseCase:        createCommentUsecase,
-		UpdateCommentUseCase:        updateCommentUsecase,
-		DeleteCommentUseCase:        deleteCommentUsecase,
-		GetCommentByIDUseCase:       getCommentByIDUsecase,
-		GetCommentsByPostIDUseCase:  getCommentByPostIDUsecase,
-		ListCommentsUseCase:         listCommentsUsecase,
 		CreateFavoriteUseCase:       createFavoriteUsecase,
 		DeleteFavoriteUseCase:       deleteFavoriteUsecase,
 		GetFavoriteByIDUseCase:      getFavoriteByIDUsecase,
