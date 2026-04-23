@@ -10,7 +10,6 @@ type AddUserToRoomInput struct {
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
-	Password  string `json:"password"`
 	Email     string `json:"email"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`

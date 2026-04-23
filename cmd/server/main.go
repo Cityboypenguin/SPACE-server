@@ -118,6 +118,7 @@ func main() {
 		AddUserToRoomUseCase:        addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase:   removeUserFromRoomUseCase,
 		RoomUserRepository:          roomUserRepository,
+		UserRepository:              userRepository,
 		PubSub:                      ps,
 	}
 

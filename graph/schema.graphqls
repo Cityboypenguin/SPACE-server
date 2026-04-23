@@ -9,7 +9,8 @@ type Query {
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
-  getProfileByUserID(userID: String!): Profile
+  myProfile: Profile
+  getProfileByUserID(userID: ID!): Profile
   messages(roomID: ID!): [Message!]!
   room(id: ID!): Room
   myDMRooms: [Room!]!

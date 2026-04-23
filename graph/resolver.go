@@ -45,6 +45,7 @@ type Resolver struct {
 	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
 	RoomUserRepository        repository.RoomUserRepository
+	UserRepository            repository.UserRepository
 
 	PubSub *pubsub.PubSub
 }

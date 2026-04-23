@@ -425,7 +425,7 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 
 // SearchUsers is the resolver for the searchUsers field.
 func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -496,36 +496,38 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 	return gqlAdmins, nil
 }
 
+// MyProfile is the resolver for the myProfile field.
+func (r *queryResolver) MyProfile(ctx context.Context) (*gqlmodel.Profile, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	u, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	if err != nil || u == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return r.buildProfile(ctx, u)
+}
+
 // GetProfileByUserID is the resolver for the getProfileByUserID field.
 func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user id format")
+		return nil, fmt.Errorf("invalid user id")
 	}
 
-	if _, err := requireSelfOrAdmin(ctx, numericUserID, "get_profile_by_user_id"); err != nil {
-		return nil, err
-	}
-
-	p, err := r.GetProfileUseCase.Execute(ctx, numericUserID)
-	if err != nil {
-		return nil, err
-	}
-	if p == nil {
+	u, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+	if err != nil || u == nil {
 		return nil, nil
 	}
 
-	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
-
-	return &gqlmodel.Profile{
-		UserID:    encodeGraphID("user", p.UserID),
-		User:      toGraphUser(targetUser),
-		Bio:       &p.Bio,
-		Grade:     &p.Grade,
-		Image:     &p.Image,
-		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
-	}, nil
+	return r.buildProfile(ctx, u)
 }
 
 // Messages is the resolver for the messages field.
@@ -702,3 +704,4 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+

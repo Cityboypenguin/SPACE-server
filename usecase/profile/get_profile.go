@@ -23,7 +23,7 @@ func NewGetProfileUseCase(profileRepo repository.ProfileRepository) GetProfileUs
 }
 
 func (uc *GetProfileInteractor) Execute(ctx context.Context, userID int64) (*model.Profile, error) {
-	if _, err := authz.RequireSelfOrAdmin(ctx, userID); err != nil {
+	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, err
 	}
 

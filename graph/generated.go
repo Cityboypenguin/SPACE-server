@@ -42,7 +42,6 @@ type ComplexityRoot struct {
 		Email     func(childComplexity int) int
 		ID        func(childComplexity int) int
 		Name      func(childComplexity int) int
-		Password  func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
 	}
 
@@ -97,8 +96,10 @@ type ComplexityRoot struct {
 		GetAdministratorByID func(childComplexity int, id string) int
 		GetProfileByUserID   func(childComplexity int, userID string) int
 		GetUserByID          func(childComplexity int, id string) int
+		Me                   func(childComplexity int) int
 		Messages             func(childComplexity int, roomID string) int
 		MyDMRooms            func(childComplexity int) int
+		MyProfile            func(childComplexity int) int
 		Room                 func(childComplexity int, id string) int
 		SearchAdministrators func(childComplexity int, name string) int
 		SearchUsers          func(childComplexity int, name string) int
@@ -156,11 +157,13 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
+	Me(ctx context.Context) (*model.User, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
 	SearchUsers(ctx context.Context, name string) ([]*model.User, error)
 	Administrators(ctx context.Context) ([]*model.Administrator, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
+	MyProfile(ctx context.Context) (*model.Profile, error)
 	GetProfileByUserID(ctx context.Context, userID string) (*model.Profile, error)
 	Messages(ctx context.Context, roomID string) ([]*model.Message, error)
 	Room(ctx context.Context, id string) (*model.Room, error)
@@ -208,12 +211,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Administrator.Name(childComplexity), true
-	case "Administrator.password":
-		if e.ComplexityRoot.Administrator.Password == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Administrator.Password(childComplexity), true
 	case "Administrator.updatedAt":
 		if e.ComplexityRoot.Administrator.UpdatedAt == nil {
 			break
@@ -549,6 +546,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.GetUserByID(childComplexity, args["id"].(string)), true
 
+	case "Query.me":
+		if e.ComplexityRoot.Query.Me == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.Me(childComplexity), true
 	case "Query.messages":
 		if e.ComplexityRoot.Query.Messages == nil {
 			break
@@ -566,6 +569,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyDMRooms(childComplexity), true
+	case "Query.myProfile":
+		if e.ComplexityRoot.Query.MyProfile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyProfile(childComplexity), true
 	case "Query.room":
 		if e.ComplexityRoot.Query.Room == nil {
 			break
@@ -1063,7 +1072,7 @@ func (ec *executionContext) field_Query_getAdministratorByID_args(ctx context.Co
 func (ec *executionContext) field_Query_getProfileByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID", ec.unmarshalNString2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID", ec.unmarshalNID2string)
 	if err != nil {
 		return nil, err
 	}
@@ -1247,35 +1256,6 @@ func (ec *executionContext) fieldContext_Administrator_name(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _Administrator_password(ctx context.Context, field graphql.CollectedField, obj *model.Administrator) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Administrator_password,
-		func(ctx context.Context) (any, error) {
-			return obj.Password, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Administrator_password(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Administrator",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Administrator_email(ctx context.Context, field graphql.CollectedField, obj *model.Administrator) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1420,8 +1400,6 @@ func (ec *executionContext) fieldContext_AdministratorAuthPayload_administrator(
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -1977,8 +1955,6 @@ func (ec *executionContext) fieldContext_Mutation_createAdministrator(ctx contex
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -2073,8 +2049,6 @@ func (ec *executionContext) fieldContext_Mutation_updateAdministrator(ctx contex
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -2798,6 +2772,53 @@ func (ec *executionContext) fieldContext_Query_users(_ context.Context, field gr
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_me,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().Me(ctx)
+		},
+		nil,
+		ec.marshalNUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_me(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_User_ID(ctx, field)
+			case "userID":
+				return ec.fieldContext_User_userID(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "role":
+				return ec.fieldContext_User_role(ctx, field)
+			case "status":
+				return ec.fieldContext_User_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_getUserByID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2944,8 +2965,6 @@ func (ec *executionContext) fieldContext_Query_administrators(_ context.Context,
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -2988,8 +3007,6 @@ func (ec *executionContext) fieldContext_Query_getAdministratorByID(ctx context.
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -3043,8 +3060,6 @@ func (ec *executionContext) fieldContext_Query_searchAdministrators(ctx context.
 				return ec.fieldContext_Administrator_ID(ctx, field)
 			case "name":
 				return ec.fieldContext_Administrator_name(ctx, field)
-			case "password":
-				return ec.fieldContext_Administrator_password(ctx, field)
 			case "email":
 				return ec.fieldContext_Administrator_email(ctx, field)
 			case "createdAt":
@@ -3065,6 +3080,53 @@ func (ec *executionContext) fieldContext_Query_searchAdministrators(ctx context.
 	if fc.Args, err = ec.field_Query_searchAdministrators_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myProfile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_myProfile,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyProfile(ctx)
+		},
+		nil,
+		ec.marshalOProfile2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐProfile,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_myProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "userID":
+				return ec.fieldContext_Profile_userID(ctx, field)
+			case "user":
+				return ec.fieldContext_Profile_user(ctx, field)
+			case "username":
+				return ec.fieldContext_Profile_username(ctx, field)
+			case "bio":
+				return ec.fieldContext_Profile_bio(ctx, field)
+			case "grade":
+				return ec.fieldContext_Profile_grade(ctx, field)
+			case "image":
+				return ec.fieldContext_Profile_image(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Profile_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Profile_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Profile", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -5886,11 +5948,6 @@ func (ec *executionContext) _Administrator(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "password":
-			out.Values[i] = ec._Administrator_password(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "email":
 			out.Values[i] = ec._Administrator_email(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -6307,6 +6364,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "me":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_me(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "getUserByID":
 			field := field
 
@@ -6402,6 +6481,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myProfile":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myProfile(ctx, field)
 				return res
 			}
 

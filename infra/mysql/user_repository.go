@@ -161,6 +161,37 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 	return users, nil
 }
 
+func (r *MySQLUserRepository) FindByUserID(ctx context.Context, userID string) (*model.User, error) {
+	query := `
+		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users
+		WHERE user_id = ?
+		LIMIT 1
+	`
+
+	row := r.DB.QueryRowContext(ctx, query, userID)
+
+	var u model.User
+	if err := row.Scan(
+		&u.ID,
+		&u.UserID,
+		&u.Name,
+		&u.Email,
+		&u.HashedPassword,
+		&u.Role,
+		&u.Status,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &u, nil
+}
+
 func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
 		SELECT id, user_id, name, email, hashed_password, role, status, created_at, updated_at

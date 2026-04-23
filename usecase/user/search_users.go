@@ -25,7 +25,7 @@ func NewSearchUsersUseCase(userRepo repository.UserRepository) SearchUsersUseCas
 }
 
 func (uc *SearchUsersInteractor) Execute(ctx context.Context, name string) ([]*model.User, error) {
-	if _, err := authz.RequireAdmin(ctx); err != nil {
+	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, err
 	}
 

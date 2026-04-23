@@ -11,6 +11,14 @@ func IsAdminRole(role string) bool {
 	return role == "admin" || role == "administrator"
 }
 
+func RequireAuth(ctx context.Context) (*auth.Claims, error) {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+	return claims, nil
+}
+
 func RequireAdmin(ctx context.Context) (*auth.Claims, error) {
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {

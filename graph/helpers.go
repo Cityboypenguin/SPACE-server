@@ -3,10 +3,13 @@ package graph
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
+	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
@@ -67,4 +70,32 @@ func containsInt64(slice []int64, val int64) bool {
 		}
 	}
 	return false
+}
+
+func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmodel.Profile, error) {
+	p, err := r.GetProfileUseCase.Execute(ctx, u.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if p == nil {
+		return &gqlmodel.Profile{
+			UserID:    encodeGraphID("user", u.ID),
+			User:      toGraphUser(u),
+			Username:  u.UserID,
+			CreatedAt: "0",
+			UpdatedAt: "0",
+		}, nil
+	}
+
+	return &gqlmodel.Profile{
+		UserID:    encodeGraphID("user", p.UserID),
+		User:      toGraphUser(u),
+		Username:  u.UserID,
+		Bio:       &p.Bio,
+		Grade:     &p.Grade,
+		Image:     &p.Image,
+		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+	}, nil
 }
