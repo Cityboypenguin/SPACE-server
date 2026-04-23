@@ -98,6 +98,7 @@ type ComplexityRoot struct {
 		GetProfileByUserID   func(childComplexity int, userID string) int
 		GetUserByID          func(childComplexity int, id string) int
 		Messages             func(childComplexity int, roomID string) int
+		MyDMRooms            func(childComplexity int) int
 		Room                 func(childComplexity int, id string) int
 		SearchAdministrators func(childComplexity int, name string) int
 		SearchUsers          func(childComplexity int, name string) int
@@ -163,6 +164,7 @@ type QueryResolver interface {
 	GetProfileByUserID(ctx context.Context, userID string) (*model.Profile, error)
 	Messages(ctx context.Context, roomID string) ([]*model.Message, error)
 	Room(ctx context.Context, id string) (*model.Room, error)
+	MyDMRooms(ctx context.Context) ([]*model.Room, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -558,6 +560,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string)), true
+	case "Query.myDMRooms":
+		if e.ComplexityRoot.Query.MyDMRooms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyDMRooms(childComplexity), true
 	case "Query.room":
 		if e.ComplexityRoot.Query.Room == nil {
 			break
@@ -3232,6 +3240,51 @@ func (ec *executionContext) fieldContext_Query_room(ctx context.Context, field g
 	if fc.Args, err = ec.field_Query_room_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myDMRooms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_myDMRooms,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyDMRooms(ctx)
+		},
+		nil,
+		ec.marshalNRoom2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Room_ID(ctx, field)
+			case "name":
+				return ec.fieldContext_Room_name(ctx, field)
+			case "type":
+				return ec.fieldContext_Room_type(ctx, field)
+			case "user":
+				return ec.fieldContext_Room_user(ctx, field)
+			case "description":
+				return ec.fieldContext_Room_description(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Room_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Room_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -6418,6 +6471,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myDMRooms":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myDMRooms(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -7143,6 +7218,22 @@ func (ec *executionContext) unmarshalNRemoveUserFromRoomInput2githubᚗcomᚋCit
 
 func (ec *executionContext) marshalNRoom2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom(ctx context.Context, sel ast.SelectionSet, v model.Room) graphql.Marshaler {
 	return ec._Room(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRoom2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Room) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNRoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom(ctx context.Context, sel ast.SelectionSet, v *model.Room) graphql.Marshaler {

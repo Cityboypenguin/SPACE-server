@@ -355,7 +355,8 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 // CreateRoom is the resolver for the createRoom field.
 func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -366,6 +367,11 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 	if err != nil {
 		return nil, err
 	}
+
+	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, claims.ID); err != nil {
+		return nil, err
+	}
+
 	return &gqlmodel.Room{
 		ID:          fmt.Sprintf("%d", room.ID),
 		Name:        room.Name,
@@ -392,6 +398,15 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 	if err != nil {
 		return nil, err
 	}
+
+	// 既存DMを返すケースでも、双方が必ずメンバーに含まれるように補強する。
+	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, claims.ID); err != nil {
+		return nil, err
+	}
+	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, tid); err != nil {
+		return nil, err
+	}
+
 	return &gqlmodel.Room{
 		ID:          fmt.Sprintf("%d", room.ID),
 		Name:        room.Name,
@@ -708,14 +723,89 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	if err != nil {
 		return nil, err
 	}
+
+	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, []int64{rid})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load room members")
+	}
+
+	users := usersByRoomID[rid]
+	members := make([]*gqlmodel.User, 0, len(users))
+	for _, u := range users {
+		members = append(members, &gqlmodel.User{
+			ID:        fmt.Sprintf("%d", u.ID),
+			UserID:    u.UserID,
+			Name:      u.Name,
+			Email:     u.Email,
+			Role:      u.Role,
+			Status:    u.Status,
+			CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+			UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+		})
+	}
+
 	return &gqlmodel.Room{
 		ID:          fmt.Sprintf("%d", room.ID),
 		Name:        room.Name,
 		Type:        room.Type,
+		User:        members,
 		Description: room.Description,
 		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
 		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
 	}, nil
+}
+
+// MyDMRooms is the resolver for the myDMRooms field.
+func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rooms, err := r.ListMyDMRoomsUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	roomIDs := make([]int64, 0, len(rooms))
+	for _, room := range rooms {
+		roomIDs = append(roomIDs, room.ID)
+	}
+
+	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, roomIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load room members")
+	}
+
+	result := make([]*gqlmodel.Room, 0, len(rooms))
+	for _, room := range rooms {
+		users := usersByRoomID[room.ID]
+		members := make([]*gqlmodel.User, 0, len(users))
+		for _, u := range users {
+			members = append(members, &gqlmodel.User{
+				ID:        fmt.Sprintf("%d", u.ID),
+				UserID:    u.UserID,
+				Name:      u.Name,
+				Email:     u.Email,
+				Role:      u.Role,
+				Status:    u.Status,
+				CreatedAt: fmt.Sprintf("%d", u.CreatedAt),
+				UpdatedAt: fmt.Sprintf("%d", u.UpdatedAt),
+			})
+		}
+
+		result = append(result, &gqlmodel.Room{
+			ID:          fmt.Sprintf("%d", room.ID),
+			Name:        room.Name,
+			Type:        room.Type,
+			User:        members,
+			Description: room.Description,
+			CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
+			UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+		})
+	}
+
+	return result, nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.
@@ -775,10 +865,3 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.

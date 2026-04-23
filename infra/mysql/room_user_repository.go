@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -52,6 +53,88 @@ func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID
 		return nil, err
 	}
 	return ids, nil
+}
+
+func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64) ([]*model.Room, error) {
+	query := `
+		SELECT r.id, r.name, r.type, r.description, r.created_at, r.updated_at
+		FROM rooms r
+		JOIN room_users ru ON r.id = ru.room_id
+		WHERE ru.user_id = ? AND r.type = 'dm'
+		ORDER BY r.updated_at DESC
+	`
+
+	rows, err := r.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rooms []*model.Room
+	for rows.Next() {
+		var room model.Room
+		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &room.Description, &room.CreatedAt, &room.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rooms = append(rooms, &room)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return rooms, nil
+}
+
+func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error) {
+	result := make(map[int64][]*model.User)
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT ru.room_id, u.id, u.user_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id IN (%s)
+		ORDER BY ru.room_id ASC, ru.created_at ASC
+	`, placeholders)
+
+	args := make([]interface{}, len(roomIDs))
+	for i, roomID := range roomIDs {
+		args[i] = roomID
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var roomID int64
+		var user model.User
+		if err := rows.Scan(
+			&roomID,
+			&user.ID,
+			&user.UserID,
+			&user.Name,
+			&user.Email,
+			&user.HashedPassword,
+			&user.Role,
+			&user.Status,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result[roomID] = append(result[roomID], &user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error) {

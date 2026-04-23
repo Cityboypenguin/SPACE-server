@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -12,9 +15,11 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
+	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
-	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
+	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
@@ -37,6 +42,10 @@ func main() {
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
+
+	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
+		log.Fatalf("failed to bootstrap initial admin: %v", err)
+	}
 
 	messageRepository := mysql.NewMySQLMessageRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
@@ -74,6 +83,7 @@ func main() {
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
+	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
 	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
@@ -103,6 +113,7 @@ func main() {
 		ListMessagesUseCase:         listMessagesUseCase,
 		CreateRoomUseCase:           createRoomUseCase,
 		GetRoomUseCase:              getRoomUseCase,
+		ListMyDMRoomsUseCase:        listMyDMRoomsUseCase,
 		GetOrCreateDMRoomUseCase:    getOrCreateDMRoomUseCase,
 		AddUserToRoomUseCase:        addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase:   removeUserFromRoomUseCase,
@@ -177,4 +188,43 @@ func main() {
 	// SSE
 	e.GET("/events", sse.NewHandler(hub))
 	e.Logger.Fatal(e.Start(":8080"))
+}
+
+// bootstrapInitialAdmin creates exactly one initial admin when env vars are provided.
+// If INIT_ADMIN_EMAIL/INIT_ADMIN_PASSWORD are empty, this step is skipped.
+func bootstrapInitialAdmin(ctx context.Context, adminRepo repository.AdministratorRepository) error {
+	name := strings.TrimSpace(os.Getenv("INIT_ADMIN_NAME"))
+	email := strings.TrimSpace(os.Getenv("INIT_ADMIN_EMAIL"))
+	password := os.Getenv("INIT_ADMIN_PASSWORD")
+
+	if email == "" || password == "" {
+		return nil
+	}
+	if name == "" {
+		name = "Initial Admin"
+	}
+
+	existing, err := adminRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return nil
+	}
+
+	admin := &model.Administrator{}
+	if err := admin.CreateAdministrator(model.CreateAdministratorParam{
+		Name:     name,
+		Email:    email,
+		Password: password,
+	}); err != nil {
+		return err
+	}
+
+	if err := adminRepo.SaveAdministrator(ctx, admin); err != nil {
+		return err
+	}
+
+	log.Printf("initial administrator created: %s", email)
+	return nil
 }

@@ -40,6 +40,7 @@ type Resolver struct {
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase
 	CreateRoomUseCase         roomusecase.CreateRoomUseCase
 	GetRoomUseCase            roomusecase.GetRoomUseCase
+	ListMyDMRoomsUseCase      roomusecase.ListMyDMRoomsUseCase
 	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
 	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase

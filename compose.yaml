@@ -13,6 +13,10 @@ services:
       DB_NAME: space
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: local-dev-jwt-secret
+      INIT_ADMIN_NAME: ${INIT_ADMIN_NAME:-}
+      INIT_ADMIN_EMAIL: ${INIT_ADMIN_EMAIL:-}
+      INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy

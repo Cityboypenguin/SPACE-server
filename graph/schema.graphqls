@@ -11,6 +11,7 @@ type Query {
   getProfileByUserID(userID: String!): Profile
   messages(roomID: ID!): [Message!]!
   room(id: ID!): Room
+  myDMRooms: [Room!]!
 }
 
 type User {

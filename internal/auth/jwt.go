@@ -17,12 +17,17 @@ type Claims struct {
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		panic("JWT_SECRET environment variable must be set")
+		return nil
 	}
 	return []byte(secret)
 }
 
 func GenerateToken(id int64, role string) (string, error) {
+	secret := jwtSecret()
+	if len(secret) == 0 {
+		return "", errors.New("JWT_SECRET environment variable must be set")
+	}
+
 	claims := Claims{
 		ID:   id,
 		Role: role,
@@ -33,15 +38,20 @@ func GenerateToken(id int64, role string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret())
+	return token.SignedString(secret)
 }
 
 func ValidateToken(tokenString string) (*Claims, error) {
+	secret := jwtSecret()
+	if len(secret) == 0 {
+		return nil, errors.New("JWT_SECRET environment variable must be set")
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return jwtSecret(), nil
+		return secret, nil
 	})
 	if err != nil {
 		return nil, err
