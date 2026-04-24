@@ -131,11 +131,7 @@ func main() {
 	// middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository))
-	e.Use(authmiddleware.GraphQLRateLimit())
-	e.Use(authmiddleware.GraphQLAudit())
-
-	// CORS設定:フロントエンド(localhost:5173)からの通信を許可
+	// CORSはJWTより先に登録しないと、401レスポンスにCORSヘッダーが付かずブラウザがブロックする
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:5173"},
 		AllowHeaders: []string{
@@ -147,6 +143,9 @@ func main() {
 		},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository))
+	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.GraphQLAudit())
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -173,12 +172,20 @@ func main() {
 		},
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
-			authHeader, ok := initPayload["Authorization"].(string)
-			if !ok {
+			if _, ok := auth.ClaimsFromContext(ctx); ok {
 				return ctx, nil, nil
 			}
 
-			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			authHeader := authHeaderFromInitPayload(initPayload)
+			if strings.TrimSpace(authHeader) == "" {
+				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
+			}
+
+			tokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+			if tokenStr == "" {
+				return nil, nil, fmt.Errorf("missing bearer token in websocket init payload")
+			}
+
 			claims, err := auth.ValidateAccessToken(tokenStr)
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid token")
@@ -221,6 +228,59 @@ func main() {
 	// SSE
 	e.GET("/events", sse.NewHandler(hub))
 	e.Logger.Fatal(e.Start(":8080"))
+}
+
+func authHeaderFromInitPayload(initPayload transport.InitPayload) string {
+	for _, key := range []string{"Authorization", "authorization", "authToken", "token", "accessToken"} {
+		raw, ok := initPayload[key]
+		if !ok {
+			continue
+		}
+
+		header, ok := raw.(string)
+		if !ok {
+			continue
+		}
+
+		header = strings.TrimSpace(header)
+		if header != "" {
+			return header
+		}
+	}
+
+	for _, containerKey := range []string{"headers", "header"} {
+		rawContainer, ok := initPayload[containerKey]
+		if !ok {
+			continue
+		}
+
+		switch container := rawContainer.(type) {
+		case map[string]interface{}:
+			for _, key := range []string{"Authorization", "authorization", "authToken", "token", "accessToken"} {
+				raw, ok := container[key]
+				if !ok {
+					continue
+				}
+				header, ok := raw.(string)
+				if !ok {
+					continue
+				}
+				header = strings.TrimSpace(header)
+				if header != "" {
+					return header
+				}
+			}
+		case map[string]string:
+			for _, key := range []string{"Authorization", "authorization", "authToken", "token", "accessToken"} {
+				header := strings.TrimSpace(container[key])
+				if header != "" {
+					return header
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // bootstrapInitialAdmin creates exactly one initial admin when env vars are provided.

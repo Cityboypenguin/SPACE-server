@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -587,10 +588,19 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 
 	var result []*gqlmodel.Message
 	for _, msg := range msgs {
-		gqlMsg := toGraphMessage(msg)
-		if u, _ := r.GetUserByIDUseCase.Execute(ctx, msg.UserID); u != nil {
-			gqlMsg.User = toGraphUser(u)
+		// Sender lookup here is internal data hydration for room members,
+		// so it must not use self/admin-only authorization.
+		u, err := r.UserRepository.GetUserByID(ctx, msg.UserID)
+		if err != nil {
+			log.Printf("[Messages] user lookup error: messageID=%d userID=%d err=%v", msg.ID, msg.UserID, err)
+			continue
 		}
+		if u == nil {
+			log.Printf("[Messages] user not found: messageID=%d userID=%d", msg.ID, msg.UserID)
+			continue
+		}
+		gqlMsg := toGraphMessage(msg)
+		gqlMsg.User = toGraphUser(u)
 		if rm, _ := r.GetRoomUseCase.Execute(ctx, msg.RoomID); rm != nil {
 			gqlMsg.Room = toGraphRoom(rm)
 		}
@@ -697,6 +707,8 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
+	log.Printf("[MessageAdded] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+
 	ch := make(chan *gqlmodel.Message, 1)
 	sub := r.PubSub.Subscribe(roomID)
 
@@ -705,14 +717,17 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		for {
 			select {
 			case <-ctx.Done():
+				log.Printf("[MessageAdded] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
 				close(ch)
 				return
 			case data, ok := <-sub:
 				if !ok {
+					log.Printf("[MessageAdded] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
 					close(ch)
 					return
 				}
 				if msg, ok := data.(*gqlmodel.Message); ok {
+					log.Printf("[MessageAdded] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
 					ch <- msg
 				}
 			}

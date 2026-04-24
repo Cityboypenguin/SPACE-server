@@ -1,6 +1,9 @@
 package pubsub
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 type PubSub struct {
 	mu   sync.RWMutex
@@ -12,10 +15,12 @@ func New() *PubSub {
 }
 
 func (ps *PubSub) Subscribe(topic string) chan interface{} {
-	ch := make(chan interface{}, 1)
+	ch := make(chan interface{}, 16)
 	ps.mu.Lock()
 	ps.subs[topic] = append(ps.subs[topic], ch)
+	count := len(ps.subs[topic])
 	ps.mu.Unlock()
+	log.Printf("[PubSub] subscribe topic=%s subscribers=%d", topic, count)
 	return ch
 }
 
@@ -26,6 +31,7 @@ func (ps *PubSub) Unsubscribe(topic string, ch chan interface{}) {
 	for i, s := range subs {
 		if s == ch {
 			ps.subs[topic] = append(subs[:i], subs[i+1:]...)
+			log.Printf("[PubSub] unsubscribe topic=%s subscribers=%d", topic, len(ps.subs[topic]))
 			close(ch)
 			return
 		}
@@ -37,10 +43,13 @@ func (ps *PubSub) Publish(topic string, data interface{}) {
 	subs := make([]chan interface{}, len(ps.subs[topic]))
 	copy(subs, ps.subs[topic])
 	ps.mu.RUnlock()
+	log.Printf("[PubSub] publish topic=%s subscribers=%d", topic, len(subs))
 	for _, ch := range subs {
-		select {
-		case ch <- data:
-		default:
-		}
+		func(ch chan interface{}) {
+			defer func() {
+				_ = recover()
+			}()
+			ch <- data
+		}(ch)
 	}
 }
