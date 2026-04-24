@@ -6,8 +6,12 @@ services:
     volumes:
       - .:/app
     environment:
-      DB_PORT: 3306
-      DB_NAME: space
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-space}
+      DB_TLS: ${DB_TLS:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: local-dev-jwt-secret
@@ -25,8 +29,8 @@ services:
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: space
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
     ports:
       - "3306:3306" # 後悔する時に消す
     volumes:
