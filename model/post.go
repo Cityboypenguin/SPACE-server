@@ -30,6 +30,9 @@ func (p *Post) CreatePost(param CreatePostParam) {
 	p.Content = param.Content
 	p.CreatedAt = param.CreatedAt
 	p.UpdatedAt = param.UpdatedAt
+	if param.ParentID != nil {
+		p.Parent = &Post{ID: *param.ParentID}
+	}
 }
 
 func (p *Post) UpdatePost(param UpdatePostParam) {

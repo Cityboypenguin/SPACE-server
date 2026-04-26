@@ -130,7 +130,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent.ID = parentID.Int64
+			p.Parent = &model.Post{ID: parentID.Int64}
 		} else {
 			p.Parent = nil
 		}
@@ -164,7 +164,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent.ID = parentID.Int64
+			p.Parent = &model.Post{ID: parentID.Int64}
 		} else {
 			p.Parent = nil
 		}
@@ -198,7 +198,7 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent.ID = parentID.Int64
+			p.Parent = &model.Post{ID: parentID.Int64}
 		} else {
 			p.Parent = nil
 		}
@@ -233,7 +233,7 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent.ID = parentID.Int64
+			p.Parent = &model.Post{ID: parentID.Int64}
 		} else {
 			p.Parent = nil
 		}
@@ -268,7 +268,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent.ID = parentID.Int64
+			p.Parent = &model.Post{ID: parentID.Int64}
 		} else {
 			p.Parent = nil
 		}

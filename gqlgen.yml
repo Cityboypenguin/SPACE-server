@@ -140,6 +140,14 @@ models:
   UUID:
     model:
       - github.com/99designs/gqlgen/graphql.UUID
+  Post:
+    fields:
+      user:
+        resolver: true
+      parent:
+        resolver: true
+      replies:
+        resolver: true
 
   # The GraphQL spec explicitly states that the Int type is a signed 32-bit
   # integer. Using Go int or int64 to represent it can lead to unexpected
