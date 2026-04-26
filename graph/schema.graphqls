@@ -5,13 +5,17 @@ type Query {
   users: [User!]!
   getUserByID(id: ID!): User
   searchUsers(name: String!): [User!]!
+
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
+
   posts: [Post!]!
   topLevelPosts: [Post!]!
   getPostByID(id: ID!): Post
+  getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
+  
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
 }
@@ -77,16 +81,19 @@ type Mutation {
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
+
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!
   updateAdministrator(input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
+
   createPost(input: CreatePostInput!): Post!
   deletePost(id: ID!): Boolean!
   updatePost(input: UpdatePostInput!): Post!
+
   createFavorite(input: CreateFavoriteInput!): Favorite!
-  deleteFavorite(id: ID!): Boolean!
+  deleteFavorite(input: DeleteFavoriteInput!): Boolean!
 }
 
 input CreateAdministratorInput {
@@ -129,6 +136,11 @@ input UpdatePostInput {
 }
 
 input CreateFavoriteInput {
+  user_id: ID!
+  post_id: ID!
+}
+
+input DeleteFavoriteInput {
   user_id: ID!
   post_id: ID!
 }

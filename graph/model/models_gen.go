@@ -40,6 +40,11 @@ type CreateUserInput struct {
 	Password  string `json:"password"`
 }
 
+type DeleteFavoriteInput struct {
+	UserID string `json:"user_id"`
+	PostID string `json:"post_id"`
+}
+
 type Favorite struct {
 	ID        string `json:"ID"`
 	User      *User  `json:"user"`

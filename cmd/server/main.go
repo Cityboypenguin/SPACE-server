@@ -30,13 +30,15 @@ func main() {
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
 	postRepository := mysql.NewMySQLPostRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
+
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
-	updateUserUsecase := userusecase.NewUpdateUserUseCase(userRepository)
-	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository)
+	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
+	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
+
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
@@ -44,19 +46,24 @@ func main() {
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
-	createPostUsecase := postusecase.NewCreatePostUseCase(postRepository)
-	updatePostUsecase := postusecase.NewUpdatePostUseCase(postRepository)
-	deletePostUsecase := postusecase.NewDeletePostUseCase(postRepository)
-	getPostByIDUsecase := postusecase.NewGetPostByIDUseCase(postRepository)
-	listPostsUsecase := postusecase.NewListPostsUseCase(postRepository)
-	searchPostsUsecase := postusecase.NewSearchPostsUseCase(postRepository)
-	getPostsByUserIDUsecase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 
-	createFavoriteUsecase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
-	deleteFavoriteUsecase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
-	getFavoriteByIDUsecase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
-	getFavoritesByPostIDUsecase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
-	listFavoritesUsecase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository)
+	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
+	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
+	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
+	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
+	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
+	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+
+	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
+	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
+	getFavoriteByIDUseCase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
+	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
+	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
+	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
+	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
 	if err != nil {
@@ -68,14 +75,15 @@ func main() {
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
 	resolver := &graph.Resolver{
-		CreateUserUseCase:           createUserUseCase,
-		ListUsersUseCase:            listUsersUseCase,
-		DeleteUserUseCase:           deleteUserUsecase,
-		UpdateUserUseCase:           updateUserUsecase,
-		GetUserByIDUseCase:          getUserByIDUsecase,
-		SearchUsersUseCase:          searchUsersUseCase,
-		LoginUserUseCase:            loginUserUseCase,
-		LogoutUserUseCase:           logoutUserUseCase,
+		CreateUserUseCase:  createUserUseCase,
+		ListUsersUseCase:   listUsersUseCase,
+		DeleteUserUseCase:  deleteUserUseCase,
+		UpdateUserUseCase:  updateUserUseCase,
+		GetUserByIDUseCase: getUserByIDUseCase,
+		SearchUsersUseCase: searchUsersUseCase,
+		LoginUserUseCase:   loginUserUseCase,
+		LogoutUserUseCase:  logoutUserUseCase,
+
 		CreateAdministratorUseCase:  createAdministratorUseCase,
 		GetAdministratorByIDUseCase: getAdministratorByIDUseCase,
 		ListAdministratorsUseCase:   listAdministratorsUseCase,
@@ -84,18 +92,24 @@ func main() {
 		SearchAdministratorsUseCase: searchAdministratorsUseCase,
 		LoginAdministratorUseCase:   loginAdministratorUseCase,
 		LogoutAdministratorUseCase:  logoutAdministratorUseCase,
-		CreatePostUseCase:           createPostUsecase,
-		UpdatePostUseCase:           updatePostUsecase,
-		DeletePostUseCase:           deletePostUsecase,
-		GetPostByIDUseCase:          getPostByIDUsecase,
-		ListPostsUseCase:            listPostsUsecase,
-		SearchPostsUseCase:          searchPostsUsecase,
-		GetPostsByUserIDUseCase:     getPostsByUserIDUsecase,
-		CreateFavoriteUseCase:       createFavoriteUsecase,
-		DeleteFavoriteUseCase:       deleteFavoriteUsecase,
-		GetFavoriteByIDUseCase:      getFavoriteByIDUsecase,
-		GetFavoritesByPostIDUseCase: getFavoritesByPostIDUsecase,
-		ListFavoritesUseCase:        listFavoritesUsecase,
+
+		CreatePostUseCase:        createPostUseCase,
+		UpdatePostUseCase:        updatePostUseCase,
+		DeletePostUseCase:        deletePostUseCase,
+		GetPostByIDUseCase:       getPostByIDUseCase,
+		ListPostsUseCase:         listPostsUseCase,
+		SearchPostsUseCase:       searchPostsUseCase,
+		GetPostsByUserIDUseCase:  getPostsByUserIDUseCase,
+		GetRepliesByIDUseCase:    getRepliesByIDUseCase,
+		ListTopLevelPostsUseCase: listTopLevelPostsUseCase,
+
+		CreateFavoriteUseCase:               createFavoriteUseCase,
+		DeleteFavoriteUseCase:               deleteFavoriteUseCase,
+		GetFavoriteByIDUseCase:              getFavoriteByIDUseCase,
+		GetFavoritesByPostIDUseCase:         getFavoritesByPostIDUseCase,
+		ListFavoritesUseCase:                listFavoritesUseCase,
+		GetFavoritesByUserIDUseCase:         getFavoritesByUserIDUseCase,
+		GetFavoriteByUserIDAndPostIDUseCase: getFavoriteByUserIDAndPostIDUseCase,
 	}
 
 	// middleware

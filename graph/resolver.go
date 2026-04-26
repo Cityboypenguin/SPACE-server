@@ -30,17 +30,22 @@ type Resolver struct {
 	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
 	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
 
-	GetPostByIDUseCase      post.GetPostByIDUseCase
-	GetPostsByUserIDUseCase post.GetPostsByUserIDUseCase
-	CreatePostUseCase       post.CreatePostUseCase
-	ListPostsUseCase        post.ListPostsUseCase
-	DeletePostUseCase       post.DeletePostUseCase
-	UpdatePostUseCase       post.UpdatePostUseCase
-	SearchPostsUseCase      post.SearchPostsUseCase
+	GetPostByIDUseCase       post.GetPostByIDUseCase
+	CreatePostUseCase        post.CreatePostUseCase
+	ListPostsUseCase         post.ListPostsUseCase
+	DeletePostUseCase        post.DeletePostUseCase
+	UpdatePostUseCase        post.UpdatePostUseCase
+	SearchPostsUseCase       post.SearchPostsUseCase
+	ListTopLevelPostsUseCase post.ListTopLevelPostsUseCase
+	GetRepliesByIDUseCase    post.GetRepliesByIDUseCase
+	GetPostsByUserIDUseCase  post.GetPostsByUserIDUseCase
 
-	GetFavoriteByIDUseCase      favorite.GetFavoriteByIDUseCase
-	CreateFavoriteUseCase       favorite.CreateFavoriteUseCase
-	DeleteFavoriteUseCase       favorite.DeleteFavoriteUseCase
-	GetFavoritesByPostIDUseCase favorite.GetFavoritesByPostIDUseCase
-	ListFavoritesUseCase        favorite.ListFavoritesUseCase
+	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
+	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase
+	DeleteFavoriteUseCase                  favorite.DeleteFavoriteUseCase
+	DeleteFavoriteByUserIDAndPostIDUseCase favorite.DeleteFavoriteByUserIDAndPostIDUseCase
+	GetFavoriteByUserIDAndPostIDUseCase    favorite.GetFavoriteByUserIDAndPostIDUseCase
+	GetFavoritesByPostIDUseCase            favorite.GetFavoritesByPostIDUseCase
+	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
+	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 }

@@ -161,3 +161,18 @@ func (r *MySQLFavoriteRepository) GetFavoriteByUserIDAndPostID(ctx context.Conte
 
 	return &favorite, nil
 }
+
+func (r *MySQLFavoriteRepository) DeleteFavoriteByUserIDAndPostID(ctx context.Context, userID int64, postID int64) (bool, error) {
+	query := `DELETE FROM favorites WHERE user_id = ? AND post_id = ?`
+	result, err := r.DB.ExecContext(ctx, query, userID, postID)
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected > 0, nil
+}

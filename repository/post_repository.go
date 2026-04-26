@@ -12,7 +12,7 @@ type PostRepository interface {
 	DeletePost(ctx context.Context, id int64) (bool, error)
 	GetPostByID(ctx context.Context, id int64) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, user_id int64) ([]*model.Post, error)
-	GetTopLevelPosts(ctx context.Context) ([]*model.Post, error)
+	ListTopLevelPosts(ctx context.Context) ([]*model.Post, error)
 	ListPosts(ctx context.Context) ([]*model.Post, error)
 	SearchPosts(ctx context.Context, query string) ([]*model.Post, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
