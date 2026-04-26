@@ -113,9 +113,13 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 	for rows.Next() {
 		var favorite model.Favorite
 		favorite.Post = &model.Post{ID: postID}
-		if err := rows.Scan(&favorite.ID, &favorite.User, &favorite.CreatedAt); err != nil {
+		var createdAtUnix int64
+		var userID int64
+		if err := rows.Scan(&favorite.ID, &userID, &createdAtUnix); err != nil {
 			return nil, err
 		}
+		favorite.User = &model.User{ID: userID}
+		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
 		favorites = append(favorites, &favorite)
 	}
 

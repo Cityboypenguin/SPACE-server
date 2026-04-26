@@ -148,7 +148,14 @@ models:
         resolver: true
       replies:
         resolver: true
-
+      favorites:
+        resolver: true
+  Favorite:
+    fields:
+      user:
+        resolver: true
+      post:
+        resolver: true
   # The GraphQL spec explicitly states that the Int type is a signed 32-bit
   # integer. Using Go int or int64 to represent it can lead to unexpected
   # behavior, and some GraphQL tools like Apollo Router will fail when

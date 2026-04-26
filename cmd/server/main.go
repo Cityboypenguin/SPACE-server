@@ -59,6 +59,7 @@ func main() {
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
+	deleteFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewDeleteFavoriteByUserIDAndPostIDUseCase(favoriteRepository, postRepository)
 	getFavoriteByIDUseCase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
 	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
@@ -103,13 +104,14 @@ func main() {
 		GetRepliesByIDUseCase:    getRepliesByIDUseCase,
 		ListTopLevelPostsUseCase: listTopLevelPostsUseCase,
 
-		CreateFavoriteUseCase:               createFavoriteUseCase,
-		DeleteFavoriteUseCase:               deleteFavoriteUseCase,
-		GetFavoriteByIDUseCase:              getFavoriteByIDUseCase,
-		GetFavoritesByPostIDUseCase:         getFavoritesByPostIDUseCase,
-		ListFavoritesUseCase:                listFavoritesUseCase,
-		GetFavoritesByUserIDUseCase:         getFavoritesByUserIDUseCase,
-		GetFavoriteByUserIDAndPostIDUseCase: getFavoriteByUserIDAndPostIDUseCase,
+		CreateFavoriteUseCase:                  createFavoriteUseCase,
+		DeleteFavoriteUseCase:                  deleteFavoriteUseCase,
+		DeleteFavoriteByUserIDAndPostIDUseCase: deleteFavoriteByUserIDAndPostIDUseCase,
+		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
+		GetFavoritesByPostIDUseCase:            getFavoritesByPostIDUseCase,
+		ListFavoritesUseCase:                   listFavoritesUseCase,
+		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
+		GetFavoriteByUserIDAndPostIDUseCase:    getFavoriteByUserIDAndPostIDUseCase,
 	}
 
 	// middleware

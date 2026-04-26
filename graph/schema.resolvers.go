@@ -14,6 +14,59 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+// User is the resolver for the user field.
+func (r *favoriteResolver) User(ctx context.Context, obj *gqlmodel.Favorite) (*gqlmodel.User, error) {
+	numericUserID, err := strconv.ParseInt(obj.User.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
+	}
+
+	user, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gqlmodel.User{
+		ID:        fmt.Sprintf("%d", user.ID),
+		AccountID: user.AccountID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
+	}, nil
+}
+
+// Post is the resolver for the post field.
+func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*gqlmodel.Post, error) {
+	numericPostID, err := strconv.ParseInt(obj.Post.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id: %s", obj.Post.ID)
+	}
+
+	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlParent *gqlmodel.Post
+	if post.Parent != nil {
+		gqlParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", post.Parent.ID)}
+	}
+
+	return &gqlmodel.Post{
+		ID:        fmt.Sprintf("%d", post.ID),
+		Content:   post.Content,
+		CreatedAt: fmt.Sprintf("%s", post.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%s", post.UpdatedAt),
+		User: &gqlmodel.User{
+			ID: fmt.Sprintf("%d", post.User.ID),
+		},
+		Parent: gqlParent,
+	}, nil
+}
+
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
@@ -255,8 +308,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		User: &gqlmodel.User{
 			ID: fmt.Sprintf("%d", post.User.ID),
 		},
-		Parent:    gqlParent,
-		Favorites: []*gqlmodel.Favorite{},
+		Parent: gqlParent,
 	}, nil
 }
 
@@ -299,7 +351,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		User: &gqlmodel.User{
 			ID: fmt.Sprintf("%d", post.User.ID),
 		},
-		Favorites: []*gqlmodel.Favorite{},
 	}, nil
 }
 
@@ -328,6 +379,12 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	return &gqlmodel.Favorite{
 		ID:        fmt.Sprintf("%d", favorite.ID),
 		CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
+		User: &gqlmodel.User{
+			ID: fmt.Sprintf("%d", favorite.User.ID),
+		},
+		Post: &gqlmodel.Post{
+			ID: fmt.Sprintf("%d", favorite.Post.ID),
+		},
 	}, nil
 }
 
@@ -373,6 +430,35 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 		CreatedAt: fmt.Sprintf("%s", user.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%s", user.UpdatedAt),
 	}, nil
+}
+
+// Favorites is the resolver for the favorites field.
+func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Favorite, error) {
+	numericPostID, err := strconv.ParseInt(obj.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id: %s", obj.ID)
+	}
+
+	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericPostID)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlFavorites []*gqlmodel.Favorite
+	for _, favorite := range favorites {
+		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
+			ID:        fmt.Sprintf("%d", favorite.ID),
+			CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
+			User: &gqlmodel.User{
+				ID: fmt.Sprintf("%d", favorite.User.ID),
+			},
+			Post: &gqlmodel.Post{
+				ID: fmt.Sprintf("%d", favorite.Post.ID),
+			},
+		})
+	}
+
+	return gqlFavorites, nil
 }
 
 // Parent is the resolver for the parent field.
@@ -617,8 +703,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 			User: &gqlmodel.User{
 				ID: fmt.Sprintf("%d", post.User.ID),
 			},
-			Parent:    gqlParent,
-			Favorites: []*gqlmodel.Favorite{},
+			Parent: gqlParent,
 		})
 	}
 	return gqlPosts, nil
@@ -641,7 +726,6 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 			User: &gqlmodel.User{
 				ID: fmt.Sprintf("%d", post.User.ID),
 			},
-			Favorites: []*gqlmodel.Favorite{},
 		})
 	}
 	return gqlPosts, nil
@@ -659,22 +743,9 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 		return nil, err
 	}
 
-	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-
 	var gqlParent *gqlmodel.Post
 	if post.Parent != nil {
 		gqlParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", post.Parent.ID)}
-	}
-
-	var gqlFavorites []*gqlmodel.Favorite
-	for _, favorite := range favorites {
-		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        fmt.Sprintf("%d", favorite.ID),
-			CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
-		})
 	}
 
 	return &gqlmodel.Post{
@@ -685,8 +756,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 		User: &gqlmodel.User{
 			ID: fmt.Sprintf("%d", post.User.ID),
 		},
-		Parent:    gqlParent,
-		Favorites: gqlFavorites,
+		Parent: gqlParent,
 	}, nil
 }
 
@@ -712,8 +782,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 			User: &gqlmodel.User{
 				ID: fmt.Sprintf("%d", reply.User.ID),
 			},
-			Parent:    &gqlmodel.Post{ID: postID},
-			Favorites: []*gqlmodel.Favorite{},
+			Parent: &gqlmodel.Post{ID: postID},
 		})
 	}
 
@@ -741,8 +810,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 			User: &gqlmodel.User{
 				ID: fmt.Sprintf("%d", post.User.ID),
 			},
-			Parent:    gqlParent,
-			Favorites: []*gqlmodel.Favorite{},
+			Parent: gqlParent,
 		})
 	}
 	return gqlPosts, nil
@@ -760,6 +828,12 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
 			ID:        fmt.Sprintf("%d", favorite.ID),
 			CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
+			User: &gqlmodel.User{
+				ID: fmt.Sprintf("%d", favorite.User.ID),
+			},
+			Post: &gqlmodel.Post{
+				ID: fmt.Sprintf("%d", favorite.Post.ID),
+			},
 		})
 	}
 	return gqlFavorites, nil
@@ -780,8 +854,17 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 	return &gqlmodel.Favorite{
 		ID:        fmt.Sprintf("%d", favorite.ID),
 		CreatedAt: fmt.Sprintf("%s", favorite.CreatedAt),
+		User: &gqlmodel.User{
+			ID: fmt.Sprintf("%d", favorite.User.ID),
+		},
+		Post: &gqlmodel.Post{
+			ID: fmt.Sprintf("%d", favorite.Post.ID),
+		},
 	}, nil
 }
+
+// Favorite returns FavoriteResolver implementation.
+func (r *Resolver) Favorite() FavoriteResolver { return &favoriteResolver{r} }
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
@@ -792,6 +875,7 @@ func (r *Resolver) Post() PostResolver { return &postResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+type favoriteResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }

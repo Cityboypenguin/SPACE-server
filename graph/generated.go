@@ -29,6 +29,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Favorite() FavoriteResolver
 	Mutation() MutationResolver
 	Post() PostResolver
 	Query() QueryResolver
@@ -123,6 +124,10 @@ type ComplexityRoot struct {
 	}
 }
 
+type FavoriteResolver interface {
+	User(ctx context.Context, obj *model.Favorite) (*model.User, error)
+	Post(ctx context.Context, obj *model.Favorite) (*model.Post, error)
+}
 type MutationResolver interface {
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
@@ -142,7 +147,7 @@ type MutationResolver interface {
 }
 type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
-
+	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post) ([]*model.Post, error)
 }
@@ -1612,7 +1617,7 @@ func (ec *executionContext) _Favorite_user(ctx context.Context, field graphql.Co
 			return ec.fieldContext_Favorite_user(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.User, nil
+			return ec.Resolvers.Favorite().User(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
@@ -1626,8 +1631,8 @@ func (ec *executionContext) fieldContext_Favorite_user(_ context.Context, field 
 	fc = &graphql.FieldContext{
 		Object:     "Favorite",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_User(ctx, field)
 		},
@@ -1644,7 +1649,7 @@ func (ec *executionContext) _Favorite_post(ctx context.Context, field graphql.Co
 			return ec.fieldContext_Favorite_post(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Post, nil
+			return ec.Resolvers.Favorite().Post(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
@@ -1658,8 +1663,8 @@ func (ec *executionContext) fieldContext_Favorite_post(_ context.Context, field 
 	fc = &graphql.FieldContext{
 		Object:     "Favorite",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Post(ctx, field)
 		},
@@ -2483,7 +2488,7 @@ func (ec *executionContext) _Post_favorites(ctx context.Context, field graphql.C
 			return ec.fieldContext_Post_favorites(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Favorites, nil
+			return ec.Resolvers.Post().Favorites(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*model.Favorite) graphql.Marshaler {
@@ -2497,8 +2502,8 @@ func (ec *executionContext) fieldContext_Post_favorites(_ context.Context, field
 	fc = &graphql.FieldContext{
 		Object:     "Post",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Favorite(ctx, field)
 		},
@@ -5046,22 +5051,84 @@ func (ec *executionContext) _Favorite(ctx context.Context, sel ast.SelectionSet,
 		case "ID":
 			out.Values[i] = ec._Favorite_ID(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "user":
-			out.Values[i] = ec._Favorite_user(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Favorite_user(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "post":
-			out.Values[i] = ec._Favorite_post(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Favorite_post(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			out.Values[i] = ec._Favorite_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -5301,10 +5368,41 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "favorites":
-			out.Values[i] = ec._Post_favorites(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_favorites(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "parent":
 			field := field
 
