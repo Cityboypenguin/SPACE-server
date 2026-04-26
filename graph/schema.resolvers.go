@@ -7,8 +7,11 @@ package graph
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -275,6 +278,11 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, fmt.Errorf("invalid user id: %s", input.UserID)
 	}
 
+	trimmedContent := strings.TrimSpace(input.Content)
+	if trimmedContent == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+
 	var numericParentID *int64
 	if input.ParentID != nil {
 		parentID, err := strconv.ParseInt(*input.ParentID, 10, 64)
@@ -286,7 +294,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 
 	param := model.CreatePostParam{
 		UserID:   numericUserID,
-		Content:  input.Content,
+		Content:  trimmedContent,
 		ParentID: numericParentID,
 	}
 
@@ -364,6 +372,23 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	numericPostID, err := strconv.ParseInt(input.PostID, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id: %s", input.PostID)
+	}
+
+	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
+	if err != nil {
+		return nil, fmt.Errorf("post not found with id: %s", input.PostID)
+	}
+
+	if post.User.ID == numericUserID {
+		return nil, fmt.Errorf("cannot favorite your own post")
+	}
+
+	existingFavorite, err := r.GetFavoriteByUserIDAndPostIDUseCase.Execute(ctx, numericUserID, numericPostID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	if existingFavorite != nil {
+		return nil, fmt.Errorf("favorite already exists for user id %d and post id %d", numericUserID, numericPostID)
 	}
 
 	param := model.CreateFavoriteParam{
