@@ -2,7 +2,7 @@ package user
 
 import (
 	"context"
-
+	"time"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -15,11 +15,13 @@ var _ CreateUserUseCase = &CreateUserInteractor{}
 
 type CreateUserInteractor struct {
 	userRepo repository.UserRepository
+	profileRepo repository.ProfileRepository
 }
 
-func NewCreateUserUseCase(userRepo repository.UserRepository) CreateUserUseCase {
+func NewCreateUserUseCase(userRepo repository.UserRepository , profileRepo repository.ProfileRepository) CreateUserUseCase {
 	return &CreateUserInteractor{
 		userRepo: userRepo,
+		profileRepo: profileRepo,
 	}
 }
 
@@ -43,5 +45,22 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		return nil, err
 	}
 
+	// 登録されたばかりのユーザーのIDを使って、空のプロフィールを作る
+	emptyProfile := &model.Profile{
+		UserID:    user.ID, // 先ほど作られたユーザーの内部ID
+		Bio:       "",
+		Grade:     0,       // 未設定は0とする
+		Image:     "",
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	// プロフィール倉庫係にお願いして保存する
+	if err := uc.profileRepo.SaveProfile(ctx, emptyProfile); err != nil {
+		return nil, err
+	}
+
 	return user, nil
+
+
 }

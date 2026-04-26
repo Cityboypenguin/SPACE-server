@@ -53,7 +53,7 @@ func main() {
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 
-	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
+	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
 	updateUserUsecase := userusecase.NewUpdateUserUseCase(userRepository)
