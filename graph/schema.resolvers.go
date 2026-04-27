@@ -304,8 +304,7 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 	}
 
 	room, err := r.CreateRoomUseCase.Execute(ctx, model.CreateRoomParam{
-		Name:        input.Name,
-		Description: input.Description,
+		Name: input.Name,
 	})
 	if err != nil {
 		return nil, err
@@ -360,6 +359,25 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 	uid, err := decodeGraphID(ctx, "user", input.UserID)
 	if err != nil {
 		return false, fmt.Errorf("invalid user id")
+	}
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get room")
+	}
+	if room == nil {
+		return false, errors.New("room not found")
+	}
+
+	if room.Type == model.RoomTypeCommunity {
+		if uid != claims.ID {
+			return false, errors.New("forbidden: can only join community as yourself")
+		}
+
+		if err := r.AddUserToRoomUseCase.Execute(ctx, rid, claims.ID); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 
 	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)

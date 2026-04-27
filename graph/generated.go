@@ -110,13 +110,12 @@ type ComplexityRoot struct {
 	}
 
 	Room struct {
-		CreatedAt   func(childComplexity int) int
-		Description func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Type        func(childComplexity int) int
-		UpdatedAt   func(childComplexity int) int
-		User        func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Type      func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+		User      func(childComplexity int) int
 	}
 
 	Subscription struct {
@@ -655,12 +654,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.CreatedAt(childComplexity), true
-	case "Room.description":
-		if e.ComplexityRoot.Room.Description == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Room.Description(childComplexity), true
 	case "Room.ID":
 		if e.ComplexityRoot.Room.ID == nil {
 			break
@@ -1594,8 +1587,6 @@ func (ec *executionContext) fieldContext_Message_room(_ context.Context, field g
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -2505,8 +2496,6 @@ func (ec *executionContext) fieldContext_Mutation_createRoom(ctx context.Context
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -2562,8 +2551,6 @@ func (ec *executionContext) fieldContext_Mutation_getOrCreateDMRoom(ctx context.
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -3475,8 +3462,6 @@ func (ec *executionContext) fieldContext_Query_room(ctx context.Context, field g
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -3531,8 +3516,6 @@ func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, fiel
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -3781,35 +3764,6 @@ func (ec *executionContext) fieldContext_Room_user(_ context.Context, field grap
 				return ec.fieldContext_User_updatedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Room_description(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Room_description,
-		func(ctx context.Context) (any, error) {
-			return obj.Description, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Room_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Room",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5807,7 +5761,7 @@ func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description"}
+	fieldsInOrder := [...]string{"name"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -5821,13 +5775,6 @@ func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, o
 				return it, err
 			}
 			it.Name = data
-		case "description":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Description = data
 		}
 	}
 	return it, nil
@@ -6071,7 +6018,7 @@ func (ec *executionContext) unmarshalInputUpdateRoomInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description"}
+	fieldsInOrder := [...]string{"name"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -6085,13 +6032,6 @@ func (ec *executionContext) unmarshalInputUpdateRoomInput(ctx context.Context, o
 				return it, err
 			}
 			it.Name = data
-		case "description":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Description = data
 		}
 	}
 	return it, nil
@@ -6891,11 +6831,6 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "user":
 			out.Values[i] = ec._Room_user(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "description":
-			out.Values[i] = ec._Room_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

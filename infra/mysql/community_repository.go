@@ -81,3 +81,88 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 
 	return &c, nil
 }
+
+func (r *MySQLCommunityRepository) SearchCommunitiesByName(ctx context.Context, name string) ([]*model.Community, error) {
+	query := `
+		SELECT id, name, description, created_at, updated_at
+		FROM communities
+		WHERE name LIKE ?
+	`
+
+	rows, err := r.DB.QueryContext(ctx, query, "%"+name+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var communities []*model.Community
+	for rows.Next() {
+		var c model.Community
+		if err := rows.Scan(
+			&c.ID,
+			&c.Name,
+			&c.Description,
+			&c.CreatedAt,
+			&c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		communities = append(communities, &c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return communities, nil
+}
+
+func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64) (bool, error) {
+	query := `
+		DELETE FROM communities
+		WHERE id = ?
+	`
+	result, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return false, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rowsAffected > 0, nil
+}
+
+func (r *MySQLCommunityRepository) ListCommunities(ctx context.Context) ([]*model.Community, error) {
+	query := `
+		SELECT id, name, description, created_at, updated_at
+		FROM communities
+	`
+
+	rows, err := r.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var communities []*model.Community
+	for rows.Next() {
+		var c model.Community
+		if err := rows.Scan(
+			&c.ID,
+			&c.Name,
+			&c.Description,
+			&c.CreatedAt,
+			&c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		communities = append(communities, &c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return communities, nil
+}

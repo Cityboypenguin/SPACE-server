@@ -122,7 +122,6 @@ type Room {
   name: String!
   type: String!
   user: [User!]!
-  description: String!
   createdAt: String!
   updatedAt: String!
 }
@@ -140,12 +139,10 @@ type Message {
 
 input CreateRoomInput {
   name: String!
-  description: String!
 }
 
 input UpdateRoomInput {
   name: String
-  description: String
 }
 
 input AddUserToRoomInput {

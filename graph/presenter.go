@@ -41,12 +41,11 @@ func toGraphRoom(room *model.Room) *gqlmodel.Room {
 		return nil
 	}
 	return &gqlmodel.Room{
-		ID:          encodeGraphID("room", room.ID),
-		Name:        room.Name,
-		Type:        room.Type,
-		Description: room.Description,
-		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+		ID:        encodeGraphID("room", room.ID),
+		Name:      room.Name,
+		Type:      room.Type,
+		CreatedAt: fmt.Sprintf("%d", room.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", room.UpdatedAt),
 	}
 }
 

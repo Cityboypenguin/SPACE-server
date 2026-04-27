@@ -28,8 +28,7 @@ type CreateAdministratorInput struct {
 }
 
 type CreateRoomInput struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name string `json:"name"`
 }
 
 type CreateUserInput struct {
@@ -78,13 +77,12 @@ type RemoveUserFromRoomInput struct {
 }
 
 type Room struct {
-	ID          string  `json:"ID"`
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	User        []*User `json:"user"`
-	Description string  `json:"description"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID        string  `json:"ID"`
+	Name      string  `json:"name"`
+	Type      string  `json:"type"`
+	User      []*User `json:"user"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 type Subscription struct {
@@ -105,8 +103,7 @@ type UpdateProfileInput struct {
 }
 
 type UpdateRoomInput struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 type UpdateUserInput struct {
