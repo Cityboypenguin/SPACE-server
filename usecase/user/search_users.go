@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -24,6 +25,10 @@ func NewSearchUsersUseCase(userRepo repository.UserRepository) SearchUsersUseCas
 }
 
 func (uc *SearchUsersInteractor) Execute(ctx context.Context, name string) ([]*model.User, error) {
+	if _, err := authz.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	users, err := uc.userRepo.SearchUsersByName(ctx, name)
 	if err != nil {
 		return nil, err

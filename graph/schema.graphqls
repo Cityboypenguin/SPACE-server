@@ -3,6 +3,7 @@
 # https://gqlgen.com/getting-started/
 type Query {
   users: [User!]!
+  me: User!
   getUserByID(id: ID!): User
   searchUsers(name: String!): [User!]!
 
@@ -18,6 +19,11 @@ type Query {
   
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
+  myProfile: Profile
+  getProfileByUserID(userID: ID!): Profile
+  messages(roomID: ID!): [Message!]!
+  room(id: ID!): Room
+  myDMRooms: [Room!]!
 }
 
 type User {
@@ -36,7 +42,6 @@ type User {
 type Administrator {
   ID: ID!
   name: String!
-  password: String!
   email: String!
   createdAt: String!
   updatedAt: String!
@@ -62,11 +67,13 @@ type Favorite {
 
 type UserAuthPayload {
   token: String!
+  refreshToken: String!
   user: User!
 }
 
 type AdministratorAuthPayload {
   token: String!
+  refreshToken: String!
   administrator: Administrator!
 }
 
@@ -80,12 +87,14 @@ type Mutation {
   deleteUser(id: ID!): Boolean!
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
+  refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
 
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!
-  updateAdministrator(input: UpdateAdministratorInput!): Administrator!
+  updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
+  refreshAdministratorToken(refreshToken: String!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
 
   createPost(input: CreatePostInput!): Post!
@@ -94,6 +103,13 @@ type Mutation {
 
   createFavorite(input: CreateFavoriteInput!): Favorite!
   deleteFavorite(input: DeleteFavoriteInput!): Boolean!
+  
+  updateProfile(input: UpdateProfileInput!): Profile!
+  sendMessage(roomID: ID!, content: String!): Message!
+  createRoom(input: CreateRoomInput!): Room!
+  getOrCreateDMRoom(targetUserID: ID!): Room!
+  addUserToRoom(input: AddUserToRoomInput!): Boolean!
+  removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
 }
 
 input CreateAdministratorInput {
@@ -103,7 +119,6 @@ input CreateAdministratorInput {
 }
 
 input UpdateAdministratorInput {
-  ID: ID!
   name: String
   email: String
   password: String
@@ -117,8 +132,6 @@ input CreateUserInput {
 }
 
 input UpdateUserInput {
-  ID: ID!
-  accountID: String
   name: String
   email: String
   password: String
@@ -143,4 +156,67 @@ input CreateFavoriteInput {
 input DeleteFavoriteInput {
   user_id: ID!
   post_id: ID!
+}
+type Profile {
+  userID: String!
+  user: User!
+  username: String!
+  bio: String
+  grade: Int
+  image: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+input UpdateProfileInput {
+  userID: String!
+  username: String
+  bio: String
+  grade: Int
+  image: String
+}
+
+type Room {
+  ID: ID!
+  name: String!
+  type: String!
+  user: [User!]!
+  description: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Message {
+  ID: ID!
+  roomID: ID!
+  room: Room!
+  userID: ID!
+  user: User!
+  content: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input CreateRoomInput {
+  name: String!
+  description: String!
+}
+
+input UpdateRoomInput {
+  name: String
+  description: String
+}
+
+input AddUserToRoomInput {
+  roomID: ID!
+  userID: ID!
+}
+
+input RemoveUserFromRoomInput {
+  roomID: ID!
+  userID: ID!
+}
+
+type Subscription {
+  messageAdded(roomID: ID!): Message!
 }

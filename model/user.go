@@ -31,8 +31,6 @@ type UpdateUserParam struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
-	Role     *string `json:"role,omitempty"`
-	Status   *string `json:"status,omitempty"`
 }
 
 func hashPassword(password string) (string, error) {
@@ -72,12 +70,6 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 			return err
 		}
 		u.HashedPassword = hashedPassword
-	}
-	if param.Role != nil {
-		u.Role = *param.Role
-	}
-	if param.Status != nil {
-		u.Status = *param.Status
 	}
 	u.UpdatedAt = time.Now()
 	return nil

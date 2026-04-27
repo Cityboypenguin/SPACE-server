@@ -6,13 +6,20 @@ services:
     volumes:
       - .:/app
     environment:
-      DB_USER: root
-      DB_PASSWORD: password
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: space
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-space}
+      DB_TLS: ${DB_TLS:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: local-dev-jwt-secret
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      JWT_REFRESH_EXPIRATION_MINUTES: ${JWT_REFRESH_EXPIRATION_MINUTES:-20160}
+      INIT_ADMIN_NAME: ${INIT_ADMIN_NAME:-}
+      INIT_ADMIN_EMAIL: ${INIT_ADMIN_EMAIL:-}
+      INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -22,18 +29,19 @@ services:
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: space
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
     ports:
-      - "3306:3306"
+      - "3306:3306" # 後悔する時に消す
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 30
+      start_period: 40s
 
   redis:
     image: redis:7-alpine

@@ -2,10 +2,14 @@
 
 package model
 
+type AddUserToRoomInput struct {
+	RoomID string `json:"roomID"`
+	UserID string `json:"userID"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
-	Password  string `json:"password"`
 	Email     string `json:"email"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
@@ -13,6 +17,7 @@ type Administrator struct {
 
 type AdministratorAuthPayload struct {
 	Token         string         `json:"token"`
+	RefreshToken  string         `json:"refreshToken"`
 	Administrator *Administrator `json:"administrator"`
 }
 
@@ -31,6 +36,11 @@ type CreatePostInput struct {
 	UserID   string  `json:"user_id"`
 	Content  string  `json:"content"`
 	ParentID *string `json:"parent_id,omitempty"`
+}
+
+type CreateRoomInput struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type CreateUserInput struct {
@@ -57,6 +67,17 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+type Message struct {
+	ID        string `json:"ID"`
+	RoomID    string `json:"roomID"`
+	Room      *Room  `json:"room"`
+	UserID    string `json:"userID"`
+	User      *User  `json:"user"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type Mutation struct {
 }
 
@@ -71,11 +92,39 @@ type Post struct {
 	Replies   []*Post     `json:"replies"`
 }
 
+type Profile struct {
+	UserID    string  `json:"userID"`
+	User      *User   `json:"user"`
+	Username  string  `json:"username"`
+	Bio       *string `json:"bio,omitempty"`
+	Grade     *int32  `json:"grade,omitempty"`
+	Image     *string `json:"image,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
+}
+
 type Query struct {
 }
 
+type RemoveUserFromRoomInput struct {
+	RoomID string `json:"roomID"`
+	UserID string `json:"userID"`
+}
+
+type Room struct {
+	ID          string  `json:"ID"`
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	User        []*User `json:"user"`
+	Description string  `json:"description"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+type Subscription struct {
+}
+
 type UpdateAdministratorInput struct {
-	ID       string  `json:"ID"`
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
@@ -86,12 +135,23 @@ type UpdatePostInput struct {
 	Content *string `json:"content,omitempty"`
 }
 
+type UpdateProfileInput struct {
+	UserID   string  `json:"userID"`
+	Username *string `json:"username,omitempty"`
+	Bio      *string `json:"bio,omitempty"`
+	Grade    *int32  `json:"grade,omitempty"`
+	Image    *string `json:"image,omitempty"`
+}
+
+type UpdateRoomInput struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
 type UpdateUserInput struct {
-	ID        string  `json:"ID"`
-	AccountID *string `json:"accountID,omitempty"`
-	Name      *string `json:"name,omitempty"`
-	Email     *string `json:"email,omitempty"`
-	Password  *string `json:"password,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Email    *string `json:"email,omitempty"`
+	Password *string `json:"password,omitempty"`
 }
 
 type User struct {
@@ -108,6 +168,7 @@ type User struct {
 }
 
 type UserAuthPayload struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refreshToken"`
+	User         *User  `json:"user"`
 }

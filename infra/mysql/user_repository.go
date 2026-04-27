@@ -119,6 +119,9 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return users, nil
 }
@@ -157,8 +160,42 @@ func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string
 		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return users, nil
+}
+
+func (r *MySQLUserRepository) FindByAccountID(ctx context.Context, accountID string) (*model.User, error) {
+	query := `
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users
+		WHERE account_id = ?
+		LIMIT 1
+	`
+
+	row := r.DB.QueryRowContext(ctx, query, accountID)
+
+	var u model.User
+	if err := row.Scan(
+		&u.ID,
+		&u.AccountID,
+		&u.Name,
+		&u.Email,
+		&u.HashedPassword,
+		&u.Role,
+		&u.Status,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &u, nil
 }
 
 func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {

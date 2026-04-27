@@ -11,7 +11,8 @@ import (
 )
 
 type LoginAdministratorResult struct {
-	Token         string
+	AccessToken   string
+	RefreshToken  string
 	Administrator *model.Administrator
 }
 
@@ -42,10 +43,15 @@ func (uc *LoginAdministratorInteractor) Execute(ctx context.Context, email, pass
 		return nil, errors.New("invalid email or password")
 	}
 
-	token, err := auth.GenerateToken(admin.ID, "administrator")
+	accessToken, err := auth.GenerateAccessToken(admin.ID, "administrator")
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoginAdministratorResult{Token: token, Administrator: admin}, nil
+	refreshToken, err := auth.GenerateRefreshToken(admin.ID, "administrator")
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginAdministratorResult{AccessToken: accessToken, RefreshToken: refreshToken, Administrator: admin}, nil
 }
