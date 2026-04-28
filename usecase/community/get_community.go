@@ -19,19 +19,12 @@ type GetCommunityInteractor struct {
 }
 
 func NewGetCommunityUseCase(communityRepo repository.CommunityRepository) GetCommunityUseCase {
-	return &GetCommunityInteractor{
-		communityRepo: communityRepo,
-	}
+	return &GetCommunityInteractor{communityRepo: communityRepo}
 }
 
 func (uc *GetCommunityInteractor) Execute(ctx context.Context, id int64) (*model.Community, error) {
 	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	c, err := uc.communityRepo.GetCommunityByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+	return uc.communityRepo.GetCommunityByID(ctx, id)
 }

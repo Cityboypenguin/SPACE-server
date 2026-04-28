@@ -8,30 +8,24 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-type SerarchCommunityUseCase interface {
+type SearchCommunityUseCase interface {
 	Execute(ctx context.Context, name string) ([]*model.Community, error)
 }
 
-var _ SerarchCommunityUseCase = &SearchCommunityInteractor{}
+var _ SearchCommunityUseCase = &SearchCommunityInteractor{}
 
 type SearchCommunityInteractor struct {
 	communityRepo repository.CommunityRepository
 }
 
-func NewSearchCommunityUseCase(communityRepo repository.CommunityRepository) SerarchCommunityUseCase {
-	return &SearchCommunityInteractor{
-		communityRepo: communityRepo,
-	}
+func NewSearchCommunityUseCase(communityRepo repository.CommunityRepository) SearchCommunityUseCase {
+	return &SearchCommunityInteractor{communityRepo: communityRepo}
 }
 
 func (uc *SearchCommunityInteractor) Execute(ctx context.Context, name string) ([]*model.Community, error) {
-	if _, err := authz.RequireAuth(ctx); err != nil {
-		return nil, err
-	}
-
-	cs, err := uc.communityRepo.SearchCommunitiesByName(ctx, name)
+	_, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return cs, nil
+	return uc.communityRepo.SearchCommunities(ctx, name)
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
@@ -46,8 +47,14 @@ type Resolver struct {
 	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
 	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
+	JoinRoomUseCase           roomusecase.JoinRoomUseCase
 	RoomUserRepository        repository.RoomUserRepository
 	UserRepository            repository.UserRepository
+
+	CreateCommunityUseCase   communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase      communityusecase.GetCommunityUseCase
+	SearchCommunityUseCase   communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase communityusecase.ListMyCommunitiesUseCase
 
 	PubSub *pubsub.PubSub
 }

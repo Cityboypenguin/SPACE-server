@@ -4,6 +4,7 @@ import "time"
 
 type Community struct {
 	ID          int64  `json:"id"`
+	RoomID      int64  `json:"room_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	CreatedAt   int64  `json:"created_at"`
@@ -22,7 +23,8 @@ type UpdateCommunityParam struct {
 	Description *string `json:"description,omitempty"`
 }
 
-func (c *Community) CreateCommunity(param CreateCommunityParam) {
+func (c *Community) CreateCommunity(param CreateCommunityParam, roomID int64) {
+	c.RoomID = roomID
 	c.Name = param.Name
 	c.Description = param.Description
 	c.CreatedAt = param.CreatedAt.Unix()

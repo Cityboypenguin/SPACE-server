@@ -420,6 +420,24 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 	return true, nil
 }
 
+// CreateCommunity is the resolver for the createCommunity field.
+func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.CreateCommunityInput) (*gqlmodel.Community, error) {
+	c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCommunity(c), nil
+}
+
+// JoinRoom is the resolver for the joinRoom field.
+func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, error) {
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return false, fmt.Errorf("invalid room id")
+	}
+	return r.JoinRoomUseCase.Execute(ctx, rid)
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -702,6 +720,32 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 		result = append(result, gqlRoom)
 	}
 
+	return result, nil
+}
+
+// MyCommunities is the resolver for the myCommunities field.
+func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Community, error) {
+	communities, err := r.ListMyCommunitiesUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*gqlmodel.Community, 0, len(communities))
+	for _, c := range communities {
+		result = append(result, toGraphCommunity(c))
+	}
+	return result, nil
+}
+
+// SearchCommunities is the resolver for the searchCommunities field.
+func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*gqlmodel.Community, error) {
+	communities, err := r.SearchCommunityUseCase.Execute(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*gqlmodel.Community, 0, len(communities))
+	for _, c := range communities {
+		result = append(result, toGraphCommunity(c))
+	}
 	return result, nil
 }
 
