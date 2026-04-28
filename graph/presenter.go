@@ -41,12 +41,25 @@ func toGraphRoom(room *model.Room) *gqlmodel.Room {
 		return nil
 	}
 	return &gqlmodel.Room{
-		ID:          encodeGraphID("room", room.ID),
-		Name:        room.Name,
-		Type:        room.Type,
-		Description: room.Description,
-		CreatedAt:   fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", room.UpdatedAt),
+		ID:        encodeGraphID("room", room.ID),
+		Name:      room.Name,
+		Type:      room.Type,
+		CreatedAt: fmt.Sprintf("%d", room.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", room.UpdatedAt),
+	}
+}
+
+func toGraphCommunity(c *model.Community) *gqlmodel.Community {
+	if c == nil {
+		return nil
+	}
+	return &gqlmodel.Community{
+		ID:          encodeGraphID("community", c.ID),
+		RoomID:      encodeGraphID("room", c.RoomID),
+		Name:        c.Name,
+		Description: c.Description,
+		CreatedAt:   fmt.Sprintf("%d", c.CreatedAt),
+		UpdatedAt:   fmt.Sprintf("%d", c.UpdatedAt),
 	}
 }
 

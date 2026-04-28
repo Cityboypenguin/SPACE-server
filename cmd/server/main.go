@@ -23,6 +23,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
@@ -91,6 +92,13 @@ func main() {
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
 	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
+	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
+
+	communityRepository := mysql.NewMySQLCommunityRepository(database)
+	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository)
+	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
+	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
+	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
 
 	ps := pubsub.New()
 
@@ -123,8 +131,13 @@ func main() {
 		GetOrCreateDMRoomUseCase:         getOrCreateDMRoomUseCase,
 		AddUserToRoomUseCase:             addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase:        removeUserFromRoomUseCase,
+		JoinRoomUseCase:                  joinRoomUseCase,
 		RoomUserRepository:               roomUserRepository,
 		UserRepository:                   userRepository,
+		CreateCommunityUseCase:           createCommunityUseCase,
+		GetCommunityUseCase:              getCommunityUseCase,
+		SearchCommunityUseCase:           searchCommunityUseCase,
+		ListMyCommunitiesUseCase:         listMyCommunitiesUseCase,
 		PubSub:                           ps,
 	}
 

@@ -21,15 +21,28 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type Community struct {
+	ID          string `json:"ID"`
+	RoomID      string `json:"roomID"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-type CreateRoomInput struct {
+type CreateCommunityInput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+}
+
+type CreateRoomInput struct {
+	Name string `json:"name"`
 }
 
 type CreateUserInput struct {
@@ -78,13 +91,12 @@ type RemoveUserFromRoomInput struct {
 }
 
 type Room struct {
-	ID          string  `json:"ID"`
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	User        []*User `json:"user"`
-	Description string  `json:"description"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID        string  `json:"ID"`
+	Name      string  `json:"name"`
+	Type      string  `json:"type"`
+	User      []*User `json:"user"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 type Subscription struct {
@@ -105,8 +117,7 @@ type UpdateProfileInput struct {
 }
 
 type UpdateRoomInput struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 type UpdateUserInput struct {

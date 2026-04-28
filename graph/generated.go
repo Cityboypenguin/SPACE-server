@@ -51,6 +51,15 @@ type ComplexityRoot struct {
 		Token         func(childComplexity int) int
 	}
 
+	Community struct {
+		CreatedAt   func(childComplexity int) int
+		Description func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+		RoomID      func(childComplexity int) int
+		UpdatedAt   func(childComplexity int) int
+	}
+
 	Message struct {
 		Content   func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
@@ -65,11 +74,13 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AddUserToRoom             func(childComplexity int, input model.AddUserToRoomInput) int
 		CreateAdministrator       func(childComplexity int, input model.CreateAdministratorInput) int
+		CreateCommunity           func(childComplexity int, input model.CreateCommunityInput) int
 		CreateRoom                func(childComplexity int, input model.CreateRoomInput) int
 		CreateUser                func(childComplexity int, input model.CreateUserInput) int
 		DeleteAdministrator       func(childComplexity int, id string) int
 		DeleteUser                func(childComplexity int, id string) int
 		GetOrCreateDMRoom         func(childComplexity int, targetUserID string) int
+		JoinRoom                  func(childComplexity int, roomID string) int
 		LoginAdministrator        func(childComplexity int, input model.LoginInput) int
 		LoginUser                 func(childComplexity int, input model.LoginInput) int
 		LogoutAdministrator       func(childComplexity int, token string) int
@@ -101,22 +112,23 @@ type ComplexityRoot struct {
 		GetUserByID          func(childComplexity int, id string) int
 		Me                   func(childComplexity int) int
 		Messages             func(childComplexity int, roomID string) int
+		MyCommunities        func(childComplexity int) int
 		MyDMRooms            func(childComplexity int) int
 		MyProfile            func(childComplexity int) int
 		Room                 func(childComplexity int, id string) int
 		SearchAdministrators func(childComplexity int, name string) int
+		SearchCommunities    func(childComplexity int, name string) int
 		SearchUsers          func(childComplexity int, name string) int
 		Users                func(childComplexity int) int
 	}
 
 	Room struct {
-		CreatedAt   func(childComplexity int) int
-		Description func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Type        func(childComplexity int) int
-		UpdatedAt   func(childComplexity int) int
-		User        func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Type      func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+		User      func(childComplexity int) int
 	}
 
 	Subscription struct {
@@ -160,6 +172,8 @@ type MutationResolver interface {
 	GetOrCreateDMRoom(ctx context.Context, targetUserID string) (*model.Room, error)
 	AddUserToRoom(ctx context.Context, input model.AddUserToRoomInput) (bool, error)
 	RemoveUserFromRoom(ctx context.Context, input model.RemoveUserFromRoomInput) (bool, error)
+	CreateCommunity(ctx context.Context, input model.CreateCommunityInput) (*model.Community, error)
+	JoinRoom(ctx context.Context, roomID string) (bool, error)
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
@@ -174,6 +188,8 @@ type QueryResolver interface {
 	Messages(ctx context.Context, roomID string) ([]*model.Message, error)
 	Room(ctx context.Context, id string) (*model.Room, error)
 	MyDMRooms(ctx context.Context) ([]*model.Room, error)
+	MyCommunities(ctx context.Context) ([]*model.Community, error)
+	SearchCommunities(ctx context.Context, name string) ([]*model.Community, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -242,6 +258,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdministratorAuthPayload.Token(childComplexity), true
+
+	case "Community.createdAt":
+		if e.ComplexityRoot.Community.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.CreatedAt(childComplexity), true
+	case "Community.description":
+		if e.ComplexityRoot.Community.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.Description(childComplexity), true
+	case "Community.ID":
+		if e.ComplexityRoot.Community.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.ID(childComplexity), true
+	case "Community.name":
+		if e.ComplexityRoot.Community.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.Name(childComplexity), true
+	case "Community.roomID":
+		if e.ComplexityRoot.Community.RoomID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.RoomID(childComplexity), true
+	case "Community.updatedAt":
+		if e.ComplexityRoot.Community.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.UpdatedAt(childComplexity), true
 
 	case "Message.content":
 		if e.ComplexityRoot.Message.Content == nil {
@@ -314,6 +367,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateAdministrator(childComplexity, args["input"].(model.CreateAdministratorInput)), true
+	case "Mutation.createCommunity":
+		if e.ComplexityRoot.Mutation.CreateCommunity == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createCommunity_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateCommunity(childComplexity, args["input"].(model.CreateCommunityInput)), true
 	case "Mutation.createRoom":
 		if e.ComplexityRoot.Mutation.CreateRoom == nil {
 			break
@@ -369,6 +433,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.GetOrCreateDMRoom(childComplexity, args["targetUserID"].(string)), true
+	case "Mutation.joinRoom":
+		if e.ComplexityRoot.Mutation.JoinRoom == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_joinRoom_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.JoinRoom(childComplexity, args["roomID"].(string)), true
 	case "Mutation.loginAdministrator":
 		if e.ComplexityRoot.Mutation.LoginAdministrator == nil {
 			break
@@ -597,6 +672,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string)), true
+	case "Query.myCommunities":
+		if e.ComplexityRoot.Query.MyCommunities == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyCommunities(childComplexity), true
 	case "Query.myDMRooms":
 		if e.ComplexityRoot.Query.MyDMRooms == nil {
 			break
@@ -631,6 +712,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchAdministrators(childComplexity, args["name"].(string)), true
+	case "Query.searchCommunities":
+		if e.ComplexityRoot.Query.SearchCommunities == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchCommunities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SearchCommunities(childComplexity, args["name"].(string)), true
 	case "Query.searchUsers":
 		if e.ComplexityRoot.Query.SearchUsers == nil {
 			break
@@ -655,12 +747,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.CreatedAt(childComplexity), true
-	case "Room.description":
-		if e.ComplexityRoot.Room.Description == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Room.Description(childComplexity), true
 	case "Room.ID":
 		if e.ComplexityRoot.Room.ID == nil {
 			break
@@ -782,6 +868,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAddUserToRoomInput,
 		ec.unmarshalInputCreateAdministratorInput,
+		ec.unmarshalInputCreateCommunityInput,
 		ec.unmarshalInputCreateRoomInput,
 		ec.unmarshalInputCreateUserInput,
 		ec.unmarshalInputLoginInput,
@@ -923,6 +1010,17 @@ func (ec *executionContext) field_Mutation_createAdministrator_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createCommunity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateCommunityInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateCommunityInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createRoom_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -975,6 +1073,17 @@ func (ec *executionContext) field_Mutation_getOrCreateDMRoom_args(ctx context.Co
 		return nil, err
 	}
 	args["targetUserID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_joinRoom_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
 	return args, nil
 }
 
@@ -1176,6 +1285,17 @@ func (ec *executionContext) field_Query_room_args(ctx context.Context, rawArgs m
 }
 
 func (ec *executionContext) field_Query_searchAdministrators_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_searchCommunities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
@@ -1504,6 +1624,180 @@ func (ec *executionContext) fieldContext_AdministratorAuthPayload_administrator(
 	return fc, nil
 }
 
+func (ec *executionContext) _Community_ID(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_ID,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_roomID(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_roomID,
+		func(ctx context.Context) (any, error) {
+			return obj.RoomID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_name(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_description(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_updatedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Message_ID(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1594,8 +1888,6 @@ func (ec *executionContext) fieldContext_Message_room(_ context.Context, field g
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -2505,8 +2797,6 @@ func (ec *executionContext) fieldContext_Mutation_createRoom(ctx context.Context
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -2562,8 +2852,6 @@ func (ec *executionContext) fieldContext_Mutation_getOrCreateDMRoom(ctx context.
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -2662,6 +2950,102 @@ func (ec *executionContext) fieldContext_Mutation_removeUserFromRoom(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_removeUserFromRoom_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createCommunity(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createCommunity,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateCommunity(ctx, fc.Args["input"].(model.CreateCommunityInput))
+		},
+		nil,
+		ec.marshalNCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunity,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createCommunity(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Community_ID(ctx, field)
+			case "roomID":
+				return ec.fieldContext_Community_roomID(ctx, field)
+			case "name":
+				return ec.fieldContext_Community_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Community_description(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Community_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Community_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createCommunity_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_joinRoom(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_joinRoom,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().JoinRoom(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_joinRoom(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_joinRoom_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -3475,8 +3859,6 @@ func (ec *executionContext) fieldContext_Query_room(ctx context.Context, field g
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -3531,8 +3913,6 @@ func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, fiel
 				return ec.fieldContext_Room_type(ctx, field)
 			case "user":
 				return ec.fieldContext_Room_user(ctx, field)
-			case "description":
-				return ec.fieldContext_Room_description(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Room_createdAt(ctx, field)
 			case "updatedAt":
@@ -3540,6 +3920,104 @@ func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, fiel
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myCommunities(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_myCommunities,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyCommunities(ctx)
+		},
+		nil,
+		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_myCommunities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Community_ID(ctx, field)
+			case "roomID":
+				return ec.fieldContext_Community_roomID(ctx, field)
+			case "name":
+				return ec.fieldContext_Community_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Community_description(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Community_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Community_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_searchCommunities(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_searchCommunities,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SearchCommunities(ctx, fc.Args["name"].(string))
+		},
+		nil,
+		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_searchCommunities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Community_ID(ctx, field)
+			case "roomID":
+				return ec.fieldContext_Community_roomID(ctx, field)
+			case "name":
+				return ec.fieldContext_Community_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Community_description(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Community_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Community_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchCommunities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -3781,35 +4259,6 @@ func (ec *executionContext) fieldContext_Room_user(_ context.Context, field grap
 				return ec.fieldContext_User_updatedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Room_description(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Room_description,
-		func(ctx context.Context) (any, error) {
-			return obj.Description, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Room_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Room",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5796,8 +6245,8 @@ func (ec *executionContext) unmarshalInputCreateAdministratorInput(ctx context.C
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, obj any) (model.CreateRoomInput, error) {
-	var it model.CreateRoomInput
+func (ec *executionContext) unmarshalInputCreateCommunityInput(ctx context.Context, obj any) (model.CreateCommunityInput, error) {
+	var it model.CreateCommunityInput
 	if obj == nil {
 		return it, nil
 	}
@@ -5828,6 +6277,36 @@ func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, o
 				return it, err
 			}
 			it.Description = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, obj any) (model.CreateRoomInput, error) {
+	var it model.CreateRoomInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
 		}
 	}
 	return it, nil
@@ -6071,7 +6550,7 @@ func (ec *executionContext) unmarshalInputUpdateRoomInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description"}
+	fieldsInOrder := [...]string{"name"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -6085,13 +6564,6 @@ func (ec *executionContext) unmarshalInputUpdateRoomInput(ctx context.Context, o
 				return it, err
 			}
 			it.Name = data
-		case "description":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Description = data
 		}
 	}
 	return it, nil
@@ -6231,6 +6703,70 @@ func (ec *executionContext) _AdministratorAuthPayload(ctx context.Context, sel a
 			}
 		case "administrator":
 			out.Values[i] = ec._AdministratorAuthPayload_administrator(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var communityImplementors = []string{"Community"}
+
+func (ec *executionContext) _Community(ctx context.Context, sel ast.SelectionSet, obj *model.Community) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Community")
+		case "ID":
+			out.Values[i] = ec._Community_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roomID":
+			out.Values[i] = ec._Community_roomID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._Community_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._Community_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Community_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Community_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -6472,6 +7008,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "removeUserFromRoom":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeUserFromRoom(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createCommunity":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createCommunity(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "joinRoom":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_joinRoom(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -6832,6 +7382,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myCommunities":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myCommunities(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchCommunities":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchCommunities(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -6891,11 +7485,6 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "user":
 			out.Values[i] = ec._Room_user(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "description":
-			out.Values[i] = ec._Room_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -7475,8 +8064,43 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) marshalNCommunity2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunity(ctx context.Context, sel ast.SelectionSet, v model.Community) graphql.Marshaler {
+	return ec._Community(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Community) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunity(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunity(ctx context.Context, sel ast.SelectionSet, v *model.Community) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Community(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCreateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateAdministratorInput(ctx context.Context, v any) (model.CreateAdministratorInput, error) {
 	res, err := ec.unmarshalInputCreateAdministratorInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNCreateCommunityInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateCommunityInput(ctx context.Context, v any) (model.CreateCommunityInput, error) {
+	res, err := ec.unmarshalInputCreateCommunityInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
