@@ -555,7 +555,7 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 
 	u, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
 	if err != nil || u == nil {
-		return nil, nil
+		return nil, fmt.Errorf("user not found")
 	}
 
 	return r.buildProfile(ctx, u)

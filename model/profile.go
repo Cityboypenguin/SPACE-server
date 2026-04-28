@@ -4,9 +4,9 @@ import "time"
 
 // Profile はデータベースに保存するプロフィールの「箱」です
 type Profile struct {
-	UserID    int64 `json:"user_id"`
+	UserID    int64  `json:"user_id"`
 	Bio       string `json:"bio"`
-	Grade     int32    `json:"grade"`
+	Grade     int32  `json:"grade"`
 	Image     string `json:"image"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
@@ -16,7 +16,7 @@ type Profile struct {
 // 中身が空っぽ（nil）の可能性があるため、すべてポインタ（*）にしています
 type UpdateProfileParam struct {
 	Bio   *string `json:"bio"`
-	Grade *int32    `json:"grade"`
+	Grade *int32  `json:"grade"`
 	Image *string `json:"image"`
 }
 
