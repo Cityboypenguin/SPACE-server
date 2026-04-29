@@ -146,7 +146,7 @@ func main() {
 	e.Use(middleware.Recover())
 	// CORSはJWTより先に登録しないと、401レスポンスにCORSヘッダーが付かずブラウザがブロックする
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:5173"},
+		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{
 			echo.HeaderOrigin,
 			echo.HeaderContentType,
