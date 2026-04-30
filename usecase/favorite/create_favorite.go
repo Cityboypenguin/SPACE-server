@@ -34,10 +34,5 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 		return nil, err
 	}
 
-	err = uc.postRepo.IncrementPostFavoriteCount(ctx, favorite.Post.ID)
-	if err != nil {
-		return nil, err
-	}
-
 	return favorite, nil
 }

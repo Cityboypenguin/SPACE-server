@@ -6,9 +6,19 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(name: String!): [User!]!
+
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
+
+  posts: [Post!]!
+  topLevelPosts: [Post!]!
+  getPostByID(id: ID!): Post
+  getRepliesByPostID(post_id: ID!): [Post!]!
+  searchPosts(content: String!): [Post!]!
+  
+  favorites: [Favorite!]!
+  getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
   messages(roomID: ID!): [Message!]!
@@ -27,6 +37,8 @@ type User {
   status: String!
   createdAt: String!
   updatedAt: String!
+  posts: [Post!]!
+  favorites: [Favorite!]!
 }
 
 type Administrator {
@@ -35,6 +47,24 @@ type Administrator {
   email: String!
   createdAt: String!
   updatedAt: String!
+}
+
+type Post {
+  ID: ID!
+  content: String!
+  createdAt: String!
+  updatedAt: String!
+  user: User!
+  favorites: [Favorite!]!
+  parent: Post
+  replies: [Post!]!
+}
+
+type Favorite {
+  ID: ID!
+  user: User!
+  post: Post!
+  createdAt: String!
 }
 
 type UserAuthPayload {
@@ -61,12 +91,20 @@ type Mutation {
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
+
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!
   updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   refreshAdministratorToken(refreshToken: String!): AdministratorAuthPayload!
   logoutAdministrator(token: String!): Boolean!
+
+  createPost(input: CreatePostInput!): Post!
+  deletePost(id: ID!): Boolean!
+  updatePost(input: UpdatePostInput!): Post!
+
+  createFavorite(input: CreateFavoriteInput!): Favorite!
+  deleteFavorite(input: DeleteFavoriteInput!): Boolean!
   updateProfile(input: UpdateProfileInput!): Profile!
   sendMessage(roomID: ID!, content: String!): Message!
   createRoom(input: CreateRoomInput!): Room!
@@ -102,6 +140,10 @@ input UpdateUserInput {
   password: String
 }
 
+input CreatePostInput {
+  user_id: ID!
+  content: String!
+  parent_id: ID
 type Profile {
   userID: String!
   user: User!
@@ -123,6 +165,7 @@ input UpdateProfileInput {
 
 type Room {
   ID: ID!
+  content: String
   name: String!
   type: String!
   user: [User!]!
@@ -130,6 +173,15 @@ type Room {
   updatedAt: String!
 }
 
+input CreateFavoriteInput {
+  user_id: ID!
+  post_id: ID!
+}
+
+input DeleteFavoriteInput {
+  user_id: ID!
+  post_id: ID!
+}
 type Message {
   ID: ID!
   roomID: ID!

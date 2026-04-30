@@ -2,6 +2,7 @@ package post
 
 import (
 	"context"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -31,7 +32,10 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, id int64, param mod
 
 	post.UpdatePost(param)
 
-	err = uc.postRepo.SavePost(ctx, post)
+	now := time.Now()
+	post.UpdatedAt = now
+
+	err = uc.postRepo.UpdatePost(ctx, post)
 	if err != nil {
 		return nil, err
 	}

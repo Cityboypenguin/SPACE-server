@@ -113,9 +113,13 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 	for rows.Next() {
 		var favorite model.Favorite
 		favorite.Post = &model.Post{ID: postID}
-		if err := rows.Scan(&favorite.ID, &favorite.User, &favorite.CreatedAt); err != nil {
+		var createdAtUnix int64
+		var userID int64
+		if err := rows.Scan(&favorite.ID, &userID, &createdAtUnix); err != nil {
 			return nil, err
 		}
+		favorite.User = &model.User{ID: userID}
+		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
 		favorites = append(favorites, &favorite)
 	}
 
@@ -141,4 +145,38 @@ func (r *MySQLFavoriteRepository) GetFavoritesByUserID(ctx context.Context, user
 	}
 
 	return favorites, nil
+}
+
+func (r *MySQLFavoriteRepository) GetFavoriteByUserIDAndPostID(ctx context.Context, userID int64, postID int64) (*model.Favorite, error) {
+	query := `SELECT id, created_at FROM favorites WHERE user_id = ? AND post_id = ?`
+	row := r.DB.QueryRowContext(ctx, query, userID, postID)
+
+	var favorite model.Favorite
+	var createdAtUnix int64
+
+	favorite.User = &model.User{ID: userID}
+	favorite.Post = &model.Post{ID: postID}
+
+	if err := row.Scan(&favorite.ID, &createdAtUnix); err != nil {
+		return nil, err
+	}
+
+	favorite.CreatedAt = time.Unix(createdAtUnix, 0)
+
+	return &favorite, nil
+}
+
+func (r *MySQLFavoriteRepository) DeleteFavoriteByUserIDAndPostID(ctx context.Context, userID int64, postID int64) (bool, error) {
+	query := `DELETE FROM favorites WHERE user_id = ? AND post_id = ?`
+	result, err := r.DB.ExecContext(ctx, query, userID, postID)
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected > 0, nil
 }
