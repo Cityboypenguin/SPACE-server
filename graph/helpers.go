@@ -92,7 +92,6 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 		User:      toGraphUser(u),
 		Username:  u.AccountID,
 		Bio:       &p.Bio,
-		Grade:     &p.Grade,
 		Image:     &p.Image,
 		CreatedAt: p.CreatedAt.Format(timeFormat),
 		UpdatedAt: p.UpdatedAt.Format(timeFormat),

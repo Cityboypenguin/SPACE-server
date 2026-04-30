@@ -56,7 +56,6 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	emptyProfile := &model.Profile{
 		UserID:    user.ID, // 先ほど作られたユーザーの内部ID
 		Bio:       "",
-		Grade:     0, // 未設定は0とする
 		Image:     "",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

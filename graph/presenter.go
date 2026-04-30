@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"fmt"
+
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
@@ -89,5 +91,28 @@ func toGraphPost(post *model.Post, parent *gqlmodel.Post) *gqlmodel.Post {
 		Parent:    parent,
 		CreatedAt: post.CreatedAt.Format(timeFormat),
 		UpdatedAt: post.UpdatedAt.Format(timeFormat),
+	}
+}
+func toGraphProfile(user *model.User, profile *model.Profile) *gqlmodel.Profile {
+	if user == nil {
+		return nil
+	}
+	if profile == nil {
+		return &gqlmodel.Profile{
+			UserID:    encodeGraphID("user", user.ID),
+			User:      toGraphUser(user),
+			Username:  user.Name,
+			CreatedAt: "0",
+			UpdatedAt: "0",
+		}
+	}
+	return &gqlmodel.Profile{
+		UserID:    encodeGraphID("user", profile.UserID),
+		User:      toGraphUser(user),
+		Username:  user.Name,
+		Bio:       &profile.Bio,
+		Image:     &profile.Image,
+		CreatedAt: fmt.Sprintf("%d", profile.CreatedAt),
+		UpdatedAt: fmt.Sprintf("%d", profile.UpdatedAt),
 	}
 }
