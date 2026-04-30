@@ -2,7 +2,6 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
@@ -33,6 +32,7 @@ type Resolver struct {
 
 	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase
+	CountAdministratorsUseCase       administrator.CountAdministratorsUseCase
 	ListAdministratorsUseCase        administrator.ListAdministratorsUseCase
 	DeleteAdministratorUseCase       administrator.DeleteAdministratorUseCase
 	UpdateAdministratorUseCase       administrator.UpdateAdministratorUseCase
@@ -64,19 +64,18 @@ type Resolver struct {
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase
 	CreateRoomUseCase         roomusecase.CreateRoomUseCase
 	GetRoomUseCase            roomusecase.GetRoomUseCase
+	GetUserIDsByRoomIDUseCase roomusecase.GetUserIDsByRoomIDUseCase
+	ListUsersByRoomIDsUseCase roomusecase.ListUsersByRoomIDsUseCase
 	ListMyDMRoomsUseCase      roomusecase.ListMyDMRoomsUseCase
 	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
 	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
 	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
 	JoinRoomUseCase           roomusecase.JoinRoomUseCase
-	RoomUserRepository        repository.RoomUserRepository
-	UserRepository            repository.UserRepository
 
 	CreateCommunityUseCase   communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase      communityusecase.GetCommunityUseCase
 	SearchCommunityUseCase   communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase communityusecase.ListMyCommunitiesUseCase
-	AdministratorRepository  repository.AdministratorRepository
 
 	PubSub *pubsub.PubSub
 }

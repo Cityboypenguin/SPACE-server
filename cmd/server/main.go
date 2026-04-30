@@ -70,6 +70,7 @@ func main() {
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
+	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
 	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository)
@@ -111,6 +112,8 @@ func main() {
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
+	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
+	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
@@ -141,6 +144,7 @@ func main() {
 
 		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
 		CreateAdministratorUseCase:       createAdministratorUseCase,
+		CountAdministratorsUseCase:       countAdministratorsUseCase,
 		ListAdministratorsUseCase:        listAdministratorsUseCase,
 		DeleteAdministratorUseCase:       deleteAdministratorUseCase,
 		UpdateAdministratorUseCase:       updateAdministratorUseCase,
@@ -172,19 +176,18 @@ func main() {
 		ListMessagesUseCase:       listMessagesUseCase,
 		CreateRoomUseCase:         createRoomUseCase,
 		GetRoomUseCase:            getRoomUseCase,
+		GetUserIDsByRoomIDUseCase: getUserIDsByRoomIDUseCase,
+		ListUsersByRoomIDsUseCase: listUsersByRoomIDsUseCase,
 		ListMyDMRoomsUseCase:      listMyDMRoomsUseCase,
 		GetOrCreateDMRoomUseCase:  getOrCreateDMRoomUseCase,
 		AddUserToRoomUseCase:      addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase: removeUserFromRoomUseCase,
 		JoinRoomUseCase:           joinRoomUseCase,
-		RoomUserRepository:        roomUserRepository,
-		UserRepository:            userRepository,
 
 		CreateCommunityUseCase:   createCommunityUseCase,
 		GetCommunityUseCase:      getCommunityUseCase,
 		SearchCommunityUseCase:   searchCommunityUseCase,
 		ListMyCommunitiesUseCase: listMyCommunitiesUseCase,
-		AdministratorRepository:  administratorRepository,
 
 		PubSub: ps,
 	}

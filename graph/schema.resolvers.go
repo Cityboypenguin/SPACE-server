@@ -162,11 +162,11 @@ func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmod
 			return nil, errors.New("forbidden")
 		}
 	} else {
-		administrators, err := r.AdministratorRepository.ListAdministrators(ctx)
+		count, err := r.CountAdministratorsUseCase.Execute(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if len(administrators) > 0 {
+		if count > 0 {
 			return nil, errors.New("unauthorized")
 		}
 	}
@@ -424,7 +424,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -498,7 +498,7 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 		return nil, err
 	}
 
-	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, []int64{room.ID})
+	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{room.ID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load room members")
 	}
@@ -548,7 +548,7 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 		return true, nil
 	}
 
-	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify room membership")
 	}
@@ -1003,7 +1003,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -1020,7 +1020,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 	for _, msg := range msgs {
 		// Sender lookup here is internal data hydration for room members,
 		// so it must not use self/admin-only authorization.
-		u, err := r.UserRepository.GetUserByID(ctx, msg.UserID)
+		u, err := r.GetUserByIDUseCase.Execute(ctx, msg.UserID)
 		if err != nil {
 			log.Printf("[Messages] user lookup error: messageID=%d userID=%d err=%v", msg.ID, msg.UserID, err)
 			continue
@@ -1055,7 +1055,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		return nil, err
 	}
 
-	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -1063,7 +1063,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, []int64{rid})
+	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load room members")
 	}
@@ -1096,7 +1096,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 		roomIDs = append(roomIDs, room.ID)
 	}
 
-	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, roomIDs)
+	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load room members")
 	}
@@ -1155,7 +1155,7 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	memberIDs, err := r.RoomUserRepository.GetUserIDsByRoomID(ctx, rid)
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
