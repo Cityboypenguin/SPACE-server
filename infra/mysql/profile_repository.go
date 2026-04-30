@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
@@ -24,12 +25,15 @@ func (r *MySQLProfileRepository) GetProfileByUserID(ctx context.Context, userID 
 	row := r.DB.QueryRowContext(ctx, query, userID)
 
 	var p model.Profile
-	if err := row.Scan(&p.UserID, &p.Bio, &p.Grade, &p.Image, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	var createdAtUnix, updatedAtUnix int64
+	if err := row.Scan(&p.UserID, &p.Bio, &p.Grade, &p.Image, &createdAtUnix, &updatedAtUnix); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	p.CreatedAt = time.Unix(createdAtUnix, 0)
+	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 	return &p, nil
 }
 
@@ -43,6 +47,6 @@ func (r *MySQLProfileRepository) SaveProfile(ctx context.Context, p *model.Profi
 		image = VALUES(image),
 		updated_at = VALUES(updated_at)
 	`
-	_, err := r.DB.ExecContext(ctx, query, p.UserID, p.Bio, p.Grade, p.Image, p.CreatedAt, p.UpdatedAt)
+	_, err := r.DB.ExecContext(ctx, query, p.UserID, p.Bio, p.Grade, p.Image, p.CreatedAt.Unix(), p.UpdatedAt.Unix())
 	return err
 }
