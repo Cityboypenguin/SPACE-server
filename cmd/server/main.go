@@ -184,6 +184,7 @@ func main() {
 		GetCommunityUseCase:      getCommunityUseCase,
 		SearchCommunityUseCase:   searchCommunityUseCase,
 		ListMyCommunitiesUseCase: listMyCommunitiesUseCase,
+		AdministratorRepository:  administratorRepository,
 
 		PubSub: ps,
 	}

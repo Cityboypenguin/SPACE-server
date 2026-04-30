@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
@@ -156,8 +157,18 @@ func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, 
 
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
-		return nil, err
+	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+		if !isAdminRole(claims.Role) {
+			return nil, errors.New("forbidden")
+		}
+	} else {
+		administrators, err := r.AdministratorRepository.ListAdministrators(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(administrators) > 0 {
+			return nil, errors.New("unauthorized")
+		}
 	}
 
 	param := model.CreateAdministratorParam{

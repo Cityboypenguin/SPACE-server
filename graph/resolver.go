@@ -76,6 +76,7 @@ type Resolver struct {
 	GetCommunityUseCase      communityusecase.GetCommunityUseCase
 	SearchCommunityUseCase   communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase communityusecase.ListMyCommunitiesUseCase
+	AdministratorRepository  repository.AdministratorRepository
 
 	PubSub *pubsub.PubSub
 }
