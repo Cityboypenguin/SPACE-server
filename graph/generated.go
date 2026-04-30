@@ -126,7 +126,6 @@ type ComplexityRoot struct {
 		Image     func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
 		User      func(childComplexity int) int
-		UserID    func(childComplexity int) int
 		Username  func(childComplexity int) int
 	}
 
@@ -782,12 +781,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Profile.User(childComplexity), true
-	case "Profile.userID":
-		if e.ComplexityRoot.Profile.UserID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Profile.UserID(childComplexity), true
 	case "Profile.username":
 		if e.ComplexityRoot.Profile.Username == nil {
 			break
@@ -1358,8 +1351,6 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 
 func (ec *executionContext) childFields_Profile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
-	case "userID":
-		return ec.fieldContext_Profile_userID(ctx, field)
 	case "user":
 		return ec.fieldContext_Profile_user(ctx, field)
 	case "username":
@@ -4137,29 +4128,6 @@ func (ec *executionContext) fieldContext_Post_replies(_ context.Context, field g
 		},
 	}
 	return fc, nil
-}
-
-func (ec *executionContext) _Profile_userID(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Profile_userID(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.UserID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Profile_userID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Profile", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Profile_user(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
@@ -7292,7 +7260,7 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 		switch k {
 		case "userID":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNID2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -7364,20 +7332,20 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"userID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"accountID", "name", "email", "password"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "userID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+		case "accountID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("accountID"))
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.UserID = data
+			it.AccountID = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -8197,11 +8165,6 @@ func (ec *executionContext) _Profile(ctx context.Context, sel ast.SelectionSet, 
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Profile")
-		case "userID":
-			out.Values[i] = ec._Profile_userID(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "user":
 			out.Values[i] = ec._Profile_user(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

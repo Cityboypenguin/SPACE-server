@@ -106,7 +106,6 @@ type Post struct {
 }
 
 type Profile struct {
-	UserID    string  `json:"userID"`
 	User      *User   `json:"user"`
 	Username  string  `json:"username"`
 	Bio       *string `json:"bio,omitempty"`
@@ -159,10 +158,10 @@ type UpdateRoomInput struct {
 }
 
 type UpdateUserInput struct {
-	UserID   *string `json:"userID,omitempty"`
-	Name     *string `json:"name,omitempty"`
-	Email    *string `json:"email,omitempty"`
-	Password *string `json:"password,omitempty"`
+	AccountID string  `json:"accountID"`
+	Name      *string `json:"name,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	Password  *string `json:"password,omitempty"`
 }
 
 type User struct {

@@ -112,7 +112,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}
 
 	param := model.UpdateUserParam{
-		AccountID: input.UserID,
+		AccountID: &input.AccountID,
 		Name:      input.Name,
 		Email:     input.Email,
 		Password:  input.Password,
@@ -412,14 +412,7 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 
 	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
 
-	return &gqlmodel.Profile{
-		UserID:    encodeGraphID("user", p.UserID),
-		User:      toGraphUser(targetUser),
-		Bio:       &p.Bio,
-		Image:     &p.Image,
-		CreatedAt: strconv.FormatInt(p.CreatedAt.Unix(), 10),
-		UpdatedAt: strconv.FormatInt(p.UpdatedAt.Unix(), 10),
-	}, nil
+	return toGraphProfile(targetUser, p), nil
 }
 
 // SendMessage is the resolver for the sendMessage field.

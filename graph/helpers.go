@@ -79,7 +79,6 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 
 	if p == nil {
 		return &gqlmodel.Profile{
-			UserID:    encodeGraphID("user", u.ID),
 			User:      toGraphUser(u),
 			Username:  u.AccountID,
 			CreatedAt: "0",
@@ -88,7 +87,6 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 	}
 
 	return &gqlmodel.Profile{
-		UserID:    encodeGraphID("user", p.UserID),
 		User:      toGraphUser(u),
 		Username:  u.AccountID,
 		Bio:       &p.Bio,

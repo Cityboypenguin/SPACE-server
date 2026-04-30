@@ -135,7 +135,7 @@ input CreateUserInput {
 }
 
 input UpdateUserInput {
-  userID: String
+  accountID: String!
   name: String
   email: String
   password: String
@@ -153,7 +153,6 @@ input UpdatePostInput {
 }
 
 type Profile {
-  userID: String!
   user: User!
   username: String!
   bio: String
@@ -163,7 +162,7 @@ type Profile {
 }
 
 input UpdateProfileInput {
-  userID: String!
+  userID: ID!
   username: String
   bio: String
   image: String
