@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -19,7 +18,7 @@ import (
 
 // User is the resolver for the user field on Favorite.
 func (r *favoriteResolver) User(ctx context.Context, obj *gqlmodel.Favorite) (*gqlmodel.User, error) {
-	numericUserID, err := strconv.ParseInt(obj.User.ID, 10, 64)
+	numericUserID, err := decodeGraphID(ctx, "user", obj.User.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
@@ -32,7 +31,7 @@ func (r *favoriteResolver) User(ctx context.Context, obj *gqlmodel.Favorite) (*g
 
 // Post is the resolver for the post field on Favorite.
 func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*gqlmodel.Post, error) {
-	numericPostID, err := strconv.ParseInt(obj.Post.ID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", obj.Post.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id: %s", obj.Post.ID)
 	}
@@ -47,17 +46,10 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 
 	var gqlParent *gqlmodel.Post
 	if post.Parent != nil {
-		gqlParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", post.Parent.ID)}
+		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
 	}
 
-	return &gqlmodel.Post{
-		ID:        fmt.Sprintf("%d", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-		Parent:    gqlParent,
-	}, nil
+	return toGraphPost(post, gqlParent), nil
 }
 
 // CreateUser is the resolver for the createUser field.
@@ -359,10 +351,10 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	}
 
 	return &gqlmodel.Favorite{
-		ID:        fmt.Sprintf("%d", favorite.ID),
+		ID:        encodeGraphID("favorite", favorite.ID),
 		CreatedAt: favorite.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", favorite.User.ID)},
-		Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", favorite.Post.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", favorite.User.ID)},
+		Post:      &gqlmodel.Post{ID: encodeGraphID("post", favorite.Post.ID)},
 	}, nil
 }
 
@@ -608,7 +600,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 
 // User is the resolver for the user field on Post.
 func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.User, error) {
-	numericUserID, err := strconv.ParseInt(obj.User.ID, 10, 64)
+	numericUserID, err := decodeGraphID(ctx, "user", obj.User.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
@@ -925,10 +917,10 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 	var gqlFavorites []*gqlmodel.Favorite
 	for _, f := range favorites {
 		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        fmt.Sprintf("%d", f.ID),
+			ID:        encodeGraphID("favorite", f.ID),
 			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", f.User.ID)},
-			Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", f.Post.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
+			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
 		})
 	}
 	return gqlFavorites, nil
@@ -936,7 +928,7 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 
 // GetFavoriteByID is the resolver for the getFavoriteByID field.
 func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmodel.Favorite, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "favorite", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid favorite id: %s", id)
 	}
@@ -950,10 +942,10 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 	}
 
 	return &gqlmodel.Favorite{
-		ID:        fmt.Sprintf("%d", f.ID),
+		ID:        encodeGraphID("favorite", f.ID),
 		CreatedAt: f.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", f.User.ID)},
-		Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", f.Post.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
+		Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
 	}, nil
 }
 

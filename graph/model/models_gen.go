@@ -42,7 +42,6 @@ type CreateCommunityInput struct {
 }
 
 type CreateFavoriteInput struct {
-	UserID string `json:"user_id"`
 	PostID string `json:"post_id"`
 }
 
@@ -63,7 +62,6 @@ type CreateUserInput struct {
 }
 
 type DeleteFavoriteInput struct {
-	UserID string `json:"user_id"`
 	PostID string `json:"post_id"`
 }
 

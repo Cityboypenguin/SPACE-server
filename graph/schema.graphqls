@@ -178,12 +178,10 @@ type Room {
 }
 
 input CreateFavoriteInput {
-  user_id: ID!
   post_id: ID!
 }
 
 input DeleteFavoriteInput {
-  user_id: ID!
   post_id: ID!
 }
 type Message {

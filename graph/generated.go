@@ -6897,20 +6897,13 @@ func (ec *executionContext) unmarshalInputCreateFavoriteInput(ctx context.Contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"user_id", "post_id"}
+	fieldsInOrder := [...]string{"post_id"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "user_id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("user_id"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.UserID = data
 		case "post_id":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("post_id"))
 			data, err := ec.unmarshalNID2string(ctx, v)
@@ -7052,20 +7045,13 @@ func (ec *executionContext) unmarshalInputDeleteFavoriteInput(ctx context.Contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"user_id", "post_id"}
+	fieldsInOrder := [...]string{"post_id"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "user_id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("user_id"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.UserID = data
 		case "post_id":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("post_id"))
 			data, err := ec.unmarshalNID2string(ctx, v)
