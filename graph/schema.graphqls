@@ -161,7 +161,6 @@ type Profile {
 }
 
 input UpdateProfileInput {
-  userID: ID!
   username: String
   bio: String
   image: String

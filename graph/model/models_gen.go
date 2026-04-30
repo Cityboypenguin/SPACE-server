@@ -144,7 +144,6 @@ type UpdatePostInput struct {
 }
 
 type UpdateProfileInput struct {
-	UserID   string  `json:"userID"`
 	Username *string `json:"username,omitempty"`
 	Bio      *string `json:"bio,omitempty"`
 	Image    *string `json:"image,omitempty"`
@@ -155,7 +154,7 @@ type UpdateRoomInput struct {
 }
 
 type UpdateUserInput struct {
-	AccountID string  `json:"accountID"`
+	AccountID *string `json:"accountID,omitempty"`
 	Name      *string `json:"name,omitempty"`
 	Email     *string `json:"email,omitempty"`
 	Password  *string `json:"password,omitempty"`

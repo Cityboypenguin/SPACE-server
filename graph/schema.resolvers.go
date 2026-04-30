@@ -104,7 +104,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}
 
 	param := model.UpdateUserParam{
-		AccountID: &input.AccountID,
+		AccountID: input.AccountID,
 		Name:      input.Name,
 		Email:     input.Email,
 		Password:  input.Password,
@@ -375,15 +375,12 @@ func (r *mutationResolver) DeleteFavorite(ctx context.Context, input gqlmodel.De
 
 // UpdateProfile is the resolver for the updateProfile field.
 func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
-	_, err := requireAuth(ctx)
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	numericUserID, err := decodeGraphID(ctx, "user", input.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id format")
-	}
+	numericUserID := claims.ID
 
 	if _, err := requireSelfOrAdmin(ctx, numericUserID, "update_profile"); err != nil {
 		return nil, err
