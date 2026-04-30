@@ -76,7 +76,6 @@ type Profile struct {
 	User      *User   `json:"user"`
 	Username  string  `json:"username"`
 	Bio       *string `json:"bio,omitempty"`
-	Grade     *int32  `json:"grade,omitempty"`
 	Image     *string `json:"image,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 	UpdatedAt string  `json:"updatedAt"`
@@ -112,7 +111,6 @@ type UpdateProfileInput struct {
 	UserID   string  `json:"userID"`
 	Username *string `json:"username,omitempty"`
 	Bio      *string `json:"bio,omitempty"`
-	Grade    *int32  `json:"grade,omitempty"`
 	Image    *string `json:"image,omitempty"`
 }
 
@@ -121,6 +119,7 @@ type UpdateRoomInput struct {
 }
 
 type UpdateUserInput struct {
+	UserID   *string `json:"userID,omitempty"`
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`

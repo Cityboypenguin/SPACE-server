@@ -97,6 +97,7 @@ input CreateUserInput {
 }
 
 input UpdateUserInput {
+  userID: String
   name: String
   email: String
   password: String
@@ -107,7 +108,6 @@ type Profile {
   user: User!
   username: String!
   bio: String
-  grade: Int
   image: String
   createdAt: String!
   updatedAt: String!
@@ -117,7 +117,6 @@ input UpdateProfileInput {
   userID: String!
   username: String
   bio: String
-  grade: Int
   image: String
 }
 

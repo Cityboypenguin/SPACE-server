@@ -6,7 +6,6 @@ import "time"
 type Profile struct {
 	UserID    int64  `json:"user_id"`
 	Bio       string `json:"bio"`
-	Grade     int32  `json:"grade"`
 	Image     string `json:"image"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
@@ -16,7 +15,6 @@ type Profile struct {
 // 中身が空っぽ（nil）の可能性があるため、すべてポインタ（*）にしています
 type UpdateProfileParam struct {
 	Bio   *string `json:"bio"`
-	Grade *int32  `json:"grade"`
 	Image *string `json:"image"`
 }
 
@@ -24,9 +22,6 @@ type UpdateProfileParam struct {
 func (p *Profile) UpdateProfile(param UpdateProfileParam) {
 	if param.Bio != nil {
 		p.Bio = *param.Bio
-	}
-	if param.Grade != nil {
-		p.Grade = *param.Grade
 	}
 	if param.Image != nil {
 		p.Image = *param.Image

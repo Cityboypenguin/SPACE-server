@@ -67,6 +67,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}
 
 	param := model.UpdateUserParam{
+	    UserID:   input.UserID,
 		Name:     input.Name,
 		Email:    input.Email,
 		Password: input.Password,
@@ -234,7 +235,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 
 	param := model.UpdateProfileParam{
 		Bio:   input.Bio,
-		Grade: input.Grade,
 		Image: input.Image,
 	}
 
@@ -249,7 +249,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 		UserID:    encodeGraphID("user", p.UserID),
 		User:      toGraphUser(targetUser),
 		Bio:       &p.Bio,
-		Grade:     &p.Grade,
 		Image:     &p.Image,
 		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
 		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),

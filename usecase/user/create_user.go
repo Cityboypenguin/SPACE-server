@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"time"
+
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -49,7 +50,6 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	emptyProfile := &model.Profile{
 		UserID:    user.ID, // 先ほど作られたユーザーの内部ID
 		Bio:       "",
-		Grade:     0,       // 未設定は0とする
 		Image:     "",
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),

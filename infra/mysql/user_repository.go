@@ -226,11 +226,12 @@ func (r *MySQLUserRepository) FindByEmail(ctx context.Context, email string) (*m
 func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) error {
 	query := `
 		UPDATE users
-		SET name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
+		SET user_id = ?, name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
 		WHERE id = ?
 	`
 
 	_, err := r.DB.ExecContext(ctx, query,
+		u.UserID,
 		u.Name,
 		u.Email,
 		u.HashedPassword,

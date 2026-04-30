@@ -97,7 +97,6 @@ type ComplexityRoot struct {
 	Profile struct {
 		Bio       func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
-		Grade     func(childComplexity int) int
 		Image     func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
 		User      func(childComplexity int) int
@@ -578,12 +577,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Profile.CreatedAt(childComplexity), true
-	case "Profile.grade":
-		if e.ComplexityRoot.Profile.Grade == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Profile.Grade(childComplexity), true
 	case "Profile.image":
 		if e.ComplexityRoot.Profile.Image == nil {
 			break
@@ -2679,8 +2672,6 @@ func (ec *executionContext) fieldContext_Mutation_updateProfile(ctx context.Cont
 				return ec.fieldContext_Profile_username(ctx, field)
 			case "bio":
 				return ec.fieldContext_Profile_bio(ctx, field)
-			case "grade":
-				return ec.fieldContext_Profile_grade(ctx, field)
 			case "image":
 				return ec.fieldContext_Profile_image(ctx, field)
 			case "createdAt":
@@ -3186,35 +3177,6 @@ func (ec *executionContext) fieldContext_Profile_bio(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Profile_grade(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Profile_grade,
-		func(ctx context.Context) (any, error) {
-			return obj.Grade, nil
-		},
-		nil,
-		ec.marshalOInt2ᚖint32,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Profile_grade(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Profile",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Profile_image(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3693,8 +3655,6 @@ func (ec *executionContext) fieldContext_Query_myProfile(_ context.Context, fiel
 				return ec.fieldContext_Profile_username(ctx, field)
 			case "bio":
 				return ec.fieldContext_Profile_bio(ctx, field)
-			case "grade":
-				return ec.fieldContext_Profile_grade(ctx, field)
 			case "image":
 				return ec.fieldContext_Profile_image(ctx, field)
 			case "createdAt":
@@ -3741,8 +3701,6 @@ func (ec *executionContext) fieldContext_Query_getProfileByUserID(ctx context.Co
 				return ec.fieldContext_Profile_username(ctx, field)
 			case "bio":
 				return ec.fieldContext_Profile_bio(ctx, field)
-			case "grade":
-				return ec.fieldContext_Profile_grade(ctx, field)
 			case "image":
 				return ec.fieldContext_Profile_image(ctx, field)
 			case "createdAt":
@@ -6492,7 +6450,7 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"userID", "username", "bio", "grade", "image"}
+	fieldsInOrder := [...]string{"userID", "username", "bio", "image"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -6520,13 +6478,6 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 				return it, err
 			}
 			it.Bio = data
-		case "grade":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("grade"))
-			data, err := ec.unmarshalOInt2ᚖint32(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Grade = data
 		case "image":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("image"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -6580,13 +6531,20 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "password"}
+	fieldsInOrder := [...]string{"userID", "name", "email", "password"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "userID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.UserID = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -7077,8 +7035,6 @@ func (ec *executionContext) _Profile(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "bio":
 			out.Values[i] = ec._Profile_bio(ctx, field, obj)
-		case "grade":
-			out.Values[i] = ec._Profile_grade(ctx, field, obj)
 		case "image":
 			out.Values[i] = ec._Profile_image(ctx, field, obj)
 		case "createdAt":
@@ -8464,24 +8420,6 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
-	return res
-}
-
-func (ec *executionContext) unmarshalOInt2ᚖint32(ctx context.Context, v any) (*int32, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := graphql.UnmarshalInt32(v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOInt2ᚖint32(ctx context.Context, sel ast.SelectionSet, v *int32) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	_ = sel
-	_ = ctx
-	res := graphql.MarshalInt32(*v)
 	return res
 }
 
