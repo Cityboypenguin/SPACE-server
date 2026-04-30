@@ -275,9 +275,9 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 
 	var numericParentID *int64
 	if input.ParentID != nil {
-		parentID, err := strconv.ParseInt(*input.ParentID, 10, 64)
+		parentID, err := decodeGraphID(ctx, "post", *input.ParentID)
 		if err != nil {
-			return nil, fmt.Errorf("invalid parent post id: %s", *input.ParentID)
+			return nil, fmt.Errorf("invalid parent post id")
 		}
 		numericParentID = &parentID
 	}
@@ -296,14 +296,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		gqlParent = &gqlmodel.Post{ID: *input.ParentID}
 	}
 
-	return &gqlmodel.Post{
-		ID:        fmt.Sprintf("%d", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-		Parent:    gqlParent,
-	}, nil
+	return toGraphPost(post, gqlParent), nil
 }
 
 // DeletePost is the resolver for the deletePost field.
@@ -312,9 +305,9 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 		return false, err
 	}
 
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "post", id)
 	if err != nil {
-		return false, fmt.Errorf("invalid post id: %s", id)
+		return false, fmt.Errorf("invalid post id")
 	}
 
 	return r.DeletePostUseCase.Execute(ctx, numericID)
@@ -326,9 +319,9 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	numericID, err := strconv.ParseInt(input.ID, 10, 64)
+	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", input.ID)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, model.UpdatePostParam{
@@ -354,9 +347,9 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		return nil, err
 	}
 
-	numericPostID, err := strconv.ParseInt(input.PostID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", input.PostID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", input.PostID)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	favorite, err := r.CreateFavoriteUseCase.Execute(ctx, model.CreateFavoriteParam{
@@ -382,9 +375,9 @@ func (r *mutationResolver) DeleteFavorite(ctx context.Context, input gqlmodel.De
 		return false, err
 	}
 
-	numericPostID, err := strconv.ParseInt(input.PostID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", input.PostID)
 	if err != nil {
-		return false, fmt.Errorf("invalid post id: %s", input.PostID)
+		return false, fmt.Errorf("invalid post id")
 	}
 
 	return r.DeleteFavoriteByUserIDAndPostIDUseCase.Execute(ctx, claims.ID, numericPostID)
@@ -627,9 +620,9 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 
 // Favorites is the resolver for the favorites field on Post.
 func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Favorite, error) {
-	numericPostID, err := strconv.ParseInt(obj.ID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", obj.ID)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericPostID)
@@ -640,10 +633,10 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 	var gqlFavorites []*gqlmodel.Favorite
 	for _, f := range favorites {
 		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        fmt.Sprintf("%d", f.ID),
+			ID:        encodeGraphID("favorite", f.ID),
 			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", f.User.ID)},
-			Post:      &gqlmodel.Post{ID: fmt.Sprintf("%d", f.Post.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
+			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
 		})
 	}
 	return gqlFavorites, nil
@@ -654,9 +647,9 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 	if obj.Parent == nil {
 		return nil, nil
 	}
-	numericParentID, err := strconv.ParseInt(obj.Parent.ID, 10, 64)
+	numericParentID, err := decodeGraphID(ctx, "post", obj.Parent.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid parent post id: %s", obj.Parent.ID)
+		return nil, fmt.Errorf("invalid parent post id")
 	}
 
 	parent, err := r.GetPostByIDUseCase.Execute(ctx, numericParentID)
@@ -669,24 +662,24 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 
 	var gqlGrandParent *gqlmodel.Post
 	if parent.Parent != nil && parent.Parent.ID != 0 {
-		gqlGrandParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", parent.Parent.ID)}
+		gqlGrandParent = &gqlmodel.Post{ID: encodeGraphID("post", parent.Parent.ID)}
 	}
 
 	return &gqlmodel.Post{
-		ID:        fmt.Sprintf("%d", parent.ID),
+		ID:        encodeGraphID("post", parent.ID),
 		Content:   parent.Content,
 		CreatedAt: parent.CreatedAt.Format(timeFormat),
 		UpdatedAt: parent.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", parent.User.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", parent.User.ID)},
 		Parent:    gqlGrandParent,
 	}, nil
 }
 
 // Replies is the resolver for the replies field on Post.
 func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Post, error) {
-	numericPostID, err := strconv.ParseInt(obj.ID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", obj.ID)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID)
@@ -697,11 +690,11 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 	var gqlReplies []*gqlmodel.Post
 	for _, reply := range replies {
 		gqlReplies = append(gqlReplies, &gqlmodel.Post{
-			ID:        fmt.Sprintf("%d", reply.ID),
+			ID:        encodeGraphID("post", reply.ID),
 			Content:   reply.Content,
 			CreatedAt: reply.CreatedAt.Format(timeFormat),
 			UpdatedAt: reply.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", reply.User.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", reply.User.ID)},
 			Parent:    &gqlmodel.Post{ID: obj.ID},
 		})
 	}
@@ -842,13 +835,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID:        fmt.Sprintf("%d", post.ID),
-			Content:   post.Content,
-			CreatedAt: post.CreatedAt.Format(timeFormat),
-			UpdatedAt: post.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-		})
+		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
 	}
 	return gqlPosts, nil
 }
@@ -862,22 +849,16 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID:        fmt.Sprintf("%d", post.ID),
-			Content:   post.Content,
-			CreatedAt: post.CreatedAt.Format(timeFormat),
-			UpdatedAt: post.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-		})
+		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
 	}
 	return gqlPosts, nil
 }
 
 // GetPostByID is the resolver for the getPostByID field.
 func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.Post, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	numericID, err := decodeGraphID(ctx, "post", id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", id)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	post, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
@@ -890,24 +871,17 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 
 	var gqlParent *gqlmodel.Post
 	if post.Parent != nil {
-		gqlParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", post.Parent.ID)}
+		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
 	}
 
-	return &gqlmodel.Post{
-		ID:        fmt.Sprintf("%d", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-		Parent:    gqlParent,
-	}, nil
+	return toGraphPost(post, gqlParent), nil
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
 func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) ([]*gqlmodel.Post, error) {
-	numericPostID, err := strconv.ParseInt(postID, 10, 64)
+	numericPostID, err := decodeGraphID(ctx, "post", postID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid post id: %s", postID)
+		return nil, fmt.Errorf("invalid post id")
 	}
 
 	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID)
@@ -917,14 +891,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 
 	var gqlReplies []*gqlmodel.Post
 	for _, reply := range replies {
-		gqlReplies = append(gqlReplies, &gqlmodel.Post{
-			ID:        fmt.Sprintf("%d", reply.ID),
-			Content:   reply.Content,
-			CreatedAt: reply.CreatedAt.Format(timeFormat),
-			UpdatedAt: reply.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", reply.User.ID)},
-			Parent:    &gqlmodel.Post{ID: postID},
-		})
+		gqlReplies = append(gqlReplies, toGraphPost(reply, &gqlmodel.Post{ID: postID}))
 	}
 	return gqlReplies, nil
 }
@@ -940,16 +907,9 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 	for _, post := range posts {
 		var gqlParent *gqlmodel.Post
 		if post.Parent != nil {
-			gqlParent = &gqlmodel.Post{ID: fmt.Sprintf("%d", post.Parent.ID)}
+			gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
 		}
-		gqlPosts = append(gqlPosts, &gqlmodel.Post{
-			ID:        fmt.Sprintf("%d", post.ID),
-			Content:   post.Content,
-			CreatedAt: post.CreatedAt.Format(timeFormat),
-			UpdatedAt: post.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
-			Parent:    gqlParent,
-		})
+		gqlPosts = append(gqlPosts, toGraphPost(post, gqlParent))
 	}
 	return gqlPosts, nil
 }

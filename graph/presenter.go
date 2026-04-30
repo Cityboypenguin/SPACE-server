@@ -76,3 +76,18 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
 }
+
+func toGraphPost(post *model.Post, parent *gqlmodel.Post) *gqlmodel.Post {
+	if post == nil {
+		return nil
+	}
+
+	return &gqlmodel.Post{
+		ID:        encodeGraphID("post", post.ID),
+		User:      toGraphUser(post.User),
+		Content:   post.Content,
+		Parent:    parent,
+		CreatedAt: post.CreatedAt.Format(timeFormat),
+		UpdatedAt: post.UpdatedAt.Format(timeFormat),
+	}
+}
