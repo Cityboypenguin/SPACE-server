@@ -59,6 +59,9 @@ func (u *User) CreateUser(param CreateUserParam) error {
 }
 
 func (u *User) UpdateUser(param UpdateUserParam) error {
+	if param.AccountID != nil {
+		u.AccountID = *param.AccountID
+	}
 	if param.Name != nil {
 		u.Name = *param.Name
 	}
