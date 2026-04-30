@@ -4,7 +4,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
-	"github.com/Cityboypenguin/SPACE-server/usecase/comment"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
@@ -32,14 +31,15 @@ type Resolver struct {
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
 
-	GetAdministratorByIDUseCase administrator.GetAdministratorByIDUseCase
-	CreateAdministratorUseCase  administrator.CreateAdministratorUseCase
-	ListAdministratorsUseCase   administrator.ListAdministratorsUseCase
-	DeleteAdministratorUseCase  administrator.DeleteAdministratorUseCase
-	UpdateAdministratorUseCase  administrator.UpdateAdministratorUseCase
-	SearchAdministratorsUseCase administrator.SearchAdministratorsUseCase
-	LoginAdministratorUseCase   administrator.LoginAdministratorUseCase
-	LogoutAdministratorUseCase  administrator.LogoutAdministratorUseCase
+	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
+	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase
+	ListAdministratorsUseCase        administrator.ListAdministratorsUseCase
+	DeleteAdministratorUseCase       administrator.DeleteAdministratorUseCase
+	UpdateAdministratorUseCase       administrator.UpdateAdministratorUseCase
+	SearchAdministratorsUseCase      administrator.SearchAdministratorsUseCase
+	LoginAdministratorUseCase        administrator.LoginAdministratorUseCase
+	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
+	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
 	GetPostByIDUseCase       post.GetPostByIDUseCase
 	CreatePostUseCase        post.CreatePostUseCase
@@ -59,27 +59,6 @@ type Resolver struct {
 	GetFavoritesByPostIDUseCase            favorite.GetFavoritesByPostIDUseCase
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
 	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
-	GetPostByIDUseCase                     post.GetPostByIDUseCase
-	GetPostsByUserIDUseCase                post.GetPostsByUserIDUseCase
-	CreatePostUseCase                      post.CreatePostUseCase
-	ListPostsUseCase                       post.ListPostsUseCase
-	DeletePostUseCase                      post.DeletePostUseCase
-	UpdatePostUseCase                      post.UpdatePostUseCase
-	SearchPostsUseCase                     post.SearchPostsUseCase
-
-	GetCommentByIDUseCase      comment.GetCommentByIDUseCase
-	CreateCommentUseCase       comment.CreateCommentUseCase
-	DeleteCommentUseCase       comment.DeleteCommentUseCase
-	UpdateCommentUseCase       comment.UpdateCommentUseCase
-	GetCommentsByPostIDUseCase comment.GetCommentsByPostIDUseCase
-	ListCommentsUseCase        comment.ListCommentsUseCase
-
-	GetFavoriteByIDUseCase           favorite.GetFavoriteByIDUseCase
-	CreateFavoriteUseCase            favorite.CreateFavoriteUseCase
-	DeleteFavoriteUseCase            favorite.DeleteFavoriteUseCase
-	GetFavoritesByPostIDUseCase      favorite.GetFavoritesByPostIDUseCase
-	ListFavoritesUseCase             favorite.ListFavoritesUseCase
-	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 
 	SendMessageUseCase        messageusecase.SendMessageUseCase
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase
