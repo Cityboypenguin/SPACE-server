@@ -135,7 +135,7 @@ input CreateUserInput {
 }
 
 input UpdateUserInput {
-  accountID: String!
+  accountID: String
   name: String
   email: String
   password: String
