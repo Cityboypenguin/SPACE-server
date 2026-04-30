@@ -239,7 +239,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 
 	query := `
 		UPDATE users
-		SET user_id = ?, name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
+		SET account_id = ?, name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
 		WHERE id = ?
 	`
 
