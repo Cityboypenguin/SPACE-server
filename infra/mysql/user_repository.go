@@ -241,7 +241,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 	`
 
 	_, err := r.DB.ExecContext(ctx, query,
-		u.UserID,
+		u.AccountID,
 		u.Name,
 		u.Email,
 		u.HashedPassword,

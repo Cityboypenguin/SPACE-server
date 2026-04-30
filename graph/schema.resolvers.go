@@ -112,10 +112,10 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	}
 
 	param := model.UpdateUserParam{
-	    UserID:   input.UserID,
-		Name:     input.Name,
-		Email:    input.Email,
-		Password: input.Password,
+		AccountID: input.UserID,
+		Name:      input.Name,
+		Email:     input.Email,
+		Password:  input.Password,
 	}
 
 	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param)

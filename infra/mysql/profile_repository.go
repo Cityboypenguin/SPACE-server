@@ -26,8 +26,7 @@ func (r *MySQLProfileRepository) GetProfileByUserID(ctx context.Context, userID 
 
 	var p model.Profile
 	var createdAtUnix, updatedAtUnix int64
-	if err := row.Scan(&p.UserID, &p.Bio, &p.Grade, &p.Image, &createdAtUnix, &updatedAtUnix); err != nil {
-	if err := row.Scan(&p.UserID, &p.Bio, &p.Image, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.UserID, &p.Bio, &p.Image, &createdAtUnix, &updatedAtUnix); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -47,7 +46,6 @@ func (r *MySQLProfileRepository) SaveProfile(ctx context.Context, p *model.Profi
 		image = VALUES(image),
 		updated_at = VALUES(updated_at)
 	`
-	_, err := r.DB.ExecContext(ctx, query, p.UserID, p.Bio, p.Grade, p.Image, p.CreatedAt.Unix(), p.UpdatedAt.Unix())
-	_, err := r.DB.ExecContext(ctx, query, p.UserID, p.Bio, p.Image, p.CreatedAt, p.UpdatedAt)
+	_, err := r.DB.ExecContext(ctx, query, p.UserID, p.Bio, p.Image, p.CreatedAt.Unix(), p.UpdatedAt.Unix())
 	return err
 }

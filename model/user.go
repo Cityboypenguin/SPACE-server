@@ -28,7 +28,6 @@ type CreateUserParam struct {
 }
 
 type UpdateUserParam struct {
-	UserID   *string `json:"user_id,omitempty"`
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
@@ -59,9 +58,6 @@ func (u *User) CreateUser(param CreateUserParam) error {
 }
 
 func (u *User) UpdateUser(param UpdateUserParam) error {
-	if param.UserID != nil {
-		u.UserID = *param.UserID
-	}
 	if param.Name != nil {
 		u.Name = *param.Name
 	}

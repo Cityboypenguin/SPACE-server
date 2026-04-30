@@ -1366,8 +1366,6 @@ func (ec *executionContext) childFields_Profile(ctx context.Context, field graph
 		return ec.fieldContext_Profile_username(ctx, field)
 	case "bio":
 		return ec.fieldContext_Profile_bio(ctx, field)
-	case "grade":
-		return ec.fieldContext_Profile_grade(ctx, field)
 	case "image":
 		return ec.fieldContext_Profile_image(ctx, field)
 	case "createdAt":
@@ -3596,27 +3594,7 @@ func (ec *executionContext) fieldContext_Mutation_updateProfile(ctx context.Cont
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-<<<<<<< HEAD
-			switch field.Name {
-			case "userID":
-				return ec.fieldContext_Profile_userID(ctx, field)
-			case "user":
-				return ec.fieldContext_Profile_user(ctx, field)
-			case "username":
-				return ec.fieldContext_Profile_username(ctx, field)
-			case "bio":
-				return ec.fieldContext_Profile_bio(ctx, field)
-			case "image":
-				return ec.fieldContext_Profile_image(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Profile_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Profile_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Profile", field.Name)
-=======
 			return ec.childFields_Profile(ctx, field)
->>>>>>> 55b5bd76599a361662ac8f347b4873484f083123
 		},
 	}
 	defer func() {
@@ -4262,32 +4240,6 @@ func (ec *executionContext) fieldContext_Profile_bio(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Profile", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-<<<<<<< HEAD
-=======
-func (ec *executionContext) _Profile_grade(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Profile_grade(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Grade, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
-			return ec.marshalOInt2ᚖint32(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Profile_grade(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Profile", field, false, false, errors.New("field of type Int does not have child fields"))
-}
-
->>>>>>> 55b5bd76599a361662ac8f347b4873484f083123
 func (ec *executionContext) _Profile_image(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4927,27 +4879,7 @@ func (ec *executionContext) fieldContext_Query_myProfile(_ context.Context, fiel
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-<<<<<<< HEAD
-			switch field.Name {
-			case "userID":
-				return ec.fieldContext_Profile_userID(ctx, field)
-			case "user":
-				return ec.fieldContext_Profile_user(ctx, field)
-			case "username":
-				return ec.fieldContext_Profile_username(ctx, field)
-			case "bio":
-				return ec.fieldContext_Profile_bio(ctx, field)
-			case "image":
-				return ec.fieldContext_Profile_image(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Profile_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Profile_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Profile", field.Name)
-=======
 			return ec.childFields_Profile(ctx, field)
->>>>>>> 55b5bd76599a361662ac8f347b4873484f083123
 		},
 	}
 	return fc, nil
@@ -4980,27 +4912,7 @@ func (ec *executionContext) fieldContext_Query_getProfileByUserID(ctx context.Co
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-<<<<<<< HEAD
-			switch field.Name {
-			case "userID":
-				return ec.fieldContext_Profile_userID(ctx, field)
-			case "user":
-				return ec.fieldContext_Profile_user(ctx, field)
-			case "username":
-				return ec.fieldContext_Profile_username(ctx, field)
-			case "bio":
-				return ec.fieldContext_Profile_bio(ctx, field)
-			case "image":
-				return ec.fieldContext_Profile_image(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Profile_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Profile_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Profile", field.Name)
-=======
 			return ec.childFields_Profile(ctx, field)
->>>>>>> 55b5bd76599a361662ac8f347b4873484f083123
 		},
 	}
 	defer func() {
@@ -9930,8 +9842,6 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-<<<<<<< HEAD
-=======
 func (ec *executionContext) marshalOFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavorite(ctx context.Context, sel ast.SelectionSet, v *model.Favorite) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -9957,24 +9867,6 @@ func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalOInt2ᚖint32(ctx context.Context, v any) (*int32, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := graphql.UnmarshalInt32(v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOInt2ᚖint32(ctx context.Context, sel ast.SelectionSet, v *int32) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	_ = sel
-	_ = ctx
-	res := graphql.MarshalInt32(*v)
-	return res
-}
-
 func (ec *executionContext) marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx context.Context, sel ast.SelectionSet, v *model.Post) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -9982,7 +9874,6 @@ func (ec *executionContext) marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPAC
 	return ec._Post(ctx, sel, v)
 }
 
->>>>>>> 55b5bd76599a361662ac8f347b4873484f083123
 func (ec *executionContext) marshalOProfile2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐProfile(ctx context.Context, sel ast.SelectionSet, v *model.Profile) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
