@@ -3,7 +3,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
@@ -82,7 +81,7 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 		return &gqlmodel.Profile{
 			UserID:    encodeGraphID("user", u.ID),
 			User:      toGraphUser(u),
-			Username:  u.UserID,
+			Username:  u.AccountID,
 			CreatedAt: "0",
 			UpdatedAt: "0",
 		}, nil
@@ -91,10 +90,10 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 	return &gqlmodel.Profile{
 		UserID:    encodeGraphID("user", p.UserID),
 		User:      toGraphUser(u),
-		Username:  u.UserID,
+		Username:  u.AccountID,
 		Bio:       &p.Bio,
 		Image:     &p.Image,
-		CreatedAt: fmt.Sprintf("%d", p.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", p.UpdatedAt),
+		CreatedAt: p.CreatedAt.Format(timeFormat),
+		UpdatedAt: p.UpdatedAt.Format(timeFormat),
 	}, nil
 }

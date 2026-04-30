@@ -5,7 +5,9 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
+	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -38,6 +40,25 @@ type Resolver struct {
 	LoginAdministratorUseCase        administrator.LoginAdministratorUseCase
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
+
+	GetPostByIDUseCase       post.GetPostByIDUseCase
+	CreatePostUseCase        post.CreatePostUseCase
+	ListPostsUseCase         post.ListPostsUseCase
+	DeletePostUseCase        post.DeletePostUseCase
+	UpdatePostUseCase        post.UpdatePostUseCase
+	SearchPostsUseCase       post.SearchPostsUseCase
+	ListTopLevelPostsUseCase post.ListTopLevelPostsUseCase
+	GetRepliesByIDUseCase    post.GetRepliesByIDUseCase
+	GetPostsByUserIDUseCase  post.GetPostsByUserIDUseCase
+
+	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
+	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase
+	DeleteFavoriteUseCase                  favorite.DeleteFavoriteUseCase
+	DeleteFavoriteByUserIDAndPostIDUseCase favorite.DeleteFavoriteByUserIDAndPostIDUseCase
+	GetFavoriteByUserIDAndPostIDUseCase    favorite.GetFavoriteByUserIDAndPostIDUseCase
+	GetFavoritesByPostIDUseCase            favorite.GetFavoritesByPostIDUseCase
+	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
+	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
 	SendMessageUseCase        messageusecase.SendMessageUseCase
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase

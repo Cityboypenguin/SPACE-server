@@ -24,7 +24,9 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
+	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -44,6 +46,8 @@ func main() {
 
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
+	postRepository := mysql.NewMySQLPostRepository(database)
+	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -56,9 +60,9 @@ func main() {
 
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUsecase := userusecase.NewDeleteUserUseCase(userRepository)
-	updateUserUsecase := userusecase.NewUpdateUserUseCase(userRepository)
-	getUserByIDUsecase := userusecase.NewGetUserByIDUseCase(userRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository)
+	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
+	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 
@@ -72,6 +76,25 @@ func main() {
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository)
+	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
+	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
+	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
+	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
+	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
+	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+
+	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
+	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
+	deleteFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewDeleteFavoriteByUserIDAndPostIDUseCase(favoriteRepository, postRepository)
+	getFavoriteByIDUseCase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
+	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
+	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
+	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
+	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
 	if err != nil {
@@ -103,19 +126,21 @@ func main() {
 	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
-		CreateUserUseCase:                createUserUseCase,
-		ListUsersUseCase:                 listUsersUseCase,
-		DeleteUserUseCase:                deleteUserUsecase,
-		UpdateUserUseCase:                updateUserUsecase,
-		GetUserByIDUseCase:               getUserByIDUsecase,
-		SearchUsersUseCase:               searchUsersUseCase,
-		LoginUserUseCase:                 loginUserUseCase,
-		RefreshUserTokenUseCase:          refreshUserTokenUseCase,
-		LogoutUserUseCase:                logoutUserUseCase,
-		GetProfileUseCase:                getProfileUseCase,
-		UpdateProfileUseCase:             updateProfileUseCase,
-		CreateAdministratorUseCase:       createAdministratorUseCase,
+		CreateUserUseCase:       createUserUseCase,
+		ListUsersUseCase:        listUsersUseCase,
+		DeleteUserUseCase:       deleteUserUseCase,
+		UpdateUserUseCase:       updateUserUseCase,
+		GetUserByIDUseCase:      getUserByIDUseCase,
+		SearchUsersUseCase:      searchUsersUseCase,
+		LoginUserUseCase:        loginUserUseCase,
+		RefreshUserTokenUseCase: refreshUserTokenUseCase,
+		LogoutUserUseCase:       logoutUserUseCase,
+
+		GetProfileUseCase:    getProfileUseCase,
+		UpdateProfileUseCase: updateProfileUseCase,
+
 		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
+		CreateAdministratorUseCase:       createAdministratorUseCase,
 		ListAdministratorsUseCase:        listAdministratorsUseCase,
 		DeleteAdministratorUseCase:       deleteAdministratorUseCase,
 		UpdateAdministratorUseCase:       updateAdministratorUseCase,
@@ -123,22 +148,44 @@ func main() {
 		LoginAdministratorUseCase:        loginAdministratorUseCase,
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
-		SendMessageUseCase:               sendMessageUseCase,
-		ListMessagesUseCase:              listMessagesUseCase,
-		CreateRoomUseCase:                createRoomUseCase,
-		GetRoomUseCase:                   getRoomUseCase,
-		ListMyDMRoomsUseCase:             listMyDMRoomsUseCase,
-		GetOrCreateDMRoomUseCase:         getOrCreateDMRoomUseCase,
-		AddUserToRoomUseCase:             addUserToRoomUseCase,
-		RemoveUserFromRoomUseCase:        removeUserFromRoomUseCase,
-		JoinRoomUseCase:                  joinRoomUseCase,
-		RoomUserRepository:               roomUserRepository,
-		UserRepository:                   userRepository,
-		CreateCommunityUseCase:           createCommunityUseCase,
-		GetCommunityUseCase:              getCommunityUseCase,
-		SearchCommunityUseCase:           searchCommunityUseCase,
-		ListMyCommunitiesUseCase:         listMyCommunitiesUseCase,
-		PubSub:                           ps,
+
+		GetPostByIDUseCase:       getPostByIDUseCase,
+		CreatePostUseCase:        createPostUseCase,
+		ListPostsUseCase:         listPostsUseCase,
+		DeletePostUseCase:        deletePostUseCase,
+		UpdatePostUseCase:        updatePostUseCase,
+		SearchPostsUseCase:       searchPostsUseCase,
+		ListTopLevelPostsUseCase: listTopLevelPostsUseCase,
+		GetRepliesByIDUseCase:    getRepliesByIDUseCase,
+		GetPostsByUserIDUseCase:  getPostsByUserIDUseCase,
+
+		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
+		CreateFavoriteUseCase:                  createFavoriteUseCase,
+		DeleteFavoriteUseCase:                  deleteFavoriteUseCase,
+		DeleteFavoriteByUserIDAndPostIDUseCase: deleteFavoriteByUserIDAndPostIDUseCase,
+		GetFavoriteByUserIDAndPostIDUseCase:    getFavoriteByUserIDAndPostIDUseCase,
+		GetFavoritesByPostIDUseCase:            getFavoritesByPostIDUseCase,
+		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
+		ListFavoritesUseCase:                   listFavoritesUseCase,
+
+		SendMessageUseCase:        sendMessageUseCase,
+		ListMessagesUseCase:       listMessagesUseCase,
+		CreateRoomUseCase:         createRoomUseCase,
+		GetRoomUseCase:            getRoomUseCase,
+		ListMyDMRoomsUseCase:      listMyDMRoomsUseCase,
+		GetOrCreateDMRoomUseCase:  getOrCreateDMRoomUseCase,
+		AddUserToRoomUseCase:      addUserToRoomUseCase,
+		RemoveUserFromRoomUseCase: removeUserFromRoomUseCase,
+		JoinRoomUseCase:           joinRoomUseCase,
+		RoomUserRepository:        roomUserRepository,
+		UserRepository:            userRepository,
+
+		CreateCommunityUseCase:   createCommunityUseCase,
+		GetCommunityUseCase:      getCommunityUseCase,
+		SearchCommunityUseCase:   searchCommunityUseCase,
+		ListMyCommunitiesUseCase: listMyCommunitiesUseCase,
+
+		PubSub: ps,
 	}
 
 	// middleware
@@ -146,7 +193,7 @@ func main() {
 	e.Use(middleware.Recover())
 	// CORSはJWTより先に登録しないと、401レスポンスにCORSヘッダーが付かずブラウザがブロックする
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:5173"},
+		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{
 			echo.HeaderOrigin,
 			echo.HeaderContentType,

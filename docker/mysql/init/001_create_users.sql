@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
     id              BIGINT       NOT NULL AUTO_INCREMENT,
-    user_id         VARCHAR(255) NOT NULL UNIQUE,
+    account_id      VARCHAR(255) NOT NULL UNIQUE,
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) NOT NULL UNIQUE,
     hashed_password VARCHAR(255) NOT NULL,

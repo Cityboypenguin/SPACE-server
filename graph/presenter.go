@@ -1,11 +1,11 @@
 package graph
 
 import (
-	"fmt"
-
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
+
+const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
@@ -13,13 +13,13 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 	}
 	return &gqlmodel.User{
 		ID:        encodeGraphID("user", user.ID),
-		UserID:    user.UserID,
+		AccountID: user.AccountID,
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
-		CreatedAt: fmt.Sprintf("%d", user.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", user.UpdatedAt),
+		CreatedAt: user.CreatedAt.Format(timeFormat),
+		UpdatedAt: user.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -31,8 +31,8 @@ func toGraphAdministrator(admin *model.Administrator) *gqlmodel.Administrator {
 		ID:        encodeGraphID("administrator", admin.ID),
 		Name:      admin.Name,
 		Email:     admin.Email,
-		CreatedAt: fmt.Sprintf("%d", admin.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", admin.UpdatedAt),
+		CreatedAt: admin.CreatedAt.Format(timeFormat),
+		UpdatedAt: admin.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -44,8 +44,8 @@ func toGraphRoom(room *model.Room) *gqlmodel.Room {
 		ID:        encodeGraphID("room", room.ID),
 		Name:      room.Name,
 		Type:      room.Type,
-		CreatedAt: fmt.Sprintf("%d", room.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", room.UpdatedAt),
+		CreatedAt: room.CreatedAt.Format(timeFormat),
+		UpdatedAt: room.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -58,8 +58,8 @@ func toGraphCommunity(c *model.Community) *gqlmodel.Community {
 		RoomID:      encodeGraphID("room", c.RoomID),
 		Name:        c.Name,
 		Description: c.Description,
-		CreatedAt:   fmt.Sprintf("%d", c.CreatedAt),
-		UpdatedAt:   fmt.Sprintf("%d", c.UpdatedAt),
+		CreatedAt:   c.CreatedAt.Format(timeFormat),
+		UpdatedAt:   c.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -72,8 +72,8 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		RoomID:    encodeGraphID("room", msg.RoomID),
 		UserID:    encodeGraphID("user", msg.UserID),
 		Content:   msg.Content,
-		CreatedAt: fmt.Sprintf("%d", msg.CreatedAt),
-		UpdatedAt: fmt.Sprintf("%d", msg.UpdatedAt),
+		CreatedAt: msg.CreatedAt.Format(timeFormat),
+		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
 }
 

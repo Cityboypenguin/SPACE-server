@@ -2,6 +2,7 @@ package administrator
 
 import (
 	"context"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -25,6 +26,12 @@ func NewCreateAdministratorUseCase(adminRepo repository.AdministratorRepository)
 
 func (uc *CreateAdministratorInteractor) Execute(ctx context.Context, param model.CreateAdministratorParam) (*model.Administrator, error) {
 	admin := &model.Administrator{}
+	now := time.Now()
+
+	// Set timestamps explicitly
+	param.CreatedAt = now
+	param.UpdatedAt = now
+
 	if err := admin.CreateAdministrator(param); err != nil {
 		return nil, err
 	}

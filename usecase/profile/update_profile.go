@@ -33,7 +33,7 @@ func (uc *UpdateProfileInteractor) Execute(ctx context.Context, userID int64, pa
 	if profile == nil {
 		profile = &model.Profile{
 			UserID:    userID,
-			CreatedAt: time.Now().Unix(),
+			CreatedAt: time.Now(),
 		}
 	}
 

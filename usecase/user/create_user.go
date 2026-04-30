@@ -15,19 +15,25 @@ type CreateUserUseCase interface {
 var _ CreateUserUseCase = &CreateUserInteractor{}
 
 type CreateUserInteractor struct {
-	userRepo repository.UserRepository
+	userRepo    repository.UserRepository
 	profileRepo repository.ProfileRepository
 }
 
-func NewCreateUserUseCase(userRepo repository.UserRepository , profileRepo repository.ProfileRepository) CreateUserUseCase {
+func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository) CreateUserUseCase {
 	return &CreateUserInteractor{
-		userRepo: userRepo,
+		userRepo:    userRepo,
 		profileRepo: profileRepo,
 	}
 }
 
 func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error) {
 	user := &model.User{}
+	now := time.Now()
+
+	// Set timestamps explicitly
+	param.CreatedAt = now
+	param.UpdatedAt = now
+
 	err := user.CreateUser(param)
 	if err != nil {
 		return nil, err
@@ -51,8 +57,8 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		UserID:    user.ID, // 先ほど作られたユーザーの内部ID
 		Bio:       "",
 		Image:     "",
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// プロフィール倉庫係にお願いして保存する
@@ -61,6 +67,5 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	}
 
 	return user, nil
-
 
 }

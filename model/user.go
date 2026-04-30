@@ -7,19 +7,19 @@ import (
 )
 
 type User struct {
-	ID             int64  `json:"id"`
-	UserID         string `json:"user_id"`
-	Name           string `json:"name"`
-	Email          string `json:"email"`
-	HashedPassword string `json:"hashed_password"`
-	Role           string `json:"role"`
-	Status         string `json:"status"`
-	CreatedAt      int64  `json:"created_at"`
-	UpdatedAt      int64  `json:"updated_at"`
+	ID             int64     `json:"id"`
+	AccountID      string    `json:"account_id"`
+	Name           string    `json:"name"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"hashed_password"`
+	Role           string    `json:"role"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type CreateUserParam struct {
-	UserID    string    `json:"user_id"`
+	AccountID string    `json:"account_id"`
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Password  string    `json:"password"`
@@ -48,12 +48,12 @@ func (u *User) CreateUser(param CreateUserParam) error {
 		return err
 	}
 
-	u.UserID = param.UserID
+	u.AccountID = param.AccountID
 	u.Name = param.Name
 	u.Email = param.Email
 	u.HashedPassword = hashedPassword
-	u.CreatedAt = param.CreatedAt.Unix()
-	u.UpdatedAt = param.UpdatedAt.Unix()
+	u.CreatedAt = param.CreatedAt
+	u.UpdatedAt = param.UpdatedAt
 
 	return nil
 }
@@ -75,6 +75,6 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 		}
 		u.HashedPassword = hashedPassword
 	}
-	u.UpdatedAt = time.Now().Unix()
+	u.UpdatedAt = time.Now()
 	return nil
 }

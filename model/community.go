@@ -3,12 +3,12 @@ package model
 import "time"
 
 type Community struct {
-	ID          int64  `json:"id"`
-	RoomID      int64  `json:"room_id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	ID          int64     `json:"id"`
+	RoomID      int64     `json:"room_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CreateCommunityParam struct {
@@ -27,8 +27,8 @@ func (c *Community) CreateCommunity(param CreateCommunityParam, roomID int64) {
 	c.RoomID = roomID
 	c.Name = param.Name
 	c.Description = param.Description
-	c.CreatedAt = param.CreatedAt.Unix()
-	c.UpdatedAt = param.UpdatedAt.Unix()
+	c.CreatedAt = param.CreatedAt
+	c.UpdatedAt = param.UpdatedAt
 }
 
 func (c *Community) UpdateCommunity(param UpdateCommunityParam) {
@@ -38,5 +38,5 @@ func (c *Community) UpdateCommunity(param UpdateCommunityParam) {
 	if param.Description != nil {
 		c.Description = *param.Description
 	}
-	c.UpdatedAt = time.Now().Unix()
+	c.UpdatedAt = time.Now()
 }
