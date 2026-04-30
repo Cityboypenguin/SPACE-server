@@ -71,13 +71,6 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 		}
 		u.HashedPassword = hashedPassword
 	}
-	if param.Role != nil {
-		u.Role = *param.Role
-	}
-	if param.Status != nil {
-		u.Status = *param.Status
-	}
 	u.UpdatedAt = time.Now()
-	u.UpdatedAt = time.Now().Unix()
 	return nil
 }

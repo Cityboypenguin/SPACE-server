@@ -26,7 +26,7 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 	}
 	defer tx.Rollback()
 
-	now := time.Now().Unix()
+	now := time.Now()
 
 	// 1. rooms に community room を作成
 	roomResult, err := tx.ExecContext(ctx,
@@ -107,7 +107,7 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 }
 
 func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model.Community) error {
-	c.UpdatedAt = time.Now().Unix()
+	c.UpdatedAt = time.Now()
 	_, err := r.DB.ExecContext(ctx,
 		`UPDATE communities SET name = ?, description = ?, updated_at = ? WHERE id = ?`,
 		c.Name, c.Description, c.UpdatedAt, c.ID,

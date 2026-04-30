@@ -61,15 +61,7 @@ type Resolver struct {
 	DeleteFavoriteUseCase            favorite.DeleteFavoriteUseCase
 	GetFavoritesByPostIDUseCase      favorite.GetFavoritesByPostIDUseCase
 	ListFavoritesUseCase             favorite.ListFavoritesUseCase
-	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
-	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase
-	ListAdministratorsUseCase        administrator.ListAdministratorsUseCase
-	DeleteAdministratorUseCase       administrator.DeleteAdministratorUseCase
-	UpdateAdministratorUseCase       administrator.UpdateAdministratorUseCase
-	SearchAdministratorsUseCase      administrator.SearchAdministratorsUseCase
-	LoginAdministratorUseCase        administrator.LoginAdministratorUseCase
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
-	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
 	SendMessageUseCase        messageusecase.SendMessageUseCase
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase

@@ -51,8 +51,8 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		Bio:       "",
 		Grade:     0,       // 未設定は0とする
 		Image:     "",
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// プロフィール倉庫係にお願いして保存する

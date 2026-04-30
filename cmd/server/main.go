@@ -50,7 +50,6 @@ func main() {
 	postRepository := mysql.NewMySQLPostRepository(database)
 	commentRepository := mysql.NewMySQLCommentRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
-	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -137,7 +136,10 @@ func main() {
 		GetUserByIDUseCase:               getUserByIDUsecase,
 		SearchUsersUseCase:               searchUsersUseCase,
 		LoginUserUseCase:                 loginUserUseCase,
+		RefreshUserTokenUseCase:          refreshUserTokenUseCase,
 		LogoutUserUseCase:                logoutUserUseCase,
+		GetProfileUseCase:                getProfileUseCase,
+		UpdateProfileUseCase:             updateProfileUseCase,
 		CreateAdministratorUseCase:       createAdministratorUseCase,
 		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
 		ListAdministratorsUseCase:        listAdministratorsUseCase,
@@ -145,6 +147,7 @@ func main() {
 		UpdateAdministratorUseCase:       updateAdministratorUseCase,
 		SearchAdministratorsUseCase:      searchAdministratorsUseCase,
 		LoginAdministratorUseCase:        loginAdministratorUseCase,
+		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 		CreatePostUseCase:                createPostUsecase,
 		UpdatePostUseCase:                updatePostUsecase,
@@ -164,26 +167,6 @@ func main() {
 		GetFavoriteByIDUseCase:           getFavoriteByIDUsecase,
 		GetFavoritesByPostIDUseCase:      getFavoritesByPostIDUsecase,
 		ListFavoritesUseCase:             listFavoritesUsecase,
-		CreateUserUseCase:                createUserUseCase,
-		ListUsersUseCase:                 listUsersUseCase,
-		DeleteUserUseCase:                deleteUserUsecase,
-		UpdateUserUseCase:                updateUserUsecase,
-		GetUserByIDUseCase:               getUserByIDUsecase,
-		SearchUsersUseCase:               searchUsersUseCase,
-		LoginUserUseCase:                 loginUserUseCase,
-		RefreshUserTokenUseCase:          refreshUserTokenUseCase,
-		LogoutUserUseCase:                logoutUserUseCase,
-		GetProfileUseCase:                getProfileUseCase,
-		UpdateProfileUseCase:             updateProfileUseCase,
-		CreateAdministratorUseCase:       createAdministratorUseCase,
-		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
-		ListAdministratorsUseCase:        listAdministratorsUseCase,
-		DeleteAdministratorUseCase:       deleteAdministratorUseCase,
-		UpdateAdministratorUseCase:       updateAdministratorUseCase,
-		SearchAdministratorsUseCase:      searchAdministratorsUseCase,
-		LoginAdministratorUseCase:        loginAdministratorUseCase,
-		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
-		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 		SendMessageUseCase:               sendMessageUseCase,
 		ListMessagesUseCase:              listMessagesUseCase,
 		CreateRoomUseCase:                createRoomUseCase,

@@ -20,7 +20,7 @@ type Query {
 
 type User {
   ID: ID!
-  userID: String!
+  accountID: String!
   name: String!
   email: String!
   role: String!
@@ -90,7 +90,7 @@ input UpdateAdministratorInput {
 }
 
 input CreateUserInput {
-  userID: String!
+  accountID: String!
   name: String!
   email: String!
   password: String!

@@ -21,7 +21,7 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 }
 
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
-	now := time.Now().Unix()
+	now := time.Now()
 	query := "INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)"
 	_, err := r.DB.ExecContext(ctx, query, roomID, userID, now, now)
 	return err
@@ -93,7 +93,7 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
 	query := fmt.Sprintf(`
-		SELECT ru.room_id, u.id, u.user_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at
+		SELECT ru.room_id, u.id, u.account_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at
 		FROM room_users ru
 		JOIN users u ON ru.user_id = u.id
 		WHERE ru.room_id IN (%s)
@@ -117,7 +117,7 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 		if err := rows.Scan(
 			&roomID,
 			&user.ID,
-			&user.UserID,
+			&user.AccountID,
 			&user.Name,
 			&user.Email,
 			&user.HashedPassword,
@@ -193,7 +193,7 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 		return nil, err
 	}
 
-	now := time.Now().Unix()
+	now := time.Now()
 	leftUserName := fmt.Sprintf("user:%d", leftUserID)
 	rightUserName := fmt.Sprintf("user:%d", rightUserID)
 

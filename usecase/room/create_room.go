@@ -23,7 +23,7 @@ func NewCreateRoomUseCase(roomRepo repository.RoomRepository) CreateRoomUseCase 
 }
 
 func (uc *CreateRoomInteractor) Execute(ctx context.Context, param model.CreateRoomParam) (*model.Room, error) {
-	now := time.Now().Unix()
+	now := time.Now()
 	param.CreatedAt = now
 	param.UpdatedAt = now
 	r := &model.Room{}

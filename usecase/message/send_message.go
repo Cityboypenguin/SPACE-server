@@ -23,7 +23,7 @@ func NewSendMessageUseCase(messageRepo repository.MessageRepository) SendMessage
 }
 
 func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string) (*model.Message, error) {
-	now := time.Now().Unix()
+	now := time.Now()
 	m := &model.Message{}
 	m.CreateMessage(model.CreateMessageParam{
 		RoomID:    roomID,
