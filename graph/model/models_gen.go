@@ -47,7 +47,6 @@ type CreateFavoriteInput struct {
 }
 
 type CreatePostInput struct {
-	UserID   string  `json:"user_id"`
 	Content  string  `json:"content"`
 	ParentID *string `json:"parent_id,omitempty"`
 }

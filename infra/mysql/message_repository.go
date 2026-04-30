@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -26,7 +27,7 @@ func NewMySQLMessageRepository(db *sql.DB) repository.MessageRepository {
 // Implement the methods of the MessageRepository interface here
 func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Message) error {
 	query := "INSERT INTO messages (room_id, user_id, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-	result, err := r.DB.ExecContext(ctx, query, m.RoomID, m.UserID, m.Content, m.CreatedAt, m.UpdatedAt)
+	result, err := r.DB.ExecContext(ctx, query, m.RoomID, m.UserID, m.Content, m.CreatedAt.Unix(), m.UpdatedAt.Unix())
 	if err != nil {
 		return err
 	}
@@ -39,13 +40,16 @@ func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var m model.Message
-	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.CreatedAt, &m.UpdatedAt)
+	var createdAt, updatedAt int64
+	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // Message not found
+			return nil, nil
 		}
 		return nil, err
 	}
+	m.CreatedAt = time.Unix(createdAt, 0)
+	m.UpdatedAt = time.Unix(updatedAt, 0)
 	return &m, nil
 }
 
@@ -73,9 +77,12 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 	var messages []*model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		m.UpdatedAt = time.Unix(updatedAt, 0)
 		messages = append(messages, &m)
 	}
 	if err := rows.Err(); err != nil {

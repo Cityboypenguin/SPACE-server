@@ -21,7 +21,7 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 }
 
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
-	now := time.Now()
+	now := time.Now().Unix()
 	query := "INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)"
 	_, err := r.DB.ExecContext(ctx, query, roomID, userID, now, now)
 	return err
@@ -73,9 +73,12 @@ func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userI
 	var rooms []*model.Room
 	for rows.Next() {
 		var room model.Room
-		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		room.CreatedAt = time.Unix(createdAt, 0)
+		room.UpdatedAt = time.Unix(updatedAt, 0)
 		rooms = append(rooms, &room)
 	}
 	if err := rows.Err(); err != nil {
@@ -114,6 +117,7 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 	for rows.Next() {
 		var roomID int64
 		var user model.User
+		var createdAt, updatedAt int64
 		if err := rows.Scan(
 			&roomID,
 			&user.ID,
@@ -123,11 +127,13 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 			&user.HashedPassword,
 			&user.Role,
 			&user.Status,
-			&user.CreatedAt,
-			&user.UpdatedAt,
+			&createdAt,
+			&updatedAt,
 		); err != nil {
 			return nil, err
 		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
 		result[roomID] = append(result[roomID], &user)
 	}
 	if err := rows.Err(); err != nil {
@@ -148,13 +154,16 @@ func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userI
 	`
 	row := r.DB.QueryRowContext(ctx, query, userID1, userID2)
 	var room model.Room
-	err := row.Scan(&room.ID, &room.Name, &room.Type, &room.CreatedAt, &room.UpdatedAt)
+	var createdAt, updatedAt int64
+	err := row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	room.CreatedAt = time.Unix(createdAt, 0)
+	room.UpdatedAt = time.Unix(updatedAt, 0)
 	return &room, nil
 }
 
@@ -182,8 +191,11 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	`
 	row := tx.QueryRowContext(ctx, findQuery, leftUserID, rightUserID, model.RoomTypeDM)
 	var room model.Room
-	err = row.Scan(&room.ID, &room.Name, &room.Type, &room.CreatedAt, &room.UpdatedAt)
+	var createdAt, updatedAt int64
+	err = row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt)
 	if err == nil {
+		room.CreatedAt = time.Unix(createdAt, 0)
+		room.UpdatedAt = time.Unix(updatedAt, 0)
 		if err = tx.Commit(); err != nil {
 			return nil, err
 		}
@@ -194,6 +206,7 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	}
 
 	now := time.Now()
+	nowUnix := now.Unix()
 	leftUserName := fmt.Sprintf("user:%d", leftUserID)
 	rightUserName := fmt.Sprintf("user:%d", rightUserID)
 
@@ -208,7 +221,7 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	name := fmt.Sprintf("DM:%s<->%s", leftUserName, rightUserName)
 	result, err := tx.ExecContext(ctx,
 		"INSERT INTO rooms (name, type, created_at, updated_at) VALUES (?, ?, ?, ?)",
-		name, model.RoomTypeDM, now, now,
+		name, model.RoomTypeDM, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -219,10 +232,10 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	}
 
 	insertMember := "INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)"
-	if _, err = tx.ExecContext(ctx, insertMember, roomID, leftUserID, now, now); err != nil {
+	if _, err = tx.ExecContext(ctx, insertMember, roomID, leftUserID, nowUnix, nowUnix); err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, insertMember, roomID, rightUserID, now, now); err != nil {
+	if _, err = tx.ExecContext(ctx, insertMember, roomID, rightUserID, nowUnix, nowUnix); err != nil {
 		return nil, err
 	}
 

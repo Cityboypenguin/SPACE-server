@@ -178,6 +178,7 @@ func (r *MySQLUserRepository) FindByAccountID(ctx context.Context, accountID str
 	row := r.DB.QueryRowContext(ctx, query, accountID)
 
 	var u model.User
+	var createdAtUnix, updatedAtUnix int64
 	if err := row.Scan(
 		&u.ID,
 		&u.AccountID,
@@ -186,14 +187,16 @@ func (r *MySQLUserRepository) FindByAccountID(ctx context.Context, accountID str
 		&u.HashedPassword,
 		&u.Role,
 		&u.Status,
-		&u.CreatedAt,
-		&u.UpdatedAt,
+		&createdAtUnix,
+		&updatedAtUnix,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	u.CreatedAt = time.Unix(createdAtUnix, 0)
+	u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &u, nil
 }

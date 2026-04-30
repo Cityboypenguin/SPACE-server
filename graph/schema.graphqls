@@ -142,7 +142,6 @@ input UpdateUserInput {
 }
 
 input CreatePostInput {
-  user_id: ID!
   content: String!
   parent_id: ID
 }

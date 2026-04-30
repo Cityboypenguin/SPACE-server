@@ -275,12 +275,14 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	}
 
 	var numericParentID *int64
-	if input.ParentID != nil {
+	var gqlParent *gqlmodel.Post
+	if input.ParentID != nil && *input.ParentID != "" {
 		parentID, err := decodeGraphID(ctx, "post", *input.ParentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent post id")
 		}
 		numericParentID = &parentID
+		gqlParent = &gqlmodel.Post{ID: *input.ParentID}
 	}
 
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
@@ -290,11 +292,6 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	var gqlParent *gqlmodel.Post
-	if input.ParentID != nil {
-		gqlParent = &gqlmodel.Post{ID: *input.ParentID}
 	}
 
 	return toGraphPost(post, gqlParent), nil
@@ -501,7 +498,19 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 		return nil, err
 	}
 
-	return toGraphRoom(room), nil
+	usersByRoomID, err := r.RoomUserRepository.ListUsersByRoomIDs(ctx, []int64{room.ID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load room members")
+	}
+
+	members := make([]*gqlmodel.User, 0)
+	for _, u := range usersByRoomID[room.ID] {
+		members = append(members, toGraphUser(u))
+	}
+
+	gqlRoom := toGraphRoom(room)
+	gqlRoom.User = members
+	return gqlRoom, nil
 }
 
 // AddUserToRoom is the resolver for the addUserToRoom field.

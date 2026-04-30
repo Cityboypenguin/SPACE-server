@@ -27,11 +27,12 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 	defer tx.Rollback()
 
 	now := time.Now()
+	nowUnix := now.Unix()
 
 	// 1. rooms に community room を作成
 	roomResult, err := tx.ExecContext(ctx,
 		`INSERT INTO rooms (name, type, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-		name, model.RoomTypeCommunity, now, now,
+		name, model.RoomTypeCommunity, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 	// 2. room_users に作成者を追加
 	_, err = tx.ExecContext(ctx,
 		`INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-		roomID, creatorUserID, now, now,
+		roomID, creatorUserID, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 	// 3. communities を作成
 	communityResult, err := tx.ExecContext(ctx,
 		`INSERT INTO communities (room_id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		roomID, name, description, now, now,
+		roomID, name, description, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -81,12 +82,15 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 	row := r.DB.QueryRowContext(ctx,
 		`SELECT id, room_id, name, description, created_at, updated_at FROM communities WHERE id = ?`, id)
 	var c model.Community
-	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	var createdAt, updatedAt int64
+	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	c.CreatedAt = time.Unix(createdAt, 0)
+	c.UpdatedAt = time.Unix(updatedAt, 0)
 	return &c, nil
 }
 
@@ -110,7 +114,7 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	c.UpdatedAt = time.Now()
 	_, err := r.DB.ExecContext(ctx,
 		`UPDATE communities SET name = ?, description = ?, updated_at = ? WHERE id = ?`,
-		c.Name, c.Description, c.UpdatedAt, c.ID,
+		c.Name, c.Description, c.UpdatedAt.Unix(), c.ID,
 	)
 	return err
 }
@@ -147,9 +151,12 @@ func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
 	var list []*model.Community
 	for rows.Next() {
 		var c model.Community
-		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		c.CreatedAt = time.Unix(createdAt, 0)
+		c.UpdatedAt = time.Unix(updatedAt, 0)
 		list = append(list, &c)
 	}
 	return list, rows.Err()

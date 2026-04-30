@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -19,7 +20,7 @@ func NewMySQLRoomRepository(db *sql.DB) repository.RoomRepository {
 
 func (r *MySQLRoomRepository) SaveRoom(ctx context.Context, room *model.Room) error {
 	query := "INSERT INTO rooms (name, type, created_at, updated_at) VALUES (?, ?, ?, ?)"
-	result, err := r.DB.ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt, room.UpdatedAt)
+	result, err := r.DB.ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt.Unix(), room.UpdatedAt.Unix())
 	if err != nil {
 		return err
 	}
@@ -32,13 +33,16 @@ func (r *MySQLRoomRepository) GetRoomByID(ctx context.Context, id int64) (*model
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var room model.Room
-	err := row.Scan(&room.ID, &room.Name, &room.Type, &room.CreatedAt, &room.UpdatedAt)
+	var createdAt, updatedAt int64
+	err := row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Room not found
 		}
 		return nil, err
 	}
+	room.CreatedAt = time.Unix(createdAt, 0)
+	room.UpdatedAt = time.Unix(updatedAt, 0)
 	return &room, nil
 }
 
@@ -66,9 +70,12 @@ func (r *MySQLRoomRepository) ListRooms(ctx context.Context) ([]*model.Room, err
 	var rooms []*model.Room
 	for rows.Next() {
 		var room model.Room
-		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		room.CreatedAt = time.Unix(createdAt, 0)
+		room.UpdatedAt = time.Unix(updatedAt, 0)
 		rooms = append(rooms, &room)
 	}
 	if err := rows.Err(); err != nil {
@@ -79,6 +86,6 @@ func (r *MySQLRoomRepository) ListRooms(ctx context.Context) ([]*model.Room, err
 
 func (r *MySQLRoomRepository) UpdateRoom(ctx context.Context, room *model.Room) error {
 	query := "UPDATE rooms SET name = ?, updated_at = ? WHERE id = ?"
-	_, err := r.DB.ExecContext(ctx, query, room.Name, room.UpdatedAt, room.ID)
+	_, err := r.DB.ExecContext(ctx, query, room.Name, room.UpdatedAt.Unix(), room.ID)
 	return err
 }
