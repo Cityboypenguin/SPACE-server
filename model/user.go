@@ -28,9 +28,10 @@ type CreateUserParam struct {
 }
 
 type UpdateUserParam struct {
-	Name     *string `json:"name,omitempty"`
-	Email    *string `json:"email,omitempty"`
-	Password *string `json:"password,omitempty"`
+	AccountID *string `json:"account_id,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	Password  *string `json:"password,omitempty"`
 }
 
 func hashPassword(password string) (string, error) {
