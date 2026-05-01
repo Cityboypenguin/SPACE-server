@@ -1,24 +1,24 @@
 package model
 
 type RoomUser struct {
-	ID        int64  `json:"id"`
-	RoomID    int64  `json:"room_id"`
-	UserID    int64  `json:"user_id"`
-	Role      string `json:"role"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID        int64
+	RoomID    int64
+	UserID    int64
+	Role      string
+	CreatedAt int64
+	UpdatedAt int64
 }
 
 type CreateRoomUserParam struct {
-	RoomID    int64  `json:"room_id"`
-	UserID    int64  `json:"user_id"`
-	Role      string `json:"role"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	RoomID    int64
+	UserID    int64
+	Role      string
+	CreatedAt int64
+	UpdatedAt int64
 }
 
 type UpdateRoomUserParam struct {
-	Role *string `json:"role,omitempty"`
+	Role *string
 }
 
 func (ru *RoomUser) CreateRoomUser(param CreateRoomUserParam) {

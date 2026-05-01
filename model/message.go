@@ -3,24 +3,24 @@ package model
 import "time"
 
 type Message struct {
-	ID        int64     `json:"id"`
-	RoomID    int64     `json:"room_id"`
-	UserID    int64     `json:"user_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	RoomID    int64
+	UserID    int64
+	Content   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type CreateMessageParam struct {
-	RoomID    int64     `json:"room_id"`
-	UserID    int64     `json:"user_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	RoomID    int64
+	UserID    int64
+	Content   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UpdateMessageParam struct {
-	Content *string `json:"content,omitempty"`
+	Content *string
 }
 
 func (m *Message) CreateMessage(param CreateMessageParam) {
