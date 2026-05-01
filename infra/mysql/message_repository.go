@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -17,7 +16,9 @@ type MySQLMessageRepository struct {
 
 // UpdateMessage implements [repository.MessageRepository].
 func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Message) error {
-	return fmt.Errorf("UpdateMessage: not implemented")
+	query := "UPDATE messages SET content = ?, updated_at = ? WHERE id = ?"
+	_, err := r.DB.ExecContext(ctx, query, m.Content, m.UpdatedAt.Unix(), m.ID)
+	return err
 }
 
 func NewMySQLMessageRepository(db *sql.DB) repository.MessageRepository {

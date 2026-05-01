@@ -412,46 +412,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 	return toGraphProfile(targetUser, p), nil
 }
 
-// SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string) (*gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content)
-	if err != nil {
-		return nil, err
-	}
-
-	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
-
-	gqlMsg := toGraphMessage(msg)
-	if user != nil {
-		gqlMsg.User = toGraphUser(user)
-	}
-	if room != nil {
-		gqlMsg.Room = toGraphRoom(room)
-	}
-
-	r.PubSub.Publish(roomID, gqlMsg)
-	return gqlMsg, nil
-}
-
 // CreateRoom is the resolver for the createRoom field.
 func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
 	claims, err := requireAuth(ctx)
@@ -604,6 +564,94 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 		return false, fmt.Errorf("invalid room id")
 	}
 	return r.JoinRoomUseCase.Execute(ctx, rid)
+}
+
+// SendMessage is the resolver for the sendMessage field.
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string) (*gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content)
+	if err != nil {
+		return nil, err
+	}
+
+	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
+
+	gqlMsg := toGraphMessage(msg)
+	if user != nil {
+		gqlMsg.User = toGraphUser(user)
+	}
+	if room != nil {
+		gqlMsg.Room = toGraphRoom(room)
+	}
+
+	r.PubSub.Publish(roomID+":message:added", gqlMsg)
+	return gqlMsg, nil
+}
+
+// DeleteMessage is the resolver for the deleteMessage field.
+func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id string) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "message", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid message id")
+	}
+
+	deleted, err := r.DeleteMessageUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+	if deleted {
+		r.PubSub.Publish(roomID+":message:deleted", &gqlmodel.Message{ID: id})
+	}
+	return deleted, nil
+}
+
+// UpdateMessage is the resolver for the updateMessage field.
+func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string) (*gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "message", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content})
+	if err != nil {
+		return nil, err
+	}
+
+	gqlMsg := toGraphMessage(msg)
+	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	if user != nil {
+		gqlMsg.User = toGraphUser(user)
+	}
+
+	r.PubSub.Publish(roomID+":message:updated", gqlMsg)
+	return gqlMsg, nil
 }
 
 // User is the resolver for the user field on Post.
@@ -1166,10 +1214,10 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 	log.Printf("[MessageAdded] subscribe start roomID=%s userID=%d", roomID, claims.ID)
 
 	ch := make(chan *gqlmodel.Message, 1)
-	sub := r.PubSub.Subscribe(roomID)
+	sub := r.PubSub.Subscribe(roomID + ":message:added")
 
 	go func() {
-		defer r.PubSub.Unsubscribe(roomID, sub)
+		defer r.PubSub.Unsubscribe(roomID+":message:added", sub)
 		for {
 			select {
 			case <-ctx.Done():
@@ -1184,6 +1232,108 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 				}
 				if msg, ok := data.(*gqlmodel.Message); ok {
 					log.Printf("[MessageAdded] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
+					ch <- msg
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// MessageDeleted is the resolver for the messageDeleted field.
+func (r *subscriptionResolver) MessageDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	log.Printf("[MessageDeleted] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+
+	ch := make(chan *gqlmodel.Message, 1)
+	topic := roomID + ":message:deleted"
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("[MessageDeleted] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					log.Printf("[MessageDeleted] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
+					close(ch)
+					return
+				}
+				if msg, ok := data.(*gqlmodel.Message); ok {
+					log.Printf("[MessageDeleted] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
+					ch <- msg
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// MessageUpdated is the resolver for the messageUpdated field.
+func (r *subscriptionResolver) MessageUpdated(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	log.Printf("[MessageUpdated] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+
+	ch := make(chan *gqlmodel.Message, 1)
+	topic := roomID + ":message:updated"
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("[MessageUpdated] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					log.Printf("[MessageUpdated] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
+					close(ch)
+					return
+				}
+				if msg, ok := data.(*gqlmodel.Message); ok {
+					log.Printf("[MessageUpdated] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
 					ch <- msg
 				}
 			}

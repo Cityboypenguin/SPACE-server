@@ -35,4 +35,5 @@ func (m *Message) UpdateMessage(param UpdateMessageParam) {
 	if param.Content != nil {
 		m.Content = *param.Content
 	}
+	m.UpdatedAt = time.Now()
 }

@@ -106,13 +106,15 @@ type Mutation {
   createFavorite(input: CreateFavoriteInput!): Favorite!
   deleteFavorite(input: DeleteFavoriteInput!): Boolean!
   updateProfile(input: UpdateProfileInput!): Profile!
-  sendMessage(roomID: ID!, content: String!): Message!
   createRoom(input: CreateRoomInput!): Room!
   getOrCreateDMRoom(targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!
   removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
   createCommunity(input: CreateCommunityInput!): Community!
   joinRoom(roomID: ID!): Boolean!
+  sendMessage(roomID: ID!, content: String!): Message!
+  deleteMessage(roomID: ID!, id: ID!): Boolean!
+  updateMessage(roomID: ID!, id: ID!, content: String!): Message!
 }
 
 input CreateAdministratorInput {
@@ -228,4 +230,6 @@ input CreateCommunityInput {
 
 type Subscription {
   messageAdded(roomID: ID!): Message!
+  messageDeleted(roomID: ID!): Message!
+  messageUpdated(roomID: ID!): Message!
 }

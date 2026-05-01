@@ -15,7 +15,7 @@ func New() *PubSub {
 }
 
 func (ps *PubSub) Subscribe(topic string) chan interface{} {
-	ch := make(chan interface{}, 16)
+	ch := make(chan interface{}, 64) // バッファサイズは適宜調整
 	ps.mu.Lock()
 	ps.subs[topic] = append(ps.subs[topic], ch)
 	count := len(ps.subs[topic])
@@ -36,6 +36,9 @@ func (ps *PubSub) Unsubscribe(topic string, ch chan interface{}) {
 			return
 		}
 	}
+	if len(ps.subs[topic]) == 0 {
+		delete(ps.subs, topic)
+	}
 }
 
 func (ps *PubSub) Publish(topic string, data interface{}) {
@@ -49,7 +52,11 @@ func (ps *PubSub) Publish(topic string, data interface{}) {
 			defer func() {
 				_ = recover()
 			}()
-			ch <- data
+			select {
+			case ch <- data:
+			default:
+				log.Printf("[PubSub] publish topic=%s dropped message for slow subscriber", topic)
+			}
 		}(ch)
 	}
 }

@@ -62,6 +62,8 @@ type Resolver struct {
 
 	SendMessageUseCase        messageusecase.SendMessageUseCase
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase      messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase      messageusecase.UpdateMessageUseCase
 	CreateRoomUseCase         roomusecase.CreateRoomUseCase
 	GetRoomUseCase            roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase roomusecase.GetUserIDsByRoomIDUseCase

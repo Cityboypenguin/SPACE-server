@@ -110,6 +110,8 @@ func main() {
 
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
+	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
+	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
@@ -174,6 +176,8 @@ func main() {
 
 		SendMessageUseCase:        sendMessageUseCase,
 		ListMessagesUseCase:       listMessagesUseCase,
+		DeleteMessageUseCase:      deleteMessageUseCase,
+		UpdateMessageUseCase:      updateMessageUseCase,
 		CreateRoomUseCase:         createRoomUseCase,
 		GetRoomUseCase:            getRoomUseCase,
 		GetUserIDsByRoomIDUseCase: getUserIDsByRoomIDUseCase,
