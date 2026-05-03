@@ -4,8 +4,8 @@ import "time"
 
 type Favorite struct {
 	ID        int64
-	User      *User
-	Post      *Post
+	UserID    int64
+	PostID    int64
 	CreatedAt time.Time
 }
 
@@ -14,8 +14,10 @@ type CreateFavoriteParam struct {
 	PostID int64
 }
 
-func (f *Favorite) CreateFavorite(param CreateFavoriteParam) {
-	f.User = &User{ID: param.UserID}
-	f.Post = &Post{ID: param.PostID}
-	f.CreatedAt = time.Now()
+func CreateFavorite(param CreateFavoriteParam) *Favorite {
+	return &Favorite{
+		UserID:    param.UserID,
+		PostID:    param.PostID,
+		CreatedAt: time.Now(),
+	}
 }

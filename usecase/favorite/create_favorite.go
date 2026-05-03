@@ -26,8 +26,7 @@ func NewCreateFavoriteUseCase(favoriteRepo repository.FavoriteRepository, postRe
 }
 
 func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.CreateFavoriteParam) (*model.Favorite, error) {
-	favorite := &model.Favorite{}
-	favorite.CreateFavorite(param)
+	favorite := model.CreateFavorite(param)
 
 	_, err := uc.favoriteRepo.CreateFavorite(ctx, favorite)
 	if err != nil {

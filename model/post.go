@@ -7,31 +7,29 @@ type Post struct {
 	Content   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	User      *User
-	Favorites []*Favorite
-	Parent    *Post
-	Replies   []*Post
+	UserID    int64
+	ParentID  *int64
 }
 
 type CreatePostParam struct {
-	UserID    int64
 	Content   string
-	ParentID  *int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	UserID    int64
+	ParentID  *int64
 }
 
 type UpdatePostParam struct {
 	Content *string
 }
 
-func (p *Post) CreatePost(param CreatePostParam) {
-	p.User = &User{ID: param.UserID}
-	p.Content = param.Content
-	p.CreatedAt = param.CreatedAt
-	p.UpdatedAt = param.UpdatedAt
-	if param.ParentID != nil {
-		p.Parent = &Post{ID: *param.ParentID}
+func CreatePost(param CreatePostParam) *Post {
+	return &Post{
+		UserID:    param.UserID,
+		Content:   param.Content,
+		ParentID:  param.ParentID,
+		CreatedAt: param.CreatedAt,
+		UpdatedAt: param.UpdatedAt,
 	}
 }
 
