@@ -45,12 +45,7 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 		return nil, nil
 	}
 
-	var gqlParent *gqlmodel.Post
-	if post.ParentID != nil {
-		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
-	}
-
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // CreateUser is the resolver for the createUser field.
@@ -278,14 +273,12 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	}
 
 	var numericParentID *int64
-	var gqlParent *gqlmodel.Post
 	if input.ParentID != nil && *input.ParentID != "" {
 		parentID, err := decodeGraphID(ctx, "post", *input.ParentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent post id")
 		}
 		numericParentID = &parentID
-		gqlParent = &gqlmodel.Post{ID: *input.ParentID}
 	}
 
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
@@ -297,7 +290,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // DeletePost is the resolver for the deletePost field.
@@ -836,7 +829,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }
@@ -850,7 +843,7 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }
@@ -870,12 +863,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 		return nil, nil
 	}
 
-	var gqlParent *gqlmodel.Post
-	if post.ParentID != nil {
-		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
-	}
-
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
@@ -892,7 +880,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 
 	var gqlReplies []*gqlmodel.Post
 	for _, reply := range replies {
-		gqlReplies = append(gqlReplies, toGraphPost(reply, &gqlmodel.Post{ID: postID}))
+		gqlReplies = append(gqlReplies, toGraphPost(reply))
 	}
 	return gqlReplies, nil
 }
@@ -906,11 +894,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		var gqlParent *gqlmodel.Post
-		if post.ParentID != nil {
-			gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
-		}
-		gqlPosts = append(gqlPosts, toGraphPost(post, gqlParent))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }

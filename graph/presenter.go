@@ -77,9 +77,14 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 	}
 }
 
-func toGraphPost(post *model.Post, parent *gqlmodel.Post) *gqlmodel.Post {
+func toGraphPost(post *model.Post) *gqlmodel.Post {
 	if post == nil {
 		return nil
+	}
+
+	var gqlParent *gqlmodel.Post
+	if post.ParentID != nil {
+		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
 	}
 
 	return &gqlmodel.Post{
@@ -87,6 +92,8 @@ func toGraphPost(post *model.Post, parent *gqlmodel.Post) *gqlmodel.Post {
 		Content:   post.Content,
 		CreatedAt: post.CreatedAt.Format(timeFormat),
 		UpdatedAt: post.UpdatedAt.Format(timeFormat),
+		User:      toGraphUser(&model.User{ID: post.UserID}),
+		Parent:    gqlParent,
 	}
 }
 func toGraphProfile(user *model.User, profile *model.Profile) *gqlmodel.Profile {
