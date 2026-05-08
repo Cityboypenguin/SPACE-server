@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS posts (
     user_id         BIGINT       NOT NULL,
     parent_id       BIGINT       NULL,
     PRIMARY KEY (id),
-    FOREIGN KEY (user_id)   REFERENCES users(id),
+    FOREIGN KEY (user_id)   REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (parent_id) REFERENCES posts(id) ON DELETE CASCADE
 );

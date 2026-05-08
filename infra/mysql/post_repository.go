@@ -107,6 +107,12 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 	return affected > 0, nil
 }
 
+func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID int64) error {
+	query := `DELETE FROM posts WHERE user_id = ?`
+	_, err := r.DB.ExecContext(ctx, query, userID)
+	return err
+}
+
 func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id

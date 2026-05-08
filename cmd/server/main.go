@@ -60,7 +60,7 @@ func main() {
 
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)

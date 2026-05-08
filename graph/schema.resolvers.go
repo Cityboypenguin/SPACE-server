@@ -603,6 +603,31 @@ func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input
 	return toGraphUser(user), nil
 }
 
+// AdminUpdateProfile is the resolver for the adminUpdateProfile field.
+func (r *mutationResolver) AdminUpdateProfile(ctx context.Context, userID string, input gqlmodel.UpdateProfileInput) (*gqlmodel.Profile, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	param := model.UpdateProfileParam{
+		Bio:   input.Bio,
+		Image: input.Image,
+	}
+
+	p, err := r.UpdateProfileUseCase.Execute(ctx, numericUserID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+	return toGraphProfile(targetUser, p), nil
+}
+
 // UpdateCommunity is the resolver for the updateCommunity field.
 func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input gqlmodel.UpdateCommunityInput) (*gqlmodel.Community, error) {
 	claims, err := requireAuth(ctx)
