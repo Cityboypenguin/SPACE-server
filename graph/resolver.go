@@ -26,6 +26,8 @@ type Resolver struct {
 	LoginUserUseCase        user.LoginUserUseCase
 	RefreshUserTokenUseCase user.RefreshUserTokenUseCase
 	LogoutUserUseCase       user.LogoutUserUseCase
+	FreezeUserUseCase       user.FreezeUserUseCase
+	UnfreezeUserUseCase     user.UnfreezeUserUseCase
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase

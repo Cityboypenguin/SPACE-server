@@ -6,6 +6,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	UserStatusActive = "active"
+	UserStatusFrozen = "frozen"
+)
+
 type User struct {
 	ID             int64     `json:"id"`
 	AccountID      string    `json:"account_id"`

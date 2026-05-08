@@ -7,6 +7,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -41,6 +42,10 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
 		return nil, errors.New("invalid email or password")
+	}
+
+	if user.Status == model.UserStatusFrozen {
+		return nil, errors.New("account is frozen")
 	}
 
 	accessToken, err := auth.GenerateAccessToken(user.ID, user.Role)

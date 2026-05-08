@@ -65,6 +65,8 @@ func main() {
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
+	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
+	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
@@ -150,6 +152,8 @@ func main() {
 		LoginUserUseCase:        loginUserUseCase,
 		RefreshUserTokenUseCase: refreshUserTokenUseCase,
 		LogoutUserUseCase:       logoutUserUseCase,
+		FreezeUserUseCase:       freezeUserUseCase,
+		UnfreezeUserUseCase:     unfreezeUserUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
@@ -231,7 +235,7 @@ func main() {
 		},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.GraphQLAudit())
 

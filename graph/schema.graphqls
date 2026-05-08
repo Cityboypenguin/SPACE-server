@@ -121,6 +121,8 @@ type Mutation {
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
   demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
   adminDeletePost(id: ID!): Boolean!
+  freezeUser(id: ID!): Boolean!
+  unfreezeUser(id: ID!): Boolean!
   joinRoom(roomID: ID!): Boolean!
   sendMessage(roomID: ID!, content: String!): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
