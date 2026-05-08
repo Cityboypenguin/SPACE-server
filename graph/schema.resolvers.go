@@ -45,12 +45,7 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 		return nil, nil
 	}
 
-	var gqlParent *gqlmodel.Post
-	if post.Parent != nil {
-		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
-	}
-
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // CreateUser is the resolver for the createUser field.
@@ -286,14 +281,12 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	}
 
 	var numericParentID *int64
-	var gqlParent *gqlmodel.Post
 	if input.ParentID != nil && *input.ParentID != "" {
 		parentID, err := decodeGraphID(ctx, "post", *input.ParentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent post id")
 		}
 		numericParentID = &parentID
-		gqlParent = &gqlmodel.Post{ID: *input.ParentID}
 	}
 
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
@@ -305,7 +298,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // DeletePost is the resolver for the deletePost field.
@@ -345,7 +338,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		Content:   post.Content,
 		CreatedAt: post.CreatedAt.Format(timeFormat),
 		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.User.ID)},
+		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
 	}, nil
 }
 
@@ -372,8 +365,8 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	return &gqlmodel.Favorite{
 		ID:        encodeGraphID("favorite", favorite.ID),
 		CreatedAt: favorite.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", favorite.User.ID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", favorite.Post.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", favorite.UserID)},
+		Post:      &gqlmodel.Post{ID: encodeGraphID("post", favorite.PostID)},
 	}, nil
 }
 
@@ -954,8 +947,8 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
 			ID:        encodeGraphID("favorite", f.ID),
 			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
-			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
+			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
 		})
 	}
 	return gqlFavorites, nil
@@ -980,8 +973,8 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 	}
 
 	var gqlGrandParent *gqlmodel.Post
-	if parent.Parent != nil && parent.Parent.ID != 0 {
-		gqlGrandParent = &gqlmodel.Post{ID: encodeGraphID("post", parent.Parent.ID)}
+	if parent.ParentID != nil && *parent.ParentID != 0 {
+		gqlGrandParent = &gqlmodel.Post{ID: encodeGraphID("post", *parent.ParentID)}
 	}
 
 	return &gqlmodel.Post{
@@ -989,7 +982,7 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 		Content:   parent.Content,
 		CreatedAt: parent.CreatedAt.Format(timeFormat),
 		UpdatedAt: parent.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", parent.User.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", parent.UserID)},
 		Parent:    gqlGrandParent,
 	}, nil
 }
@@ -1013,7 +1006,7 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 			Content:   reply.Content,
 			CreatedAt: reply.CreatedAt.Format(timeFormat),
 			UpdatedAt: reply.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", reply.User.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", reply.UserID)},
 			Parent:    &gqlmodel.Post{ID: obj.ID},
 		})
 	}
@@ -1154,7 +1147,7 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }
@@ -1168,7 +1161,7 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post, nil))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }
@@ -1188,12 +1181,7 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 		return nil, nil
 	}
 
-	var gqlParent *gqlmodel.Post
-	if post.Parent != nil {
-		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
-	}
-
-	return toGraphPost(post, gqlParent), nil
+	return toGraphPost(post), nil
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
@@ -1210,7 +1198,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 
 	var gqlReplies []*gqlmodel.Post
 	for _, reply := range replies {
-		gqlReplies = append(gqlReplies, toGraphPost(reply, &gqlmodel.Post{ID: postID}))
+		gqlReplies = append(gqlReplies, toGraphPost(reply))
 	}
 	return gqlReplies, nil
 }
@@ -1224,11 +1212,7 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 
 	var gqlPosts []*gqlmodel.Post
 	for _, post := range posts {
-		var gqlParent *gqlmodel.Post
-		if post.Parent != nil {
-			gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", post.Parent.ID)}
-		}
-		gqlPosts = append(gqlPosts, toGraphPost(post, gqlParent))
+		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
 }
@@ -1245,8 +1229,8 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
 			ID:        encodeGraphID("favorite", f.ID),
 			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
-			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
+			User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
+			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
 		})
 	}
 	return gqlFavorites, nil
@@ -1270,8 +1254,8 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 	return &gqlmodel.Favorite{
 		ID:        encodeGraphID("favorite", f.ID),
 		CreatedAt: f.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", f.User.ID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.Post.ID)},
+		User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
+		Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
 	}, nil
 }
 

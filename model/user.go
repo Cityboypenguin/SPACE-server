@@ -12,31 +12,31 @@ const (
 )
 
 type User struct {
-	ID             int64     `json:"id"`
-	AccountID      string    `json:"account_id"`
-	Name           string    `json:"name"`
-	Email          string    `json:"email"`
-	HashedPassword string    `json:"hashed_password"`
-	Role           string    `json:"role"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             int64
+	AccountID      string
+	Name           string
+	Email          string
+	HashedPassword string
+	Role           string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type CreateUserParam struct {
-	AccountID string    `json:"account_id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Password  string    `json:"password"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	AccountID string
+	Name      string
+	Email     string
+	Password  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UpdateUserParam struct {
-	AccountID *string `json:"account_id,omitempty"`
-	Name      *string `json:"name,omitempty"`
-	Email     *string `json:"email,omitempty"`
-	Password  *string `json:"password,omitempty"`
+	AccountID *string
+	Name      *string
+	Email     *string
+	Password  *string
 }
 
 func hashPassword(password string) (string, error) {

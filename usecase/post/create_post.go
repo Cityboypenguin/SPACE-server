@@ -25,8 +25,7 @@ func NewCreatePostUseCase(postRepo repository.PostRepository) CreatePostUseCase 
 }
 
 func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam) (*model.Post, error) {
-	post := &model.Post{}
-	post.CreatePost(param)
+	post := model.CreatePost(param)
 
 	now := time.Now()
 	post.CreatedAt = now

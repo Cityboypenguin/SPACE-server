@@ -8,21 +8,21 @@ const (
 )
 
 type Room struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	Name      string
+	Type      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type CreateRoomParam struct {
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UpdateRoomParam struct {
-	Name *string `json:"name,omitempty"`
+	Name *string
 }
 
 func (r *Room) CreateRoom(param CreateRoomParam) {

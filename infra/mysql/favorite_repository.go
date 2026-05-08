@@ -29,11 +29,7 @@ func (r *MySQLFavoriteRepository) ListFavorites(ctx context.Context) ([]*model.F
 	for rows.Next() {
 		var favorite model.Favorite
 		var createdAtUnix int64
-
-		favorite.Post = &model.Post{}
-		favorite.User = &model.User{}
-
-		if err := rows.Scan(&favorite.ID, &favorite.Post.ID, &favorite.User.ID, &createdAtUnix); err != nil {
+		if err := rows.Scan(&favorite.ID, &favorite.PostID, &favorite.UserID, &createdAtUnix); err != nil {
 			return nil, err
 		}
 		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -50,10 +46,7 @@ func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64)
 	var favorite model.Favorite
 	var createdAtUnix int64
 
-	favorite.Post = &model.Post{}
-	favorite.User = &model.User{}
-
-	if err := row.Scan(&favorite.ID, &favorite.Post.ID, &favorite.User.ID, &createdAtUnix); err != nil {
+	if err := row.Scan(&favorite.ID, &favorite.PostID, &favorite.UserID, &createdAtUnix); err != nil {
 		return nil, err
 	}
 
@@ -68,8 +61,8 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, f *model.F
 		VALUES (?, ?, ?)
 	`
 	result, err := r.DB.ExecContext(ctx, query,
-		f.Post.ID,
-		f.User.ID,
+		f.PostID,
+		f.UserID,
 		f.CreatedAt.Unix(),
 	)
 	if err != nil {
@@ -112,13 +105,13 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 	var favorites []*model.Favorite
 	for rows.Next() {
 		var favorite model.Favorite
-		favorite.Post = &model.Post{ID: postID}
+		favorite.PostID = postID
 		var createdAtUnix int64
 		var userID int64
 		if err := rows.Scan(&favorite.ID, &userID, &createdAtUnix); err != nil {
 			return nil, err
 		}
-		favorite.User = &model.User{ID: userID}
+		favorite.UserID = userID
 		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
 		favorites = append(favorites, &favorite)
 	}
@@ -137,8 +130,8 @@ func (r *MySQLFavoriteRepository) GetFavoritesByUserID(ctx context.Context, user
 	var favorites []*model.Favorite
 	for rows.Next() {
 		var favorite model.Favorite
-		favorite.User = &model.User{ID: userID}
-		if err := rows.Scan(&favorite.ID, &favorite.Post, &favorite.CreatedAt); err != nil {
+		favorite.UserID = userID
+		if err := rows.Scan(&favorite.ID, &favorite.PostID, &favorite.CreatedAt); err != nil {
 			return nil, err
 		}
 		favorites = append(favorites, &favorite)
@@ -154,8 +147,8 @@ func (r *MySQLFavoriteRepository) GetFavoriteByUserIDAndPostID(ctx context.Conte
 	var favorite model.Favorite
 	var createdAtUnix int64
 
-	favorite.User = &model.User{ID: userID}
-	favorite.Post = &model.Post{ID: postID}
+	favorite.UserID = userID
+	favorite.PostID = postID
 
 	if err := row.Scan(&favorite.ID, &createdAtUnix); err != nil {
 		return nil, err

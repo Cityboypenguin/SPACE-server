@@ -26,16 +26,15 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var p model.Post
-	p.User = &model.User{}
 	var createdAtUnix, updatedAtUnix int64
 	var parentID sql.NullInt64
-	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 		return nil, err
 	}
 	if parentID.Valid {
-		p.Parent = &model.Post{ID: parentID.Int64}
+		p.ParentID = &parentID.Int64
 	} else {
-		p.Parent = nil
+		p.ParentID = nil
 	}
 	p.CreatedAt = time.Unix(createdAtUnix, 0)
 	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -50,8 +49,8 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 	`
 
 	var validParentID sql.NullInt64
-	if p.Parent != nil && p.Parent.ID != 0 {
-		validParentID = sql.NullInt64{Int64: p.Parent.ID, Valid: true}
+	if p.ParentID != nil && *p.ParentID != 0 {
+		validParentID = sql.NullInt64{Int64: *p.ParentID, Valid: true}
 	} else {
 		validParentID = sql.NullInt64{Valid: false}
 	}
@@ -60,7 +59,7 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		p.Content,
 		p.CreatedAt.Unix(),
 		p.UpdatedAt.Unix(),
-		p.User.ID,
+		p.UserID,
 		validParentID,
 	)
 	if err != nil {
@@ -128,17 +127,15 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		p.User = &model.User{}
-		p.Parent = &model.Post{}
 		var createdAtUnix, updatedAtUnix int64
 		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent = &model.Post{ID: parentID.Int64}
+			p.ParentID = &parentID.Int64
 		} else {
-			p.Parent = nil
+			p.ParentID = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -162,17 +159,15 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		p.User = &model.User{}
-		p.Parent = &model.Post{}
 		var createdAtUnix, updatedAtUnix int64
 		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent = &model.Post{ID: parentID.Int64}
+			p.ParentID = &parentID.Int64
 		} else {
-			p.Parent = nil
+			p.ParentID = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -197,16 +192,15 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		p.User = &model.User{}
 		var createdAtUnix, updatedAtUnix int64
 		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent = &model.Post{ID: parentID.Int64}
+			p.ParentID = &parentID.Int64
 		} else {
-			p.Parent = nil
+			p.ParentID = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -231,17 +225,15 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		p.User = &model.User{}
-		p.Parent = &model.Post{}
 		var createdAtUnix, updatedAtUnix int64
 		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent = &model.Post{ID: parentID.Int64}
+			p.ParentID = &parentID.Int64
 		} else {
-			p.Parent = nil
+			p.ParentID = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -266,17 +258,15 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
-		p.User = &model.User{}
-		p.Parent = &model.Post{}
 		var createdAtUnix, updatedAtUnix int64
 		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.User.ID, &parentID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
-			p.Parent = &model.Post{ID: parentID.Int64}
+			p.ParentID = &parentID.Int64
 		} else {
-			p.Parent = nil
+			p.ParentID = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
