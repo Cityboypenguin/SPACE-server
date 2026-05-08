@@ -81,6 +81,14 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 		return false, fmt.Errorf("invalid user id")
 	}
 
+	isSole, err := r.IsSoleOwnerWithOtherMembersUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+	if isSole {
+		return false, errors.New("cannot delete user: they are the sole owner of a community with other members; transfer ownership first")
+	}
+
 	deleted, err := r.DeleteUserUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return false, err
@@ -542,9 +550,21 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 		return false, errors.New("forbidden: can only remove yourself from a room")
 	}
 
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get room")
+	}
+
 	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, rid, uid); err != nil {
 		return false, err
 	}
+
+	if room != nil && room.Type == model.RoomTypeCommunity {
+		if err := r.deleteCommunityIfEmpty(ctx, rid); err != nil {
+			log.Printf("failed to auto-delete empty community room %d: %v", rid, err)
+		}
+	}
+
 	return true, nil
 }
 
@@ -555,6 +575,183 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 		return nil, err
 	}
 	return toGraphCommunity(c), nil
+}
+
+// AdminUpdateUser is the resolver for the adminUpdateUser field.
+func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "user", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	param := model.UpdateUserParam{
+		AccountID: input.AccountID,
+		Name:      input.Name,
+		Email:     input.Email,
+		Password:  input.Password,
+	}
+
+	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphUser(user), nil
+}
+
+// UpdateCommunity is the resolver for the updateCommunity field.
+func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input gqlmodel.UpdateCommunityInput) (*gqlmodel.Community, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "community", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid community id")
+	}
+
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("community not found")
+	}
+
+	if !isAdminRole(claims.Role) {
+		role, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
+		if err != nil {
+			return nil, err
+		}
+		if role != model.RoomUserRoleOwner {
+			return nil, errors.New("forbidden: only community owners or administrators can update the community")
+		}
+	}
+
+	c.UpdateCommunity(model.UpdateCommunityParam{
+		Name:        input.Name,
+		Description: input.Description,
+	})
+
+	if err := r.UpdateCommunityUseCase.Execute(ctx, c); err != nil {
+		return nil, err
+	}
+
+	return toGraphCommunity(c), nil
+}
+
+// KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
+func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityID string, userID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return false, fmt.Errorf("invalid community id")
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return false, fmt.Errorf("invalid user id")
+	}
+
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericCommunityID)
+	if err != nil {
+		return false, err
+	}
+	if c == nil {
+		return false, fmt.Errorf("community not found")
+	}
+
+	if !isAdminRole(claims.Role) {
+		callerRole, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
+		if err != nil {
+			return false, err
+		}
+		if callerRole != model.RoomUserRoleOwner {
+			return false, errors.New("forbidden: only community owners or administrators can kick members")
+		}
+		if claims.ID == numericUserID {
+			return false, errors.New("cannot kick yourself; use leave instead")
+		}
+	}
+
+	kickedRole, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, numericUserID)
+	if err != nil {
+		return false, err
+	}
+	if kickedRole == model.RoomUserRoleOwner {
+		ownerCount, err := r.countCommunityOwners(ctx, c.RoomID)
+		if err != nil {
+			return false, err
+		}
+		if ownerCount <= 1 {
+			memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, c.RoomID)
+			if err != nil {
+				return false, err
+			}
+			if len(memberIDs) > 1 {
+				return false, errors.New("cannot kick the last owner while other members remain; promote another member first")
+			}
+		}
+	}
+
+	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, c.RoomID, numericUserID); err != nil {
+		return false, err
+	}
+
+	if err := r.deleteCommunityIfEmpty(ctx, c.RoomID); err != nil {
+		log.Printf("failed to auto-delete empty community room %d: %v", c.RoomID, err)
+	}
+
+	return true, nil
+}
+
+// PromoteToCommunityOwner is the resolver for the promoteToCommunityOwner field.
+func (r *mutationResolver) PromoteToCommunityOwner(ctx context.Context, communityID string, userID string) (bool, error) {
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return false, fmt.Errorf("invalid community id")
+	}
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return false, fmt.Errorf("invalid user id")
+	}
+	return r.PromoteToCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+}
+
+// DemoteFromCommunityOwner is the resolver for the demoteFromCommunityOwner field.
+func (r *mutationResolver) DemoteFromCommunityOwner(ctx context.Context, communityID string, userID string) (bool, error) {
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return false, fmt.Errorf("invalid community id")
+	}
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return false, fmt.Errorf("invalid user id")
+	}
+	return r.DemoteFromCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+}
+
+// AdminDeletePost is the resolver for the adminDeletePost field.
+func (r *mutationResolver) AdminDeletePost(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "post", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid post id")
+	}
+
+	return r.DeletePostUseCase.Execute(ctx, numericID)
 }
 
 // JoinRoom is the resolver for the joinRoom field.
@@ -608,13 +805,33 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 // DeleteMessage is the resolver for the deleteMessage field.
 func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id string) (bool, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return false, err
 	}
 
 	numericID, err := decodeGraphID(ctx, "message", id)
 	if err != nil {
 		return false, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.GetMessageByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get message")
+	}
+	if msg == nil {
+		return false, fmt.Errorf("message not found")
+	}
+
+	if msg.UserID != claims.ID {
+		room, err := r.GetRoomUseCase.Execute(ctx, msg.RoomID)
+		if err != nil || room == nil || room.Type != model.RoomTypeCommunity {
+			return false, errors.New("forbidden: can only delete your own messages")
+		}
+		role, err := r.GetRoomUserRoleUseCase.Execute(ctx, msg.RoomID, claims.ID)
+		if err != nil || role != model.RoomUserRoleOwner {
+			return false, errors.New("forbidden: can only delete your own messages")
+		}
 	}
 
 	deleted, err := r.DeleteMessageUseCase.Execute(ctx, numericID)
@@ -1107,7 +1324,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
+	if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
@@ -1187,6 +1404,85 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
 		result = append(result, toGraphCommunity(c))
+	}
+	return result, nil
+}
+
+// Communities is the resolver for the communities field.
+func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	communities, err := r.ListAllCommunitiesUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.Community, 0, len(communities))
+	for _, c := range communities {
+		result = append(result, toGraphCommunity(c))
+	}
+	return result, nil
+}
+
+// GetMyRoleInCommunity is the resolver for the getMyRoleInCommunity field.
+func (r *queryResolver) GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return "", fmt.Errorf("invalid community id")
+	}
+
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericCommunityID)
+	if err != nil {
+		return "", err
+	}
+	if c == nil {
+		return "", fmt.Errorf("community not found")
+	}
+
+	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
+	if err != nil {
+		return model.RoomUserRoleMember, nil
+	}
+	return role, nil
+}
+
+// GetCommunityMembers is the resolver for the getCommunityMembers field.
+func (r *queryResolver) GetCommunityMembers(ctx context.Context, communityID string) ([]*gqlmodel.CommunityMember, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid community id")
+	}
+
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericCommunityID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("community not found")
+	}
+
+	members, err := r.ListRoomMembersWithRolesUseCase.Execute(ctx, c.RoomID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.CommunityMember, 0, len(members))
+	for _, m := range members {
+		result = append(result, &gqlmodel.CommunityMember{
+			User: toGraphUser(m.User),
+			Role: m.Role,
+		})
 	}
 	return result, nil
 }

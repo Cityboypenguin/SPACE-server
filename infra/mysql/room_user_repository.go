@@ -22,9 +22,74 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
 	now := time.Now().Unix()
-	query := "INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)"
-	_, err := r.DB.ExecContext(ctx, query, roomID, userID, now, now)
+	query := "INSERT IGNORE INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+	_, err := r.DB.ExecContext(ctx, query, roomID, userID, model.RoomUserRoleMember, now, now)
 	return err
+}
+
+func (r *MySQLRoomUserRepository) GetRoomUserRole(ctx context.Context, roomID, userID int64) (string, error) {
+	var role string
+	err := r.DB.QueryRowContext(ctx,
+		"SELECT role FROM room_users WHERE room_id = ? AND user_id = ?",
+		roomID, userID,
+	).Scan(&role)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return role, nil
+}
+
+func (r *MySQLRoomUserRepository) SetRoomUserRole(ctx context.Context, roomID, userID int64, role string) error {
+	now := time.Now().Unix()
+	_, err := r.DB.ExecContext(ctx,
+		"UPDATE room_users SET role = ?, updated_at = ? WHERE room_id = ? AND user_id = ?",
+		role, now, roomID, userID,
+	)
+	return err
+}
+
+func (r *MySQLRoomUserRepository) CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error) {
+	var count int
+	err := r.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM room_users WHERE room_id = ? AND role = ?",
+		roomID, role,
+	).Scan(&count)
+	return count, err
+}
+
+func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error) {
+	query := `
+		SELECT u.id, u.account_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at, ru.role
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id = ?
+		ORDER BY ru.created_at ASC
+	`
+	rows, err := r.DB.QueryContext(ctx, query, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members []*model.RoomMember
+	for rows.Next() {
+		var u model.User
+		var roomRole string
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&u.ID, &u.AccountID, &u.Name, &u.Email, &u.HashedPassword,
+			&u.Role, &u.Status, &createdAt, &updatedAt, &roomRole,
+		); err != nil {
+			return nil, err
+		}
+		u.CreatedAt = time.Unix(createdAt, 0)
+		u.UpdatedAt = time.Unix(updatedAt, 0)
+		members = append(members, &model.RoomMember{User: &u, Role: roomRole})
+	}
+	return members, rows.Err()
 }
 
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {

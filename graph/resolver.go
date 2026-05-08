@@ -60,6 +60,7 @@ type Resolver struct {
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
 	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
+	GetMessageByIDUseCase     messageusecase.GetMessageByIDUseCase
 	SendMessageUseCase        messageusecase.SendMessageUseCase
 	ListMessagesUseCase       messageusecase.ListMessagesUseCase
 	DeleteMessageUseCase      messageusecase.DeleteMessageUseCase
@@ -70,14 +71,23 @@ type Resolver struct {
 	ListUsersByRoomIDsUseCase roomusecase.ListUsersByRoomIDsUseCase
 	ListMyDMRoomsUseCase      roomusecase.ListMyDMRoomsUseCase
 	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase      roomusecase.AddUserToRoomUseCase
-	RemoveUserFromRoomUseCase roomusecase.RemoveUserFromRoomUseCase
-	JoinRoomUseCase           roomusecase.JoinRoomUseCase
+	AddUserToRoomUseCase              roomusecase.AddUserToRoomUseCase
+	RemoveUserFromRoomUseCase         roomusecase.RemoveUserFromRoomUseCase
+	DeleteRoomUseCase                 roomusecase.DeleteRoomUseCase
+	JoinRoomUseCase                   roomusecase.JoinRoomUseCase
+	GetRoomUserRoleUseCase            roomusecase.GetRoomUserRoleUseCase
+	SetRoomUserRoleUseCase            roomusecase.SetRoomUserRoleUseCase
+	ListRoomMembersWithRolesUseCase   roomusecase.ListRoomMembersWithRolesUseCase
 
-	CreateCommunityUseCase   communityusecase.CreateCommunityUseCase
-	GetCommunityUseCase      communityusecase.GetCommunityUseCase
-	SearchCommunityUseCase   communityusecase.SearchCommunityUseCase
-	ListMyCommunitiesUseCase communityusecase.ListMyCommunitiesUseCase
+	CreateCommunityUseCase                communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase                   communityusecase.GetCommunityUseCase
+	UpdateCommunityUseCase                communityusecase.UpdateCommunityUseCase
+	SearchCommunityUseCase                communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase              communityusecase.ListMyCommunitiesUseCase
+	ListAllCommunitiesUseCase             communityusecase.ListAllCommunitiesUseCase
+	PromoteToCommunityOwnerUseCase        communityusecase.PromoteToCommunityOwnerUseCase
+	DemoteFromCommunityOwnerUseCase       communityusecase.DemoteFromCommunityOwnerUseCase
+	IsSoleOwnerWithOtherMembersUseCase    communityusecase.IsSoleOwnerWithOtherMembersUseCase
 
 	PubSub *pubsub.PubSub
 }

@@ -42,10 +42,10 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 		return nil, err
 	}
 
-	// 2. room_users に作成者を追加
+	// 2. room_users に作成者をオーナーとして追加
 	_, err = tx.ExecContext(ctx,
-		`INSERT IGNORE INTO room_users (room_id, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-		roomID, creatorUserID, nowUnix, nowUnix,
+		`INSERT IGNORE INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		roomID, creatorUserID, model.RoomUserRoleOwner, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -145,6 +145,33 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 	}
 	defer rows.Close()
 	return scanCommunities(rows)
+}
+
+func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context) ([]*model.Community, error) {
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT id, room_id, name, description, created_at, updated_at FROM communities ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCommunities(rows)
+}
+
+func (r *MySQLCommunityRepository) IsSoleOwnerWithOtherMembers(ctx context.Context, userID int64) (bool, error) {
+	query := `
+		SELECT COUNT(*) FROM room_users ru
+		JOIN rooms rm ON ru.room_id = rm.id
+		WHERE ru.user_id = ? AND ru.role = ? AND rm.type = ?
+		AND (SELECT COUNT(*) FROM room_users ru2 WHERE ru2.room_id = ru.room_id AND ru2.role = ?) = 1
+		AND (SELECT COUNT(*) FROM room_users ru3 WHERE ru3.room_id = ru.room_id) > 1
+	`
+	var count int
+	err := r.DB.QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {

@@ -108,12 +108,14 @@ func main() {
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
+	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
 	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
+	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
@@ -121,12 +123,20 @@ func main() {
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
 	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
+	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
+	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
+	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
 
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
+	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
 	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
 	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
+	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
+	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
+	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
+	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 
 	ps := pubsub.New()
 
@@ -174,12 +184,14 @@ func main() {
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
 		ListFavoritesUseCase:                   listFavoritesUseCase,
 
+		GetMessageByIDUseCase:     getMessageByIDUseCase,
 		SendMessageUseCase:        sendMessageUseCase,
 		ListMessagesUseCase:       listMessagesUseCase,
 		DeleteMessageUseCase:      deleteMessageUseCase,
 		UpdateMessageUseCase:      updateMessageUseCase,
 		CreateRoomUseCase:         createRoomUseCase,
 		GetRoomUseCase:            getRoomUseCase,
+		DeleteRoomUseCase:         deleteRoomUseCase,
 		GetUserIDsByRoomIDUseCase: getUserIDsByRoomIDUseCase,
 		ListUsersByRoomIDsUseCase: listUsersByRoomIDsUseCase,
 		ListMyDMRoomsUseCase:      listMyDMRoomsUseCase,
@@ -187,11 +199,19 @@ func main() {
 		AddUserToRoomUseCase:      addUserToRoomUseCase,
 		RemoveUserFromRoomUseCase: removeUserFromRoomUseCase,
 		JoinRoomUseCase:           joinRoomUseCase,
+		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
+		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
+		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
 
-		CreateCommunityUseCase:   createCommunityUseCase,
-		GetCommunityUseCase:      getCommunityUseCase,
-		SearchCommunityUseCase:   searchCommunityUseCase,
-		ListMyCommunitiesUseCase: listMyCommunitiesUseCase,
+		CreateCommunityUseCase:             createCommunityUseCase,
+		GetCommunityUseCase:                getCommunityUseCase,
+		UpdateCommunityUseCase:             updateCommunityUseCase,
+		SearchCommunityUseCase:             searchCommunityUseCase,
+		ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
+		ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,
+		PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
+		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
+		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
 
 		PubSub: ps,
 	}

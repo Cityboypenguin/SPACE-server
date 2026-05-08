@@ -30,6 +30,11 @@ type Community struct {
 	UpdatedAt   string `json:"updatedAt"`
 }
 
+type CommunityMember struct {
+	User *User  `json:"user"`
+	Role string `json:"role"`
+}
+
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -136,6 +141,11 @@ type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
+}
+
+type UpdateCommunityInput struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 type UpdatePostInput struct {

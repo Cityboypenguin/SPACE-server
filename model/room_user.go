@@ -1,5 +1,10 @@
 package model
 
+const (
+	RoomUserRoleOwner  = "owner"
+	RoomUserRoleMember = "member"
+)
+
 type RoomUser struct {
 	ID        int64  `json:"id"`
 	RoomID    int64  `json:"room_id"`
@@ -33,4 +38,9 @@ func (ru *RoomUser) UpdateRoomUser(param UpdateRoomUserParam) {
 	if param.Role != nil {
 		ru.Role = *param.Role
 	}
+}
+
+type RoomMember struct {
+	User *User
+	Role string
 }
