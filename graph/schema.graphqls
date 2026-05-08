@@ -29,6 +29,7 @@ type Query {
   communities: [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
+  presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
 }
 
 type User {
@@ -38,10 +39,16 @@ type User {
   email: String!
   role: String!
   status: String!
+  avatarUrl: String
   createdAt: String!
   updatedAt: String!
   posts: [Post!]!
   favorites: [Favorite!]!
+}
+
+type PresignedUploadUrl {
+  uploadUrl: String!
+  objectKey: String!
 }
 
 type Administrator {
@@ -123,6 +130,7 @@ type Mutation {
   adminDeletePost(id: ID!): Boolean!
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
+  setAvatar(objectKey: String!): Profile!
   joinRoom(roomID: ID!): Boolean!
   sendMessage(roomID: ID!, content: String!): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
@@ -169,7 +177,7 @@ type Profile {
   user: User!
   username: String!
   bio: String
-  image: String
+  avatarUrl: String
   createdAt: String!
   updatedAt: String!
 }
@@ -177,7 +185,6 @@ type Profile {
 input UpdateProfileInput {
   username: String
   bio: String
-  image: String
 }
 
 type Room {

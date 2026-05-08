@@ -107,11 +107,16 @@ type Post struct {
 	Replies   []*Post     `json:"replies"`
 }
 
+type PresignedUploadURL struct {
+	UploadURL string `json:"uploadUrl"`
+	ObjectKey string `json:"objectKey"`
+}
+
 type Profile struct {
 	User      *User   `json:"user"`
 	Username  string  `json:"username"`
 	Bio       *string `json:"bio,omitempty"`
-	Image     *string `json:"image,omitempty"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 	UpdatedAt string  `json:"updatedAt"`
 }
@@ -156,7 +161,6 @@ type UpdatePostInput struct {
 type UpdateProfileInput struct {
 	Username *string `json:"username,omitempty"`
 	Bio      *string `json:"bio,omitempty"`
-	Image    *string `json:"image,omitempty"`
 }
 
 type UpdateRoomInput struct {
@@ -177,6 +181,7 @@ type User struct {
 	Email     string      `json:"email"`
 	Role      string      `json:"role"`
 	Status    string      `json:"status"`
+	AvatarURL *string     `json:"avatarUrl,omitempty"`
 	CreatedAt string      `json:"createdAt"`
 	UpdatedAt string      `json:"updatedAt"`
 	Posts     []*Post     `json:"posts"`

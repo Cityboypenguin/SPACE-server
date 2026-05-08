@@ -54,9 +54,8 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 
 	// 登録されたばかりのユーザーのIDを使って、空のプロフィールを作る
 	emptyProfile := &model.Profile{
-		UserID:    user.ID, // 先ほど作られたユーザーの内部ID
+		UserID:    user.ID,
 		Bio:       "",
-		Image:     "",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

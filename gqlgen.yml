@@ -140,6 +140,10 @@ models:
   UUID:
     model:
       - github.com/99designs/gqlgen/graphql.UUID
+  User:
+    fields:
+      avatarUrl:
+        resolver: true
   Post:
     fields:
       user:

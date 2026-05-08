@@ -11,6 +11,14 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+func (r *Resolver) avatarURLFor(p *model.Profile) *string {
+	if p == nil || p.AvatarKey == nil {
+		return nil
+	}
+	url := r.StorageRepository.PublicURL(*p.AvatarKey)
+	return &url
+}
+
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {
@@ -77,21 +85,5 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 		return nil, err
 	}
 
-	if p == nil {
-		return &gqlmodel.Profile{
-			User:      toGraphUser(u),
-			Username:  u.AccountID,
-			CreatedAt: "0",
-			UpdatedAt: "0",
-		}, nil
-	}
-
-	return &gqlmodel.Profile{
-		User:      toGraphUser(u),
-		Username:  u.AccountID,
-		Bio:       &p.Bio,
-		Image:     &p.Image,
-		CreatedAt: p.CreatedAt.Format(timeFormat),
-		UpdatedAt: p.UpdatedAt.Format(timeFormat),
-	}, nil
+	return toGraphProfile(u, p, r.avatarURLFor(p)), nil
 }

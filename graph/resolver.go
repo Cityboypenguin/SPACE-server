@@ -2,6 +2,7 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
@@ -17,6 +18,8 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
+	StorageRepository repository.StorageRepository
+
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	CreateUserUseCase       user.CreateUserUseCase
 	ListUsersUseCase        user.ListUsersUseCase
@@ -27,10 +30,11 @@ type Resolver struct {
 	RefreshUserTokenUseCase user.RefreshUserTokenUseCase
 	LogoutUserUseCase       user.LogoutUserUseCase
 	FreezeUserUseCase       user.FreezeUserUseCase
-	UnfreezeUserUseCase     user.UnfreezeUserUseCase
+	UnfreezeUserUseCase user.UnfreezeUserUseCase
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
+	SetAvatarUseCase     profile.SetAvatarUseCase
 
 	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase

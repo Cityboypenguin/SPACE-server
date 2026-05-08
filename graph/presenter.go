@@ -96,7 +96,7 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		Parent:    gqlParent,
 	}
 }
-func toGraphProfile(user *model.User, profile *model.Profile) *gqlmodel.Profile {
+func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string) *gqlmodel.Profile {
 	if user == nil {
 		return nil
 	}
@@ -112,7 +112,7 @@ func toGraphProfile(user *model.User, profile *model.Profile) *gqlmodel.Profile 
 		User:      toGraphUser(user),
 		Username:  user.Name,
 		Bio:       &profile.Bio,
-		Image:     &profile.Image,
+		AvatarURL: avatarURL,
 		CreatedAt: profile.CreatedAt.Format(timeFormat),
 		UpdatedAt: profile.UpdatedAt.Format(timeFormat),
 	}

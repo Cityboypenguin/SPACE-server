@@ -26,7 +26,6 @@ func (r *MySQLUserRepository) SaveUser(ctx context.Context, u *model.User) error
 		if err != nil {
 			return err
 		}
-
 		u.ID = id
 	} else {
 		if err := r.UpdateUser(ctx, u); err != nil {
@@ -71,10 +70,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 }
 
 func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, error) {
-	query := `
-		DELETE FROM users
-		WHERE id = ?
-	`
+	query := `DELETE FROM users WHERE id = ?`
 	result, err := r.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
@@ -83,7 +79,6 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 	if err != nil {
 		return false, err
 	}
-
 	return affected > 0, nil
 }
 

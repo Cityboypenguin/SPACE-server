@@ -15,6 +15,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
+	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
@@ -58,6 +59,11 @@ func main() {
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 
+	storageRepository, err := miniorepo.New()
+	if err != nil {
+		log.Fatalf("failed to connect to minio: %v", err)
+	}
+
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
@@ -67,9 +73,9 @@ func main() {
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
-
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
@@ -143,6 +149,8 @@ func main() {
 	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
+		StorageRepository: storageRepository,
+
 		CreateUserUseCase:       createUserUseCase,
 		ListUsersUseCase:        listUsersUseCase,
 		DeleteUserUseCase:       deleteUserUseCase,
@@ -154,6 +162,7 @@ func main() {
 		LogoutUserUseCase:       logoutUserUseCase,
 		FreezeUserUseCase:       freezeUserUseCase,
 		UnfreezeUserUseCase:     unfreezeUserUseCase,
+		SetAvatarUseCase:        setAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
