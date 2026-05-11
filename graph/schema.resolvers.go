@@ -1558,8 +1558,10 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}
 
+	const avatarMaxBytes = 5 * 1024 * 1024 // 5 MB
+
 	objectKey := fmt.Sprintf("avatars/%d/%s%s", claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, avatarMaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}
@@ -1602,8 +1604,10 @@ func (r *queryResolver) PresignedMessageFileUploadURL(ctx context.Context, roomI
 		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}
 
+	const messageFileMaxBytes = 20 * 1024 * 1024 // 20 MB
+
 	objectKey := fmt.Sprintf("messages/%d/%d/%s%s", rid, claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, messageFileMaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}

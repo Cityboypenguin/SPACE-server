@@ -33,20 +33,31 @@ func tokenExpirationMinutes(envKey string, defaultMinutes int) int {
 	return defaultMinutes
 }
 
+func jwtIssuer() string  { return os.Getenv("JWT_ISSUER") }
+func jwtAudience() string { return os.Getenv("JWT_AUDIENCE") }
+
 func generateTokenWithType(id int64, role string, tokenType string, expirationMinutes int) (string, error) {
 	secret := jwtSecret()
 	if len(secret) == 0 {
 		return "", errors.New("JWT_SECRET environment variable must be set")
 	}
 
+	registered := jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expirationMinutes) * time.Minute)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+	}
+	if iss := jwtIssuer(); iss != "" {
+		registered.Issuer = iss
+	}
+	if aud := jwtAudience(); aud != "" {
+		registered.Audience = jwt.ClaimStrings{aud}
+	}
+
 	claims := Claims{
-		ID:        id,
-		Role:      role,
-		TokenType: tokenType,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expirationMinutes) * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
+		ID:               id,
+		Role:             role,
+		TokenType:        tokenType,
+		RegisteredClaims: registered,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -98,12 +109,20 @@ func ValidateToken(tokenString string) (*Claims, error) {
 		return nil, errors.New("JWT_SECRET environment variable must be set")
 	}
 
+	parserOpts := []jwt.ParserOption{}
+	if iss := jwtIssuer(); iss != "" {
+		parserOpts = append(parserOpts, jwt.WithIssuer(iss))
+	}
+	if aud := jwtAudience(); aud != "" {
+		parserOpts = append(parserOpts, jwt.WithAudience(aud))
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
 		return secret, nil
-	})
+	}, parserOpts...)
 	if err != nil {
 		return nil, err
 	}

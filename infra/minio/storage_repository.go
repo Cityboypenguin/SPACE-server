@@ -67,9 +67,12 @@ func New() (*MinIOStorageRepository, error) {
 	}, nil
 }
 
-func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey string, contentType string, expires time.Duration) (string, error) {
+func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey string, contentType string, expires time.Duration, _ int64) (string, error) {
 	// presignClient は公開エンドポイントで初期化されているため、
 	// 生成される URL のホストはすでに localhost:9000 になっている。
+	// maxBytes は PUT presigned URL では強制できないため無視する。
+	// サーバー側での厳密なサイズ制限が必要な場合は presigned POST policy
+	// またはバケットポリシーへの移行を検討すること。
 	u, err := r.presignClient.PresignedPutObject(ctx, r.bucket, objectKey, expires)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned url: %w", err)

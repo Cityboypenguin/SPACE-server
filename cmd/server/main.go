@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -232,9 +234,13 @@ func main() {
 	// middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
+
+	// ALLOWED_ORIGINS が設定されていれば本番用ホワイトリスト、未設定なら開発用ワイルドカード
+	allowedOrigins := allowedOriginsFromEnv()
+
 	// CORSはJWTより先に登録しないと、401レスポンスにCORSヘッダーが付かずブラウザがブロックする
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: allowedOrigins,
 		AllowHeaders: []string{
 			echo.HeaderOrigin,
 			echo.HeaderContentType,
@@ -247,6 +253,7 @@ func main() {
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.GraphQLAudit())
+	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -264,9 +271,7 @@ func main() {
 	gqlServer.AddTransport(transport.Websocket{
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// origin := r.Header.Get("Origin")
-				// return origin == "http://localhost:5173"
-				return true // 開発環境では全てのオリジンを許可
+				return isOriginAllowed(r.Header.Get("Origin"), allowedOrigins)
 			},
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -308,7 +313,12 @@ func main() {
 	gqlServer.AddTransport(transport.GET{})
 	gqlServer.AddTransport(transport.POST{})
 	gqlServer.AddTransport(transport.MultipartForm{})
-	gqlServer.Use(extension.Introspection{})
+	gqlServer.Use(extension.FixedComplexityLimit(300))
+
+	isProd := os.Getenv("APP_ENV") == "production"
+	if !isProd {
+		gqlServer.Use(extension.Introspection{})
+	}
 
 	// GraphQL エンドポイント (POST: query/mutation, GET: WebSocket subscription)
 	gqlHandler := func(c echo.Context) error {
@@ -318,17 +328,62 @@ func main() {
 	e.POST("/query", gqlHandler)
 	e.GET("/query", gqlHandler)
 
-	// Playground（開発用）
-	e.GET("/playground", func(c echo.Context) error {
-		playground.Handler("GraphQL Playground", "/query").
-			ServeHTTP(c.Response(), c.Request())
-		return nil
-	})
+	// Playground（開発環境のみ）
+	if !isProd {
+		e.GET("/playground", func(c echo.Context) error {
+			playground.Handler("GraphQL Playground", "/query").
+				ServeHTTP(c.Response(), c.Request())
+			return nil
+		})
+	}
 
 	hub := sse.NewHub()
 	// SSE
 	e.GET("/events", sse.NewHandler(hub))
-	e.Logger.Fatal(e.Start(":8080"))
+
+	go func() {
+		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
+			e.Logger.Fatal(err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		e.Logger.Fatal(err)
+	}
+}
+
+// allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
+// If ALLOWED_ORIGINS is not set, it falls back to wildcard (dev-friendly).
+func allowedOriginsFromEnv() []string {
+	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if raw == "" {
+		return []string{"*"}
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, o := range parts {
+		if o = strings.TrimSpace(o); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
+}
+
+// isOriginAllowed checks whether an origin is in the whitelist.
+// A whitelist of ["*"] allows every origin.
+func isOriginAllowed(origin string, allowed []string) bool {
+	for _, a := range allowed {
+		if a == "*" || a == origin {
+			return true
+		}
+	}
+	return false
 }
 
 func authHeaderFromInitPayload(initPayload transport.InitPayload) string {
