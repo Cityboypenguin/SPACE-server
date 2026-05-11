@@ -1316,8 +1316,10 @@ func (r *queryResolver) MyProfile(ctx context.Context) (*gqlmodel.Profile, error
 
 // GetProfileByUserID is the resolver for the getProfileByUserID field.
 func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (*gqlmodel.Profile, error) {
-	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
+	if _, userErr := requireAuth(ctx); userErr != nil {
+		if _, adminErr := requireAdminAuth(ctx); adminErr != nil {
+			return nil, userErr
+		}
 	}
 
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
