@@ -99,10 +99,6 @@ func ValidateRefreshToken(tokenString string) (*Claims, error) {
 	return validateTokenWithType(tokenString, "refresh")
 }
 
-func GenerateToken(id int64, role string) (string, error) {
-	return GenerateAccessToken(id, role)
-}
-
 func ValidateToken(tokenString string) (*Claims, error) {
 	secret := jwtSecret()
 	if len(secret) == 0 {

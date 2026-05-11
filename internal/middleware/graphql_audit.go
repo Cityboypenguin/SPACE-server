@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/labstack/echo/v4"
 )
@@ -85,20 +85,13 @@ func GraphQLAudit() echo.MiddlewareFunc {
 			status := c.Response().Status
 			duration := time.Since(start).Milliseconds()
 
-			ev := logger.Log.Info().
+			audit.WithActor(logger.Log.Info().
 				Str("event", "graphql_audit").
 				Str("op", opName).
 				Int("status", status).
 				Str("ip", c.RealIP()).
 				Int64("duration_ms", duration).
-				Str("vars", maskedVars)
-
-			if claims, ok := auth.ClaimsFromContext(c.Request().Context()); ok {
-				ev = ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
-			} else {
-				ev = ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
-			}
-			ev.Send()
+				Str("vars", maskedVars), c.Request().Context()).Send()
 
 			return err
 		}
