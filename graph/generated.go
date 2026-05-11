@@ -77,14 +77,16 @@ type ComplexityRoot struct {
 	}
 
 	Message struct {
-		Content   func(childComplexity int) int
-		CreatedAt func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Room      func(childComplexity int) int
-		RoomID    func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
-		User      func(childComplexity int) int
-		UserID    func(childComplexity int) int
+		AttachmentName func(childComplexity int) int
+		AttachmentURL  func(childComplexity int) int
+		Content        func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Room           func(childComplexity int) int
+		RoomID         func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		User           func(childComplexity int) int
+		UserID         func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -116,7 +118,7 @@ type ComplexityRoot struct {
 		RefreshAdministratorToken func(childComplexity int, refreshToken string) int
 		RefreshUserToken          func(childComplexity int, refreshToken string) int
 		RemoveUserFromRoom        func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		SendMessage               func(childComplexity int, roomID string, content string) int
+		SendMessage               func(childComplexity int, roomID string, content string, attachmentKey *string, attachmentName *string) int
 		SetAvatar                 func(childComplexity int, objectKey string) int
 		UnfreezeUser              func(childComplexity int, id string) int
 		UpdateAdministrator       func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -153,31 +155,32 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Administrators           func(childComplexity int) int
-		Communities              func(childComplexity int) int
-		Favorites                func(childComplexity int) int
-		GetAdministratorByID     func(childComplexity int, id string) int
-		GetCommunityMembers      func(childComplexity int, communityID string) int
-		GetFavoriteByID          func(childComplexity int, id string) int
-		GetMyRoleInCommunity     func(childComplexity int, communityID string) int
-		GetPostByID              func(childComplexity int, id string) int
-		GetProfileByUserID       func(childComplexity int, userID string) int
-		GetRepliesByPostID       func(childComplexity int, postID string) int
-		GetUserByID              func(childComplexity int, id string) int
-		Me                       func(childComplexity int) int
-		Messages                 func(childComplexity int, roomID string) int
-		MyCommunities            func(childComplexity int) int
-		MyDMRooms                func(childComplexity int) int
-		MyProfile                func(childComplexity int) int
-		Posts                    func(childComplexity int) int
-		PresignedAvatarUploadURL func(childComplexity int, contentType string) int
-		Room                     func(childComplexity int, id string) int
-		SearchAdministrators     func(childComplexity int, name string) int
-		SearchCommunities        func(childComplexity int, name string) int
-		SearchPosts              func(childComplexity int, content string) int
-		SearchUsers              func(childComplexity int, name string) int
-		TopLevelPosts            func(childComplexity int) int
-		Users                    func(childComplexity int) int
+		Administrators                func(childComplexity int) int
+		Communities                   func(childComplexity int) int
+		Favorites                     func(childComplexity int) int
+		GetAdministratorByID          func(childComplexity int, id string) int
+		GetCommunityMembers           func(childComplexity int, communityID string) int
+		GetFavoriteByID               func(childComplexity int, id string) int
+		GetMyRoleInCommunity          func(childComplexity int, communityID string) int
+		GetPostByID                   func(childComplexity int, id string) int
+		GetProfileByUserID            func(childComplexity int, userID string) int
+		GetRepliesByPostID            func(childComplexity int, postID string) int
+		GetUserByID                   func(childComplexity int, id string) int
+		Me                            func(childComplexity int) int
+		Messages                      func(childComplexity int, roomID string) int
+		MyCommunities                 func(childComplexity int) int
+		MyDMRooms                     func(childComplexity int) int
+		MyProfile                     func(childComplexity int) int
+		Posts                         func(childComplexity int) int
+		PresignedAvatarUploadURL      func(childComplexity int, contentType string) int
+		PresignedMessageFileUploadURL func(childComplexity int, roomID string, contentType string) int
+		Room                          func(childComplexity int, id string) int
+		SearchAdministrators          func(childComplexity int, name string) int
+		SearchCommunities             func(childComplexity int, name string) int
+		SearchPosts                   func(childComplexity int, content string) int
+		SearchUsers                   func(childComplexity int, name string) int
+		TopLevelPosts                 func(childComplexity int) int
+		Users                         func(childComplexity int) int
 	}
 
 	Room struct {
@@ -256,7 +259,7 @@ type MutationResolver interface {
 	UnfreezeUser(ctx context.Context, id string) (bool, error)
 	SetAvatar(ctx context.Context, objectKey string) (*model.Profile, error)
 	JoinRoom(ctx context.Context, roomID string) (bool, error)
-	SendMessage(ctx context.Context, roomID string, content string) (*model.Message, error)
+	SendMessage(ctx context.Context, roomID string, content string, attachmentKey *string, attachmentName *string) (*model.Message, error)
 	DeleteMessage(ctx context.Context, roomID string, id string) (bool, error)
 	UpdateMessage(ctx context.Context, roomID string, id string, content string) (*model.Message, error)
 }
@@ -292,6 +295,7 @@ type QueryResolver interface {
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
 	GetCommunityMembers(ctx context.Context, communityID string) ([]*model.CommunityMember, error)
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
+	PresignedMessageFileUploadURL(ctx context.Context, roomID string, contentType string) (*model.PresignedUploadURL, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -441,6 +445,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Favorite.User(childComplexity), true
 
+	case "Message.attachmentName":
+		if e.ComplexityRoot.Message.AttachmentName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.AttachmentName(childComplexity), true
+	case "Message.attachmentUrl":
+		if e.ComplexityRoot.Message.AttachmentURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.AttachmentURL(childComplexity), true
 	case "Message.content":
 		if e.ComplexityRoot.Message.Content == nil {
 			break
@@ -808,7 +824,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string)), true
+		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["attachmentKey"].(*string), args["attachmentName"].(*string)), true
 	case "Mutation.setAvatar":
 		if e.ComplexityRoot.Mutation.SetAvatar == nil {
 			break
@@ -1156,6 +1172,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedAvatarUploadURL(childComplexity, args["contentType"].(string)), true
+	case "Query.presignedMessageFileUploadUrl":
+		if e.ComplexityRoot.Query.PresignedMessageFileUploadURL == nil {
+			break
+		}
+
+		args, err := ec.field_Query_presignedMessageFileUploadUrl_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.PresignedMessageFileUploadURL(childComplexity, args["roomID"].(string), args["contentType"].(string)), true
 	case "Query.room":
 		if e.ComplexityRoot.Query.Room == nil {
 			break
@@ -1606,6 +1633,10 @@ func (ec *executionContext) childFields_Message(ctx context.Context, field graph
 		return ec.fieldContext_Message_user(ctx, field)
 	case "content":
 		return ec.fieldContext_Message_content(ctx, field)
+	case "attachmentUrl":
+		return ec.fieldContext_Message_attachmentUrl(ctx, field)
+	case "attachmentName":
+		return ec.fieldContext_Message_attachmentName(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Message_createdAt(ctx, field)
 	case "updatedAt":
@@ -2299,6 +2330,22 @@ func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context,
 		return nil, err
 	}
 	args["content"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "attachmentKey",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["attachmentKey"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "attachmentName",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["attachmentName"] = arg3
 	return args, nil
 }
 
@@ -2597,6 +2644,28 @@ func (ec *executionContext) field_Query_presignedAvatarUploadUrl_args(ctx contex
 		return nil, err
 	}
 	args["contentType"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_presignedMessageFileUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "contentType",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["contentType"] = arg1
 	return args, nil
 }
 
@@ -3425,6 +3494,52 @@ func (ec *executionContext) _Message_content(ctx context.Context, field graphql.
 	)
 }
 func (ec *executionContext) fieldContext_Message_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Message_attachmentUrl(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_attachmentUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttachmentURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Message_attachmentUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Message_attachmentName(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_attachmentName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttachmentName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Message_attachmentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -4980,7 +5095,7 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string))
+			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["attachmentKey"].(*string), fc.Args["attachmentName"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
@@ -6489,6 +6604,50 @@ func (ec *executionContext) fieldContext_Query_presignedAvatarUploadUrl(ctx cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_presignedAvatarUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_presignedMessageFileUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_presignedMessageFileUploadUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().PresignedMessageFileUploadURL(ctx, fc.Args["roomID"].(string), fc.Args["contentType"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PresignedUploadURL) graphql.Marshaler {
+			return ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_presignedMessageFileUploadUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PresignedUploadUrl(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_presignedMessageFileUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9268,6 +9427,10 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "attachmentUrl":
+			out.Values[i] = ec._Message_attachmentUrl(ctx, field, obj)
+		case "attachmentName":
+			out.Values[i] = ec._Message_attachmentName(ctx, field, obj)
 		case "createdAt":
 			out.Values[i] = ec._Message_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -10435,6 +10598,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_presignedAvatarUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedMessageFileUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedMessageFileUploadUrl(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

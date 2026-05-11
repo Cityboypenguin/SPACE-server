@@ -83,14 +83,16 @@ type LoginInput struct {
 }
 
 type Message struct {
-	ID        string `json:"ID"`
-	RoomID    string `json:"roomID"`
-	Room      *Room  `json:"room"`
-	UserID    string `json:"userID"`
-	User      *User  `json:"user"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID             string  `json:"ID"`
+	RoomID         string  `json:"roomID"`
+	Room           *Room   `json:"room"`
+	UserID         string  `json:"userID"`
+	User           *User   `json:"user"`
+	Content        string  `json:"content"`
+	AttachmentURL  *string `json:"attachmentUrl,omitempty"`
+	AttachmentName *string `json:"attachmentName,omitempty"`
+	CreatedAt      string  `json:"createdAt"`
+	UpdatedAt      string  `json:"updatedAt"`
 }
 
 type Mutation struct {

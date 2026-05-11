@@ -826,7 +826,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 }
 
 // SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, attachmentKey *string, attachmentName *string) (*gqlmodel.Message, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -845,7 +845,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content)
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, attachmentKey, attachmentName)
 	if err != nil {
 		return nil, err
 	}
@@ -853,7 +853,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
 	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
 
-	gqlMsg := toGraphMessage(msg)
+	gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
 	if user != nil {
 		gqlMsg.User = toGraphUser(user)
 	}
@@ -923,7 +923,7 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		return nil, err
 	}
 
-	gqlMsg := toGraphMessage(msg)
+	gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
 	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
 	if user != nil {
 		gqlMsg.User = toGraphUser(user)
@@ -1347,7 +1347,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 			log.Printf("[Messages] user not found: messageID=%d userID=%d", msg.ID, msg.UserID)
 			continue
 		}
-		gqlMsg := toGraphMessage(msg)
+		gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
 		gqlMsg.User = toGraphUser(u)
 		if rm, _ := r.GetRoomUseCase.Execute(ctx, msg.RoomID); rm != nil {
 			gqlMsg.Room = toGraphRoom(rm)
@@ -1559,6 +1559,50 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 	}
 
 	objectKey := fmt.Sprintf("avatars/%d/%s%s", claims.ID, uuid.New().String(), ext)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate upload url")
+	}
+
+	return &gqlmodel.PresignedUploadURL{
+		UploadURL: uploadURL,
+		ObjectKey: objectKey,
+	}, nil
+}
+
+// PresignedMessageFileUploadURL is the resolver for the presignedMessageFileUploadUrl field.
+func (r *queryResolver) PresignedMessageFileUploadURL(ctx context.Context, roomID string, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	extMap := map[string]string{
+		"image/jpeg":      ".jpg",
+		"image/png":       ".png",
+		"image/gif":       ".gif",
+		"image/webp":      ".webp",
+		"application/pdf": ".pdf",
+	}
+	ext, ok := extMap[contentType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
+	}
+
+	objectKey := fmt.Sprintf("messages/%d/%d/%s%s", rid, claims.ID, uuid.New().String(), ext)
 	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")

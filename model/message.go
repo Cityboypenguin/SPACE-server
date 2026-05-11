@@ -3,20 +3,24 @@ package model
 import "time"
 
 type Message struct {
-	ID        int64
-	RoomID    int64
-	UserID    int64
-	Content   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID             int64
+	RoomID         int64
+	UserID         int64
+	Content        string
+	AttachmentKey  *string
+	AttachmentName *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type CreateMessageParam struct {
-	RoomID    int64
-	UserID    int64
-	Content   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	RoomID         int64
+	UserID         int64
+	Content        string
+	AttachmentKey  *string
+	AttachmentName *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type UpdateMessageParam struct {
@@ -27,6 +31,8 @@ func (m *Message) CreateMessage(param CreateMessageParam) {
 	m.RoomID = param.RoomID
 	m.UserID = param.UserID
 	m.Content = param.Content
+	m.AttachmentKey = param.AttachmentKey
+	m.AttachmentName = param.AttachmentName
 	m.CreatedAt = param.CreatedAt
 	m.UpdatedAt = param.UpdatedAt
 }
