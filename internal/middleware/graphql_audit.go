@@ -13,19 +13,19 @@ import (
 )
 
 type graphqlRequestPayload struct {
-	OperationName string                 `json:"operationName"`
-	Query         string                 `json:"query"`
-	Variables     map[string]interface{} `json:"variables"`
+	OperationName string         `json:"operationName"`
+	Query         string         `json:"query"`
+	Variables     map[string]any `json:"variables"`
 }
 
-// sensitiveKeys はログ出力時にマスクするフィールド名（大文字小文字・部分一致）。
+// sensitivePattern はログ出力時にマスクするフィールド名（大文字小文字・部分一致）。
 var sensitivePattern = regexp.MustCompile(`(?i)password|secret|token`)
 
-func maskVariables(vars map[string]interface{}) map[string]interface{} {
+func maskVariables(vars map[string]any) map[string]any {
 	if len(vars) == 0 {
 		return vars
 	}
-	masked := make(map[string]interface{}, len(vars))
+	masked := make(map[string]any, len(vars))
 	for k, v := range vars {
 		if sensitivePattern.MatchString(k) {
 			masked[k] = "***"
@@ -34,6 +34,32 @@ func maskVariables(vars map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return masked
+}
+
+func parseGraphQLBody(c echo.Context) (operationName, maskedVars string) {
+	bodyBytes, err := io.ReadAll(c.Request().Body)
+	c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		logger.Log.Warn().Err(err).Msg("graphql_audit: failed to read request body")
+		return
+	}
+	if len(bodyBytes) == 0 {
+		return
+	}
+	var payload graphqlRequestPayload
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		return
+	}
+	operationName = payload.OperationName
+	if len(payload.Variables) == 0 {
+		return
+	}
+	b, err := json.Marshal(maskVariables(payload.Variables))
+	if err != nil {
+		return
+	}
+	maskedVars = string(b)
+	return
 }
 
 func GraphQLAudit() echo.MiddlewareFunc {
@@ -48,22 +74,11 @@ func GraphQLAudit() echo.MiddlewareFunc {
 
 			var maskedVars string
 			if c.Request().Method == echo.POST {
-				bodyBytes, _ := io.ReadAll(c.Request().Body)
-				c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-				if len(bodyBytes) > 0 {
-					var payload graphqlRequestPayload
-					if err := json.Unmarshal(bodyBytes, &payload); err == nil {
-						if payload.OperationName != "" {
-							opName = payload.OperationName
-						}
-						if len(payload.Variables) > 0 {
-							if b, err := json.Marshal(maskVariables(payload.Variables)); err == nil {
-								maskedVars = string(b)
-							}
-						}
-					}
+				parsedOp, parsedVars := parseGraphQLBody(c)
+				if parsedOp != "" {
+					opName = parsedOp
 				}
+				maskedVars = parsedVars
 			}
 
 			err := next(c)
@@ -79,9 +94,9 @@ func GraphQLAudit() echo.MiddlewareFunc {
 				Str("vars", maskedVars)
 
 			if claims, ok := auth.ClaimsFromContext(c.Request().Context()); ok {
-				ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
+				ev = ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
 			} else {
-				ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
+				ev = ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
 			}
 			ev.Send()
 
