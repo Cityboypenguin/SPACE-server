@@ -46,7 +46,7 @@ func (r *MySQLProfileRepository) SaveProfile(ctx context.Context, p *model.Profi
 		avatar_key = VALUES(avatar_key),
 		updated_at = VALUES(updated_at)
 	`
-	_, err := r.DB.ExecContext(ctx, query,
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query,
 		p.UserID, p.Bio, p.AvatarKey,
 		p.CreatedAt.Unix(), p.UpdatedAt.Unix(),
 	)

@@ -17,29 +17,26 @@ var _ CreateUserUseCase = &CreateUserInteractor{}
 type CreateUserInteractor struct {
 	userRepo    repository.UserRepository
 	profileRepo repository.ProfileRepository
+	txManager   repository.TxManager
 }
 
-func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository) CreateUserUseCase {
+func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository, txManager repository.TxManager) CreateUserUseCase {
 	return &CreateUserInteractor{
 		userRepo:    userRepo,
 		profileRepo: profileRepo,
+		txManager:   txManager,
 	}
 }
 
 func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error) {
-	user := &model.User{}
 	now := time.Now()
-
-	// Set timestamps explicitly
 	param.CreatedAt = now
 	param.UpdatedAt = now
 
-	err := user.CreateUser(param)
-	if err != nil {
+	user := &model.User{}
+	if err := user.CreateUser(param); err != nil {
 		return nil, err
 	}
-
-	// Set default values if not provided
 	if user.Role == "" {
 		user.Role = "user"
 	}
@@ -47,24 +44,21 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		user.Status = "active"
 	}
 
-	err = uc.userRepo.SaveUser(ctx, user)
+	err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
+		if err := uc.userRepo.SaveUser(ctx, user); err != nil {
+			return err
+		}
+		emptyProfile := &model.Profile{
+			UserID:    user.ID,
+			Bio:       "",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		return uc.profileRepo.SaveProfile(ctx, emptyProfile)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// 登録されたばかりのユーザーのIDを使って、空のプロフィールを作る
-	emptyProfile := &model.Profile{
-		UserID:    user.ID,
-		Bio:       "",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	// プロフィール倉庫係にお願いして保存する
-	if err := uc.profileRepo.SaveProfile(ctx, emptyProfile); err != nil {
-		return nil, err
-	}
-
 	return user, nil
-
 }

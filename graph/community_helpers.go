@@ -2,8 +2,8 @@ package graph
 
 import (
 	"context"
-	"log"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
@@ -14,7 +14,7 @@ func (r *mutationResolver) deleteCommunityIfEmpty(ctx context.Context, roomID in
 	}
 	if len(memberIDs) == 0 {
 		if _, err := r.DeleteRoomUseCase.Execute(ctx, roomID); err != nil {
-			log.Printf("failed to delete empty community room %d: %v", roomID, err)
+			logger.Log.Error().Err(err).Int64("room_id", roomID).Msg("failed to delete empty community room")
 			return err
 		}
 	}

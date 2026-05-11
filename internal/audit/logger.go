@@ -2,27 +2,39 @@ package audit
 
 import (
 	"context"
-	"log"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 )
 
 func LogDenied(ctx context.Context, action string, target string, targetID int64, reason string) {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if ok {
-		log.Printf("audit denied action=%s actor_id=%d actor_role=%s target=%s target_id=%d reason=%s", action, claims.ID, claims.Role, target, targetID, reason)
-		return
-	}
+	ev := logger.Log.Warn().
+		Str("event", "audit_denied").
+		Str("action", action).
+		Str("target", target).
+		Int64("target_id", targetID).
+		Str("reason", reason)
 
-	log.Printf("audit denied action=%s actor_id=anonymous actor_role=anonymous target=%s target_id=%d reason=%s", action, target, targetID, reason)
+	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+		ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
+	} else {
+		ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
+	}
+	ev.Send()
 }
 
 func LogProbe(ctx context.Context, action string, target string, suppliedID string, reason string) {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if ok {
-		log.Printf("audit probe action=%s actor_id=%d actor_role=%s target=%s supplied_id=%s reason=%s", action, claims.ID, claims.Role, target, suppliedID, reason)
-		return
-	}
+	ev := logger.Log.Warn().
+		Str("event", "audit_probe").
+		Str("action", action).
+		Str("target", target).
+		Str("supplied_id", suppliedID).
+		Str("reason", reason)
 
-	log.Printf("audit probe action=%s actor_id=anonymous actor_role=anonymous target=%s supplied_id=%s reason=%s", action, target, suppliedID, reason)
+	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+		ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
+	} else {
+		ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
+	}
+	ev.Send()
 }

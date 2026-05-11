@@ -257,7 +257,7 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.DB.ExecContext(ctx, query,
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query,
 		u.AccountID,
 		u.Name,
 		u.Email,

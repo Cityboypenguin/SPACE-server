@@ -9,12 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/google/uuid"
 )
@@ -305,7 +305,8 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 
 // DeletePost is the resolver for the deletePost field.
 func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return false, err
 	}
 
@@ -314,18 +315,41 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 		return false, fmt.Errorf("invalid post id")
 	}
 
+	post, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get post")
+	}
+	if post == nil {
+		return false, fmt.Errorf("post not found")
+	}
+	if post.UserID != claims.ID {
+		return false, errors.New("forbidden: can only delete your own posts")
+	}
+
 	return r.DeletePostUseCase.Execute(ctx, numericID)
 }
 
 // UpdatePost is the resolver for the updatePost field.
 func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.UpdatePostInput) (*gqlmodel.Post, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
+	}
+
+	existing, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post")
+	}
+	if existing == nil {
+		return nil, fmt.Errorf("post not found")
+	}
+	if existing.UserID != claims.ID {
+		return nil, errors.New("forbidden: can only update your own posts")
 	}
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, model.UpdatePostParam{
@@ -555,7 +579,7 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 
 	if room != nil && room.Type == model.RoomTypeCommunity {
 		if err := r.deleteCommunityIfEmpty(ctx, rid); err != nil {
-			log.Printf("failed to auto-delete empty community room %d: %v", rid, err)
+			logger.Log.Error().Err(err).Int64("room_id", rid).Msg("failed to auto-delete empty community room")
 		}
 	}
 
@@ -726,7 +750,7 @@ func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityI
 	}
 
 	if err := r.deleteCommunityIfEmpty(ctx, c.RoomID); err != nil {
-		log.Printf("failed to auto-delete empty community room %d: %v", c.RoomID, err)
+		logger.Log.Error().Err(err).Int64("room_id", c.RoomID).Msg("failed to auto-delete empty community room")
 	}
 
 	return true, nil
@@ -1340,11 +1364,11 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 		// so it must not use self/admin-only authorization.
 		u, err := r.GetUserByIDUseCase.Execute(ctx, msg.UserID)
 		if err != nil {
-			log.Printf("[Messages] user lookup error: messageID=%d userID=%d err=%v", msg.ID, msg.UserID, err)
+			logger.Log.Error().Err(err).Int64("message_id", msg.ID).Int64("user_id", msg.UserID).Msg("messages: user lookup error")
 			continue
 		}
 		if u == nil {
-			log.Printf("[Messages] user not found: messageID=%d userID=%d", msg.ID, msg.UserID)
+			logger.Log.Warn().Int64("message_id", msg.ID).Int64("user_id", msg.UserID).Msg("messages: user not found")
 			continue
 		}
 		gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
@@ -1638,7 +1662,7 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	log.Printf("[MessageAdded] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageAdded subscribe start")
 
 	ch := make(chan *gqlmodel.Message, 1)
 	sub := r.PubSub.Subscribe(roomID + ":message:added")
@@ -1648,17 +1672,17 @@ func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Printf("[MessageAdded] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
+				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageAdded subscribe end")
 				close(ch)
 				return
 			case data, ok := <-sub:
 				if !ok {
-					log.Printf("[MessageAdded] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
+					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageAdded subscribe end")
 					close(ch)
 					return
 				}
 				if msg, ok := data.(*gqlmodel.Message); ok {
-					log.Printf("[MessageAdded] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
+					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageAdded deliver")
 					ch <- msg
 				}
 			}
@@ -1688,7 +1712,7 @@ func (r *subscriptionResolver) MessageDeleted(ctx context.Context, roomID string
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	log.Printf("[MessageDeleted] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageDeleted subscribe start")
 
 	ch := make(chan *gqlmodel.Message, 1)
 	topic := roomID + ":message:deleted"
@@ -1699,17 +1723,17 @@ func (r *subscriptionResolver) MessageDeleted(ctx context.Context, roomID string
 		for {
 			select {
 			case <-ctx.Done():
-				log.Printf("[MessageDeleted] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
+				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageDeleted subscribe end")
 				close(ch)
 				return
 			case data, ok := <-sub:
 				if !ok {
-					log.Printf("[MessageDeleted] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
+					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageDeleted subscribe end")
 					close(ch)
 					return
 				}
 				if msg, ok := data.(*gqlmodel.Message); ok {
-					log.Printf("[MessageDeleted] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
+					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageDeleted deliver")
 					ch <- msg
 				}
 			}
@@ -1739,7 +1763,7 @@ func (r *subscriptionResolver) MessageUpdated(ctx context.Context, roomID string
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	log.Printf("[MessageUpdated] subscribe start roomID=%s userID=%d", roomID, claims.ID)
+	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageUpdated subscribe start")
 
 	ch := make(chan *gqlmodel.Message, 1)
 	topic := roomID + ":message:updated"
@@ -1750,17 +1774,17 @@ func (r *subscriptionResolver) MessageUpdated(ctx context.Context, roomID string
 		for {
 			select {
 			case <-ctx.Done():
-				log.Printf("[MessageUpdated] subscribe end roomID=%s userID=%d reason=context_done", roomID, claims.ID)
+				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageUpdated subscribe end")
 				close(ch)
 				return
 			case data, ok := <-sub:
 				if !ok {
-					log.Printf("[MessageUpdated] subscribe end roomID=%s userID=%d reason=pubsub_closed", roomID, claims.ID)
+					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageUpdated subscribe end")
 					close(ch)
 					return
 				}
 				if msg, ok := data.(*gqlmodel.Message); ok {
-					log.Printf("[MessageUpdated] deliver roomID=%s userID=%d messageID=%s", roomID, claims.ID, msg.ID)
+					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageUpdated deliver")
 					ch <- msg
 				}
 			}

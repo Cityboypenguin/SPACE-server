@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
-	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/labstack/echo/v4"
 )
@@ -22,25 +21,9 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 			}
 
 			tokenStr := strings.TrimPrefix(header, "Bearer ")
-			claims, err := auth.ValidateAccessToken(tokenStr)
+			claims, err := auth.ValidateAndVerifyToken(c.Request().Context(), tokenStr, revokedTokenRepo, userRepo)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
-			}
-
-			revoked, err := revokedTokenRepo.IsRevoked(c.Request().Context(), tokenStr)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to verify token")
-			}
-			if revoked {
-				return echo.NewHTTPError(http.StatusUnauthorized, "token has been revoked")
-			}
-
-			u, err := userRepo.GetUserByID(c.Request().Context(), claims.ID)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to verify user")
-			}
-			if u != nil && u.Status == model.UserStatusFrozen {
-				return echo.NewHTTPError(http.StatusUnauthorized, "account is frozen")
+				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
 
 			ctx := auth.WithClaims(c.Request().Context(), claims)

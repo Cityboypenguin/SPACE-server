@@ -11,6 +11,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/minio/minio-go/v7 v7.1.0
 	github.com/redis/go-redis/v9 v9.18.0
+	github.com/rs/zerolog v1.35.1
 	github.com/vektah/gqlparser/v2 v2.5.33
 	golang.org/x/crypto v0.50.0
 )

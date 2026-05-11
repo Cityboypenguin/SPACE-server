@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +19,7 @@ import (
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
@@ -41,9 +41,8 @@ import (
 func main() {
 	database, err := mysql.New()
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Log.Fatal().Err(err).Msg("failed to connect to database")
 	}
-	defer database.Close()
 
 	e := echo.New()
 
@@ -52,9 +51,10 @@ func main() {
 	postRepository := mysql.NewMySQLPostRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
+	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
-		log.Fatalf("failed to bootstrap initial admin: %v", err)
+		logger.Log.Fatal().Err(err).Msg("failed to bootstrap initial admin")
 	}
 
 	messageRepository := mysql.NewMySQLMessageRepository(database)
@@ -63,10 +63,10 @@ func main() {
 
 	storageRepository, err := miniorepo.New()
 	if err != nil {
-		log.Fatalf("failed to connect to minio: %v", err)
+		logger.Log.Fatal().Err(err).Msg("failed to connect to minio")
 	}
 
-	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository)
+	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, txManager)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
@@ -109,9 +109,8 @@ func main() {
 
 	redisClient, err := infraredis.New()
 	if err != nil {
-		log.Fatalf("failed to connect to redis: %v", err)
+		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
 	}
-	defer redisClient.Close()
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
@@ -250,8 +249,9 @@ func main() {
 		},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
 
@@ -283,26 +283,14 @@ func main() {
 			}
 
 			authHeader := authHeaderFromInitPayload(initPayload)
-			if strings.TrimSpace(authHeader) == "" {
+			tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
+			if tokenStr == "" {
 				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
 			}
 
-			tokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-			if tokenStr == "" {
-				return nil, nil, fmt.Errorf("missing bearer token in websocket init payload")
-			}
-
-			claims, err := auth.ValidateAccessToken(tokenStr)
+			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid token")
-			}
-
-			revoked, err := revokedTokenRepository.IsRevoked(ctx, tokenStr)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to verify token")
-			}
-			if revoked {
-				return nil, nil, fmt.Errorf("token has been revoked")
+				return nil, nil, err
 			}
 
 			ctx = auth.WithClaims(ctx, claims)
@@ -351,11 +339,23 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	logger.Log.Info().Msg("shutting down server...")
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	if err := e.Shutdown(shutdownCtx); err != nil {
-		e.Logger.Fatal(err)
+		logger.Log.Error().Err(err).Msg("server shutdown error")
 	}
+
+	if err := database.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("database close error")
+	}
+	if err := redisClient.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("redis close error")
+	}
+
+	logger.Log.Info().Msg("server stopped")
 }
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
@@ -474,6 +474,6 @@ func bootstrapInitialAdmin(ctx context.Context, adminRepo repository.Administrat
 		return err
 	}
 
-	log.Printf("initial administrator created: %s", email)
+	logger.Log.Info().Str("email", email).Msg("initial administrator created")
 	return nil
 }

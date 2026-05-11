@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log"
 	"regexp"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/labstack/echo/v4"
 )
 
@@ -70,12 +70,20 @@ func GraphQLAudit() echo.MiddlewareFunc {
 			status := c.Response().Status
 			duration := time.Since(start).Milliseconds()
 
-			claims, ok := auth.ClaimsFromContext(c.Request().Context())
-			if ok {
-				log.Printf("audit graphql op=%s status=%d actor_id=%d actor_role=%s ip=%s duration_ms=%d vars=%s", opName, status, claims.ID, claims.Role, c.RealIP(), duration, maskedVars)
+			ev := logger.Log.Info().
+				Str("event", "graphql_audit").
+				Str("op", opName).
+				Int("status", status).
+				Str("ip", c.RealIP()).
+				Int64("duration_ms", duration).
+				Str("vars", maskedVars)
+
+			if claims, ok := auth.ClaimsFromContext(c.Request().Context()); ok {
+				ev.Int64("actor_id", claims.ID).Str("actor_role", claims.Role)
 			} else {
-				log.Printf("audit graphql op=%s status=%d actor_id=anonymous actor_role=anonymous ip=%s duration_ms=%d vars=%s", opName, status, c.RealIP(), duration, maskedVars)
+				ev.Str("actor_id", "anonymous").Str("actor_role", "anonymous")
 			}
+			ev.Send()
 
 			return err
 		}

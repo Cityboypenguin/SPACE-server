@@ -1,8 +1,9 @@
 package pubsub
 
 import (
-	"log"
 	"sync"
+
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 )
 
 type PubSub struct {
@@ -15,12 +16,12 @@ func New() *PubSub {
 }
 
 func (ps *PubSub) Subscribe(topic string) chan interface{} {
-	ch := make(chan interface{}, 64) // バッファサイズは適宜調整
+	ch := make(chan interface{}, 64)
 	ps.mu.Lock()
 	ps.subs[topic] = append(ps.subs[topic], ch)
 	count := len(ps.subs[topic])
 	ps.mu.Unlock()
-	log.Printf("[PubSub] subscribe topic=%s subscribers=%d", topic, count)
+	logger.Log.Debug().Str("topic", topic).Int("subscribers", count).Msg("pubsub subscribe")
 	return ch
 }
 
@@ -31,7 +32,7 @@ func (ps *PubSub) Unsubscribe(topic string, ch chan interface{}) {
 	for i, s := range subs {
 		if s == ch {
 			ps.subs[topic] = append(subs[:i], subs[i+1:]...)
-			log.Printf("[PubSub] unsubscribe topic=%s subscribers=%d", topic, len(ps.subs[topic]))
+			logger.Log.Debug().Str("topic", topic).Int("subscribers", len(ps.subs[topic])).Msg("pubsub unsubscribe")
 			close(ch)
 			return
 		}
@@ -46,7 +47,7 @@ func (ps *PubSub) Publish(topic string, data interface{}) {
 	subs := make([]chan interface{}, len(ps.subs[topic]))
 	copy(subs, ps.subs[topic])
 	ps.mu.RUnlock()
-	log.Printf("[PubSub] publish topic=%s subscribers=%d", topic, len(subs))
+	logger.Log.Debug().Str("topic", topic).Int("subscribers", len(subs)).Msg("pubsub publish")
 	for _, ch := range subs {
 		func(ch chan interface{}) {
 			defer func() {
@@ -55,7 +56,7 @@ func (ps *PubSub) Publish(topic string, data interface{}) {
 			select {
 			case ch <- data:
 			default:
-				log.Printf("[PubSub] publish topic=%s dropped message for slow subscriber", topic)
+				logger.Log.Warn().Str("topic", topic).Msg("pubsub dropped message for slow subscriber")
 			}
 		}(ch)
 	}
