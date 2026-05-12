@@ -47,10 +47,6 @@ func (uc *RefreshAdministratorTokenInteractor) Execute(ctx context.Context, refr
 		return nil, errors.New("refresh token has been revoked")
 	}
 
-	if err := uc.revokedTokenRepo.RevokeToken(ctx, refreshToken, claims.ExpiresAt.Unix()); err != nil {
-		return nil, err
-	}
-
 	accessToken, err := auth.GenerateAccessToken(claims.ID, claims.Role)
 	if err != nil {
 		return nil, err
@@ -66,6 +62,10 @@ func (uc *RefreshAdministratorTokenInteractor) Execute(ctx context.Context, refr
 	}
 	if a == nil {
 		return nil, errors.New("administrator not found")
+	}
+
+	if err := uc.revokedTokenRepo.RevokeToken(ctx, refreshToken, claims.ExpiresAt.Unix()); err != nil {
+		return nil, err
 	}
 
 	return &RefreshAdministratorTokenResult{AccessToken: accessToken, RefreshToken: newRefreshToken, Administrator: a}, nil

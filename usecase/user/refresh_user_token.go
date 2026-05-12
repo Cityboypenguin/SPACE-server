@@ -47,10 +47,6 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 		return nil, errors.New("refresh token has been revoked")
 	}
 
-	if err := uc.revokedTokenRepo.RevokeToken(ctx, refreshToken, claims.ExpiresAt.Unix()); err != nil {
-		return nil, err
-	}
-
 	accessToken, err := auth.GenerateAccessToken(claims.ID, claims.Role)
 	if err != nil {
 		return nil, err
@@ -66,6 +62,10 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 	}
 	if u == nil {
 		return nil, errors.New("user not found")
+	}
+
+	if err := uc.revokedTokenRepo.RevokeToken(ctx, refreshToken, claims.ExpiresAt.Unix()); err != nil {
+		return nil, err
 	}
 
 	return &RefreshUserTokenResult{AccessToken: accessToken, RefreshToken: newRefreshToken, User: u}, nil
