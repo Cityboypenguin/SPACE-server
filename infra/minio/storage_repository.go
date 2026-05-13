@@ -26,23 +26,28 @@ func New() (*MinIOStorageRepository, error) {
 	useSSL := os.Getenv("MINIO_USE_SSL") == "true"
 	publicEndpoint := os.Getenv("MINIO_PUBLIC_ENDPOINT")
 
+	region := os.Getenv("MINIO_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	// ローカル MinIO は path-style、AWS S3 は DNS-style（virtual-hosted）
+	bucketLookup := minio.BucketLookupPath
+	if os.Getenv("MINIO_BUCKET_LOOKUP") == "dns" {
+		bucketLookup = minio.BucketLookupDNS
+	}
+
 	creds := credentials.NewStaticV4(accessKey, secretKey, "")
 
-	// Docker 内部ネットワーク用クライアント（DeleteObject などに使用）
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:        creds,
 		Secure:       useSSL,
-		Region:       "us-east-1",
-		BucketLookup: minio.BucketLookupPath,
+		Region:       region,
+		BucketLookup: bucketLookup,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
-	// Presigned URL 生成専用クライアント。
-	// 公開エンドポイント (localhost:9000) で署名することで、
-	// ブラウザが同じホストに PUT したときに署名が一致する。
-	// Region を明示することで GetBucketLocation のネットワーク呼び出しを防ぐ。
 	presignClient := client
 	if publicEndpoint != "" {
 		pub, parseErr := url.Parse(publicEndpoint)
@@ -50,8 +55,8 @@ func New() (*MinIOStorageRepository, error) {
 			pc, clientErr := minio.New(pub.Host, &minio.Options{
 				Creds:        creds,
 				Secure:       pub.Scheme == "https",
-				Region:       "us-east-1",
-				BucketLookup: minio.BucketLookupPath,
+				Region:       region,
+				BucketLookup: bucketLookup,
 			})
 			if clientErr == nil {
 				presignClient = pc
