@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os"
 
@@ -14,9 +15,12 @@ func New() (*redis.Client, error) {
 		getenv("REDIS_PORT", "6379"),
 	)
 
-	client := redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
+	opts := &redis.Options{Addr: addr}
+	if os.Getenv("REDIS_TLS") == "true" {
+		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+
+	client := redis.NewClient(opts)
 
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		return nil, err
