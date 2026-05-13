@@ -15,8 +15,9 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/Cityboypenguin/SPACE-server/graph"
-	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
+	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
+	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -61,9 +62,17 @@ func main() {
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 
-	storageRepository, err := miniorepo.New()
-	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("failed to connect to minio")
+	var storageRepository repository.StorageRepository
+	if os.Getenv("STORAGE_PROVIDER") == "azure" {
+		storageRepository, err = azurerepo.New()
+		if err != nil {
+			logger.Log.Fatal().Err(err).Msg("failed to connect to azure blob storage")
+		}
+	} else {
+		storageRepository, err = miniorepo.New()
+		if err != nil {
+			logger.Log.Fatal().Err(err).Msg("failed to connect to minio")
+		}
 	}
 
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, txManager)
