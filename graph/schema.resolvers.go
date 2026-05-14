@@ -323,7 +323,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	}
 
 	trimmedContent := strings.TrimSpace(input.Content)
-	if trimmedContent == "" {
+	if trimmedContent == "" && len(input.MediaInputs) == 0 {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
 
