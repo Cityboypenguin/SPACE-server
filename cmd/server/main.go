@@ -29,6 +29,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
@@ -59,6 +60,7 @@ func main() {
 	}
 
 	messageRepository := mysql.NewMySQLMessageRepository(database)
+	mediaRepository := mysql.NewMySQLMediaRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 
@@ -97,7 +99,7 @@ func main() {
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
-	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository)
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager)
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
@@ -126,8 +128,11 @@ func main() {
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
+	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
+	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
+
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
-	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository)
+	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
 	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
@@ -207,8 +212,11 @@ func main() {
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
 		ListFavoritesUseCase:                   listFavoritesUseCase,
 
-		GetMessageByIDUseCase:     getMessageByIDUseCase,
-		SendMessageUseCase:        sendMessageUseCase,
+		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
+		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
+
+		GetMessageByIDUseCase: getMessageByIDUseCase,
+		SendMessageUseCase:    sendMessageUseCase,
 		ListMessagesUseCase:       listMessagesUseCase,
 		DeleteMessageUseCase:      deleteMessageUseCase,
 		UpdateMessageUseCase:      updateMessageUseCase,

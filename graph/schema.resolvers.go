@@ -16,6 +16,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/google/uuid"
 )
 
@@ -48,6 +50,49 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 	}
 
 	return toGraphPost(post), nil
+}
+
+// Room is the resolver for the room field.
+func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.Room, error) {
+	numericID, err := decodeGraphID(ctx, "room", obj.RoomID)
+	if err != nil {
+		return nil, nil
+	}
+	rm, err := r.GetRoomUseCase.Execute(ctx, numericID)
+	if err != nil || rm == nil {
+		return nil, nil
+	}
+	return toGraphRoom(rm), nil
+}
+
+// User is the resolver for the user field.
+func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.User, error) {
+	numericID, err := decodeGraphID(ctx, "user", obj.UserID)
+	if err != nil {
+		return nil, nil
+	}
+	u, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	if err != nil || u == nil {
+		return nil, nil
+	}
+	return toGraphUser(u), nil
+}
+
+// Media is the resolver for the media field.
+func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*gqlmodel.Media, error) {
+	numericID, err := decodeGraphID(ctx, "message", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	mediaList, err := r.ListMediaByMessageIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.Media
+	for _, m := range mediaList {
+		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+	}
+	return result, nil
 }
 
 // CreateUser is the resolver for the createUser field.
@@ -291,11 +336,21 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		numericParentID = &parentID
 	}
 
+	var ucMediaInputs []postusecase.MediaInput
+	for _, m := range input.MediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
 		UserID:   claims.ID,
 		Content:  trimmedContent,
 		ParentID: numericParentID,
-	})
+	}, ucMediaInputs)
 	if err != nil {
 		return nil, err
 	}
@@ -850,7 +905,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 }
 
 // SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, attachmentKey *string, attachmentName *string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput) (*gqlmodel.Message, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -869,22 +924,22 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, attachmentKey, attachmentName)
+	var ucMediaInputs []messageusecase.MediaInput
+	for _, m := range mediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, messageusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs)
 	if err != nil {
 		return nil, err
 	}
 
-	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	room, _ := r.GetRoomUseCase.Execute(ctx, rid)
-
-	gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
-	if user != nil {
-		gqlMsg.User = toGraphUser(user)
-	}
-	if room != nil {
-		gqlMsg.Room = toGraphRoom(room)
-	}
-
+	gqlMsg := toGraphMessage(msg)
 	r.PubSub.Publish(roomID+":message:added", gqlMsg)
 	return gqlMsg, nil
 }
@@ -932,8 +987,7 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 
 // UpdateMessage is the resolver for the updateMessage field.
 func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string) (*gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -947,12 +1001,7 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		return nil, err
 	}
 
-	gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
-	user, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	if user != nil {
-		gqlMsg.User = toGraphUser(user)
-	}
-
+	gqlMsg := toGraphMessage(msg)
 	r.PubSub.Publish(roomID+":message:updated", gqlMsg)
 	return gqlMsg, nil
 }
@@ -1051,6 +1100,23 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 		})
 	}
 	return gqlReplies, nil
+}
+
+// Media is the resolver for the media field.
+func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Media, error) {
+	numericID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	mediaList, err := r.ListMediaByPostIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.Media
+	for _, m := range mediaList {
+		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+	}
+	return result, nil
 }
 
 // Users is the resolver for the users field.
@@ -1362,23 +1428,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 
 	var result []*gqlmodel.Message
 	for _, msg := range msgs {
-		// Sender lookup here is internal data hydration for room members,
-		// so it must not use self/admin-only authorization.
-		u, err := r.GetUserByIDUseCase.Execute(ctx, msg.UserID)
-		if err != nil {
-			logger.Log.Error().Err(err).Int64("message_id", msg.ID).Int64("user_id", msg.UserID).Msg("messages: user lookup error")
-			continue
-		}
-		if u == nil {
-			logger.Log.Warn().Int64("message_id", msg.ID).Int64("user_id", msg.UserID).Msg("messages: user not found")
-			continue
-		}
-		gqlMsg := toGraphMessage(msg, r.attachmentURLFor(msg))
-		gqlMsg.User = toGraphUser(u)
-		if rm, _ := r.GetRoomUseCase.Execute(ctx, msg.RoomID); rm != nil {
-			gqlMsg.Room = toGraphRoom(rm)
-		}
-		result = append(result, gqlMsg)
+		result = append(result, toGraphMessage(msg))
 	}
 	return result, nil
 }
@@ -1598,42 +1648,28 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 	}, nil
 }
 
-// PresignedMessageFileUploadURL is the resolver for the presignedMessageFileUploadUrl field.
-func (r *queryResolver) PresignedMessageFileUploadURL(ctx context.Context, roomID string, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+// PresignedMediaUploadURL is the resolver for the presignedMediaUploadUrl field.
+func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType string) (*gqlmodel.PresignedUploadURL, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-
 	extMap := map[string]string{
-		"image/jpeg":      ".jpg",
-		"image/png":       ".png",
-		"image/gif":       ".gif",
-		"image/webp":      ".webp",
-		"application/pdf": ".pdf",
+		"image/jpeg": ".jpg",
+		"image/png":  ".png",
+		"image/webp": ".webp",
+		"image/gif":  ".gif",
 	}
 	ext, ok := extMap[contentType]
 	if !ok {
 		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}
 
-	const messageFileMaxBytes = 20 * 1024 * 1024 // 20 MB
+	const mediaMaxBytes = 20 * 1024 * 1024
 
-	objectKey := fmt.Sprintf("messages/%d/%d/%s%s", rid, claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, messageFileMaxBytes)
+	objectKey := fmt.Sprintf("media/%d/%s%s", claims.ID, uuid.New().String(), ext)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, mediaMaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}
@@ -1812,6 +1848,9 @@ func (r *userResolver) AvatarURL(ctx context.Context, obj *gqlmodel.User) (*stri
 // Favorite returns FavoriteResolver implementation.
 func (r *Resolver) Favorite() FavoriteResolver { return &favoriteResolver{r} }
 
+// Message returns MessageResolver implementation.
+func (r *Resolver) Message() MessageResolver { return &messageResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
@@ -1828,8 +1867,62 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 func (r *Resolver) User() UserResolver { return &userResolver{r} }
 
 type favoriteResolver struct{ *Resolver }
+type messageResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *queryResolver) PresignedMessageFileUploadURL(ctx context.Context, roomID string, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	extMap := map[string]string{
+		"image/jpeg":      ".jpg",
+		"image/png":       ".png",
+		"image/gif":       ".gif",
+		"image/webp":      ".webp",
+		"application/pdf": ".pdf",
+	}
+	ext, ok := extMap[contentType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
+	}
+
+	const messageFileMaxBytes = 20 * 1024 * 1024 // 20 MB
+
+	objectKey := fmt.Sprintf("messages/%d/%d/%s%s", rid, claims.ID, uuid.New().String(), ext)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, messageFileMaxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate upload url")
+	}
+
+	return &gqlmodel.PresignedUploadURL{
+		UploadURL: uploadURL,
+		ObjectKey: objectKey,
+	}, nil
+}
+*/

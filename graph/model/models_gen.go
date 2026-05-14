@@ -51,8 +51,9 @@ type CreateFavoriteInput struct {
 }
 
 type CreatePostInput struct {
-	Content  string  `json:"content"`
-	ParentID *string `json:"parent_id,omitempty"`
+	Content     string              `json:"content"`
+	ParentID    *string             `json:"parent_id,omitempty"`
+	MediaInputs []*MediaUploadInput `json:"mediaInputs,omitempty"`
 }
 
 type CreateRoomInput struct {
@@ -82,17 +83,28 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+type Media struct {
+	ID          string `json:"ID"`
+	URL         string `json:"url"`
+	ContentType string `json:"contentType"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+type MediaUploadInput struct {
+	ObjectKey   string `json:"objectKey"`
+	ContentType string `json:"contentType"`
+}
+
 type Message struct {
-	ID             string  `json:"ID"`
-	RoomID         string  `json:"roomID"`
-	Room           *Room   `json:"room"`
-	UserID         string  `json:"userID"`
-	User           *User   `json:"user"`
-	Content        string  `json:"content"`
-	AttachmentURL  *string `json:"attachmentUrl,omitempty"`
-	AttachmentName *string `json:"attachmentName,omitempty"`
-	CreatedAt      string  `json:"createdAt"`
-	UpdatedAt      string  `json:"updatedAt"`
+	ID        string   `json:"ID"`
+	RoomID    string   `json:"roomID"`
+	Room      *Room    `json:"room"`
+	UserID    string   `json:"userID"`
+	User      *User    `json:"user"`
+	Content   string   `json:"content"`
+	Media     []*Media `json:"media"`
+	CreatedAt string   `json:"createdAt"`
+	UpdatedAt string   `json:"updatedAt"`
 }
 
 type Mutation struct {
@@ -107,6 +119,7 @@ type Post struct {
 	Favorites []*Favorite `json:"favorites"`
 	Parent    *Post       `json:"parent,omitempty"`
 	Replies   []*Post     `json:"replies"`
+	Media     []*Media    `json:"media"`
 }
 
 type PresignedUploadURL struct {

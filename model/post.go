@@ -17,6 +17,7 @@ type CreatePostParam struct {
 	UpdatedAt time.Time
 	UserID    int64
 	ParentID  *int64
+	MediaKeys []string
 }
 
 type UpdatePostParam struct {

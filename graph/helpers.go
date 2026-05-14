@@ -11,14 +11,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-func (r *Resolver) attachmentURLFor(m *model.Message) *string {
-	if m == nil || m.AttachmentKey == nil {
-		return nil
-	}
-	url := r.StorageRepository.PublicURL(*m.AttachmentKey)
-	return &url
-}
-
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarKey == nil {
 		return nil

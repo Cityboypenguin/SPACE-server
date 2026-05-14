@@ -63,19 +63,29 @@ func toGraphCommunity(c *model.Community) *gqlmodel.Community {
 	}
 }
 
-func toGraphMessage(msg *model.Message, attachmentURL *string) *gqlmodel.Message {
+func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 	if msg == nil {
 		return nil
 	}
 	return &gqlmodel.Message{
-		ID:            encodeGraphID("message", msg.ID),
-		RoomID:        encodeGraphID("room", msg.RoomID),
-		UserID:        encodeGraphID("user", msg.UserID),
-		Content:        msg.Content,
-		AttachmentURL:  attachmentURL,
-		AttachmentName: msg.AttachmentName,
-		CreatedAt:     msg.CreatedAt.Format(timeFormat),
-		UpdatedAt:     msg.UpdatedAt.Format(timeFormat),
+		ID:        encodeGraphID("message", msg.ID),
+		RoomID:    encodeGraphID("room", msg.RoomID),
+		UserID:    encodeGraphID("user", msg.UserID),
+		Content:   msg.Content,
+		CreatedAt: msg.CreatedAt.Format(timeFormat),
+		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphMedia(m *model.Media, url string) *gqlmodel.Media {
+	if m == nil {
+		return nil
+	}
+	return &gqlmodel.Media{
+		ID:          encodeGraphID("media", m.ID),
+		URL:         url,
+		ContentType: m.ContentType,
+		CreatedAt:   m.CreatedAt.Format(timeFormat),
 	}
 }
 

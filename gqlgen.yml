@@ -154,6 +154,16 @@ models:
         resolver: true
       favorites:
         resolver: true
+      media:
+        resolver: true
+  Message:
+    fields:
+      user:
+        resolver: true
+      room:
+        resolver: true
+      media:
+        resolver: true
   Favorite:
     fields:
       user:

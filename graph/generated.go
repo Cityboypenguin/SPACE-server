@@ -30,6 +30,7 @@ type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
 	Favorite() FavoriteResolver
+	Message() MessageResolver
 	Mutation() MutationResolver
 	Post() PostResolver
 	Query() QueryResolver
@@ -76,17 +77,23 @@ type ComplexityRoot struct {
 		User      func(childComplexity int) int
 	}
 
+	Media struct {
+		ContentType func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		URL         func(childComplexity int) int
+	}
+
 	Message struct {
-		AttachmentName func(childComplexity int) int
-		AttachmentURL  func(childComplexity int) int
-		Content        func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		ID             func(childComplexity int) int
-		Room           func(childComplexity int) int
-		RoomID         func(childComplexity int) int
-		UpdatedAt      func(childComplexity int) int
-		User           func(childComplexity int) int
-		UserID         func(childComplexity int) int
+		Content   func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Media     func(childComplexity int) int
+		Room      func(childComplexity int) int
+		RoomID    func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+		User      func(childComplexity int) int
+		UserID    func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -118,7 +125,7 @@ type ComplexityRoot struct {
 		RefreshAdministratorToken func(childComplexity int, refreshToken string) int
 		RefreshUserToken          func(childComplexity int, refreshToken string) int
 		RemoveUserFromRoom        func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		SendMessage               func(childComplexity int, roomID string, content string, attachmentKey *string, attachmentName *string) int
+		SendMessage               func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                 func(childComplexity int, objectKey string) int
 		UnfreezeUser              func(childComplexity int, id string) int
 		UpdateAdministrator       func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -134,6 +141,7 @@ type ComplexityRoot struct {
 		CreatedAt func(childComplexity int) int
 		Favorites func(childComplexity int) int
 		ID        func(childComplexity int) int
+		Media     func(childComplexity int) int
 		Parent    func(childComplexity int) int
 		Replies   func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
@@ -155,32 +163,32 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Administrators                func(childComplexity int) int
-		Communities                   func(childComplexity int) int
-		Favorites                     func(childComplexity int) int
-		GetAdministratorByID          func(childComplexity int, id string) int
-		GetCommunityMembers           func(childComplexity int, communityID string) int
-		GetFavoriteByID               func(childComplexity int, id string) int
-		GetMyRoleInCommunity          func(childComplexity int, communityID string) int
-		GetPostByID                   func(childComplexity int, id string) int
-		GetProfileByUserID            func(childComplexity int, userID string) int
-		GetRepliesByPostID            func(childComplexity int, postID string) int
-		GetUserByID                   func(childComplexity int, id string) int
-		Me                            func(childComplexity int) int
-		Messages                      func(childComplexity int, roomID string) int
-		MyCommunities                 func(childComplexity int) int
-		MyDMRooms                     func(childComplexity int) int
-		MyProfile                     func(childComplexity int) int
-		Posts                         func(childComplexity int) int
-		PresignedAvatarUploadURL      func(childComplexity int, contentType string) int
-		PresignedMessageFileUploadURL func(childComplexity int, roomID string, contentType string) int
-		Room                          func(childComplexity int, id string) int
-		SearchAdministrators          func(childComplexity int, name string) int
-		SearchCommunities             func(childComplexity int, name string) int
-		SearchPosts                   func(childComplexity int, content string) int
-		SearchUsers                   func(childComplexity int, name string) int
-		TopLevelPosts                 func(childComplexity int) int
-		Users                         func(childComplexity int) int
+		Administrators           func(childComplexity int) int
+		Communities              func(childComplexity int) int
+		Favorites                func(childComplexity int) int
+		GetAdministratorByID     func(childComplexity int, id string) int
+		GetCommunityMembers      func(childComplexity int, communityID string) int
+		GetFavoriteByID          func(childComplexity int, id string) int
+		GetMyRoleInCommunity     func(childComplexity int, communityID string) int
+		GetPostByID              func(childComplexity int, id string) int
+		GetProfileByUserID       func(childComplexity int, userID string) int
+		GetRepliesByPostID       func(childComplexity int, postID string) int
+		GetUserByID              func(childComplexity int, id string) int
+		Me                       func(childComplexity int) int
+		Messages                 func(childComplexity int, roomID string) int
+		MyCommunities            func(childComplexity int) int
+		MyDMRooms                func(childComplexity int) int
+		MyProfile                func(childComplexity int) int
+		Posts                    func(childComplexity int) int
+		PresignedAvatarUploadURL func(childComplexity int, contentType string) int
+		PresignedMediaUploadURL  func(childComplexity int, contentType string) int
+		Room                     func(childComplexity int, id string) int
+		SearchAdministrators     func(childComplexity int, name string) int
+		SearchCommunities        func(childComplexity int, name string) int
+		SearchPosts              func(childComplexity int, content string) int
+		SearchUsers              func(childComplexity int, name string) int
+		TopLevelPosts            func(childComplexity int) int
+		Users                    func(childComplexity int) int
 	}
 
 	Room struct {
@@ -224,6 +232,13 @@ type FavoriteResolver interface {
 	User(ctx context.Context, obj *model.Favorite) (*model.User, error)
 	Post(ctx context.Context, obj *model.Favorite) (*model.Post, error)
 }
+type MessageResolver interface {
+	Room(ctx context.Context, obj *model.Message) (*model.Room, error)
+
+	User(ctx context.Context, obj *model.Message) (*model.User, error)
+
+	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
+}
 type MutationResolver interface {
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
@@ -259,7 +274,7 @@ type MutationResolver interface {
 	UnfreezeUser(ctx context.Context, id string) (bool, error)
 	SetAvatar(ctx context.Context, objectKey string) (*model.Profile, error)
 	JoinRoom(ctx context.Context, roomID string) (bool, error)
-	SendMessage(ctx context.Context, roomID string, content string, attachmentKey *string, attachmentName *string) (*model.Message, error)
+	SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*model.MediaUploadInput) (*model.Message, error)
 	DeleteMessage(ctx context.Context, roomID string, id string) (bool, error)
 	UpdateMessage(ctx context.Context, roomID string, id string, content string) (*model.Message, error)
 }
@@ -268,6 +283,7 @@ type PostResolver interface {
 	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post) ([]*model.Post, error)
+	Media(ctx context.Context, obj *model.Post) ([]*model.Media, error)
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
@@ -295,7 +311,7 @@ type QueryResolver interface {
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
 	GetCommunityMembers(ctx context.Context, communityID string) ([]*model.CommunityMember, error)
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
-	PresignedMessageFileUploadURL(ctx context.Context, roomID string, contentType string) (*model.PresignedUploadURL, error)
+	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -445,18 +461,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Favorite.User(childComplexity), true
 
-	case "Message.attachmentName":
-		if e.ComplexityRoot.Message.AttachmentName == nil {
+	case "Media.contentType":
+		if e.ComplexityRoot.Media.ContentType == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Message.AttachmentName(childComplexity), true
-	case "Message.attachmentUrl":
-		if e.ComplexityRoot.Message.AttachmentURL == nil {
+		return e.ComplexityRoot.Media.ContentType(childComplexity), true
+	case "Media.createdAt":
+		if e.ComplexityRoot.Media.CreatedAt == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Message.AttachmentURL(childComplexity), true
+		return e.ComplexityRoot.Media.CreatedAt(childComplexity), true
+	case "Media.ID":
+		if e.ComplexityRoot.Media.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Media.ID(childComplexity), true
+	case "Media.url":
+		if e.ComplexityRoot.Media.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Media.URL(childComplexity), true
+
 	case "Message.content":
 		if e.ComplexityRoot.Message.Content == nil {
 			break
@@ -475,6 +504,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.ID(childComplexity), true
+	case "Message.media":
+		if e.ComplexityRoot.Message.Media == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.Media(childComplexity), true
 	case "Message.room":
 		if e.ComplexityRoot.Message.Room == nil {
 			break
@@ -824,7 +859,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["attachmentKey"].(*string), args["attachmentName"].(*string)), true
+		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["mediaInputs"].([]*model.MediaUploadInput)), true
 	case "Mutation.setAvatar":
 		if e.ComplexityRoot.Mutation.SetAvatar == nil {
 			break
@@ -938,6 +973,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.ID(childComplexity), true
+	case "Post.media":
+		if e.ComplexityRoot.Post.Media == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.Media(childComplexity), true
 	case "Post.parent":
 		if e.ComplexityRoot.Post.Parent == nil {
 			break
@@ -1172,17 +1213,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedAvatarUploadURL(childComplexity, args["contentType"].(string)), true
-	case "Query.presignedMessageFileUploadUrl":
-		if e.ComplexityRoot.Query.PresignedMessageFileUploadURL == nil {
+	case "Query.presignedMediaUploadUrl":
+		if e.ComplexityRoot.Query.PresignedMediaUploadURL == nil {
 			break
 		}
 
-		args, err := ec.field_Query_presignedMessageFileUploadUrl_args(ctx, rawArgs)
+		args, err := ec.field_Query_presignedMediaUploadUrl_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.PresignedMessageFileUploadURL(childComplexity, args["roomID"].(string), args["contentType"].(string)), true
+		return e.ComplexityRoot.Query.PresignedMediaUploadURL(childComplexity, args["contentType"].(string)), true
 	case "Query.room":
 		if e.ComplexityRoot.Query.Room == nil {
 			break
@@ -1431,6 +1472,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreateUserInput,
 		ec.unmarshalInputDeleteFavoriteInput,
 		ec.unmarshalInputLoginInput,
+		ec.unmarshalInputMediaUploadInput,
 		ec.unmarshalInputRemoveUserFromRoomInput,
 		ec.unmarshalInputUpdateAdministratorInput,
 		ec.unmarshalInputUpdateCommunityInput,
@@ -1619,6 +1661,20 @@ func (ec *executionContext) childFields_Favorite(ctx context.Context, field grap
 	return nil, fmt.Errorf("no field named %q was found under type Favorite", field.Name)
 }
 
+func (ec *executionContext) childFields_Media(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Media_ID(ctx, field)
+	case "url":
+		return ec.fieldContext_Media_url(ctx, field)
+	case "contentType":
+		return ec.fieldContext_Media_contentType(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Media_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+}
+
 func (ec *executionContext) childFields_Message(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -1633,10 +1689,8 @@ func (ec *executionContext) childFields_Message(ctx context.Context, field graph
 		return ec.fieldContext_Message_user(ctx, field)
 	case "content":
 		return ec.fieldContext_Message_content(ctx, field)
-	case "attachmentUrl":
-		return ec.fieldContext_Message_attachmentUrl(ctx, field)
-	case "attachmentName":
-		return ec.fieldContext_Message_attachmentName(ctx, field)
+	case "media":
+		return ec.fieldContext_Message_media(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Message_createdAt(ctx, field)
 	case "updatedAt":
@@ -1663,6 +1717,8 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 		return ec.fieldContext_Post_parent(ctx, field)
 	case "replies":
 		return ec.fieldContext_Post_replies(ctx, field)
+	case "media":
+		return ec.fieldContext_Post_media(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 }
@@ -2330,22 +2386,14 @@ func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context,
 		return nil, err
 	}
 	args["content"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "attachmentKey",
-		func(ctx context.Context, v any) (*string, error) {
-			return ec.unmarshalOString2ᚖstring(ctx, v)
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "mediaInputs",
+		func(ctx context.Context, v any) ([]*model.MediaUploadInput, error) {
+			return ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["attachmentKey"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "attachmentName",
-		func(ctx context.Context, v any) (*string, error) {
-			return ec.unmarshalOString2ᚖstring(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["attachmentName"] = arg3
+	args["mediaInputs"] = arg2
 	return args, nil
 }
 
@@ -2647,25 +2695,17 @@ func (ec *executionContext) field_Query_presignedAvatarUploadUrl_args(ctx contex
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_presignedMessageFileUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_presignedMediaUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNID2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["roomID"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "contentType",
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "contentType",
 		func(ctx context.Context, v any) (string, error) {
 			return ec.unmarshalNString2string(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["contentType"] = arg1
+	args["contentType"] = arg0
 	return args, nil
 }
 
@@ -3341,6 +3381,98 @@ func (ec *executionContext) fieldContext_Favorite_createdAt(_ context.Context, f
 	return graphql.NewScalarFieldContext("Favorite", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Media_ID(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Media_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Media_url(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Media_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Media_contentType(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_contentType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ContentType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Media_contentType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Media_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Media_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Message_ID(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3396,7 +3528,7 @@ func (ec *executionContext) _Message_room(ctx context.Context, field graphql.Col
 			return ec.fieldContext_Message_room(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Room, nil
+			return ec.Resolvers.Message().Room(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Room) graphql.Marshaler {
@@ -3410,8 +3542,8 @@ func (ec *executionContext) fieldContext_Message_room(_ context.Context, field g
 	fc = &graphql.FieldContext{
 		Object:     "Message",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Room(ctx, field)
 		},
@@ -3451,7 +3583,7 @@ func (ec *executionContext) _Message_user(ctx context.Context, field graphql.Col
 			return ec.fieldContext_Message_user(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.User, nil
+			return ec.Resolvers.Message().User(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
@@ -3465,8 +3597,8 @@ func (ec *executionContext) fieldContext_Message_user(_ context.Context, field g
 	fc = &graphql.FieldContext{
 		Object:     "Message",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_User(ctx, field)
 		},
@@ -3497,50 +3629,36 @@ func (ec *executionContext) fieldContext_Message_content(_ context.Context, fiel
 	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _Message_attachmentUrl(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+func (ec *executionContext) _Message_media(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Message_attachmentUrl(ctx, field)
+			return ec.fieldContext_Message_media(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.AttachmentURL, nil
+			return ec.Resolvers.Message().Media(ctx, obj)
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+			return ec.marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx, selections, v)
 		},
 		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Message_attachmentUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _Message_attachmentName(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Message_attachmentName(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.AttachmentName, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
 		true,
-		false,
 	)
 }
-func (ec *executionContext) fieldContext_Message_attachmentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_Message_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Message",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Message_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
@@ -5095,7 +5213,7 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["attachmentKey"].(*string), fc.Args["attachmentName"].(*string))
+			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
@@ -5432,6 +5550,38 @@ func (ec *executionContext) fieldContext_Post_replies(_ context.Context, field g
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Post_media(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_media(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().Media(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+			return ec.marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Post_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Media(ctx, field)
 		},
 	}
 	return fc, nil
@@ -6610,17 +6760,17 @@ func (ec *executionContext) fieldContext_Query_presignedAvatarUploadUrl(ctx cont
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_presignedMessageFileUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_presignedMediaUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Query_presignedMessageFileUploadUrl(ctx, field)
+			return ec.fieldContext_Query_presignedMediaUploadUrl(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().PresignedMessageFileUploadURL(ctx, fc.Args["roomID"].(string), fc.Args["contentType"].(string))
+			return ec.Resolvers.Query().PresignedMediaUploadURL(ctx, fc.Args["contentType"].(string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.PresignedUploadURL) graphql.Marshaler {
@@ -6630,7 +6780,7 @@ func (ec *executionContext) _Query_presignedMessageFileUploadUrl(ctx context.Con
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Query_presignedMessageFileUploadUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_presignedMediaUploadUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -6647,7 +6797,7 @@ func (ec *executionContext) fieldContext_Query_presignedMessageFileUploadUrl(ctx
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_presignedMessageFileUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_presignedMediaUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -8599,7 +8749,7 @@ func (ec *executionContext) unmarshalInputCreatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"content", "parent_id"}
+	fieldsInOrder := [...]string{"content", "parent_id", "mediaInputs"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -8620,6 +8770,13 @@ func (ec *executionContext) unmarshalInputCreatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.ParentID = data
+		case "mediaInputs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mediaInputs"))
+			data, err := ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MediaInputs = data
 		}
 	}
 	return it, nil
@@ -8768,6 +8925,43 @@ func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.Password = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputMediaUploadInput(ctx context.Context, obj any) (model.MediaUploadInput, error) {
+	var it model.MediaUploadInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"objectKey", "contentType"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "objectKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("objectKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ObjectKey = data
+		case "contentType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("contentType"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ContentType = data
 		}
 	}
 	return it, nil
@@ -9386,6 +9580,60 @@ func (ec *executionContext) _Favorite(ctx context.Context, sel ast.SelectionSet,
 	return out
 }
 
+var mediaImplementors = []string{"Media"}
+
+func (ec *executionContext) _Media(ctx context.Context, sel ast.SelectionSet, obj *model.Media) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mediaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Media")
+		case "ID":
+			out.Values[i] = ec._Media_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._Media_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "contentType":
+			out.Values[i] = ec._Media_contentType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Media_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var messageImplementors = []string{"Message"}
 
 func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, obj *model.Message) graphql.Marshaler {
@@ -9400,46 +9648,140 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 		case "ID":
 			out.Values[i] = ec._Message_ID(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "roomID":
 			out.Values[i] = ec._Message_roomID(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "room":
-			out.Values[i] = ec._Message_room(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_room(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "userID":
 			out.Values[i] = ec._Message_userID(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "user":
-			out.Values[i] = ec._Message_user(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_user(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "content":
 			out.Values[i] = ec._Message_content(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "attachmentUrl":
-			out.Values[i] = ec._Message_attachmentUrl(ctx, field, obj)
-		case "attachmentName":
-			out.Values[i] = ec._Message_attachmentName(ctx, field, obj)
+		case "media":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_media(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			out.Values[i] = ec._Message_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Message_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -9911,6 +10253,42 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Post_replies(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "media":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_media(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -10610,7 +10988,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "presignedMessageFileUploadUrl":
+		case "presignedMediaUploadUrl":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -10619,7 +10997,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_presignedMessageFileUploadUrl(ctx, field)
+				res = ec._Query_presignedMediaUploadUrl(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -11461,6 +11839,37 @@ func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋCityboypenguin�
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMedia2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMedia(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMedia2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMedia(ctx context.Context, sel ast.SelectionSet, v *model.Media) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Media(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNMediaUploadInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInput(ctx context.Context, v any) (*model.MediaUploadInput, error) {
+	res, err := ec.unmarshalInputMediaUploadInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNMessage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v model.Message) graphql.Marshaler {
 	return ec._Message(ctx, sel, &v)
 }
@@ -11870,6 +12279,24 @@ func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.Se
 	_ = ctx
 	res := graphql.MarshalID(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx context.Context, v any) ([]*model.MediaUploadInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.MediaUploadInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNMediaUploadInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx context.Context, sel ast.SelectionSet, v *model.Post) graphql.Marshaler {

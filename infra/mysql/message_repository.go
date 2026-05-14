@@ -19,12 +19,13 @@ func NewMySQLMessageRepository(db *sql.DB) repository.MessageRepository {
 }
 
 func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Message) error {
+	db := extractDB(ctx, r.DB)
 	query := `
-		INSERT INTO messages (room_id, user_id, content, attachment_key, attachment_name, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO messages (room_id, user_id, content, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
 	`
-	result, err := r.DB.ExecContext(ctx, query,
-		m.RoomID, m.UserID, m.Content, m.AttachmentKey, m.AttachmentName,
+	result, err := db.ExecContext(ctx, query,
+		m.RoomID, m.UserID, m.Content,
 		m.CreatedAt.Unix(), m.UpdatedAt.Unix(),
 	)
 	if err != nil {
@@ -36,14 +37,14 @@ func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Messa
 
 func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (*model.Message, error) {
 	query := `
-		SELECT id, room_id, user_id, content, attachment_key, attachment_name, created_at, updated_at
+		SELECT id, room_id, user_id, content, created_at, updated_at
 		FROM messages WHERE id = ?
 	`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var m model.Message
 	var createdAt, updatedAt int64
-	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.AttachmentKey, &m.AttachmentName, &createdAt, &updatedAt)
+	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -70,7 +71,7 @@ func (r *MySQLMessageRepository) DeleteMessage(ctx context.Context, id int64) (b
 
 func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomID int64) ([]*model.Message, error) {
 	query := `
-		SELECT id, room_id, user_id, content, attachment_key, attachment_name, created_at, updated_at
+		SELECT id, room_id, user_id, content, created_at, updated_at
 		FROM messages WHERE room_id = ?
 		ORDER BY created_at ASC
 	`
@@ -84,7 +85,7 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 	for rows.Next() {
 		var m model.Message
 		var createdAt, updatedAt int64
-		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.AttachmentKey, &m.AttachmentName, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)

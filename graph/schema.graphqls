@@ -16,7 +16,7 @@ type Query {
   getPostByID(id: ID!): Post
   getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
-  
+
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
@@ -30,7 +30,7 @@ type Query {
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
-  presignedMessageFileUploadUrl(roomID: ID!, contentType: String!): PresignedUploadUrl!
+  presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
 }
 
 type User {
@@ -60,6 +60,13 @@ type Administrator {
   updatedAt: String!
 }
 
+type Media {
+  ID: ID!
+  url: String!
+  contentType: String!
+  createdAt: String!
+}
+
 type Post {
   ID: ID!
   content: String!
@@ -69,6 +76,7 @@ type Post {
   favorites: [Favorite!]!
   parent: Post
   replies: [Post!]!
+  media: [Media!]!
 }
 
 type Favorite {
@@ -133,9 +141,14 @@ type Mutation {
   unfreezeUser(id: ID!): Boolean!
   setAvatar(objectKey: String!): Profile!
   joinRoom(roomID: ID!): Boolean!
-  sendMessage(roomID: ID!, content: String!, attachmentKey: String, attachmentName: String): Message!
+  sendMessage(roomID: ID!, content: String!, mediaInputs: [MediaUploadInput!]): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
   updateMessage(roomID: ID!, id: ID!, content: String!): Message!
+}
+
+input MediaUploadInput {
+  objectKey: String!
+  contentType: String!
 }
 
 input CreateAdministratorInput {
@@ -167,6 +180,7 @@ input UpdateUserInput {
 input CreatePostInput {
   content: String!
   parent_id: ID
+  mediaInputs: [MediaUploadInput!]
 }
 
 input UpdatePostInput {
@@ -212,8 +226,7 @@ type Message {
   userID: ID!
   user: User!
   content: String!
-  attachmentUrl: String
-  attachmentName: String
+  media: [Media!]!
   createdAt: String!
   updatedAt: String!
 }

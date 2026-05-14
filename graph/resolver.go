@@ -6,6 +6,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
@@ -66,11 +67,14 @@ type Resolver struct {
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
 	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
-	GetMessageByIDUseCase     messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase        messageusecase.SendMessageUseCase
-	ListMessagesUseCase       messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase      messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase      messageusecase.UpdateMessageUseCase
+	ListMediaByPostIDUseCase    mediausecase.ListMediaByPostIDUseCase
+	ListMediaByMessageIDUseCase mediausecase.ListMediaByMessageIDUseCase
+
+	GetMessageByIDUseCase messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase    messageusecase.SendMessageUseCase
+	ListMessagesUseCase   messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase  messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase  messageusecase.UpdateMessageUseCase
 	CreateRoomUseCase         roomusecase.CreateRoomUseCase
 	GetRoomUseCase            roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase roomusecase.GetUserIDsByRoomIDUseCase
