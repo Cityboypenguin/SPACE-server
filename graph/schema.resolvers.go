@@ -628,6 +628,12 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 		return false, fmt.Errorf("failed to get room")
 	}
 
+	if room != nil && room.Type == model.RoomTypeCommunity {
+		if err := r.promoteNewOwnerIfNeeded(ctx, rid, uid); err != nil {
+			return false, fmt.Errorf("failed to transfer ownership: %w", err)
+		}
+	}
+
 	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, rid, uid); err != nil {
 		return false, err
 	}
