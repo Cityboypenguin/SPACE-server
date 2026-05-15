@@ -12,10 +12,11 @@ import (
 )
 
 type MinIOStorageRepository struct {
-	client         *minio.Client // 内部 API 呼び出し用 (minio:9000)
-	presignClient  *minio.Client // Presigned URL 生成用 (localhost:9000)
+	client         *minio.Client
+	presignClient  *minio.Client
 	bucket         string
 	publicEndpoint string
+	bucketLookup   minio.BucketLookupType
 }
 
 func New() (*MinIOStorageRepository, error) {
@@ -69,6 +70,7 @@ func New() (*MinIOStorageRepository, error) {
 		presignClient:  presignClient,
 		bucket:         bucket,
 		publicEndpoint: publicEndpoint,
+		bucketLookup:   bucketLookup,
 	}, nil
 }
 
@@ -86,6 +88,12 @@ func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey 
 }
 
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
+	if r.bucketLookup == minio.BucketLookupDNS {
+		u, err := url.Parse(r.publicEndpoint)
+		if err == nil {
+			return fmt.Sprintf("%s://%s.%s/%s", u.Scheme, r.bucket, u.Host, objectKey)
+		}
+	}
 	return fmt.Sprintf("%s/%s/%s", r.publicEndpoint, r.bucket, objectKey)
 }
 
