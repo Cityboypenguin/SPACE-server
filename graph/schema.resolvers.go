@@ -1423,7 +1423,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
+	if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
