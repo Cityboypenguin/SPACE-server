@@ -48,6 +48,14 @@ func main() {
 
 	e := echo.New()
 
+	isProd := os.Getenv("APP_ENV") == "production"
+
+	// Behind AWS ALB: trust private-network IPs as proxy hops so c.RealIP()
+	// returns the real client IP instead of being spoofable via X-Forwarded-For.
+	if isProd {
+		e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustPrivateNet(true))
+	}
+
 	userRepository := mysql.NewMySQLUserRepository(database)
 	administratorRepository := mysql.NewMySQLAdministratorRepository(database)
 	postRepository := mysql.NewMySQLPostRepository(database)
@@ -57,6 +65,9 @@ func main() {
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to bootstrap initial admin")
+	}
+	if isProd && os.Getenv("INIT_ADMIN_PASSWORD") != "" {
+		logger.Log.Warn().Msg("INIT_ADMIN_PASSWORD is set in production; unset it after the initial admin has been created")
 	}
 
 	messageRepository := mysql.NewMySQLMessageRepository(database)
@@ -252,7 +263,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// ALLOWED_ORIGINS が設定されていれば本番用ホワイトリスト、未設定なら開発用ワイルドカード
-	allowedOrigins := allowedOriginsFromEnv()
+	allowedOrigins := allowedOriginsFromEnv(isProd)
 
 	// CORSはJWTより先に登録しないと、401レスポンスにCORSヘッダーが付かずブラウザがブロックする
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -320,7 +331,6 @@ func main() {
 	gqlServer.AddTransport(transport.MultipartForm{})
 	gqlServer.Use(extension.FixedComplexityLimit(300))
 
-	isProd := os.Getenv("APP_ENV") == "production"
 	if !isProd {
 		gqlServer.Use(extension.Introspection{})
 	}
@@ -377,9 +387,12 @@ func main() {
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
 // If ALLOWED_ORIGINS is not set, it falls back to wildcard (dev-friendly).
-func allowedOriginsFromEnv() []string {
+func allowedOriginsFromEnv(isProd bool) []string {
 	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	if raw == "" {
+		if isProd {
+			logger.Log.Fatal().Msg("ALLOWED_ORIGINS must be set in production; refusing to start with wildcard CORS")
+		}
 		return []string{"*"}
 	}
 	parts := strings.Split(raw, ",")
