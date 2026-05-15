@@ -970,7 +970,7 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 		return false, fmt.Errorf("message not found")
 	}
 
-	if msg.UserID != claims.ID {
+	if msg.UserID != claims.ID && !isAdminRole(claims.Role) {
 		room, err := r.GetRoomUseCase.Execute(ctx, msg.RoomID)
 		if err != nil || room == nil || room.Type != model.RoomTypeCommunity {
 			return false, errors.New("forbidden: can only delete your own messages")
