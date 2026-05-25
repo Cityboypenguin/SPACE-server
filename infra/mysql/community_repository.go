@@ -112,11 +112,29 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 
 func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model.Community) error {
 	c.UpdatedAt = time.Now()
-	_, err := r.DB.ExecContext(ctx,
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
 		`UPDATE communities SET name = ?, description = ?, updated_at = ? WHERE id = ?`,
 		c.Name, c.Description, c.UpdatedAt.Unix(), c.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE rooms SET name = ?, updated_at = ? WHERE id = ?`,
+		c.Name, c.UpdatedAt.Unix(), c.RoomID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64) (bool, error) {
