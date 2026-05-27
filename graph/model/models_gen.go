@@ -26,6 +26,7 @@ type Community struct {
 	RoomID      string `json:"roomID"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	IconURL     string `json:"iconURL"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }
@@ -44,6 +45,7 @@ type CreateAdministratorInput struct {
 type CreateCommunityInput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	IconURL     string `json:"iconURL"`
 }
 
 type CreateFavoriteInput struct {
@@ -166,6 +168,7 @@ type UpdateAdministratorInput struct {
 type UpdateCommunityInput struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+	IconURL     *string `json:"iconURL,omitempty"`
 }
 
 type UpdatePostInput struct {

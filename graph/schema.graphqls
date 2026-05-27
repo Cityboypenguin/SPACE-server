@@ -32,6 +32,7 @@ type Query {
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
+  presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
 }
 
 type User {
@@ -255,6 +256,7 @@ type Community {
   roomID: ID!
   name: String!
   description: String!
+  iconURL: String!
   createdAt: String!
   updatedAt: String!
 }
@@ -267,11 +269,13 @@ type CommunityMember {
 input CreateCommunityInput {
   name: String!
   description: String!
+  iconURL: String!
 }
 
 input UpdateCommunityInput {
   name: String
   description: String
+  iconURL: String
 }
 
 type Subscription {

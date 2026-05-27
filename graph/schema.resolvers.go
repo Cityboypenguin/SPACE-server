@@ -649,11 +649,21 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 
 // CreateCommunity is the resolver for the createCommunity field.
 func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.CreateCommunityInput) (*gqlmodel.Community, error) {
-	c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description)
-	if err != nil {
-		return nil, err
-	}
-	return toGraphCommunity(c), nil
+	_, err := requireAuth(ctx)
+    if err != nil {
+        return nil, err
+    }
+    path := input.IconURL
+    if path != "" {
+        path = "/" + path
+    }
+
+    c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description, path)
+    if err != nil {
+        return nil, err
+    }
+
+    return toGraphCommunity(c), nil
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
@@ -1520,14 +1530,17 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 // MyCommunities is the resolver for the myCommunities field.
 func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Community, error) {
 	communities, err := r.ListMyCommunitiesUseCase.Execute(ctx)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]*gqlmodel.Community, 0, len(communities))
-	for _, c := range communities {
-		result = append(result, toGraphCommunity(c))
-	}
-	return result, nil
+    if err != nil {
+        return nil, err
+    }
+    result := make([]*gqlmodel.Community, 0, len(communities))
+    for _, c := range communities {
+        if c.IconURL != "" && !strings.HasPrefix(c.IconURL, "/") {
+        c.IconURL = "/" + c.IconURL
+    }
+    result = append(result, toGraphCommunity(c))
+    }
+    return result, nil
 }
 
 // SearchCommunities is the resolver for the searchCommunities field.
@@ -1538,7 +1551,10 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*
 	}
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		result = append(result, toGraphCommunity(c))
+		if c.IconURL != "" && !strings.HasPrefix(c.IconURL, "/") {
+        c.IconURL = "/" + c.IconURL
+    }
+    result = append(result, toGraphCommunity(c))
 	}
 	return result, nil
 }
@@ -1548,15 +1564,16 @@ func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community,
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-
 	communities, err := r.ListAllCommunitiesUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		result = append(result, toGraphCommunity(c))
+		if c.IconURL != "" && !strings.HasPrefix(c.IconURL, "/") {
+        c.IconURL = "/" + c.IconURL
+    }
+    result = append(result, toGraphCommunity(c))
 	}
 	return result, nil
 }
@@ -1564,19 +1581,25 @@ func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community,
 // RandomCommunities is the resolver for the randomCommunities field.
 func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*gqlmodel.Community, error) {
 	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
+    if err != nil {
+        return nil, err
+    }
 
-	communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, claims.ID, int(limit))
-	if err != nil {
-		return nil, err
-	}
-	result := make([]*gqlmodel.Community, 0, len(communities))
-	for _, c := range communities {
-		result = append(result, toGraphCommunity(c))
-	}
-	return result, nil
+    communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, claims.ID, int(limit))
+    if err != nil {
+        return nil, err
+    }
+    
+    result := make([]*gqlmodel.Community, 0, len(communities))
+    for _, c := range communities {
+        
+        if c.IconURL != "" && !strings.HasPrefix(c.IconURL, "/") {
+            c.IconURL = "/" + c.IconURL
+        }
+        
+        result = append(result, toGraphCommunity(c))
+    }
+    return result, nil
 }
 
 // GetMyRoleInCommunity is the resolver for the getMyRoleInCommunity field.
@@ -1694,6 +1717,38 @@ func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType
 
 	objectKey := fmt.Sprintf("media/%d/%s%s", claims.ID, uuid.New().String(), ext)
 	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, mediaMaxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate upload url")
+	}
+
+	return &gqlmodel.PresignedUploadURL{
+		UploadURL: uploadURL,
+		ObjectKey: objectKey,
+	}, nil
+}
+
+// PresignedCommunityIconUploadURL is the resolver for the presignedCommunityIconUploadUrl field.
+func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	extMap := map[string]string{
+		"image/jpeg": ".jpg",
+		"image/png":  ".png",
+		"image/webp": ".webp",
+		"image/gif":  ".gif",
+	}
+	ext, ok := extMap[contentType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
+	}
+
+	const iconMaxBytes = 5 * 1024 * 1024
+
+	objectKey := fmt.Sprintf("community-icons/%d/%s%s", claims.ID, uuid.New().String(), ext)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, iconMaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}

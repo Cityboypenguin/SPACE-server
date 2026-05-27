@@ -59,6 +59,7 @@ type ComplexityRoot struct {
 		CreatedAt   func(childComplexity int) int
 		Description func(childComplexity int) int
 		ID          func(childComplexity int) int
+		IconURL     func(childComplexity int) int
 		Name        func(childComplexity int) int
 		RoomID      func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
@@ -162,33 +163,34 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Administrators           func(childComplexity int) int
-		Communities              func(childComplexity int) int
-		Favorites                func(childComplexity int) int
-		GetAdministratorByID     func(childComplexity int, id string) int
-		GetCommunityMembers      func(childComplexity int, communityID string) int
-		GetFavoriteByID          func(childComplexity int, id string) int
-		GetMyRoleInCommunity     func(childComplexity int, communityID string) int
-		GetPostByID              func(childComplexity int, id string) int
-		GetProfileByUserID       func(childComplexity int, userID string) int
-		GetRepliesByPostID       func(childComplexity int, postID string) int
-		GetUserByID              func(childComplexity int, id string) int
-		Me                       func(childComplexity int) int
-		Messages                 func(childComplexity int, roomID string) int
-		MyCommunities            func(childComplexity int) int
-		MyDMRooms                func(childComplexity int) int
-		MyProfile                func(childComplexity int) int
-		Posts                    func(childComplexity int) int
-		PresignedAvatarUploadURL func(childComplexity int, contentType string) int
-		PresignedMediaUploadURL  func(childComplexity int, contentType string) int
-		RandomCommunities        func(childComplexity int, limit int32) int
-		Room                     func(childComplexity int, id string) int
-		SearchAdministrators     func(childComplexity int, name string) int
-		SearchCommunities        func(childComplexity int, name string) int
-		SearchPosts              func(childComplexity int, content string) int
-		SearchUsers              func(childComplexity int, name string) int
-		TopLevelPosts            func(childComplexity int) int
-		Users                    func(childComplexity int) int
+		Administrators                  func(childComplexity int) int
+		Communities                     func(childComplexity int) int
+		Favorites                       func(childComplexity int) int
+		GetAdministratorByID            func(childComplexity int, id string) int
+		GetCommunityMembers             func(childComplexity int, communityID string) int
+		GetFavoriteByID                 func(childComplexity int, id string) int
+		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
+		GetPostByID                     func(childComplexity int, id string) int
+		GetProfileByUserID              func(childComplexity int, userID string) int
+		GetRepliesByPostID              func(childComplexity int, postID string) int
+		GetUserByID                     func(childComplexity int, id string) int
+		Me                              func(childComplexity int) int
+		Messages                        func(childComplexity int, roomID string) int
+		MyCommunities                   func(childComplexity int) int
+		MyDMRooms                       func(childComplexity int) int
+		MyProfile                       func(childComplexity int) int
+		Posts                           func(childComplexity int) int
+		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
+		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
+		PresignedMediaUploadURL         func(childComplexity int, contentType string) int
+		RandomCommunities               func(childComplexity int, limit int32) int
+		Room                            func(childComplexity int, id string) int
+		SearchAdministrators            func(childComplexity int, name string) int
+		SearchCommunities               func(childComplexity int, name string) int
+		SearchPosts                     func(childComplexity int, content string) int
+		SearchUsers                     func(childComplexity int, name string) int
+		TopLevelPosts                   func(childComplexity int) int
+		Users                           func(childComplexity int) int
 	}
 
 	Room struct {
@@ -313,6 +315,7 @@ type QueryResolver interface {
 	GetCommunityMembers(ctx context.Context, communityID string) ([]*model.CommunityMember, error)
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
+	PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -405,6 +408,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Community.ID(childComplexity), true
+	case "Community.iconURL":
+		if e.ComplexityRoot.Community.IconURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.IconURL(childComplexity), true
 	case "Community.name":
 		if e.ComplexityRoot.Community.Name == nil {
 			break
@@ -1214,6 +1223,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedAvatarUploadURL(childComplexity, args["contentType"].(string)), true
+	case "Query.presignedCommunityIconUploadUrl":
+		if e.ComplexityRoot.Query.PresignedCommunityIconUploadURL == nil {
+			break
+		}
+
+		args, err := ec.field_Query_presignedCommunityIconUploadUrl_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.PresignedCommunityIconUploadURL(childComplexity, args["contentType"].(string)), true
 	case "Query.presignedMediaUploadUrl":
 		if e.ComplexityRoot.Query.PresignedMediaUploadURL == nil {
 			break
@@ -2191,6 +2211,17 @@ func (ec *executionContext) field_Query_presignedAvatarUploadUrl_args(ctx contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_presignedCommunityIconUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "contentType", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["contentType"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_presignedMediaUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2701,6 +2732,35 @@ func (ec *executionContext) _Community_description(ctx context.Context, field gr
 }
 
 func (ec *executionContext) fieldContext_Community_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Community",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Community_iconURL(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Community_iconURL,
+		func(ctx context.Context) (any, error) {
+			return obj.IconURL, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Community_iconURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Community",
 		Field:      field,
@@ -4575,6 +4635,8 @@ func (ec *executionContext) fieldContext_Mutation_createCommunity(ctx context.Co
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -4750,6 +4812,8 @@ func (ec *executionContext) fieldContext_Mutation_updateCommunity(ctx context.Co
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -6925,6 +6989,8 @@ func (ec *executionContext) fieldContext_Query_myCommunities(_ context.Context, 
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -6969,6 +7035,8 @@ func (ec *executionContext) fieldContext_Query_searchCommunities(ctx context.Con
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -7023,6 +7091,8 @@ func (ec *executionContext) fieldContext_Query_communities(_ context.Context, fi
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -7067,6 +7137,8 @@ func (ec *executionContext) fieldContext_Query_randomCommunities(ctx context.Con
 				return ec.fieldContext_Community_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Community_description(ctx, field)
+			case "iconURL":
+				return ec.fieldContext_Community_iconURL(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Community_createdAt(ctx, field)
 			case "updatedAt":
@@ -7265,6 +7337,53 @@ func (ec *executionContext) fieldContext_Query_presignedMediaUploadUrl(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_presignedMediaUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_presignedCommunityIconUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_presignedCommunityIconUploadUrl,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().PresignedCommunityIconUploadURL(ctx, fc.Args["contentType"].(string))
+		},
+		nil,
+		ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_presignedCommunityIconUploadUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "uploadUrl":
+				return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
+			case "objectKey":
+				return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_presignedCommunityIconUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9787,7 +9906,7 @@ func (ec *executionContext) unmarshalInputCreateCommunityInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description"}
+	fieldsInOrder := [...]string{"name", "description", "iconURL"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9808,6 +9927,13 @@ func (ec *executionContext) unmarshalInputCreateCommunityInput(ctx context.Conte
 				return it, err
 			}
 			it.Description = data
+		case "iconURL":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("iconURL"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IconURL = data
 		}
 	}
 	return it, nil
@@ -10164,7 +10290,7 @@ func (ec *executionContext) unmarshalInputUpdateCommunityInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description"}
+	fieldsInOrder := [...]string{"name", "description", "iconURL"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -10185,6 +10311,13 @@ func (ec *executionContext) unmarshalInputUpdateCommunityInput(ctx context.Conte
 				return it, err
 			}
 			it.Description = data
+		case "iconURL":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("iconURL"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IconURL = data
 		}
 	}
 	return it, nil
@@ -10489,6 +10622,11 @@ func (ec *executionContext) _Community(ctx context.Context, sel ast.SelectionSet
 			}
 		case "description":
 			out.Values[i] = ec._Community_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "iconURL":
+			out.Values[i] = ec._Community_iconURL(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -12125,6 +12263,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_presignedMediaUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedCommunityIconUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedCommunityIconUploadUrl(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

@@ -19,7 +19,7 @@ func NewMySQLCommunityRepository(db *sql.DB) repository.CommunityRepository {
 
 // SaveCommunityWithRoom は Room・RoomUser・Community を単一トランザクションで作成する。
 // いずれかのステップで失敗した場合はロールバックし、孤立レコードを残さない。
-func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description string, creatorUserID int64) (*model.Community, error) {
+func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description, IconURL string, creatorUserID int64) (*model.Community, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -53,8 +53,8 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 
 	// 3. communities を作成
 	communityResult, err := tx.ExecContext(ctx,
-		`INSERT INTO communities (room_id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		roomID, name, description, nowUnix, nowUnix,
+		`INSERT INTO communities (room_id, name, description, icon_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		roomID, name, description, IconURL, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -73,6 +73,7 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 		RoomID:      roomID,
 		Name:        name,
 		Description: description,
+		IconURL:     IconURL,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}, nil
@@ -80,10 +81,10 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 
 func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int64) (*model.Community, error) {
 	row := r.DB.QueryRowContext(ctx,
-		`SELECT id, room_id, name, description, created_at, updated_at FROM communities WHERE id = ?`, id)
+		`SELECT id, room_id, name, description, icon_url, created_at, updated_at FROM communities WHERE id = ?`, id)
 	var c model.Community
 	var createdAt, updatedAt int64
-	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.IconURL, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -96,7 +97,7 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 
 func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string) ([]*model.Community, error) {
 	query := `
-		SELECT c.id, c.room_id, c.name, c.description, c.created_at, c.updated_at
+		SELECT c.id, c.room_id, c.name, c.description, c.icon_url, c.created_at, c.updated_at
 		FROM communities c
 		WHERE c.name LIKE ?
 		ORDER BY c.created_at DESC
@@ -119,8 +120,8 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE communities SET name = ?, description = ?, updated_at = ? WHERE id = ?`,
-		c.Name, c.Description, c.UpdatedAt.Unix(), c.ID,
+		`UPDATE communities SET name = ?, description = ?, icon_url = ?, updated_at = ? WHERE id = ?`,
+		c.Name, c.Description, c.IconURL, c.UpdatedAt.Unix(), c.ID,
 	)
 	if err != nil {
 		return err
@@ -151,7 +152,7 @@ func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64
 
 func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64) ([]*model.Community, error) {
 	query := `
-		SELECT c.id, c.room_id, c.name, c.description, c.created_at, c.updated_at
+		SELECT c.id, c.room_id, c.name, c.description, c.icon_url, c.created_at, c.updated_at
 		FROM communities c
 		JOIN room_users ru ON c.room_id = ru.room_id
 		WHERE ru.user_id = ?
@@ -167,7 +168,7 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 
 func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context) ([]*model.Community, error) {
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, room_id, name, description, created_at, updated_at FROM communities ORDER BY created_at DESC`,
+		`SELECT id, room_id, name, description, icon_url, created_at, updated_at FROM communities ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -197,7 +198,7 @@ func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
 	for rows.Next() {
 		var c model.Community
 		var createdAt, updatedAt int64
-		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.IconURL, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
 		c.CreatedAt = time.Unix(createdAt, 0)
@@ -209,7 +210,7 @@ func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
 
 func (r *MySQLCommunityRepository) FindRandom(ctx context.Context, userID int64, limit int) ([]*model.Community, error) {
     query := `
-        SELECT c.id, c.room_id, c.name, c.description, c.created_at, c.updated_at 
+        SELECT c.id, c.room_id, c.name, c.description, c.icon_url, c.created_at, c.updated_at 
         FROM communities c
         WHERE c.room_id NOT IN (
             SELECT ru.room_id 

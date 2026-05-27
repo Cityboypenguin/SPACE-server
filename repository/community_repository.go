@@ -8,7 +8,7 @@ import (
 
 type CommunityRepository interface {
 	// SaveCommunityWithRoom は Room・RoomUser・Community を単一トランザクションで作成する。
-	SaveCommunityWithRoom(ctx context.Context, name, description string, creatorUserID int64) (*model.Community, error)
+	SaveCommunityWithRoom(ctx context.Context, name, description, iconURL string, creatorUserID int64) (*model.Community, error)
 	GetCommunityByID(ctx context.Context, id int64) (*model.Community, error)
 	SearchCommunities(ctx context.Context, name string) ([]*model.Community, error)
 	UpdateCommunity(ctx context.Context, c *model.Community) error

@@ -53,11 +53,13 @@ func toGraphCommunity(c *model.Community) *gqlmodel.Community {
 	if c == nil {
 		return nil
 	}
+
 	return &gqlmodel.Community{
 		ID:          encodeGraphID("community", c.ID),
 		RoomID:      encodeGraphID("room", c.RoomID),
 		Name:        c.Name,
 		Description: c.Description,
+		IconURL:     c.IconURL,
 		CreatedAt:   c.CreatedAt.Format(timeFormat),
 		UpdatedAt:   c.UpdatedAt.Format(timeFormat),
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 type CreateCommunityUseCase interface {
-	Execute(ctx context.Context, name, description string) (*model.Community, error)
+	Execute(ctx context.Context, name, description, iconURL string) (*model.Community, error)
 }
 
 var _ CreateCommunityUseCase = &CreateCommunityInteractor{}
@@ -22,10 +22,10 @@ func NewCreateCommunityUseCase(communityRepo repository.CommunityRepository) Cre
 	return &CreateCommunityInteractor{communityRepo: communityRepo}
 }
 
-func (uc *CreateCommunityInteractor) Execute(ctx context.Context, name, description string) (*model.Community, error) {
+func (uc *CreateCommunityInteractor) Execute(ctx context.Context, name, description, iconURL string) (*model.Community, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return uc.communityRepo.SaveCommunityWithRoom(ctx, name, description, claims.ID)
+	return uc.communityRepo.SaveCommunityWithRoom(ctx, name, description, iconURL, claims.ID)
 }
