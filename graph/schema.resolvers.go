@@ -1177,12 +1177,12 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.SearchUsersUseCase.Execute(ctx, name)
+	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}

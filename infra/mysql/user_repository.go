@@ -121,14 +121,15 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 	return users, nil
 }
 
-func (r *MySQLUserRepository) SearchUsersByName(ctx context.Context, name string) ([]*model.User, error) {
+func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword string) ([]*model.User, error) {
 	query := `
 		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
-		WHERE name LIKE ?
+		WHERE name LIKE ? OR account_id LIKE ?
 	`
 
-	rows, err := r.DB.QueryContext(ctx, query, "%"+name+"%")
+	searchParam := "%" + keyword + "%"
+	rows, err := r.DB.QueryContext(ctx, query, searchParam, searchParam)
 	if err != nil {
 		return nil, err
 	}
