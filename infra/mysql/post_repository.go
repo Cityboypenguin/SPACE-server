@@ -248,6 +248,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 		SELECT id, content, created_at, updated_at, user_id, parent_id
 		FROM posts
 		WHERE parent_id IS NULL
+		ORDER BY created_at DESC
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
 	if err != nil {
