@@ -17,4 +17,5 @@ type CommunityRepository interface {
 	ListAllCommunities(ctx context.Context) ([]*model.Community, error)
 	// IsSoleOwnerWithOtherMembers は指定ユーザーが他メンバーのいるコミュニティの唯一オーナーかどうかを返す。
 	IsSoleOwnerWithOtherMembers(ctx context.Context, userID int64) (bool, error)
+	FindRandom(ctx context.Context, limit int) ([]*model.Community, error)
 }

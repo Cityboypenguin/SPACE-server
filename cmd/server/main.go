@@ -171,6 +171,7 @@ func main() {
 	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
+	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
 
 	ps := pubsub.New()
 
@@ -254,6 +255,7 @@ func main() {
 		PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
 		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
+		GetRandomCommunitiesUseCase: *getRandomCommunitiesUseCase,
 
 		PubSub: ps,
 	}

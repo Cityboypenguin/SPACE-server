@@ -98,6 +98,7 @@ type Resolver struct {
 	PromoteToCommunityOwnerUseCase        communityusecase.PromoteToCommunityOwnerUseCase
 	DemoteFromCommunityOwnerUseCase       communityusecase.DemoteFromCommunityOwnerUseCase
 	IsSoleOwnerWithOtherMembersUseCase    communityusecase.IsSoleOwnerWithOtherMembersUseCase
+	GetRandomCommunitiesUseCase           communityusecase.GetRandomCommunitiesUseCase
 
 	PubSub *pubsub.PubSub
 }

@@ -27,6 +27,7 @@ type Query {
   myCommunities: [Community!]!
   searchCommunities(name: String!): [Community!]!
   communities: [Community!]!
+  randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!

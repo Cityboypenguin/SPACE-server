@@ -206,3 +206,19 @@ func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
 	}
 	return list, rows.Err()
 }
+
+func (r *MySQLCommunityRepository) FindRandom(ctx context.Context, limit int) ([]*model.Community, error) {
+    query := `
+        SELECT id, room_id, name, description, created_at, updated_at 
+        FROM communities 
+        ORDER BY RAND() 
+        LIMIT ?
+    `
+    rows, err := r.DB.QueryContext(ctx, query, limit)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    return scanCommunities(rows)
+}
