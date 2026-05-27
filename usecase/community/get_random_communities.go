@@ -17,6 +17,6 @@ func NewGetRandomCommunitiesUseCase(repo repository.CommunityRepository) *GetRan
     }
 }
 
-func (u *GetRandomCommunitiesUseCase) Execute(ctx context.Context, limit int) ([]*model.Community, error) {
-    return u.CommunityRepo.FindRandom(ctx, limit)
+func (u *GetRandomCommunitiesUseCase) Execute(ctx context.Context, userID int64, limit int) ([]*model.Community, error) {
+    return u.CommunityRepo.FindRandom(ctx, userID, limit)
 }

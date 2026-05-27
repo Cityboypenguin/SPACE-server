@@ -1563,7 +1563,12 @@ func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community,
 
 // RandomCommunities is the resolver for the randomCommunities field.
 func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*gqlmodel.Community, error) {
-	communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, int(limit))
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, claims.ID, int(limit))
 	if err != nil {
 		return nil, err
 	}
