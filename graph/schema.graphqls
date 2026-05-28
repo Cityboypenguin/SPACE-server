@@ -256,7 +256,7 @@ type Community {
   roomID: ID!
   name: String!
   description: String!
-  iconURL: String!
+  avatarURL: String!
   createdAt: String!
   updatedAt: String!
 }
@@ -269,13 +269,13 @@ type CommunityMember {
 input CreateCommunityInput {
   name: String!
   description: String!
-  iconURL: String!
+  avatarKey: String
 }
 
 input UpdateCommunityInput {
   name: String
   description: String
-  iconURL: String
+  avatarKey: String
 }
 
 type Subscription {

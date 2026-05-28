@@ -59,7 +59,7 @@ func toGraphCommunity(c *model.Community) *gqlmodel.Community {
 		RoomID:      encodeGraphID("room", c.RoomID),
 		Name:        c.Name,
 		Description: c.Description,
-		IconURL:     c.IconURL,
+		AvatarURL:   c.AvatarKey,
 		CreatedAt:   c.CreatedAt.Format(timeFormat),
 		UpdatedAt:   c.UpdatedAt.Format(timeFormat),
 	}

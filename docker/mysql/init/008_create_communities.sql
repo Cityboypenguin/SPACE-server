@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS communities (
     room_id     BIGINT       NOT NULL,
     name        VARCHAR(255) NOT NULL,
     description TEXT         NOT NULL,
-    icon_url VARCHAR(255) NOT NULL DEFAULT '',
+    avatar_key VARCHAR(255) DEFAULT NULL,
     created_at  BIGINT       NOT NULL,
     updated_at  BIGINT       NOT NULL,
     PRIMARY KEY (id),
