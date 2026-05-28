@@ -19,6 +19,13 @@ func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	return &url
 }
 
+func (r *Resolver) communityAvatarURL(c *model.Community) string {
+	if c == nil || c.AvatarKey == "" {
+		return ""
+	}
+	return r.StorageRepository.PublicURL(c.AvatarKey)
+}
+
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {

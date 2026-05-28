@@ -49,7 +49,7 @@ func toGraphRoom(room *model.Room) *gqlmodel.Room {
 	}
 }
 
-func toGraphCommunity(c *model.Community) *gqlmodel.Community {
+func toGraphCommunity(c *model.Community, avatarURL string) *gqlmodel.Community {
 	if c == nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func toGraphCommunity(c *model.Community) *gqlmodel.Community {
 		RoomID:      encodeGraphID("room", c.RoomID),
 		Name:        c.Name,
 		Description: c.Description,
-		AvatarURL:   c.AvatarKey,
+		AvatarURL:   avatarURL,
 		CreatedAt:   c.CreatedAt.Format(timeFormat),
 		UpdatedAt:   c.UpdatedAt.Format(timeFormat),
 	}

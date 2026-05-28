@@ -663,7 +663,7 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 		return nil, err
 	}
 
-	return toGraphCommunity(c), nil
+	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
@@ -756,7 +756,7 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, err
 	}
 
-	return toGraphCommunity(c), nil
+	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
 }
 
 // KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
@@ -1536,10 +1536,7 @@ func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Communit
 	}
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		if c.AvatarKey != "" && !strings.HasPrefix(c.AvatarKey, "/") {
-			c.AvatarKey = "/" + c.AvatarKey
-		}
-		result = append(result, toGraphCommunity(c))
+		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
 	}
 	return result, nil
 }
@@ -1552,10 +1549,7 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*
 	}
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		if c.AvatarKey != "" && !strings.HasPrefix(c.AvatarKey, "/") {
-			c.AvatarKey = "/" + c.AvatarKey
-		}
-		result = append(result, toGraphCommunity(c))
+		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
 	}
 	return result, nil
 }
@@ -1571,10 +1565,7 @@ func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community,
 	}
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		if c.AvatarKey != "" && !strings.HasPrefix(c.AvatarKey, "/") {
-			c.AvatarKey = "/" + c.AvatarKey
-		}
-		result = append(result, toGraphCommunity(c))
+		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
 	}
 	return result, nil
 }
@@ -1593,12 +1584,7 @@ func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*
 
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-
-		if c.AvatarKey != "" && !strings.HasPrefix(c.AvatarKey, "/") {
-			c.AvatarKey = "/" + c.AvatarKey
-		}
-
-		result = append(result, toGraphCommunity(c))
+		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
 	}
 	return result, nil
 }
