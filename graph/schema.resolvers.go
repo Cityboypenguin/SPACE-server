@@ -391,6 +391,11 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
+	trimmedContent := strings.TrimSpace(input.Content)
+	if trimmedContent == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
@@ -408,19 +413,13 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 	}
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, model.UpdatePostParam{
-		Content: &input.Content,
+		Content: &trimmedContent,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &gqlmodel.Post{
-		ID:        fmt.Sprintf("%d", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: fmt.Sprintf("%d", post.UserID)},
-	}, nil
+	return toGraphPost(post), nil
 }
 
 // CreateFavorite is the resolver for the createFavorite field.
@@ -1189,12 +1188,12 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.SearchUsersUseCase.Execute(ctx, name)
+	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}
