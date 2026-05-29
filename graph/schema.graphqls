@@ -33,6 +33,7 @@ type Query {
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
+  searchReports(filter: ReportSearchFilter): [UserReport!]!
 }
 
 type User {
@@ -146,6 +147,10 @@ type Mutation {
   sendMessage(roomID: ID!, content: String!, mediaInputs: [MediaUploadInput!]): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
   updateMessage(roomID: ID!, id: ID!, content: String!): Message!
+
+  createReport(input: CreateReportInput!): UserReport!
+  updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
+  toggleReportSystem(enabled: Boolean!): Boolean!
 }
 
 input MediaUploadInput {
@@ -282,4 +287,43 @@ type Subscription {
   messageAdded(roomID: ID!): Message!
   messageDeleted(roomID: ID!): Message!
   messageUpdated(roomID: ID!): Message!
+}
+
+enum ReportStatus {
+  PENDING    # 未対応
+  REVIEWING  # 確認中
+  RESOLVED   # 解決済み
+  DISMISSED  # 却下（問題なし）
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  PROMOTION
+  COMMUNITY
+}
+
+type UserReport {
+  ID: ID!
+  reporter: User!        # 通報したユーザーの情報
+  targetType: ReportTargetType!
+  targetID: ID!          # 対象（PostやCommunityなど）のID
+  reason: String!        # 通報理由の分類（スパム、嫌がらせ等）
+  customReason: String   # 詳細な理由（自由記述・オプショナル）
+  status: ReportStatus!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input ReportSearchFilter {
+  status: ReportStatus
+  targetType: ReportTargetType
+  reporterID: ID
+}
+
+input CreateReportInput {
+  targetType: ReportTargetType!
+  targetID: ID!          # 通報対象のID
+  reason: String!        # 理由の分類
+  customReason: String   # 詳細理由
 }
