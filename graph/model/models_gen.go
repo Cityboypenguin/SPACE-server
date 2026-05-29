@@ -131,6 +131,7 @@ type Post struct {
 	Content   string      `json:"content"`
 	CreatedAt string      `json:"createdAt"`
 	UpdatedAt string      `json:"updatedAt"`
+	DeletedAt *string     `json:"deletedAt,omitempty"`
 	User      *User       `json:"user"`
 	Favorites []*Favorite `json:"favorites"`
 	Parent    *Post       `json:"parent,omitempty"`

@@ -5,7 +5,7 @@ type Query {
   users: [User!]!
   me: User!
   getUserByID(id: ID!): User
-  searchUsers(name: String!): [User!]!
+  searchUsers(keyword: String!): [User!]!
 
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
@@ -75,6 +75,7 @@ type Post {
   content: String!
   createdAt: String!
   updatedAt: String!
+  deletedAt: String
   user: User!
   favorites: [Favorite!]!
   parent: Post
