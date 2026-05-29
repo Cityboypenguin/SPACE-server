@@ -34,6 +34,7 @@ import (
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -181,7 +182,15 @@ func main() {
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
-    manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+
+	notificationRepository := mysql.NewMySQLNotificationRepository(database)
+	hub := sse.NewHub()
+	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, hub)
+	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
+	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
+	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
+	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -268,7 +277,13 @@ func main() {
 		GetRandomCommunitiesUseCase: *getRandomCommunitiesUseCase,
 
 		CreateReportUsecase: *createReportUseCase,
-        ManageReportUsecase: *manageReportUseCase,
+		ManageReportUsecase: *manageReportUseCase,
+
+		NotificationPublisher:    notificationPublisher,
+		ListNotificationsUseCase: listNotificationsUseCase,
+		MarkAsReadUseCase:        markAsReadUseCase,
+		MarkAllAsReadUseCase:     markAllAsReadUseCase,
+		CountUnreadUseCase:       countUnreadUseCase,
 
 		PubSub: ps,
 	}
@@ -367,9 +382,8 @@ func main() {
 		})
 	}
 
-	hub := sse.NewHub()
 	// SSE
-	e.GET("/events", sse.NewHandler(hub))
+	e.GET("/events", sse.NewHandler(hub, revokedTokenRepository, userRepository))
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {

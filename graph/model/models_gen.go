@@ -126,6 +126,17 @@ type Message struct {
 type Mutation struct {
 }
 
+type Notification struct {
+	ID         string  `json:"ID"`
+	Type       string  `json:"type"`
+	Actor      *User   `json:"actor,omitempty"`
+	TargetType *string `json:"targetType,omitempty"`
+	TargetID   *string `json:"targetID,omitempty"`
+	Message    string  `json:"message"`
+	IsRead     bool    `json:"isRead"`
+	CreatedAt  string  `json:"createdAt"`
+}
+
 type Post struct {
 	ID        string      `json:"ID"`
 	Content   string      `json:"content"`

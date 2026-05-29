@@ -15,66 +15,61 @@ type Client struct {
 	ch chan Event
 }
 
-// Hub はクライアント管理とブロードキャストを担当
+// Hub はユーザーごとのクライアント管理と配信を担当
 type Hub struct {
 	mu      sync.Mutex
-	clients map[*Client]struct{}
+	clients map[int64][]*Client // userID → 接続中クライアント一覧
 	nextID  int64
 }
 
 // NewHub は Hub を作成する
 func NewHub() *Hub {
 	return &Hub{
-		clients: make(map[*Client]struct{}),
+		clients: make(map[int64][]*Client),
 		nextID:  1,
 	}
 }
 
-// Subscribe は新しいクライアントを登録して返す
-func (h *Hub) Subscribe() *Client {
+// Subscribe は指定ユーザーの新しいクライアントを登録して返す
+func (h *Hub) Subscribe(userID int64) *Client {
 	c := &Client{ch: make(chan Event, 32)}
 	h.mu.Lock()
-	h.clients[c] = struct{}{}
+	h.clients[userID] = append(h.clients[userID], c)
 	h.mu.Unlock()
 	return c
 }
 
-// Unsubscribe はクライアントを削除する
-func (h *Hub) Unsubscribe(c *Client) {
+// Unsubscribe はクライアントを削除してチャネルを閉じる
+func (h *Hub) Unsubscribe(userID int64, c *Client) {
 	h.mu.Lock()
-	if _, ok := h.clients[c]; ok {
-		delete(h.clients, c)
-		close(c.ch)
+	defer h.mu.Unlock()
+	list := h.clients[userID]
+	for i, cl := range list {
+		if cl == c {
+			close(c.ch)
+			h.clients[userID] = append(list[:i], list[i+1:]...)
+			break
+		}
 	}
-	h.mu.Unlock()
+	if len(h.clients[userID]) == 0 {
+		delete(h.clients, userID)
+	}
 }
 
-// Publish は全クライアントへイベントを配信する（遅いクライアントは drop）
-func (h *Hub) Publish(eventType string, data map[string]any) Event {
+// PublishToUser は特定ユーザーの全クライアントへイベントを配信する（遅いクライアントは drop）
+func (h *Hub) PublishToUser(userID int64, eventType string, data map[string]any) {
 	h.mu.Lock()
 	id := h.nextID
 	h.nextID++
-
-	clients := make([]*Client, 0, len(h.clients))
-	for c := range h.clients {
-		clients = append(clients, c)
-	}
+	clients := make([]*Client, len(h.clients[userID]))
+	copy(clients, h.clients[userID])
 	h.mu.Unlock()
 
-	ev := Event{
-		ID:   int(id),
-		Type: eventType,
-		Data: data,
-		// Time は handler 側で設定する
-	}
-
+	ev := Event{ID: int(id), Type: eventType, Data: data}
 	for _, c := range clients {
 		select {
 		case c.ch <- ev:
 		default:
-			// drop（要件次第で Unsubscribe しても良い）
 		}
 	}
-
-	return ev
 }

@@ -6,6 +6,8 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(name: String!): [User!]!
+  myNotifications(limit: Int): [Notification!]!
+  myUnreadNotificationCount: Int!
 
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
@@ -151,6 +153,9 @@ type Mutation {
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
   toggleReportSystem(enabled: Boolean!): Boolean!
+
+  markNotificationAsRead(id: ID!): Boolean!
+  markAllNotificationsAsRead: Boolean!
 }
 
 input MediaUploadInput {
@@ -319,6 +324,17 @@ input ReportSearchFilter {
   status: ReportStatus
   targetType: ReportTargetType
   reporterID: ID
+}
+
+type Notification {
+  ID: ID!
+  type: String!
+  actor: User
+  targetType: String
+  targetID: ID
+  message: String!
+  isRead: Boolean!
+  createdAt: String!
 }
 
 input CreateReportInput {

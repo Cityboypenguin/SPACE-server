@@ -8,6 +8,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
@@ -103,6 +104,12 @@ type Resolver struct {
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
+
+	NotificationPublisher    notificationuc.NotificationPublisher
+	ListNotificationsUseCase notificationuc.ListNotificationsUseCase
+	MarkAsReadUseCase        notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase     notificationuc.MarkAllAsReadUseCase
+	CountUnreadUseCase       notificationuc.CountUnreadUseCase
 
 	PubSub *pubsub.PubSub
 }
