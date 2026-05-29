@@ -1059,34 +1059,28 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 
 // UpdateReportStatus is the resolver for the updateReportStatus field.
 func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, status gqlmodel.ReportStatus) (*gqlmodel.UserReport, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
-		return nil, err
-	}
+    if _, err := requireAdminAuth(ctx); err != nil {
+        return nil, err
+    }
+    res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
+    if err != nil {
+        return nil, err
+    }
 
-	numericID, err := decodeGraphID(ctx, "report", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid report id")
-	}
-
-	res, err := r.ManageReportUsecase.UpdateStatus(ctx, fmt.Sprintf("%d", numericID), model.ReportStatus(status))
-	if err != nil {
-		return nil, err
-	}
-
-	reporterUser := &gqlmodel.User{
+    reporterUser := &gqlmodel.User{
         ID:        fmt.Sprintf("%d", res.ReporterID),
         Name:      "通報者",
         AccountID: "reporter",
     }
-	
-	return &gqlmodel.UserReport{
+    
+    return &gqlmodel.UserReport{
         ID:           res.ID,
         TargetType:   gqlmodel.ReportTargetType(res.TargetType),
         TargetID:     res.TargetID,
         Reason:       res.Reason,
         CustomReason: res.CustomReason,
         Status:       status,
-		Reporter:     reporterUser,
+        Reporter:     reporterUser,
         CreatedAt:    res.CreatedAt.Format(time.RFC3339),
         UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
     }, nil
