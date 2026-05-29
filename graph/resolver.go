@@ -10,6 +10,7 @@ import (
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
@@ -99,6 +100,9 @@ type Resolver struct {
 	DemoteFromCommunityOwnerUseCase       communityusecase.DemoteFromCommunityOwnerUseCase
 	IsSoleOwnerWithOtherMembersUseCase    communityusecase.IsSoleOwnerWithOtherMembersUseCase
 	GetRandomCommunitiesUseCase           communityusecase.GetRandomCommunitiesUseCase
+
+	CreateReportUsecase reportusecase.CreateReportUsecase
+	ManageReportUsecase reportusecase.ManageReportUsecase
 
 	PubSub *pubsub.PubSub
 }

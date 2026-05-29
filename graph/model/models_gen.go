@@ -2,6 +2,13 @@
 
 package model
 
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+)
+
 type AddUserToRoomInput struct {
 	RoomID string `json:"roomID"`
 	UserID string `json:"userID"`
@@ -56,6 +63,13 @@ type CreatePostInput struct {
 	Content     string              `json:"content"`
 	ParentID    *string             `json:"parent_id,omitempty"`
 	MediaInputs []*MediaUploadInput `json:"mediaInputs,omitempty"`
+}
+
+type CreateReportInput struct {
+	TargetType   ReportTargetType `json:"targetType"`
+	TargetID     string           `json:"targetID"`
+	Reason       string           `json:"reason"`
+	CustomReason *string          `json:"customReason,omitempty"`
 }
 
 type CreateRoomInput struct {
@@ -146,6 +160,12 @@ type RemoveUserFromRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type ReportSearchFilter struct {
+	Status     *ReportStatus     `json:"status,omitempty"`
+	TargetType *ReportTargetType `json:"targetType,omitempty"`
+	ReporterID *string           `json:"reporterID,omitempty"`
+}
+
 type Room struct {
 	ID        string  `json:"ID"`
 	Content   *string `json:"content,omitempty"`
@@ -210,4 +230,134 @@ type UserAuthPayload struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refreshToken"`
 	User         *User  `json:"user"`
+}
+
+type UserReport struct {
+	ID           string           `json:"ID"`
+	Reporter     *User            `json:"reporter"`
+	TargetType   ReportTargetType `json:"targetType"`
+	TargetID     string           `json:"targetID"`
+	Reason       string           `json:"reason"`
+	CustomReason *string          `json:"customReason,omitempty"`
+	Status       ReportStatus     `json:"status"`
+	CreatedAt    string           `json:"createdAt"`
+	UpdatedAt    string           `json:"updatedAt"`
+}
+
+type ReportStatus string
+
+const (
+	ReportStatusPending   ReportStatus = "PENDING"
+	ReportStatusReviewing ReportStatus = "REVIEWING"
+	ReportStatusResolved  ReportStatus = "RESOLVED"
+	ReportStatusDismissed ReportStatus = "DISMISSED"
+)
+
+var AllReportStatus = []ReportStatus{
+	ReportStatusPending,
+	ReportStatusReviewing,
+	ReportStatusResolved,
+	ReportStatusDismissed,
+}
+
+func (e ReportStatus) IsValid() bool {
+	switch e {
+	case ReportStatusPending, ReportStatusReviewing, ReportStatusResolved, ReportStatusDismissed:
+		return true
+	}
+	return false
+}
+
+func (e ReportStatus) String() string {
+	return string(e)
+}
+
+func (e *ReportStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReportStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReportStatus", str)
+	}
+	return nil
+}
+
+func (e ReportStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ReportStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ReportStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ReportTargetType string
+
+const (
+	ReportTargetTypePost      ReportTargetType = "POST"
+	ReportTargetTypeComment   ReportTargetType = "COMMENT"
+	ReportTargetTypePromotion ReportTargetType = "PROMOTION"
+	ReportTargetTypeCommunity ReportTargetType = "COMMUNITY"
+)
+
+var AllReportTargetType = []ReportTargetType{
+	ReportTargetTypePost,
+	ReportTargetTypeComment,
+	ReportTargetTypePromotion,
+	ReportTargetTypeCommunity,
+}
+
+func (e ReportTargetType) IsValid() bool {
+	switch e {
+	case ReportTargetTypePost, ReportTargetTypeComment, ReportTargetTypePromotion, ReportTargetTypeCommunity:
+		return true
+	}
+	return false
+}
+
+func (e ReportTargetType) String() string {
+	return string(e)
+}
+
+func (e *ReportTargetType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReportTargetType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReportTargetType", str)
+	}
+	return nil
+}
+
+func (e ReportTargetType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ReportTargetType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

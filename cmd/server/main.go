@@ -33,6 +33,7 @@ import (
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
@@ -61,6 +62,7 @@ func main() {
 	postRepository := mysql.NewMySQLPostRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
+	reportRepository := mysql.NewMySQLReportRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -172,6 +174,8 @@ func main() {
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
+	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
+    manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 
 	ps := pubsub.New()
 
@@ -256,6 +260,9 @@ func main() {
 		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
 		GetRandomCommunitiesUseCase: *getRandomCommunitiesUseCase,
+
+		CreateReportUsecase: *createReportUseCase,
+        ManageReportUsecase: *manageReportUseCase,
 
 		PubSub: ps,
 	}
