@@ -19,7 +19,7 @@ func NewMySQLPostRepository(db *sql.DB) repository.PostRepository {
 
 func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
 		WHERE id = ?
 	`
@@ -27,14 +27,21 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 
 	var p model.Post
 	var createdAtUnix, updatedAtUnix int64
-	var parentID sql.NullInt64
-	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+	var parentID, deletedAtUnix sql.NullInt64
+	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 		return nil, err
 	}
 	if parentID.Valid {
 		p.ParentID = &parentID.Int64
 	} else {
 		p.ParentID = nil
+	}
+
+	if deletedAtUnix.Valid {
+		deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+		p.DeletedAt = &deletedAt
+	} else {
+		p.DeletedAt = nil
 	}
 	p.CreatedAt = time.Unix(createdAtUnix, 0)
 	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -92,10 +99,12 @@ func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) err
 
 func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, error) {
 	query := `
-		DELETE FROM posts
-		WHERE id = ?
+		UPDATE posts
+		SET deleted_at = ?, updated_at = ?
+		WHERE id = ? AND deleted_at IS NULL
 	`
-	result, err := r.DB.ExecContext(ctx, query, id)
+
+	result, err := r.DB.ExecContext(ctx, query, time.Now().Unix(), time.Now().Unix(), id)
 	if err != nil {
 		return false, err
 	}
@@ -114,7 +123,7 @@ func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID in
 
 func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64) ([]*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
 		WHERE user_id = ?
 	`
@@ -128,14 +137,21 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -147,7 +163,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
@@ -160,14 +176,21 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -179,7 +202,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 
 func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
 	searchQuery := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
 		WHERE content LIKE ?
 	`
@@ -193,14 +216,21 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -212,9 +242,9 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 
 func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
-		WHERE parent_id = ?
+		WHERE parent_id = ? AND deleted_at IS NULL
 	`
 	rows, err := r.DB.QueryContext(ctx, query, id)
 	if err != nil {
@@ -226,14 +256,21 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -245,9 +282,9 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 
 func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at
 		FROM posts
-		WHERE parent_id IS NULL
+		WHERE parent_id IS NULL AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
@@ -260,14 +297,21 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
