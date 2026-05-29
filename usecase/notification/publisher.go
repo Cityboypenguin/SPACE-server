@@ -4,12 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-// NotificationType は通知の種別を表す。新しい発火点を追加する際はここに定数を追加する。
 type NotificationType string
 
 const (
@@ -20,7 +18,6 @@ const (
 	TypeCommunityRole NotificationType = "community_role"
 )
 
-// TargetType は通知が指す対象の種別を表す。
 type TargetType string
 
 const (
@@ -29,29 +26,33 @@ const (
 	TargetCommunity TargetType = "community"
 )
 
-// PublishParams は通知を発行する際のパラメータ。
 type PublishParams struct {
-	UserID     int64            // 通知の受信者
-	Type       NotificationType // 通知種別
-	ActorID    *int64           // 通知を発生させたユーザー（省略可）
-	TargetType *TargetType      // 対象の種別（省略可）
-	TargetID   *int64           // 対象のID（省略可）
-	Message    string           // 通知メッセージ
+	UserID     int64
+	Type       NotificationType
+	ActorID    *int64
+	TargetType *TargetType
+	TargetID   *int64
+	Message    string
 }
 
-// NotificationPublisher は通知を DB に保存し SSE でリアルタイム配信するインターフェース。
-// 新しい発火点では Publish を1行呼ぶだけでよい。
+// UserEventDelivery はリアルタイムイベントをユーザーへ配信するポート。
+// usecase 層はこのインターフェースに依存し、具体的な配信手段（SSE 等）を知らない。
+type UserEventDelivery interface {
+	PublishToUser(userID int64, eventType string, data map[string]any)
+}
+
+// NotificationPublisher は通知を DB に保存し、接続中のユーザーへリアルタイム配信する。
 type NotificationPublisher interface {
 	Publish(ctx context.Context, params PublishParams) error
 }
 
 type notificationPublisher struct {
-	repo repository.NotificationRepository
-	hub  *sse.Hub
+	repo     repository.NotificationRepository
+	delivery UserEventDelivery
 }
 
-func NewNotificationPublisher(repo repository.NotificationRepository, hub *sse.Hub) NotificationPublisher {
-	return &notificationPublisher{repo: repo, hub: hub}
+func NewNotificationPublisher(repo repository.NotificationRepository, delivery UserEventDelivery) NotificationPublisher {
+	return &notificationPublisher{repo: repo, delivery: delivery}
 }
 
 func (p *notificationPublisher) Publish(ctx context.Context, params PublishParams) error {
@@ -91,6 +92,6 @@ func (p *notificationPublisher) Publish(ctx context.Context, params PublishParam
 		data["targetID"] = *n.TargetID
 	}
 
-	p.hub.PublishToUser(params.UserID, "notification", data)
+	p.delivery.PublishToUser(params.UserID, "notification", data)
 	return nil
 }

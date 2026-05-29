@@ -185,8 +185,8 @@ func main() {
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
-	hub := sse.NewHub()
-	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, hub)
+	sseBroker := sse.NewBroker()
+	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
@@ -383,7 +383,7 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(hub, revokedTokenRepository, userRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, revokedTokenRepository, userRepository))
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {

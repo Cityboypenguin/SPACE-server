@@ -13,7 +13,7 @@ import (
 // NewHandler は /events 用の Echo ハンドラを返す。
 // 認証は Authorization ヘッダー（JWTAuth middleware 経由）か ?token= クエリパラメータで行う。
 // ブラウザ標準の EventSource はカスタムヘッダーを送れないため、?token= を主な認証手段とする。
-func NewHandler(hub *Hub, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.HandlerFunc {
+func NewHandler(hub *Broker, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
