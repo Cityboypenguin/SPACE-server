@@ -84,12 +84,14 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 		`SELECT id, room_id, name, description, avatar_key, created_at, updated_at FROM communities WHERE id = ?`, id)
 	var c model.Community
 	var createdAt, updatedAt int64
-	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.AvatarKey, &createdAt, &updatedAt); err != nil {
+	var avatarKey sql.NullString
+	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &avatarKey, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	c.AvatarKey = avatarKey.String
 	c.CreatedAt = time.Unix(createdAt, 0)
 	c.UpdatedAt = time.Unix(updatedAt, 0)
 	return &c, nil
@@ -198,9 +200,11 @@ func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
 	for rows.Next() {
 		var c model.Community
 		var createdAt, updatedAt int64
-		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &c.AvatarKey, &createdAt, &updatedAt); err != nil {
+		var avatarKey sql.NullString
+		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &avatarKey, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		c.AvatarKey = avatarKey.String
 		c.CreatedAt = time.Unix(createdAt, 0)
 		c.UpdatedAt = time.Unix(updatedAt, 0)
 		list = append(list, &c)

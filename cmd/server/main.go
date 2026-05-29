@@ -14,6 +14,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/Cityboypenguin/SPACE-server/db"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
@@ -46,6 +47,11 @@ func main() {
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to database")
 	}
+
+	if err := db.RunMigrations(database); err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to run migrations")
+	}
+	logger.Log.Info().Msg("database migrations applied")
 
 	e := echo.New()
 
