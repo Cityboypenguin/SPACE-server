@@ -9,7 +9,6 @@ type Post struct {
 	UpdatedAt time.Time
 	UserID    int64
 	ParentID  *int64
-	DeletedAt *time.Time
 }
 
 type CreatePostParam struct {
@@ -18,7 +17,6 @@ type CreatePostParam struct {
 	UpdatedAt time.Time
 	UserID    int64
 	ParentID  *int64
-	DeletedAt *time.Time
 	MediaKeys []string
 }
 
@@ -33,7 +31,6 @@ func CreatePost(param CreatePostParam) *Post {
 		ParentID:  param.ParentID,
 		CreatedAt: param.CreatedAt,
 		UpdatedAt: param.UpdatedAt,
-		DeletedAt: param.DeletedAt,
 	}
 }
 
