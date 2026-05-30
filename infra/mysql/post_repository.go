@@ -22,7 +22,7 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
-		WHERE id = ? AND deleted_at IS NULL
+		WHERE id = ?
 	`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
