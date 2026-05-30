@@ -1161,18 +1161,17 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 		gqlGrandParent = &gqlmodel.Post{ID: encodeGraphID("post", *parent.ParentID)}
 	}
 
-	return &gqlmodel.Post{
-		ID:        encodeGraphID("post", parent.ID),
-		Content:   parent.Content,
-		CreatedAt: parent.CreatedAt.Format(timeFormat),
-		UpdatedAt: parent.UpdatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", parent.UserID)},
-		Parent:    gqlGrandParent,
-	}, nil
+	gqlPost := toGraphPost(parent)
+	gqlPost.Parent = gqlGrandParent
+	return gqlPost, nil
 }
 
 // Replies is the resolver for the replies field on Post.
 func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Post, error) {
+	if obj.DeletedAt != nil {
+		return []*gqlmodel.Post{}, nil
+	}
+
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
@@ -1185,14 +1184,7 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 
 	var gqlReplies []*gqlmodel.Post
 	for _, reply := range replies {
-		gqlReplies = append(gqlReplies, &gqlmodel.Post{
-			ID:        encodeGraphID("post", reply.ID),
-			Content:   reply.Content,
-			CreatedAt: reply.CreatedAt.Format(timeFormat),
-			UpdatedAt: reply.UpdatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", reply.UserID)},
-			Parent:    &gqlmodel.Post{ID: obj.ID},
-		})
+		gqlReplies = append(gqlReplies, toGraphPost(reply))
 	}
 	return gqlReplies, nil
 }

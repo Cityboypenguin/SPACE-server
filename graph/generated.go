@@ -141,16 +141,17 @@ type ComplexityRoot struct {
 	}
 
 	Post struct {
-		Content   func(childComplexity int) int
-		CreatedAt func(childComplexity int) int
-		DeletedAt func(childComplexity int) int
-		Favorites func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Media     func(childComplexity int) int
-		Parent    func(childComplexity int) int
-		Replies   func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
-		User      func(childComplexity int) int
+		Content    func(childComplexity int) int
+		CreatedAt  func(childComplexity int) int
+		DeletedAt  func(childComplexity int) int
+		Favorites  func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Media      func(childComplexity int) int
+		Parent     func(childComplexity int) int
+		Replies    func(childComplexity int) int
+		ReplyCount func(childComplexity int) int
+		UpdatedAt  func(childComplexity int) int
+		User       func(childComplexity int) int
 	}
 
 	PresignedUploadUrl struct {
@@ -1062,6 +1063,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.Replies(childComplexity), true
+	case "Post.replyCount":
+		if e.ComplexityRoot.Post.ReplyCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.ReplyCount(childComplexity), true
 	case "Post.updatedAt":
 		if e.ComplexityRoot.Post.UpdatedAt == nil {
 			break
@@ -1874,6 +1881,8 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 		return ec.fieldContext_Post_updatedAt(ctx, field)
 	case "deletedAt":
 		return ec.fieldContext_Post_deletedAt(ctx, field)
+	case "replyCount":
+		return ec.fieldContext_Post_replyCount(ctx, field)
 	case "user":
 		return ec.fieldContext_Post_user(ctx, field)
 	case "favorites":
@@ -5884,6 +5893,29 @@ func (ec *executionContext) _Post_deletedAt(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_Post_deletedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Post", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Post_replyCount(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_replyCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplyCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Post_replyCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Post", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Post_user(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
@@ -11082,6 +11114,11 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "deletedAt":
 			out.Values[i] = ec._Post_deletedAt(ctx, field, obj)
+		case "replyCount":
+			out.Values[i] = ec._Post_replyCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "user":
 			field := field
 

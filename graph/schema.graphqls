@@ -76,6 +76,7 @@ type Post {
   createdAt: String!
   updatedAt: String!
   deletedAt: String
+  replyCount: Int!
   user: User!
   favorites: [Favorite!]!
   parent: Post
