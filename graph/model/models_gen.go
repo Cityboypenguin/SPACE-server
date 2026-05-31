@@ -138,15 +138,17 @@ type Notification struct {
 }
 
 type Post struct {
-	ID        string      `json:"ID"`
-	Content   string      `json:"content"`
-	CreatedAt string      `json:"createdAt"`
-	UpdatedAt string      `json:"updatedAt"`
-	User      *User       `json:"user"`
-	Favorites []*Favorite `json:"favorites"`
-	Parent    *Post       `json:"parent,omitempty"`
-	Replies   []*Post     `json:"replies"`
-	Media     []*Media    `json:"media"`
+	ID         string      `json:"ID"`
+	Content    string      `json:"content"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+	DeletedAt  *string     `json:"deletedAt,omitempty"`
+	ReplyCount int32       `json:"replyCount"`
+	User       *User       `json:"user"`
+	Favorites  []*Favorite `json:"favorites"`
+	Parent     *Post       `json:"parent,omitempty"`
+	Replies    []*Post     `json:"replies"`
+	Media      []*Media    `json:"media"`
 }
 
 type PresignedUploadURL struct {

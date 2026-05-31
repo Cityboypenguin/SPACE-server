@@ -5,7 +5,7 @@ type Query {
   users: [User!]!
   me: User!
   getUserByID(id: ID!): User
-  searchUsers(name: String!): [User!]!
+  searchUsers(keyword: String!): [User!]!
   myNotifications(limit: Int): [Notification!]!
   myUnreadNotificationCount: Int!
 
@@ -77,6 +77,8 @@ type Post {
   content: String!
   createdAt: String!
   updatedAt: String!
+  deletedAt: String
+  replyCount: Int!
   user: User!
   favorites: [Favorite!]!
   parent: Post

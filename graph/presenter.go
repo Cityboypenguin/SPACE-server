@@ -101,13 +101,21 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
 	}
 
+	var deletedAt *string
+	if post.DeletedAt != nil {
+		formatted := post.DeletedAt.Format(timeFormat)
+		deletedAt = &formatted
+	}
+
 	return &gqlmodel.Post{
-		ID:        encodeGraphID("post", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      toGraphUser(&model.User{ID: post.UserID}),
-		Parent:    gqlParent,
+		ID:         encodeGraphID("post", post.ID),
+		Content:    post.Content,
+		CreatedAt:  post.CreatedAt.Format(timeFormat),
+		UpdatedAt:  post.UpdatedAt.Format(timeFormat),
+		DeletedAt:  deletedAt,
+		User:       toGraphUser(&model.User{ID: post.UserID}),
+		Parent:     gqlParent,
+		ReplyCount: int32(post.ReplyCount),
 	}
 }
 func toGraphNotification(n *model.Notification) *gqlmodel.Notification {
