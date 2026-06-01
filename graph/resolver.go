@@ -10,6 +10,7 @@ import (
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -103,6 +104,8 @@ type Resolver struct {
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
+
+	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 
 	PubSub *pubsub.PubSub
 }

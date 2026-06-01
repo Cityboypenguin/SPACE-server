@@ -153,6 +153,24 @@ type Mutation {
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
   toggleReportSystem(enabled: Boolean!): Boolean!
+
+  createInquiry(input: CreateInquiryInput!): Inquiry!
+}
+
+type Inquiry {
+  ID: ID!
+  name: String!
+  email: String!
+  subject: String!
+  content: String!
+  createdAt: String!
+}
+
+input CreateInquiryInput {
+  name: String!
+  email: String!
+  subject: String!
+  content: String!
 }
 
 input MediaUploadInput {
