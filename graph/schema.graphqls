@@ -36,6 +36,8 @@ type Query {
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   searchReports(filter: ReportSearchFilter): [UserReport!]!
+  searchInquiries(status: InquiryStatus): [Inquiry!]!
+  getInquiry(id: ID!): Inquiry
 }
 
 type User {
@@ -157,8 +159,15 @@ type Mutation {
   toggleReportSystem(enabled: Boolean!): Boolean!
 
   createInquiry(input: CreateInquiryInput!): Inquiry!
+  updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   markNotificationAsRead(id: ID!): Boolean!
   markAllNotificationsAsRead: Boolean!
+}
+
+enum InquiryStatus {
+  PENDING      # 未対応
+  IN_PROGRESS  # 対応中
+  RESOLVED     # 解決済み
 }
 
 type Inquiry {
@@ -167,7 +176,9 @@ type Inquiry {
   email: String!
   subject: String!
   content: String!
+  status: InquiryStatus!
   createdAt: String!
+  updatedAt: String!
 }
 
 input CreateInquiryInput {

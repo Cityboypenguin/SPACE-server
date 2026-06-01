@@ -1170,14 +1170,20 @@ func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.Cre
 	if err != nil {
 		return nil, err
 	}
-	return &gqlmodel.Inquiry{
-		ID:        inquiry.ID,
-		Name:      inquiry.Name,
-		Email:     inquiry.Email,
-		Subject:   inquiry.Subject,
-		Content:   inquiry.Content,
-		CreatedAt: inquiry.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}, nil
+	return toGraphInquiry(inquiry), nil
+}
+
+// UpdateInquiryStatus is the resolver for the updateInquiryStatus field.
+func (r *mutationResolver) UpdateInquiryStatus(ctx context.Context, id string, status gqlmodel.InquiryStatus) (*gqlmodel.Inquiry, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	inquiry, err := r.ManageInquiryUsecase.UpdateStatus(ctx, id, model.InquiryStatus(status))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphInquiry(inquiry), nil
 }
 
 // MarkNotificationAsRead is the resolver for the markNotificationAsRead field.
@@ -2012,6 +2018,46 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 	}
 
 	return gqlReports, nil
+}
+
+// SearchInquiries is the resolver for the searchInquiries field.
+func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.InquiryStatus) ([]*gqlmodel.Inquiry, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	var domainStatus *model.InquiryStatus
+	if status != nil {
+		s := model.InquiryStatus(*status)
+		domainStatus = &s
+	}
+
+	inquiries, err := r.ManageInquiryUsecase.Search(ctx, domainStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.Inquiry, 0, len(inquiries))
+	for _, inq := range inquiries {
+		result = append(result, toGraphInquiry(inq))
+	}
+	return result, nil
+}
+
+// GetInquiry is the resolver for the getInquiry field.
+func (r *queryResolver) GetInquiry(ctx context.Context, id string) (*gqlmodel.Inquiry, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	inquiry, err := r.ManageInquiryUsecase.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if inquiry == nil {
+		return nil, nil
+	}
+	return toGraphInquiry(inquiry), nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.

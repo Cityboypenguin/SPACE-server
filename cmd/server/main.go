@@ -186,6 +186,7 @@ func main() {
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
+	manageInquiryUseCase := inquiryusecase.NewManageInquiryUsecase(inquiryRepository)
 
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
 	sseBroker := sse.NewBroker()
@@ -283,6 +284,7 @@ func main() {
 		ManageReportUsecase: *manageReportUseCase,
 
 		CreateInquiryUsecase: *createInquiryUseCase,
+		ManageInquiryUsecase: *manageInquiryUseCase,
 
 		NotificationPublisher:    notificationPublisher,
 		ListNotificationsUseCase: listNotificationsUseCase,

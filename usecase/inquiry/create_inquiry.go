@@ -3,12 +3,16 @@ package inquiry
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/google/uuid"
 )
+
+var emailRegex = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 type CreateInquiryUsecase struct {
 	inquiryRepo repository.InquiryRepository
@@ -26,17 +30,40 @@ type CreateInquiryInput struct {
 }
 
 func (u *CreateInquiryUsecase) Execute(ctx context.Context, input CreateInquiryInput) (*model.Inquiry, error) {
-	if input.Name == "" || input.Email == "" || input.Subject == "" || input.Content == "" {
+	name := strings.TrimSpace(input.Name)
+	email := strings.TrimSpace(input.Email)
+	subject := strings.TrimSpace(input.Subject)
+	content := strings.TrimSpace(input.Content)
+
+	if name == "" || email == "" || subject == "" || content == "" {
 		return nil, errors.New("all fields are required")
 	}
+	if !emailRegex.MatchString(email) {
+		return nil, errors.New("invalid email format")
+	}
+	if len(name) > 255 {
+		return nil, errors.New("name must be 255 characters or less")
+	}
+	if len(email) > 255 {
+		return nil, errors.New("email must be 255 characters or less")
+	}
+	if len(subject) > 255 {
+		return nil, errors.New("subject must be 255 characters or less")
+	}
+	if len(content) > 10000 {
+		return nil, errors.New("content must be 10000 characters or less")
+	}
 
+	now := time.Now()
 	inquiry := &model.Inquiry{
 		ID:        uuid.New().String(),
-		Name:      input.Name,
-		Email:     input.Email,
-		Subject:   input.Subject,
-		Content:   input.Content,
-		CreatedAt: time.Now(),
+		Name:      name,
+		Email:     email,
+		Subject:   subject,
+		Content:   content,
+		Status:    model.InquiryStatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	if err := u.inquiryRepo.Save(ctx, inquiry); err != nil {

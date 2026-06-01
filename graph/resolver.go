@@ -113,6 +113,7 @@ type Resolver struct {
 	CountUnreadUseCase       notificationuc.CountUnreadUseCase
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
+	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
 
 	PubSub *pubsub.PubSub
 }
