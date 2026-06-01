@@ -16,7 +16,9 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	"github.com/google/uuid"
@@ -356,6 +358,21 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
+	if numericParentID != nil {
+		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
+		if perr == nil && parent.UserID != claims.ID {
+			targetType := notificationuc.TargetPost
+			_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+				UserID:     parent.UserID,
+				Type:       notificationuc.TypeReply,
+				ActorID:    &claims.ID,
+				TargetType: &targetType,
+				TargetID:   numericParentID,
+				Message:    "あなたの投稿に返信がありました",
+			})
+		}
+	}
+
 	return toGraphPost(post), nil
 }
 
@@ -441,6 +458,19 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
+	if err == nil && post.UserID != claims.ID {
+		targetType := notificationuc.TargetPost
+		_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+			UserID:     post.UserID,
+			Type:       notificationuc.TypeFavorite,
+			ActorID:    &claims.ID,
+			TargetType: &targetType,
+			TargetID:   &numericPostID,
+			Message:    "あなたの投稿がいいねされました",
+		})
 	}
 
 	return &gqlmodel.Favorite{
@@ -825,6 +855,16 @@ func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityI
 		logger.Log.Error().Err(err).Int64("room_id", c.RoomID).Msg("failed to auto-delete empty community room")
 	}
 
+	targetType := notificationuc.TargetCommunity
+	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:     numericUserID,
+		Type:       notificationuc.TypeCommunityKick,
+		ActorID:    &claims.ID,
+		TargetType: &targetType,
+		TargetID:   &numericCommunityID,
+		Message:    "コミュニティからキックされました",
+	})
+
 	return true, nil
 }
 
@@ -838,7 +878,19 @@ func (r *mutationResolver) PromoteToCommunityOwner(ctx context.Context, communit
 	if err != nil {
 		return false, fmt.Errorf("invalid user id")
 	}
-	return r.PromoteToCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+	ok, err := r.PromoteToCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+	if err != nil || !ok {
+		return ok, err
+	}
+	targetType := notificationuc.TargetCommunity
+	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:     numericUserID,
+		Type:       notificationuc.TypeCommunityRole,
+		TargetType: &targetType,
+		TargetID:   &numericCommunityID,
+		Message:    "コミュニティのオーナーに昇格しました",
+	})
+	return true, nil
 }
 
 // DemoteFromCommunityOwner is the resolver for the demoteFromCommunityOwner field.
@@ -851,7 +903,19 @@ func (r *mutationResolver) DemoteFromCommunityOwner(ctx context.Context, communi
 	if err != nil {
 		return false, fmt.Errorf("invalid user id")
 	}
-	return r.DemoteFromCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+	ok, err := r.DemoteFromCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
+	if err != nil || !ok {
+		return ok, err
+	}
+	targetType := notificationuc.TargetCommunity
+	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:     numericUserID,
+		Type:       notificationuc.TypeCommunityRole,
+		TargetType: &targetType,
+		TargetID:   &numericCommunityID,
+		Message:    "コミュニティのオーナーから降格されました",
+	})
+	return true, nil
 }
 
 // AdminDeletePost is the resolver for the adminDeletePost field.
@@ -1062,13 +1126,7 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	numericID, err := decodeGraphID(ctx, "report", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid report id")
-	}
-
-	res, err := r.ManageReportUsecase.UpdateStatus(ctx, fmt.Sprintf("%d", numericID), model.ReportStatus(status))
+	res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
 	if err != nil {
 		return nil, err
 	}
@@ -1133,7 +1191,6 @@ func (r *mutationResolver) DeleteFavoriteUser(ctx context.Context, favoriteUserI
 	if err != nil {
 		return false, err
 	}
-
 	numericTargetID, err := decodeGraphID(ctx, "user", favoriteUserID)
 	if err != nil {
 		return false, fmt.Errorf("invalid favorite user id")
@@ -1169,18 +1226,82 @@ func (r *mutationResolver) CreateBlocker(ctx context.Context, blockedUserID stri
 }
 
 // DeleteBlocker is the resolver for the deleteBlocker field.
-func (r *mutationResolver) DeleteBlocker(ctx context.Context, blockedID string) (bool, error) {
+func (r *mutationResolver) DeleteBlocker(ctx context.Context, blockedUserID string) (bool, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return false, err
 	}
-
-	numericTargetID, err := decodeGraphID(ctx, "user", blockedID)
+	numericTargetID, err := decodeGraphID(ctx, "user", blockedUserID)
 	if err != nil {
 		return false, fmt.Errorf("invalid blocked user id")
 	}
 
 	return r.DeleteBlockUseCase.Execute(ctx, claims.ID, numericTargetID)
+}
+
+// CreateInquiry is the resolver for the createInquiry field.
+func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.CreateInquiryInput) (*gqlmodel.Inquiry, error) {
+	inquiry, err := r.CreateInquiryUsecase.Execute(ctx, inquiryusecase.CreateInquiryInput{
+		Name:    input.Name,
+		Email:   input.Email,
+		Subject: input.Subject,
+		Content: input.Content,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.Inquiry{
+		ID:        inquiry.ID,
+		Name:      inquiry.Name,
+		Email:     inquiry.Email,
+		Subject:   inquiry.Subject,
+		Content:   inquiry.Content,
+		CreatedAt: inquiry.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}, nil
+}
+
+// MarkNotificationAsRead is the resolver for the markNotificationAsRead field.
+func (r *mutationResolver) MarkNotificationAsRead(ctx context.Context, id string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "notification", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid notification id")
+	}
+	if err := r.MarkAsReadUseCase.Execute(ctx, numericID, claims.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// MarkAllNotificationsAsRead is the resolver for the markAllNotificationsAsRead field.
+func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	if err := r.MarkAllAsReadUseCase.Execute(ctx, claims.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// Actor is the resolver for the actor field on Notification.
+func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.User, error) {
+	if obj.Actor == nil {
+		return nil, nil
+	}
+	numericID, err := decodeGraphID(ctx, "user", obj.Actor.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid actor id")
+	}
+	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphUser(user), nil
 }
 
 // User is the resolver for the user field on Post.
@@ -1356,6 +1477,40 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gql
 		gqlUsers = append(gqlUsers, toGraphUser(user))
 	}
 	return gqlUsers, nil
+}
+
+// MyNotifications is the resolver for the myNotifications field.
+func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32) ([]*gqlmodel.Notification, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lim := 0
+	if limit != nil {
+		lim = int(*limit)
+	}
+	notifications, err := r.ListNotificationsUseCase.Execute(ctx, claims.ID, lim)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.Notification
+	for _, n := range notifications {
+		result = append(result, toGraphNotification(n))
+	}
+	return result, nil
+}
+
+// MyUnreadNotificationCount is the resolver for the myUnreadNotificationCount field.
+func (r *queryResolver) MyUnreadNotificationCount(ctx context.Context) (int32, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
 }
 
 // Administrators is the resolver for the administrators field.
@@ -2254,6 +2409,9 @@ func (r *Resolver) Message() MessageResolver { return &messageResolver{r} }
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// Notification returns NotificationResolver implementation.
+func (r *Resolver) Notification() NotificationResolver { return &notificationResolver{r} }
+
 // Post returns PostResolver implementation.
 func (r *Resolver) Post() PostResolver { return &postResolver{r} }
 
@@ -2269,6 +2427,7 @@ func (r *Resolver) User() UserResolver { return &userResolver{r} }
 type favoriteResolver struct{ *Resolver }
 type messageResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
+type notificationResolver struct{ *Resolver }
 type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }

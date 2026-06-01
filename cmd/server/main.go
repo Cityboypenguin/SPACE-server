@@ -32,8 +32,10 @@ import (
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
@@ -73,6 +75,7 @@ func main() {
 	reportRepository := mysql.NewMySQLReportRepository(database)
 	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
 	blockRepository := mysql.NewMySQLBlockRepository(database)
+	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -198,6 +201,15 @@ func main() {
 	listFavoriteUsersUseCase := fuusecase.NewListFavoriteUsersUseCase(favoriteuserRepository)
 	searchFavoriteUsersUseCase := fuusecase.NewSearchFavoriteUsersUseCase(favoriteuserRepository)
 	getFavoriteUsersByUserIDUseCase := fuusecase.NewGetFavoriteUsersByUserIDUseCase(favoriteuserRepository)
+	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
+
+	notificationRepository := mysql.NewMySQLNotificationRepository(database)
+	sseBroker := sse.NewBroker()
+	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
+	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
+	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
+	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -297,6 +309,13 @@ func main() {
 		ListBlockersUseCase:        listBlockersUseCase,
 		SearchBlockersUseCase:      searchBlockersUseCase,
 		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
+		CreateInquiryUsecase:       *createInquiryUseCase,
+
+		NotificationPublisher:    notificationPublisher,
+		ListNotificationsUseCase: listNotificationsUseCase,
+		MarkAsReadUseCase:        markAsReadUseCase,
+		MarkAllAsReadUseCase:     markAllAsReadUseCase,
+		CountUnreadUseCase:       countUnreadUseCase,
 
 		PubSub: ps,
 	}
@@ -396,9 +415,8 @@ func main() {
 		})
 	}
 
-	hub := sse.NewHub()
 	// SSE
-	e.GET("/events", sse.NewHandler(hub))
+	e.GET("/events", sse.NewHandler(sseBroker, revokedTokenRepository, userRepository))
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {

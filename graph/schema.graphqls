@@ -6,6 +6,8 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!): [User!]!
+  myNotifications(limit: Int): [Notification!]!
+  myUnreadNotificationCount: Int!
 
   administrators: [Administrator!]!
   getAdministratorByID(id: ID!): Administrator
@@ -181,6 +183,25 @@ type Mutation {
 
   createBlocker(blockedUserID: ID!): Blocker!
   deleteBlocker(blockedUserID: ID!): Boolean!
+  createInquiry(input: CreateInquiryInput!): Inquiry!
+  markNotificationAsRead(id: ID!): Boolean!
+  markAllNotificationsAsRead: Boolean!
+}
+
+type Inquiry {
+  ID: ID!
+  name: String!
+  email: String!
+  subject: String!
+  content: String!
+  createdAt: String!
+}
+
+input CreateInquiryInput {
+  name: String!
+  email: String!
+  subject: String!
+  content: String!
 }
 
 input MediaUploadInput {
@@ -349,6 +370,17 @@ input ReportSearchFilter {
   status: ReportStatus
   targetType: ReportTargetType
   reporterID: ID
+}
+
+type Notification {
+  ID: ID!
+  type: String!
+  actor: User
+  targetType: String
+  targetID: ID
+  message: String!
+  isRead: Boolean!
+  createdAt: String!
 }
 
 input CreateReportInput {
