@@ -1125,13 +1125,7 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	numericID, err := decodeGraphID(ctx, "report", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid report id")
-	}
-
-	res, err := r.ManageReportUsecase.UpdateStatus(ctx, fmt.Sprintf("%d", numericID), model.ReportStatus(status))
+	res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
 	if err != nil {
 		return nil, err
 	}
