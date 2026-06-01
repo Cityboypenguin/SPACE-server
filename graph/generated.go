@@ -251,13 +251,14 @@ type ComplexityRoot struct {
 	}
 
 	Room struct {
-		Content   func(childComplexity int) int
-		CreatedAt func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Name      func(childComplexity int) int
-		Type      func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
-		User      func(childComplexity int) int
+		Content             func(childComplexity int) int
+		CreatedAt           func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		IsMessagingDisabled func(childComplexity int) int
+		Name                func(childComplexity int) int
+		Type                func(childComplexity int) int
+		UpdatedAt           func(childComplexity int) int
+		User                func(childComplexity int) int
 	}
 
 	Subscription struct {
@@ -1770,6 +1771,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.ID(childComplexity), true
+	case "Room.isMessagingDisabled":
+		if e.ComplexityRoot.Room.IsMessagingDisabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Room.IsMessagingDisabled(childComplexity), true
 	case "Room.name":
 		if e.ComplexityRoot.Room.Name == nil {
 			break
@@ -2359,6 +2366,8 @@ func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.
 		return ec.fieldContext_Room_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_Room_updatedAt(ctx, field)
+	case "isMessagingDisabled":
+		return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
 }
@@ -9354,6 +9363,29 @@ func (ec *executionContext) fieldContext_Room_updatedAt(_ context.Context, field
 	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Room_isMessagingDisabled(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsMessagingDisabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Room_isMessagingDisabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Subscription_messageAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	return graphql.ResolveFieldStream(
 		ctx,
@@ -14353,6 +14385,11 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Room_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isMessagingDisabled":
+			out.Values[i] = ec._Room_isMessagingDisabled(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

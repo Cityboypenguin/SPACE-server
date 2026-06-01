@@ -210,13 +210,14 @@ type ReportSearchFilter struct {
 }
 
 type Room struct {
-	ID        string  `json:"ID"`
-	Content   *string `json:"content,omitempty"`
-	Name      string  `json:"name"`
-	Type      string  `json:"type"`
-	User      []*User `json:"user"`
-	CreatedAt string  `json:"createdAt"`
-	UpdatedAt string  `json:"updatedAt"`
+	ID                  string  `json:"ID"`
+	Content             *string `json:"content,omitempty"`
+	Name                string  `json:"name"`
+	Type                string  `json:"type"`
+	User                []*User `json:"user"`
+	CreatedAt           string  `json:"createdAt"`
+	UpdatedAt           string  `json:"updatedAt"`
+	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
 }
 
 type Subscription struct {

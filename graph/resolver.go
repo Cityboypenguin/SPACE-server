@@ -123,6 +123,7 @@ type Resolver struct {
 	GetBlockersByUserIDUseCase block.GetBlockersByUserIDUseCase
 	ListBlockersUseCase        block.ListBlockersUseCase
 	SearchBlockersUseCase      block.SearchBlockersUseCase
+	CheckBlockRelationUseCase  block.CheckBlockRelationUseCase
 
 	CreateFavoriteUserUseCase      favoriteuser.CreateFavoriteUserUseCase
 	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase

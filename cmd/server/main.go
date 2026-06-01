@@ -195,6 +195,7 @@ func main() {
 	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
 	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)
 	getBlockersByUserIDUseCase := blusecase.NewGetBlockersByUserIDUseCase(blockRepository)
+	checkBlockRelationUseCase := blusecase.NewCheckBlockRelationUseCase(blockRepository)
 
 	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
 	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
@@ -309,7 +310,9 @@ func main() {
 		ListBlockersUseCase:        listBlockersUseCase,
 		SearchBlockersUseCase:      searchBlockersUseCase,
 		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
-		CreateInquiryUsecase:       *createInquiryUseCase,
+		CheckBlockRelationUseCase:  checkBlockRelationUseCase,
+
+		CreateInquiryUsecase: *createInquiryUseCase,
 
 		NotificationPublisher:    notificationPublisher,
 		ListNotificationsUseCase: listNotificationsUseCase,

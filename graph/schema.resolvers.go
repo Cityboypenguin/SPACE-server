@@ -65,7 +65,9 @@ func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gql
 	if err != nil || rm == nil {
 		return nil, nil
 	}
-	return toGraphRoom(rm), nil
+	gqlRoom := toGraphRoom(rm)
+	gqlRoom.IsMessagingDisabled = false
+	return gqlRoom, nil
 }
 
 // User is the resolver for the user field.
@@ -541,7 +543,9 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return toGraphRoom(room), nil
+	gqlRoom := toGraphRoom(room)
+	gqlRoom.IsMessagingDisabled = false
+	return gqlRoom, nil
 }
 
 // GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
@@ -581,6 +585,13 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 
 	gqlRoom := toGraphRoom(room)
 	gqlRoom.User = members
+	isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, tid)
+	if err != nil {
+		gqlRoom.IsMessagingDisabled = false
+	} else {
+		gqlRoom.IsMessagingDisabled = isBlocked
+	}
+
 	return gqlRoom, nil
 }
 
@@ -1003,6 +1014,29 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	}
 	if !containsInt64(memberIDs, claims.ID) {
 		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room")
+	}
+
+	if room != nil && len(memberIDs) == 2 {
+		var partnerID int64
+		for _, id := range memberIDs {
+			if id != claims.ID {
+				partnerID = id
+				break
+			}
+		}
+
+		isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status")
+		}
+		if isBlocked {
+			return nil, errors.New("ブロック設定によりメッセージを送信できません")
+		}
 	}
 
 	var ucMediaInputs []messageusecase.MediaInput
@@ -1794,6 +1828,21 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 
 	gqlRoom := toGraphRoom(room)
 	gqlRoom.User = members
+
+	gqlRoom.IsMessagingDisabled = false
+	if len(users) == 2 {
+		var partnerID int64
+		for _, u := range users {
+			if u.ID != claims.ID {
+				partnerID = u.ID
+				break
+			}
+		}
+
+		isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		gqlRoom.IsMessagingDisabled = isBlocked
+	}
+
 	return gqlRoom, nil
 }
 
@@ -1823,12 +1872,18 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
 		members := make([]*gqlmodel.User, 0, len(users))
+		var partnerID int64
 		for _, u := range users {
 			members = append(members, toGraphUser(u))
 		}
 
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
+		gqlRoom.IsMessagingDisabled = false
+		if len(users) == 2 && partnerID != 0 {
+			isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+			gqlRoom.IsMessagingDisabled = isBlocked
+		}
 		result = append(result, gqlRoom)
 	}
 
