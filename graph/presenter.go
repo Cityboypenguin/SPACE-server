@@ -101,15 +101,48 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		gqlParent = &gqlmodel.Post{ID: encodeGraphID("post", *post.ParentID)}
 	}
 
+	var deletedAt *string
+	if post.DeletedAt != nil {
+		formatted := post.DeletedAt.Format(timeFormat)
+		deletedAt = &formatted
+	}
+
 	return &gqlmodel.Post{
-		ID:        encodeGraphID("post", post.ID),
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt.Format(timeFormat),
-		UpdatedAt: post.UpdatedAt.Format(timeFormat),
-		User:      toGraphUser(&model.User{ID: post.UserID}),
-		Parent:    gqlParent,
+		ID:         encodeGraphID("post", post.ID),
+		Content:    post.Content,
+		CreatedAt:  post.CreatedAt.Format(timeFormat),
+		UpdatedAt:  post.UpdatedAt.Format(timeFormat),
+		DeletedAt:  deletedAt,
+		User:       toGraphUser(&model.User{ID: post.UserID}),
+		Parent:     gqlParent,
+		ReplyCount: int32(post.ReplyCount),
 	}
 }
+func toGraphNotification(n *model.Notification) *gqlmodel.Notification {
+	if n == nil {
+		return nil
+	}
+	gql := &gqlmodel.Notification{
+		ID:        encodeGraphID("notification", n.ID),
+		Type:      n.Type,
+		Message:   n.Message,
+		IsRead:    n.IsRead,
+		CreatedAt: n.CreatedAt.Format(timeFormat),
+	}
+	if n.TargetType != nil {
+		gql.TargetType = n.TargetType
+	}
+	if n.TargetID != nil {
+		id := encodeGraphID(*n.TargetType, *n.TargetID)
+		gql.TargetID = &id
+	}
+	// Actor は notificationResolver.Actor で別途解決する
+	if n.ActorID != nil {
+		gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+	}
+	return gql
+}
+
 func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string) *gqlmodel.Profile {
 	if user == nil {
 		return nil

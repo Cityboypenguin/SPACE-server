@@ -59,6 +59,13 @@ type CreateFavoriteInput struct {
 	PostID string `json:"post_id"`
 }
 
+type CreateInquiryInput struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Subject string `json:"subject"`
+	Content string `json:"content"`
+}
+
 type CreatePostInput struct {
 	Content     string              `json:"content"`
 	ParentID    *string             `json:"parent_id,omitempty"`
@@ -94,6 +101,15 @@ type Favorite struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+type Inquiry struct {
+	ID        string `json:"ID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Subject   string `json:"subject"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -126,16 +142,29 @@ type Message struct {
 type Mutation struct {
 }
 
+type Notification struct {
+	ID         string  `json:"ID"`
+	Type       string  `json:"type"`
+	Actor      *User   `json:"actor,omitempty"`
+	TargetType *string `json:"targetType,omitempty"`
+	TargetID   *string `json:"targetID,omitempty"`
+	Message    string  `json:"message"`
+	IsRead     bool    `json:"isRead"`
+	CreatedAt  string  `json:"createdAt"`
+}
+
 type Post struct {
-	ID        string      `json:"ID"`
-	Content   string      `json:"content"`
-	CreatedAt string      `json:"createdAt"`
-	UpdatedAt string      `json:"updatedAt"`
-	User      *User       `json:"user"`
-	Favorites []*Favorite `json:"favorites"`
-	Parent    *Post       `json:"parent,omitempty"`
-	Replies   []*Post     `json:"replies"`
-	Media     []*Media    `json:"media"`
+	ID         string      `json:"ID"`
+	Content    string      `json:"content"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+	DeletedAt  *string     `json:"deletedAt,omitempty"`
+	ReplyCount int32       `json:"replyCount"`
+	User       *User       `json:"user"`
+	Favorites  []*Favorite `json:"favorites"`
+	Parent     *Post       `json:"parent,omitempty"`
+	Replies    []*Post     `json:"replies"`
+	Media      []*Media    `json:"media"`
 }
 
 type PresignedUploadURL struct {

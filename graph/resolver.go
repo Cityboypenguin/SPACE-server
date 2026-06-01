@@ -6,8 +6,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
@@ -32,7 +34,7 @@ type Resolver struct {
 	RefreshUserTokenUseCase user.RefreshUserTokenUseCase
 	LogoutUserUseCase       user.LogoutUserUseCase
 	FreezeUserUseCase       user.FreezeUserUseCase
-	UnfreezeUserUseCase user.UnfreezeUserUseCase
+	UnfreezeUserUseCase     user.UnfreezeUserUseCase
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
@@ -71,38 +73,46 @@ type Resolver struct {
 	ListMediaByPostIDUseCase    mediausecase.ListMediaByPostIDUseCase
 	ListMediaByMessageIDUseCase mediausecase.ListMediaByMessageIDUseCase
 
-	GetMessageByIDUseCase messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase    messageusecase.SendMessageUseCase
-	ListMessagesUseCase   messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase  messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase  messageusecase.UpdateMessageUseCase
-	CreateRoomUseCase         roomusecase.CreateRoomUseCase
-	GetRoomUseCase            roomusecase.GetRoomUseCase
-	GetUserIDsByRoomIDUseCase roomusecase.GetUserIDsByRoomIDUseCase
-	ListUsersByRoomIDsUseCase roomusecase.ListUsersByRoomIDsUseCase
-	ListMyDMRoomsUseCase      roomusecase.ListMyDMRoomsUseCase
-	GetOrCreateDMRoomUseCase  roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase              roomusecase.AddUserToRoomUseCase
-	RemoveUserFromRoomUseCase         roomusecase.RemoveUserFromRoomUseCase
-	DeleteRoomUseCase                 roomusecase.DeleteRoomUseCase
-	JoinRoomUseCase                   roomusecase.JoinRoomUseCase
-	GetRoomUserRoleUseCase            roomusecase.GetRoomUserRoleUseCase
-	SetRoomUserRoleUseCase            roomusecase.SetRoomUserRoleUseCase
-	ListRoomMembersWithRolesUseCase   roomusecase.ListRoomMembersWithRolesUseCase
+	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase              messageusecase.SendMessageUseCase
+	ListMessagesUseCase             messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	CreateRoomUseCase               roomusecase.CreateRoomUseCase
+	GetRoomUseCase                  roomusecase.GetRoomUseCase
+	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
+	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
+	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
+	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
+	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
+	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
+	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
+	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
+	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
+	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
+	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
 
-	CreateCommunityUseCase                communityusecase.CreateCommunityUseCase
-	GetCommunityUseCase                   communityusecase.GetCommunityUseCase
-	UpdateCommunityUseCase                communityusecase.UpdateCommunityUseCase
-	SearchCommunityUseCase                communityusecase.SearchCommunityUseCase
-	ListMyCommunitiesUseCase              communityusecase.ListMyCommunitiesUseCase
-	ListAllCommunitiesUseCase             communityusecase.ListAllCommunitiesUseCase
-	PromoteToCommunityOwnerUseCase        communityusecase.PromoteToCommunityOwnerUseCase
-	DemoteFromCommunityOwnerUseCase       communityusecase.DemoteFromCommunityOwnerUseCase
-	IsSoleOwnerWithOtherMembersUseCase    communityusecase.IsSoleOwnerWithOtherMembersUseCase
-	GetRandomCommunitiesUseCase           communityusecase.GetRandomCommunitiesUseCase
+	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase                communityusecase.GetCommunityUseCase
+	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
+	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
+	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
+	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
+	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
+	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
+	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
+
+	NotificationPublisher    notificationuc.NotificationPublisher
+	ListNotificationsUseCase notificationuc.ListNotificationsUseCase
+	MarkAsReadUseCase        notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase     notificationuc.MarkAllAsReadUseCase
+	CountUnreadUseCase       notificationuc.CountUnreadUseCase
+
+	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 
 	PubSub *pubsub.PubSub
 }

@@ -3,12 +3,15 @@ package model
 import "time"
 
 type Post struct {
-	ID        int64
-	Content   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	UserID    int64
-	ParentID  *int64
+	ID         int64
+	Content    string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	DeteledAt  *time.Time
+	UserID     int64
+	ParentID   *int64
+	DeletedAt  *time.Time
+	ReplyCount int64
 }
 
 type CreatePostParam struct {
@@ -39,4 +42,10 @@ func (p *Post) UpdatePost(param UpdatePostParam) {
 		p.Content = *param.Content
 	}
 	p.UpdatedAt = time.Now()
+}
+
+func (p *Post) DeletePost() {
+	now := time.Now()
+	p.DeletedAt = &now
+	p.UpdatedAt = now
 }
