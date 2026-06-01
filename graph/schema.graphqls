@@ -157,6 +157,8 @@ type Mutation {
   toggleReportSystem(enabled: Boolean!): Boolean!
 
   createInquiry(input: CreateInquiryInput!): Inquiry!
+  markNotificationAsRead(id: ID!): Boolean!
+  markAllNotificationsAsRead: Boolean!
 }
 
 type Inquiry {
@@ -173,9 +175,6 @@ input CreateInquiryInput {
   email: String!
   subject: String!
   content: String!
-
-  markNotificationAsRead(id: ID!): Boolean!
-  markAllNotificationsAsRead: Boolean!
 }
 
 input MediaUploadInput {
