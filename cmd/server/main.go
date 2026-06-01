@@ -105,6 +105,7 @@ func main() {
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
+	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
@@ -212,6 +213,7 @@ func main() {
 		DeleteUserUseCase:       deleteUserUseCase,
 		UpdateUserUseCase:       updateUserUseCase,
 		GetUserByIDUseCase:      getUserByIDUseCase,
+		GetUsersByIDsUseCase:    getUsersByIDsUseCase,
 		SearchUsersUseCase:      searchUsersUseCase,
 		LoginUserUseCase:        loginUserUseCase,
 		RefreshUserTokenUseCase: refreshUserTokenUseCase,

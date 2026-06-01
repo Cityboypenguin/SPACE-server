@@ -26,6 +26,7 @@ type Resolver struct {
 	StorageRepository repository.StorageRepository
 
 	GetUserByIDUseCase      user.GetUserByIDUseCase
+	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
 	CreateUserUseCase       user.CreateUserUseCase
 	ListUsersUseCase        user.ListUsersUseCase
 	DeleteUserUseCase       user.DeleteUserUseCase

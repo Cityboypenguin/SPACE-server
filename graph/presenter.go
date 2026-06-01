@@ -118,7 +118,7 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		ReplyCount: int32(post.ReplyCount),
 	}
 }
-func toGraphNotification(n *model.Notification) *gqlmodel.Notification {
+func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User) *gqlmodel.Notification {
 	if n == nil {
 		return nil
 	}
@@ -136,9 +136,12 @@ func toGraphNotification(n *model.Notification) *gqlmodel.Notification {
 		id := encodeGraphID(*n.TargetType, *n.TargetID)
 		gql.TargetID = &id
 	}
-	// Actor は notificationResolver.Actor で別途解決する
 	if n.ActorID != nil {
-		gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+		if u, ok := actorMap[*n.ActorID]; ok {
+			gql.Actor = toGraphUser(u)
+		} else {
+			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+		}
 	}
 	return gql
 }

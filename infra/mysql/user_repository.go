@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -67,6 +69,43 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 	u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 
 	return &u, nil
+}
+
+func (r *MySQLUserRepository) GetUsersByIDs(ctx context.Context, ids []int64) ([]*model.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users WHERE id IN (%s)`, placeholders)
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*model.User
+	for rows.Next() {
+		var u model.User
+		var createdAtUnix, updatedAtUnix int64
+		if err := rows.Scan(
+			&u.ID, &u.AccountID, &u.Name, &u.Email, &u.HashedPassword,
+			&u.Role, &u.Status, &createdAtUnix, &updatedAtUnix,
+		); err != nil {
+			return nil, err
+		}
+		u.CreatedAt = time.Unix(createdAtUnix, 0)
+		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
+		users = append(users, &u)
+	}
+	return users, nil
 }
 
 func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, error) {

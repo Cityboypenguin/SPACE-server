@@ -55,7 +55,7 @@ func (u *CreateAnnouncementUseCase) Execute(ctx context.Context, input CreateAnn
 		return nil, err
 	}
 
-	// 全ユーザーへの通知を非同期で送信
+	// 全ユーザーへの通知を非同期で送信 (バッチINSERT)
 	go func() {
 		bgCtx := context.Background()
 		userIDs, err := u.announcementRepo.ListAllUserIDs(bgCtx)
@@ -63,19 +63,19 @@ func (u *CreateAnnouncementUseCase) Execute(ctx context.Context, input CreateAnn
 			logger.Log.Error().Err(err).Msg("announcement: failed to list user ids")
 			return
 		}
+		targetType := notificationuc.TargetAnnouncement
+		params := make([]notificationuc.PublishParams, 0, len(userIDs))
 		for _, userID := range userIDs {
-			if err := u.notificationPublisher.Publish(bgCtx, notificationuc.PublishParams{
-				UserID:  userID,
-				Type:    notificationuc.TypeAnnouncement,
-				Message: title,
-				TargetType: func() *notificationuc.TargetType {
-					t := notificationuc.TargetAnnouncement
-					return &t
-				}(),
-				TargetID: &a.ID,
-			}); err != nil {
-				logger.Log.Error().Err(err).Int64("userID", userID).Msg("announcement: failed to publish notification")
-			}
+			params = append(params, notificationuc.PublishParams{
+				UserID:     userID,
+				Type:       notificationuc.TypeAnnouncement,
+				Message:    title,
+				TargetType: &targetType,
+				TargetID:   &a.ID,
+			})
+		}
+		if err := u.notificationPublisher.PublishBatch(bgCtx, params); err != nil {
+			logger.Log.Error().Err(err).Msg("announcement: failed to publish notifications")
 		}
 	}()
 
