@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1388,12 +1389,12 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
+	users, err := r.SearchUsersUseCase.Execute(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -2005,10 +2006,23 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 
 	var gqlReports []*gqlmodel.UserReport
 	for _, res := range reports {
+		targetID := res.TargetID
+		if res.TargetType == model.TargetPost {
+			if rawPostID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+				if post, err := r.GetPostByIDUseCase.Execute(ctx, rawPostID); err == nil && post != nil {
+					targetID = post.Content
+				} else {
+					println("Failed to fetch post content for targetID: " + res.TargetID)
+				}
+			} else {
+				println("Failed to parse targetID to int64: " + res.TargetID)
+			}
+		}
+
 		gqlReports = append(gqlReports, &gqlmodel.UserReport{
 			ID:           res.ID,
 			TargetType:   gqlmodel.ReportTargetType(res.TargetType),
-			TargetID:     res.TargetID,
+			TargetID:     targetID,
 			Reason:       res.Reason,
 			CustomReason: res.CustomReason,
 			Status:       gqlmodel.ReportStatus(res.Status),

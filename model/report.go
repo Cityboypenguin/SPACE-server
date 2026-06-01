@@ -22,13 +22,13 @@ const (
 
 type Report struct {
 	ID           string
-	ReporterID   int64            // 通報したユーザーのID
-	Reporter     User             // 通報したユーザーのドメインオブジェクト
-	TargetType   ReportTargetType // "POST", "COMMUNITY" など
-	TargetID     string           // 対象のエンティティID
-	Reason       string           // スパム、嫌がらせなどの理由
-	CustomReason *string          // 自由記述の詳細な理由（任意）
-	Status       ReportStatus     // 現在の対応ステータス
+	ReporterID   int64
+	Reporter     User
+	TargetType   ReportTargetType
+	TargetID     string
+	Reason       string
+	CustomReason *string
+	Status       ReportStatus
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
