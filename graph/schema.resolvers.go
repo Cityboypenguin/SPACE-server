@@ -16,6 +16,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -1200,6 +1201,27 @@ func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notifica
 		return nil, err
 	}
 	return toGraphUser(user), nil
+}
+
+// CreateInquiry is the resolver for the createInquiry field.
+func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.CreateInquiryInput) (*gqlmodel.Inquiry, error) {
+	inquiry, err := r.CreateInquiryUsecase.Execute(ctx, inquiryusecase.CreateInquiryInput{
+		Name:    input.Name,
+		Email:   input.Email,
+		Subject: input.Subject,
+		Content: input.Content,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.Inquiry{
+		ID:        inquiry.ID,
+		Name:      inquiry.Name,
+		Email:     inquiry.Email,
+		Subject:   inquiry.Subject,
+		Content:   inquiry.Content,
+		CreatedAt: inquiry.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}, nil
 }
 
 // User is the resolver for the user field on Post.

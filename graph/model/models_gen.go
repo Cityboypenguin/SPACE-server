@@ -59,6 +59,13 @@ type CreateFavoriteInput struct {
 	PostID string `json:"post_id"`
 }
 
+type CreateInquiryInput struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Subject string `json:"subject"`
+	Content string `json:"content"`
+}
+
 type CreatePostInput struct {
 	Content     string              `json:"content"`
 	ParentID    *string             `json:"parent_id,omitempty"`
@@ -91,6 +98,15 @@ type Favorite struct {
 	ID        string `json:"ID"`
 	User      *User  `json:"user"`
 	Post      *Post  `json:"post"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type Inquiry struct {
+	ID        string `json:"ID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Subject   string `json:"subject"`
+	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
 }
 

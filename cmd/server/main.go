@@ -30,11 +30,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
-	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -70,6 +71,7 @@ func main() {
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
 	reportRepository := mysql.NewMySQLReportRepository(database)
+	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -183,6 +185,7 @@ func main() {
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
 
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
 	sseBroker := sse.NewBroker()
@@ -246,21 +249,21 @@ func main() {
 		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
 		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
 
-		GetMessageByIDUseCase: getMessageByIDUseCase,
-		SendMessageUseCase:    sendMessageUseCase,
-		ListMessagesUseCase:       listMessagesUseCase,
-		DeleteMessageUseCase:      deleteMessageUseCase,
-		UpdateMessageUseCase:      updateMessageUseCase,
-		CreateRoomUseCase:         createRoomUseCase,
-		GetRoomUseCase:            getRoomUseCase,
-		DeleteRoomUseCase:         deleteRoomUseCase,
-		GetUserIDsByRoomIDUseCase: getUserIDsByRoomIDUseCase,
-		ListUsersByRoomIDsUseCase: listUsersByRoomIDsUseCase,
-		ListMyDMRoomsUseCase:      listMyDMRoomsUseCase,
-		GetOrCreateDMRoomUseCase:  getOrCreateDMRoomUseCase,
-		AddUserToRoomUseCase:      addUserToRoomUseCase,
-		RemoveUserFromRoomUseCase: removeUserFromRoomUseCase,
-		JoinRoomUseCase:           joinRoomUseCase,
+		GetMessageByIDUseCase:           getMessageByIDUseCase,
+		SendMessageUseCase:              sendMessageUseCase,
+		ListMessagesUseCase:             listMessagesUseCase,
+		DeleteMessageUseCase:            deleteMessageUseCase,
+		UpdateMessageUseCase:            updateMessageUseCase,
+		CreateRoomUseCase:               createRoomUseCase,
+		GetRoomUseCase:                  getRoomUseCase,
+		DeleteRoomUseCase:               deleteRoomUseCase,
+		GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
+		ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
+		ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
+		GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
+		AddUserToRoomUseCase:            addUserToRoomUseCase,
+		RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
+		JoinRoomUseCase:                 joinRoomUseCase,
 		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
 		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
@@ -274,10 +277,12 @@ func main() {
 		PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
 		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
-		GetRandomCommunitiesUseCase: *getRandomCommunitiesUseCase,
+		GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
 
 		CreateReportUsecase: *createReportUseCase,
 		ManageReportUsecase: *manageReportUseCase,
+
+		CreateInquiryUsecase: *createInquiryUseCase,
 
 		NotificationPublisher:    notificationPublisher,
 		ListNotificationsUseCase: listNotificationsUseCase,
