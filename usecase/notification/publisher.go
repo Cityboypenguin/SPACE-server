@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -76,7 +77,7 @@ func (p *notificationPublisher) Publish(ctx context.Context, params PublishParam
 	}
 
 	data := map[string]any{
-		"id":        n.ID,
+		"id":        opaqueid.Encode("notification", n.ID),
 		"type":      n.Type,
 		"message":   n.Message,
 		"isRead":    false,
