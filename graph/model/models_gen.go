@@ -28,6 +28,13 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type Blocker struct {
+	ID            string `json:"ID"`
+	UserID        string `json:"userID"`
+	BlockedUserID string `json:"blockedUserID"`
+	CreatedAt     string `json:"createdAt"`
+}
+
 type Community struct {
 	ID          string `json:"ID"`
 	RoomID      string `json:"roomID"`
@@ -92,6 +99,13 @@ type Favorite struct {
 	User      *User  `json:"user"`
 	Post      *Post  `json:"post"`
 	CreatedAt string `json:"createdAt"`
+}
+
+type FavoriteUser struct {
+	ID             string `json:"ID"`
+	UserID         string `json:"userID"`
+	FavoriteUserID string `json:"favoriteUserID"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 type LoginInput struct {

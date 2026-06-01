@@ -34,6 +34,14 @@ type Query {
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   searchReports(filter: ReportSearchFilter): [UserReport!]!
+
+  listFavoriteUsers: [User!]!
+  searchFavoriteUsers(keyword: String!): [User!]!
+  GetFavoriteUsersByUserID(userID: ID!): [User!]!
+  
+  listBlockedUsers: [User!]!
+  searchBlockedUsers(keyword: String!): [User!]!
+  GetBlockersByUserID(userID: ID!): [User!]!
 }
 
 type User {
@@ -88,6 +96,20 @@ type Favorite {
   ID: ID!
   user: User!
   post: Post!
+  createdAt: String!
+}
+
+type FavoriteUser {
+  ID: ID!
+  userID: ID!
+  favoriteUserID: ID!
+  createdAt: String!
+}
+
+type Blocker {
+  ID: ID!
+  userID: ID!
+  blockedUserID: ID!
   createdAt: String!
 }
 
@@ -153,6 +175,12 @@ type Mutation {
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
   toggleReportSystem(enabled: Boolean!): Boolean!
+
+  createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
+  deleteFavoriteUser(favoriteUserID: ID!): Boolean!
+
+  createBlocker(blockedUserID: ID!): Blocker!
+  deleteBlocker(blockedUserID: ID!): Boolean!
 }
 
 input MediaUploadInput {
@@ -329,3 +357,6 @@ input CreateReportInput {
   reason: String!        # 理由の分類
   customReason: String   # 詳細理由
 }
+
+
+

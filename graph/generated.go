@@ -56,6 +56,13 @@ type ComplexityRoot struct {
 		Token         func(childComplexity int) int
 	}
 
+	Blocker struct {
+		BlockedUserID func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		ID            func(childComplexity int) int
+		UserID        func(childComplexity int) int
+	}
+
 	Community struct {
 		AvatarURL   func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
@@ -76,6 +83,13 @@ type ComplexityRoot struct {
 		ID        func(childComplexity int) int
 		Post      func(childComplexity int) int
 		User      func(childComplexity int) int
+	}
+
+	FavoriteUser struct {
+		CreatedAt      func(childComplexity int) int
+		FavoriteUserID func(childComplexity int) int
+		ID             func(childComplexity int) int
+		UserID         func(childComplexity int) int
 	}
 
 	Media struct {
@@ -103,14 +117,18 @@ type ComplexityRoot struct {
 		AdminUpdateProfile        func(childComplexity int, userID string, input model.UpdateProfileInput) int
 		AdminUpdateUser           func(childComplexity int, id string, input model.UpdateUserInput) int
 		CreateAdministrator       func(childComplexity int, input model.CreateAdministratorInput) int
+		CreateBlocker             func(childComplexity int, blockedUserID string) int
 		CreateCommunity           func(childComplexity int, input model.CreateCommunityInput) int
 		CreateFavorite            func(childComplexity int, input model.CreateFavoriteInput) int
+		CreateFavoriteUser        func(childComplexity int, favoriteUserID string) int
 		CreatePost                func(childComplexity int, input model.CreatePostInput) int
 		CreateReport              func(childComplexity int, input model.CreateReportInput) int
 		CreateRoom                func(childComplexity int, input model.CreateRoomInput) int
 		CreateUser                func(childComplexity int, input model.CreateUserInput) int
 		DeleteAdministrator       func(childComplexity int, id string) int
+		DeleteBlocker             func(childComplexity int, blockedUserID string) int
 		DeleteFavorite            func(childComplexity int, input model.DeleteFavoriteInput) int
+		DeleteFavoriteUser        func(childComplexity int, favoriteUserID string) int
 		DeleteMessage             func(childComplexity int, roomID string, id string) int
 		DeletePost                func(childComplexity int, id string) int
 		DeleteUser                func(childComplexity int, id string) int
@@ -173,13 +191,17 @@ type ComplexityRoot struct {
 		Communities                     func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
 		GetAdministratorByID            func(childComplexity int, id string) int
+		GetBlockersByUserID             func(childComplexity int, userID string) int
 		GetCommunityMembers             func(childComplexity int, communityID string) int
 		GetFavoriteByID                 func(childComplexity int, id string) int
+		GetFavoriteUsersByUserID        func(childComplexity int, userID string) int
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
 		GetPostByID                     func(childComplexity int, id string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
 		GetUserByID                     func(childComplexity int, id string) int
+		ListBlockedUsers                func(childComplexity int) int
+		ListFavoriteUsers               func(childComplexity int) int
 		Me                              func(childComplexity int) int
 		Messages                        func(childComplexity int, roomID string) int
 		MyCommunities                   func(childComplexity int) int
@@ -192,7 +214,9 @@ type ComplexityRoot struct {
 		RandomCommunities               func(childComplexity int, limit int32) int
 		Room                            func(childComplexity int, id string) int
 		SearchAdministrators            func(childComplexity int, name string) int
+		SearchBlockedUsers              func(childComplexity int, keyword string) int
 		SearchCommunities               func(childComplexity int, name string) int
+		SearchFavoriteUsers             func(childComplexity int, keyword string) int
 		SearchPosts                     func(childComplexity int, content string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter) int
 		SearchUsers                     func(childComplexity int, keyword string) int
@@ -301,6 +325,10 @@ type MutationResolver interface {
 	CreateReport(ctx context.Context, input model.CreateReportInput) (*model.UserReport, error)
 	UpdateReportStatus(ctx context.Context, id string, status model.ReportStatus) (*model.UserReport, error)
 	ToggleReportSystem(ctx context.Context, enabled bool) (bool, error)
+	CreateFavoriteUser(ctx context.Context, favoriteUserID string) (*model.FavoriteUser, error)
+	DeleteFavoriteUser(ctx context.Context, favoriteUserID string) (bool, error)
+	CreateBlocker(ctx context.Context, blockedUserID string) (*model.Blocker, error)
+	DeleteBlocker(ctx context.Context, blockedUserID string) (bool, error)
 }
 type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
@@ -339,6 +367,12 @@ type QueryResolver interface {
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	SearchReports(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.UserReport, error)
+	ListFavoriteUsers(ctx context.Context) ([]*model.User, error)
+	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
+	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
+	ListBlockedUsers(ctx context.Context) ([]*model.User, error)
+	SearchBlockedUsers(ctx context.Context, keyword string) ([]*model.User, error)
+	GetBlockersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -412,6 +446,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdministratorAuthPayload.Token(childComplexity), true
+
+	case "Blocker.blockedUserID":
+		if e.ComplexityRoot.Blocker.BlockedUserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blocker.BlockedUserID(childComplexity), true
+	case "Blocker.createdAt":
+		if e.ComplexityRoot.Blocker.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blocker.CreatedAt(childComplexity), true
+	case "Blocker.ID":
+		if e.ComplexityRoot.Blocker.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blocker.ID(childComplexity), true
+	case "Blocker.userID":
+		if e.ComplexityRoot.Blocker.UserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blocker.UserID(childComplexity), true
 
 	case "Community.avatarURL":
 		if e.ComplexityRoot.Community.AvatarURL == nil {
@@ -493,6 +552,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Favorite.User(childComplexity), true
+
+	case "FavoriteUser.createdAt":
+		if e.ComplexityRoot.FavoriteUser.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FavoriteUser.CreatedAt(childComplexity), true
+	case "FavoriteUser.favoriteUserID":
+		if e.ComplexityRoot.FavoriteUser.FavoriteUserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FavoriteUser.FavoriteUserID(childComplexity), true
+	case "FavoriteUser.ID":
+		if e.ComplexityRoot.FavoriteUser.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FavoriteUser.ID(childComplexity), true
+	case "FavoriteUser.userID":
+		if e.ComplexityRoot.FavoriteUser.UserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FavoriteUser.UserID(childComplexity), true
 
 	case "Media.contentType":
 		if e.ComplexityRoot.Media.ContentType == nil {
@@ -629,6 +713,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateAdministrator(childComplexity, args["input"].(model.CreateAdministratorInput)), true
+	case "Mutation.createBlocker":
+		if e.ComplexityRoot.Mutation.CreateBlocker == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createBlocker_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateBlocker(childComplexity, args["blockedUserID"].(string)), true
 	case "Mutation.createCommunity":
 		if e.ComplexityRoot.Mutation.CreateCommunity == nil {
 			break
@@ -651,6 +746,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateFavorite(childComplexity, args["input"].(model.CreateFavoriteInput)), true
+	case "Mutation.createFavoriteUser":
+		if e.ComplexityRoot.Mutation.CreateFavoriteUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createFavoriteUser_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateFavoriteUser(childComplexity, args["favoriteUserID"].(string)), true
 	case "Mutation.createPost":
 		if e.ComplexityRoot.Mutation.CreatePost == nil {
 			break
@@ -706,6 +812,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteAdministrator(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteBlocker":
+		if e.ComplexityRoot.Mutation.DeleteBlocker == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteBlocker_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteBlocker(childComplexity, args["blockedUserID"].(string)), true
 	case "Mutation.deleteFavorite":
 		if e.ComplexityRoot.Mutation.DeleteFavorite == nil {
 			break
@@ -717,6 +834,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteFavorite(childComplexity, args["input"].(model.DeleteFavoriteInput)), true
+	case "Mutation.deleteFavoriteUser":
+		if e.ComplexityRoot.Mutation.DeleteFavoriteUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteFavoriteUser_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteFavoriteUser(childComplexity, args["favoriteUserID"].(string)), true
 	case "Mutation.deleteMessage":
 		if e.ComplexityRoot.Mutation.DeleteMessage == nil {
 			break
@@ -1161,6 +1289,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetAdministratorByID(childComplexity, args["id"].(string)), true
+	case "Query.GetBlockersByUserID":
+		if e.ComplexityRoot.Query.GetBlockersByUserID == nil {
+			break
+		}
+
+		args, err := ec.field_Query_GetBlockersByUserID_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetBlockersByUserID(childComplexity, args["userID"].(string)), true
 	case "Query.getCommunityMembers":
 		if e.ComplexityRoot.Query.GetCommunityMembers == nil {
 			break
@@ -1183,6 +1322,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetFavoriteByID(childComplexity, args["id"].(string)), true
+	case "Query.GetFavoriteUsersByUserID":
+		if e.ComplexityRoot.Query.GetFavoriteUsersByUserID == nil {
+			break
+		}
+
+		args, err := ec.field_Query_GetFavoriteUsersByUserID_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetFavoriteUsersByUserID(childComplexity, args["userID"].(string)), true
 	case "Query.getMyRoleInCommunity":
 		if e.ComplexityRoot.Query.GetMyRoleInCommunity == nil {
 			break
@@ -1239,6 +1389,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.GetUserByID(childComplexity, args["id"].(string)), true
 
+	case "Query.listBlockedUsers":
+		if e.ComplexityRoot.Query.ListBlockedUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ListBlockedUsers(childComplexity), true
+	case "Query.listFavoriteUsers":
+		if e.ComplexityRoot.Query.ListFavoriteUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ListFavoriteUsers(childComplexity), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -1346,6 +1508,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchAdministrators(childComplexity, args["name"].(string)), true
+	case "Query.searchBlockedUsers":
+		if e.ComplexityRoot.Query.SearchBlockedUsers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchBlockedUsers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SearchBlockedUsers(childComplexity, args["keyword"].(string)), true
 	case "Query.searchCommunities":
 		if e.ComplexityRoot.Query.SearchCommunities == nil {
 			break
@@ -1357,6 +1530,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchCommunities(childComplexity, args["name"].(string)), true
+	case "Query.searchFavoriteUsers":
+		if e.ComplexityRoot.Query.SearchFavoriteUsers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchFavoriteUsers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SearchFavoriteUsers(childComplexity, args["keyword"].(string)), true
 	case "Query.searchPosts":
 		if e.ComplexityRoot.Query.SearchPosts == nil {
 			break
@@ -1787,6 +1971,20 @@ func (ec *executionContext) childFields_AdministratorAuthPayload(ctx context.Con
 	return nil, fmt.Errorf("no field named %q was found under type AdministratorAuthPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_Blocker(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Blocker_ID(ctx, field)
+	case "userID":
+		return ec.fieldContext_Blocker_userID(ctx, field)
+	case "blockedUserID":
+		return ec.fieldContext_Blocker_blockedUserID(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Blocker_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Blocker", field.Name)
+}
+
 func (ec *executionContext) childFields_Community(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -1829,6 +2027,20 @@ func (ec *executionContext) childFields_Favorite(ctx context.Context, field grap
 		return ec.fieldContext_Favorite_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Favorite", field.Name)
+}
+
+func (ec *executionContext) childFields_FavoriteUser(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_FavoriteUser_ID(ctx, field)
+	case "userID":
+		return ec.fieldContext_FavoriteUser_userID(ctx, field)
+	case "favoriteUserID":
+		return ec.fieldContext_FavoriteUser_favoriteUserID(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_FavoriteUser_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FavoriteUser", field.Name)
 }
 
 func (ec *executionContext) childFields_Media(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2211,6 +2423,20 @@ func (ec *executionContext) field_Mutation_createAdministrator_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createBlocker_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "blockedUserID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["blockedUserID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createCommunity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2222,6 +2448,20 @@ func (ec *executionContext) field_Mutation_createCommunity_args(ctx context.Cont
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createFavoriteUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "favoriteUserID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["favoriteUserID"] = arg0
 	return args, nil
 }
 
@@ -2306,6 +2546,34 @@ func (ec *executionContext) field_Mutation_deleteAdministrator_args(ctx context.
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteBlocker_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "blockedUserID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["blockedUserID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteFavoriteUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "favoriteUserID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["favoriteUserID"] = arg0
 	return args, nil
 }
 
@@ -2789,6 +3057,34 @@ func (ec *executionContext) field_Mutation_updateUser_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_GetBlockersByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_GetFavoriteUsersByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3013,6 +3309,20 @@ func (ec *executionContext) field_Query_searchAdministrators_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_searchBlockedUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_searchCommunities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3024,6 +3334,20 @@ func (ec *executionContext) field_Query_searchCommunities_args(ctx context.Conte
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_searchFavoriteUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg0
 	return args, nil
 }
 
@@ -3368,6 +3692,98 @@ func (ec *executionContext) fieldContext_AdministratorAuthPayload_administrator(
 	return fc, nil
 }
 
+func (ec *executionContext) _Blocker_ID(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blocker_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blocker_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blocker", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Blocker_userID(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blocker_userID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blocker_userID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blocker", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Blocker_blockedUserID(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blocker_blockedUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BlockedUserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blocker_blockedUserID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blocker", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Blocker_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blocker_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blocker_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blocker", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Community_ID(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3692,6 +4108,98 @@ func (ec *executionContext) _Favorite_createdAt(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_Favorite_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Favorite", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _FavoriteUser_ID(ctx context.Context, field graphql.CollectedField, obj *model.FavoriteUser) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FavoriteUser_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FavoriteUser_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _FavoriteUser_userID(ctx context.Context, field graphql.CollectedField, obj *model.FavoriteUser) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FavoriteUser_userID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FavoriteUser_userID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _FavoriteUser_favoriteUserID(ctx context.Context, field graphql.CollectedField, obj *model.FavoriteUser) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FavoriteUser_favoriteUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FavoriteUserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FavoriteUser_favoriteUserID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _FavoriteUser_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.FavoriteUser) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FavoriteUser_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FavoriteUser_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Media_ID(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
@@ -5780,6 +6288,182 @@ func (ec *executionContext) fieldContext_Mutation_toggleReportSystem(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createFavoriteUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createFavoriteUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateFavoriteUser(ctx, fc.Args["favoriteUserID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.FavoriteUser) graphql.Marshaler {
+			return ec.marshalNFavoriteUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavoriteUser(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createFavoriteUser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FavoriteUser(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createFavoriteUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteFavoriteUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteFavoriteUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteFavoriteUser(ctx, fc.Args["favoriteUserID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteFavoriteUser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteFavoriteUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createBlocker(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createBlocker(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateBlocker(ctx, fc.Args["blockedUserID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Blocker) graphql.Marshaler {
+			return ec.marshalNBlocker2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐBlocker(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createBlocker(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Blocker(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createBlocker_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteBlocker(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteBlocker(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteBlocker(ctx, fc.Args["blockedUserID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteBlocker(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteBlocker_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Post_ID(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7421,6 +8105,246 @@ func (ec *executionContext) fieldContext_Query_searchReports(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_searchReports_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listFavoriteUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_listFavoriteUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ListFavoriteUsers(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_listFavoriteUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_searchFavoriteUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_searchFavoriteUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SearchFavoriteUsers(ctx, fc.Args["keyword"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_searchFavoriteUsers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchFavoriteUsers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_GetFavoriteUsersByUserID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_GetFavoriteUsersByUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetFavoriteUsersByUserID(ctx, fc.Args["userID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_GetFavoriteUsersByUserID(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_GetFavoriteUsersByUserID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listBlockedUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_listBlockedUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ListBlockedUsers(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_listBlockedUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_searchBlockedUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_searchBlockedUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SearchBlockedUsers(ctx, fc.Args["keyword"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_searchBlockedUsers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchBlockedUsers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_GetBlockersByUserID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_GetBlockersByUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetBlockersByUserID(ctx, fc.Args["userID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_GetBlockersByUserID(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_GetBlockersByUserID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -10304,6 +11228,60 @@ func (ec *executionContext) _AdministratorAuthPayload(ctx context.Context, sel a
 	return out
 }
 
+var blockerImplementors = []string{"Blocker"}
+
+func (ec *executionContext) _Blocker(ctx context.Context, sel ast.SelectionSet, obj *model.Blocker) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, blockerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Blocker")
+		case "ID":
+			out.Values[i] = ec._Blocker_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userID":
+			out.Values[i] = ec._Blocker_userID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blockedUserID":
+			out.Values[i] = ec._Blocker_blockedUserID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Blocker_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var communityImplementors = []string{"Community"}
 
 func (ec *executionContext) _Community(ctx context.Context, sel ast.SelectionSet, obj *model.Community) graphql.Marshaler {
@@ -10509,6 +11487,60 @@ func (ec *executionContext) _Favorite(ctx context.Context, sel ast.SelectionSet,
 			out.Values[i] = ec._Favorite_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var favoriteUserImplementors = []string{"FavoriteUser"}
+
+func (ec *executionContext) _FavoriteUser(ctx context.Context, sel ast.SelectionSet, obj *model.FavoriteUser) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, favoriteUserImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FavoriteUser")
+		case "ID":
+			out.Values[i] = ec._FavoriteUser_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userID":
+			out.Values[i] = ec._FavoriteUser_userID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "favoriteUserID":
+			out.Values[i] = ec._FavoriteUser_favoriteUserID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._FavoriteUser_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -11054,6 +12086,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "toggleReportSystem":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_toggleReportSystem(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createFavoriteUser":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createFavoriteUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteFavoriteUser":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteFavoriteUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createBlocker":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createBlocker(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteBlocker":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteBlocker(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -12057,6 +13117,138 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listFavoriteUsers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listFavoriteUsers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchFavoriteUsers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchFavoriteUsers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "GetFavoriteUsersByUserID":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_GetFavoriteUsersByUserID(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listBlockedUsers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listBlockedUsers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchBlockedUsers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchBlockedUsers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "GetBlockersByUserID":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_GetBlockersByUserID(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -12804,6 +13996,20 @@ func (ec *executionContext) marshalNAdministratorAuthPayload2ᚖgithubᚗcomᚋC
 	return ec._AdministratorAuthPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBlocker2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐBlocker(ctx context.Context, sel ast.SelectionSet, v model.Blocker) graphql.Marshaler {
+	return ec._Blocker(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNBlocker2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐBlocker(ctx context.Context, sel ast.SelectionSet, v *model.Blocker) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Blocker(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -12944,6 +14150,20 @@ func (ec *executionContext) marshalNFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋ
 		return graphql.Null
 	}
 	return ec._Favorite(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFavoriteUser2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavoriteUser(ctx context.Context, sel ast.SelectionSet, v model.FavoriteUser) graphql.Marshaler {
+	return ec._FavoriteUser(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFavoriteUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavoriteUser(ctx context.Context, sel ast.SelectionSet, v *model.FavoriteUser) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FavoriteUser(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {

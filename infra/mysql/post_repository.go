@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -24,12 +23,18 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 		FROM posts
 		WHERE id = ?
 	`
-	row := r.DB.QueryRowContext(ctx, query, id)
+	args := []interface{}{id}
+
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	row := r.DB.QueryRowContext(ctx, query, args...)
 
 	var p model.Post
 	var createdAtUnix, updatedAtUnix int64
 	var parentID, deletedAtUnix sql.NullInt64
 	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if parentID.Valid {
@@ -88,8 +93,6 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 
 	currentParentID := validParentID
 	for currentParentID.Valid {
-		// ▼ 監視カメラ：ループがどこまで遡っているかを出力する
-		log.Printf("[DEBUG] ID: %d の reply_count を +1 します\n", currentParentID.Int64)
 
 		updateQuery := `
 			UPDATE posts 
@@ -97,7 +100,6 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 			WHERE id = ?
 		`
 		if _, err := tx.ExecContext(ctx, updateQuery, currentParentID.Int64); err != nil {
-			log.Printf("[ERROR] UPDATE失敗: %v\n", err)
 			return 0, err
 		}
 
@@ -106,22 +108,17 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		err := tx.QueryRowContext(ctx, getParentQuery, currentParentID.Int64).Scan(&nextParentID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				log.Printf("[DEBUG] ID: %d の親は見つかりませんでした（一番上に到達）\n", currentParentID.Int64)
 				break
 			}
-			log.Printf("[ERROR] 親の検索に失敗: %v\n", err)
 			return 0, err
 		}
-		log.Printf("[DEBUG] 次の親IDは見つかりましたか？: %+v\n", nextParentID)
 		currentParentID = nextParentID
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("[ERROR] コミット失敗: %v\n", err)
 		return 0, err
 	}
 
-	log.Println("[DEBUG] CreatePost 正常完了！")
 	return id, nil
 }
 
@@ -168,7 +165,8 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 		WHERE id = ? AND deleted_at IS NULL
 	`
 
-	result, err := r.DB.ExecContext(ctx, deleteQuery, time.Now().Unix(), time.Now().Unix(), id)
+	now := time.Now().Unix()
+	result, err := tx.ExecContext(ctx, deleteQuery, now, now, id)
 	if err != nil {
 		return false, err
 	}
@@ -215,9 +213,16 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
-		WHERE user_id = ?
+		WHERE user_id = ? AND deleted_at IS NULL
 	`
-	rows, err := r.DB.QueryContext(ctx, query, userID)
+
+	args := []interface{}{userID}
+
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +255,6 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 
 	return posts, nil
 }
-
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
@@ -336,7 +340,10 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 		FROM posts
 		WHERE parent_id = ? AND deleted_at IS NULL
 	`
-	rows, err := r.DB.QueryContext(ctx, query, id)
+
+	args := []interface{}{id}
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +382,15 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
 		WHERE parent_id IS NULL AND deleted_at IS NULL
+	`
+
+	var args []interface{}
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query += `
 		ORDER BY created_at DESC
 	`
-	rows, err := r.DB.QueryContext(ctx, query)
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -139,3 +139,26 @@ func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string)
 		UpdatedAt: profile.UpdatedAt.Format(timeFormat),
 	}
 }
+func toGraphFavoriteUser(fu *model.FavoriteUser) *gqlmodel.FavoriteUser {
+	if fu == nil {
+		return nil
+	}
+	return &gqlmodel.FavoriteUser{
+		ID:             encodeGraphID("favorite_user", fu.ID),
+		UserID:         encodeGraphID("user", fu.UserID),
+		FavoriteUserID: encodeGraphID("user", fu.FavoriteUserID),
+		CreatedAt:      fu.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphBlocker(b *model.Blocker) *gqlmodel.Blocker {
+	if b == nil {
+		return nil
+	}
+	return &gqlmodel.Blocker{
+		ID:            encodeGraphID("blocker", b.ID),
+		UserID:        encodeGraphID("user", b.UserID),
+		BlockedUserID: encodeGraphID("user", b.BlockedUserID),
+		CreatedAt:     b.CreatedAt.Format(timeFormat),
+	}
+}

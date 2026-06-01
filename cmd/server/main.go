@@ -28,8 +28,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -69,6 +71,8 @@ func main() {
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
 	reportRepository := mysql.NewMySQLReportRepository(database)
+	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
+	blockRepository := mysql.NewMySQLBlockRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -181,7 +185,19 @@ func main() {
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
-    manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+
+	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository)
+	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
+	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
+	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)
+	getBlockersByUserIDUseCase := blusecase.NewGetBlockersByUserIDUseCase(blockRepository)
+
+	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
+	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
+	listFavoriteUsersUseCase := fuusecase.NewListFavoriteUsersUseCase(favoriteuserRepository)
+	searchFavoriteUsersUseCase := fuusecase.NewSearchFavoriteUsersUseCase(favoriteuserRepository)
+	getFavoriteUsersByUserIDUseCase := fuusecase.NewGetFavoriteUsersByUserIDUseCase(favoriteuserRepository)
 
 	ps := pubsub.New()
 
@@ -237,21 +253,21 @@ func main() {
 		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
 		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
 
-		GetMessageByIDUseCase: getMessageByIDUseCase,
-		SendMessageUseCase:    sendMessageUseCase,
-		ListMessagesUseCase:       listMessagesUseCase,
-		DeleteMessageUseCase:      deleteMessageUseCase,
-		UpdateMessageUseCase:      updateMessageUseCase,
-		CreateRoomUseCase:         createRoomUseCase,
-		GetRoomUseCase:            getRoomUseCase,
-		DeleteRoomUseCase:         deleteRoomUseCase,
-		GetUserIDsByRoomIDUseCase: getUserIDsByRoomIDUseCase,
-		ListUsersByRoomIDsUseCase: listUsersByRoomIDsUseCase,
-		ListMyDMRoomsUseCase:      listMyDMRoomsUseCase,
-		GetOrCreateDMRoomUseCase:  getOrCreateDMRoomUseCase,
-		AddUserToRoomUseCase:      addUserToRoomUseCase,
-		RemoveUserFromRoomUseCase: removeUserFromRoomUseCase,
-		JoinRoomUseCase:           joinRoomUseCase,
+		GetMessageByIDUseCase:           getMessageByIDUseCase,
+		SendMessageUseCase:              sendMessageUseCase,
+		ListMessagesUseCase:             listMessagesUseCase,
+		DeleteMessageUseCase:            deleteMessageUseCase,
+		UpdateMessageUseCase:            updateMessageUseCase,
+		CreateRoomUseCase:               createRoomUseCase,
+		GetRoomUseCase:                  getRoomUseCase,
+		DeleteRoomUseCase:               deleteRoomUseCase,
+		GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
+		ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
+		ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
+		GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
+		AddUserToRoomUseCase:            addUserToRoomUseCase,
+		RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
+		JoinRoomUseCase:                 joinRoomUseCase,
 		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
 		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
@@ -265,10 +281,22 @@ func main() {
 		PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
 		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
-		GetRandomCommunitiesUseCase: *getRandomCommunitiesUseCase,
+		GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
 
 		CreateReportUsecase: *createReportUseCase,
-        ManageReportUsecase: *manageReportUseCase,
+		ManageReportUsecase: *manageReportUseCase,
+
+		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
+		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
+		ListFavoriteUsersUseCase:       listFavoriteUsersUseCase,
+		SearchFavoriteUsersUseCase:     searchFavoriteUsersUseCase,
+		GetFavoriteUserByUserIDUseCase: getFavoriteUsersByUserIDUseCase,
+
+		CreateBlockUseCase:         createBlockUseCase,
+		DeleteBlockUseCase:         deleteBlockUseCase,
+		ListBlockersUseCase:        listBlockersUseCase,
+		SearchBlockersUseCase:      searchBlockersUseCase,
+		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
 
 		PubSub: ps,
 	}
@@ -295,6 +323,7 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
 
