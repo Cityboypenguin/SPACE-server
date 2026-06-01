@@ -28,6 +28,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -104,6 +105,7 @@ func main() {
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
+	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
@@ -191,6 +193,11 @@ func main() {
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
 	sseBroker := sse.NewBroker()
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+
+	announcementRepository := mysql.NewMySQLAnnouncementRepository(database)
+	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
+	listAnnouncementsUseCase := announcementusecase.NewListAnnouncementsUseCase(announcementRepository)
+	getAnnouncementUseCase := announcementusecase.NewGetAnnouncementUseCase(announcementRepository)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
@@ -206,6 +213,7 @@ func main() {
 		DeleteUserUseCase:       deleteUserUseCase,
 		UpdateUserUseCase:       updateUserUseCase,
 		GetUserByIDUseCase:      getUserByIDUseCase,
+		GetUsersByIDsUseCase:    getUsersByIDsUseCase,
 		SearchUsersUseCase:      searchUsersUseCase,
 		LoginUserUseCase:        loginUserUseCase,
 		RefreshUserTokenUseCase: refreshUserTokenUseCase,
@@ -285,6 +293,10 @@ func main() {
 
 		CreateInquiryUsecase: *createInquiryUseCase,
 		ManageInquiryUsecase: *manageInquiryUseCase,
+
+		CreateAnnouncementUseCase: createAnnouncementUseCase,
+		ListAnnouncementsUseCase:  listAnnouncementsUseCase,
+		GetAnnouncementUseCase:    getAnnouncementUseCase,
 
 		NotificationPublisher:    notificationPublisher,
 		ListNotificationsUseCase: listNotificationsUseCase,

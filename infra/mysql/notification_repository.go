@@ -38,6 +38,15 @@ func (r *MySQLNotificationRepository) Save(ctx context.Context, n *model.Notific
 	return nil
 }
 
+func (r *MySQLNotificationRepository) SaveBatch(ctx context.Context, ns []*model.Notification) error {
+	for _, n := range ns {
+		if err := r.Save(ctx, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*model.Notification, error) {
 	query := `
 		SELECT id, user_id, type, actor_id, target_type, target_id, message, is_read, created_at

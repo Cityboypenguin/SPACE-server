@@ -4,6 +4,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -25,6 +26,7 @@ type Resolver struct {
 	StorageRepository repository.StorageRepository
 
 	GetUserByIDUseCase      user.GetUserByIDUseCase
+	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
 	CreateUserUseCase       user.CreateUserUseCase
 	ListUsersUseCase        user.ListUsersUseCase
 	DeleteUserUseCase       user.DeleteUserUseCase
@@ -114,6 +116,10 @@ type Resolver struct {
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
+
+	CreateAnnouncementUseCase *announcementusecase.CreateAnnouncementUseCase
+	ListAnnouncementsUseCase  *announcementusecase.ListAnnouncementsUseCase
+	GetAnnouncementUseCase    *announcementusecase.GetAnnouncementUseCase
 
 	PubSub *pubsub.PubSub
 }

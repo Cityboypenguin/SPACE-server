@@ -28,6 +28,13 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type Announcement struct {
+	ID        string `json:"ID"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type Community struct {
 	ID          string `json:"ID"`
 	RoomID      string `json:"roomID"`
@@ -47,6 +54,11 @@ type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type CreateAnnouncementInput struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
 
 type CreateCommunityInput struct {

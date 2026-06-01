@@ -38,6 +38,9 @@ type Query {
   searchReports(filter: ReportSearchFilter): [UserReport!]!
   searchInquiries(status: InquiryStatus): [Inquiry!]!
   getInquiry(id: ID!): Inquiry
+
+  announcements(limit: Int): [Announcement!]!
+  announcement(id: ID!): Announcement!
 }
 
 type User {
@@ -162,6 +165,20 @@ type Mutation {
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   markNotificationAsRead(id: ID!): Boolean!
   markAllNotificationsAsRead: Boolean!
+
+  createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+}
+
+type Announcement {
+  ID: ID!
+  title: String!
+  body: String!
+  createdAt: String!
+}
+
+input CreateAnnouncementInput {
+  title: String!
+  body: String!
 }
 
 enum InquiryStatus {

@@ -8,6 +8,7 @@ import (
 
 type NotificationRepository interface {
 	Save(ctx context.Context, n *model.Notification) error
+	SaveBatch(ctx context.Context, ns []*model.Notification) error
 	ListByUserID(ctx context.Context, userID int64, limit int) ([]*model.Notification, error)
 	MarkAsRead(ctx context.Context, id int64, userID int64) error
 	MarkAllAsRead(ctx context.Context, userID int64) error

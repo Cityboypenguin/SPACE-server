@@ -17,6 +17,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
@@ -363,14 +364,16 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
 		if perr == nil && parent.UserID != claims.ID {
 			targetType := notificationuc.TargetPost
-			_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 				UserID:     parent.UserID,
 				Type:       notificationuc.TypeReply,
 				ActorID:    &claims.ID,
 				TargetType: &targetType,
 				TargetID:   numericParentID,
 				Message:    "あなたの投稿に返信がありました",
-			})
+			}); err != nil {
+				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
+			}
 		}
 	}
 
@@ -464,14 +467,16 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
 	if err == nil && post.UserID != claims.ID {
 		targetType := notificationuc.TargetPost
-		_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 			UserID:     post.UserID,
 			Type:       notificationuc.TypeFavorite,
 			ActorID:    &claims.ID,
 			TargetType: &targetType,
 			TargetID:   &numericPostID,
 			Message:    "あなたの投稿がいいねされました",
-		})
+		}); err != nil {
+			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
+		}
 	}
 
 	return &gqlmodel.Favorite{
@@ -857,14 +862,16 @@ func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityI
 	}
 
 	targetType := notificationuc.TargetCommunity
-	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 		UserID:     numericUserID,
 		Type:       notificationuc.TypeCommunityKick,
 		ActorID:    &claims.ID,
 		TargetType: &targetType,
 		TargetID:   &numericCommunityID,
 		Message:    "コミュニティからキックされました",
-	})
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish community kick notification")
+	}
 
 	return true, nil
 }
@@ -884,13 +891,15 @@ func (r *mutationResolver) PromoteToCommunityOwner(ctx context.Context, communit
 		return ok, err
 	}
 	targetType := notificationuc.TargetCommunity
-	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 		UserID:     numericUserID,
 		Type:       notificationuc.TypeCommunityRole,
 		TargetType: &targetType,
 		TargetID:   &numericCommunityID,
 		Message:    "コミュニティのオーナーに昇格しました",
-	})
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish community promote notification")
+	}
 	return true, nil
 }
 
@@ -909,13 +918,15 @@ func (r *mutationResolver) DemoteFromCommunityOwner(ctx context.Context, communi
 		return ok, err
 	}
 	targetType := notificationuc.TargetCommunity
-	_ = r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 		UserID:     numericUserID,
 		Type:       notificationuc.TypeCommunityRole,
 		TargetType: &targetType,
 		TargetID:   &numericCommunityID,
 		Message:    "コミュニティのオーナーから降格されました",
-	})
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish community demote notification")
+	}
 	return true, nil
 }
 
@@ -1023,6 +1034,27 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 	gqlMsg := toGraphMessage(msg)
 	r.PubSub.Publish(roomID+":message:added", gqlMsg)
+
+	// DM ルームの場合、相手に通知を送る
+	if room, rerr := r.GetRoomUseCase.Execute(ctx, rid); rerr == nil && room != nil && room.Type == model.RoomTypeDM {
+		targetType := notificationuc.TargetRoom
+		for _, memberID := range memberIDs {
+			if memberID == claims.ID {
+				continue
+			}
+			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+				UserID:     memberID,
+				Type:       notificationuc.TypeDM,
+				ActorID:    &claims.ID,
+				TargetType: &targetType,
+				TargetID:   &rid,
+				Message:    "新しいメッセージが届きました",
+			}); err != nil {
+				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
+			}
+		}
+	}
+
 	return gqlMsg, nil
 }
 
@@ -1215,10 +1247,31 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	return true, nil
 }
 
+// CreateAnnouncement is the resolver for the createAnnouncement field.
+func (r *mutationResolver) CreateAnnouncement(ctx context.Context, input gqlmodel.CreateAnnouncementInput) (*gqlmodel.Announcement, error) {
+	claims, err := requireAdminAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a, err := r.CreateAnnouncementUseCase.Execute(ctx, announcementusecase.CreateAnnouncementInput{
+		Title:   input.Title,
+		Body:    input.Body,
+		AdminID: claims.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnnouncement(a), nil
+}
+
 // Actor is the resolver for the actor field on Notification.
 func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.User, error) {
 	if obj.Actor == nil {
 		return nil, nil
+	}
+	// MyNotifications で事前ロード済みの場合はDBアクセス不要
+	if obj.Actor.AccountID != "" {
+		return obj.Actor, nil
 	}
 	numericID, err := decodeGraphID(ctx, "user", obj.Actor.ID)
 	if err != nil {
@@ -1420,9 +1473,31 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32) ([]*g
 	if err != nil {
 		return nil, err
 	}
+
+	// unique actor IDs を収集してバッチフェッチ (N+1 防止)
+	seen := map[int64]struct{}{}
+	var actorIDs []int64
+	for _, n := range notifications {
+		if n.ActorID != nil {
+			if _, ok := seen[*n.ActorID]; !ok {
+				seen[*n.ActorID] = struct{}{}
+				actorIDs = append(actorIDs, *n.ActorID)
+			}
+		}
+	}
+	actorMap := map[int64]*model.User{}
+	if len(actorIDs) > 0 {
+		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
+		if aerr == nil {
+			for _, u := range actors {
+				actorMap[u.ID] = u
+			}
+		}
+	}
+
 	var result []*gqlmodel.Notification
 	for _, n := range notifications {
-		result = append(result, toGraphNotification(n))
+		result = append(result, toGraphNotification(n, actorMap))
 	}
 	return result, nil
 }
@@ -2072,6 +2147,36 @@ func (r *queryResolver) GetInquiry(ctx context.Context, id string) (*gqlmodel.In
 		return nil, nil
 	}
 	return toGraphInquiry(inquiry), nil
+}
+
+// Announcements is the resolver for the announcements field.
+func (r *queryResolver) Announcements(ctx context.Context, limit *int32) ([]*gqlmodel.Announcement, error) {
+	l := 50
+	if limit != nil {
+		l = int(*limit)
+	}
+	list, err := r.ListAnnouncementsUseCase.Execute(ctx, l)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.Announcement, len(list))
+	for i, a := range list {
+		out[i] = toGraphAnnouncement(a)
+	}
+	return out, nil
+}
+
+// Announcement is the resolver for the announcement field.
+func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.Announcement, error) {
+	numericID, err := decodeGraphID(ctx, "announcement", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid announcement id")
+	}
+	a, err := r.GetAnnouncementUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnnouncement(a), nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.

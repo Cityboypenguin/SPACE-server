@@ -17,14 +17,16 @@ const (
 	TypeDM            NotificationType = "dm"
 	TypeCommunityKick NotificationType = "community_kick"
 	TypeCommunityRole NotificationType = "community_role"
+	TypeAnnouncement  NotificationType = "announcement"
 )
 
 type TargetType string
 
 const (
-	TargetPost      TargetType = "post"
-	TargetRoom      TargetType = "room"
-	TargetCommunity TargetType = "community"
+	TargetPost         TargetType = "post"
+	TargetRoom         TargetType = "room"
+	TargetCommunity    TargetType = "community"
+	TargetAnnouncement TargetType = "announcement"
 )
 
 type PublishParams struct {
@@ -45,6 +47,7 @@ type UserEventDelivery interface {
 // NotificationPublisher は通知を DB に保存し、接続中のユーザーへリアルタイム配信する。
 type NotificationPublisher interface {
 	Publish(ctx context.Context, params PublishParams) error
+	PublishBatch(ctx context.Context, params []PublishParams) error
 }
 
 type notificationPublisher struct {
@@ -54,6 +57,53 @@ type notificationPublisher struct {
 
 func NewNotificationPublisher(repo repository.NotificationRepository, delivery UserEventDelivery) NotificationPublisher {
 	return &notificationPublisher{repo: repo, delivery: delivery}
+}
+
+func (p *notificationPublisher) PublishBatch(ctx context.Context, params []PublishParams) error {
+	if len(params) == 0 {
+		return nil
+	}
+	ns := make([]*model.Notification, 0, len(params))
+	for _, param := range params {
+		var targetTypeStr *string
+		if param.TargetType != nil {
+			t := string(*param.TargetType)
+			targetTypeStr = &t
+		}
+		ns = append(ns, model.NewNotification(model.CreateNotificationParam{
+			UserID:     param.UserID,
+			Type:       string(param.Type),
+			ActorID:    param.ActorID,
+			TargetType: targetTypeStr,
+			TargetID:   param.TargetID,
+			Message:    param.Message,
+		}))
+	}
+
+	if err := p.repo.SaveBatch(ctx, ns); err != nil {
+		return err
+	}
+
+	for i, n := range ns {
+		data := map[string]any{
+			"id":        opaqueid.Encode("notification", n.ID),
+			"type":      n.Type,
+			"message":   n.Message,
+			"isRead":    false,
+			"createdAt": n.CreatedAt.Format(time.RFC3339),
+		}
+		if n.ActorID != nil {
+			data["actorID"] = opaqueid.Encode("user", *n.ActorID)
+		}
+		if n.TargetType != nil {
+			data["targetType"] = *n.TargetType
+		}
+		if n.TargetID != nil {
+			data["targetID"] = opaqueid.Encode(*n.TargetType, *n.TargetID)
+		}
+		p.delivery.PublishToUser(params[i].UserID, "notification", data)
+	}
+	return nil
 }
 
 func (p *notificationPublisher) Publish(ctx context.Context, params PublishParams) error {
@@ -84,13 +134,13 @@ func (p *notificationPublisher) Publish(ctx context.Context, params PublishParam
 		"createdAt": n.CreatedAt.Format(time.RFC3339),
 	}
 	if n.ActorID != nil {
-		data["actorID"] = *n.ActorID
+		data["actorID"] = opaqueid.Encode("user", *n.ActorID)
 	}
 	if n.TargetType != nil {
 		data["targetType"] = *n.TargetType
 	}
 	if n.TargetID != nil {
-		data["targetID"] = *n.TargetID
+		data["targetID"] = opaqueid.Encode(*n.TargetType, *n.TargetID)
 	}
 
 	p.delivery.PublishToUser(params.UserID, "notification", data)
