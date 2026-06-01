@@ -17,14 +17,16 @@ const (
 	TypeDM            NotificationType = "dm"
 	TypeCommunityKick NotificationType = "community_kick"
 	TypeCommunityRole NotificationType = "community_role"
+	TypeAnnouncement  NotificationType = "announcement"
 )
 
 type TargetType string
 
 const (
-	TargetPost      TargetType = "post"
-	TargetRoom      TargetType = "room"
-	TargetCommunity TargetType = "community"
+	TargetPost         TargetType = "post"
+	TargetRoom         TargetType = "room"
+	TargetCommunity    TargetType = "community"
+	TargetAnnouncement TargetType = "announcement"
 )
 
 type PublishParams struct {

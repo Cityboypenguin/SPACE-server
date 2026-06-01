@@ -16,6 +16,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
@@ -1214,6 +1215,23 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	return true, nil
 }
 
+// CreateAnnouncement is the resolver for the createAnnouncement field.
+func (r *mutationResolver) CreateAnnouncement(ctx context.Context, input gqlmodel.CreateAnnouncementInput) (*gqlmodel.Announcement, error) {
+	claims, err := requireAdminAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a, err := r.CreateAnnouncementUseCase.Execute(ctx, announcementusecase.CreateAnnouncementInput{
+		Title:   input.Title,
+		Body:    input.Body,
+		AdminID: claims.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnnouncement(a), nil
+}
+
 // Actor is the resolver for the actor field on Notification.
 func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.User, error) {
 	if obj.Actor == nil {
@@ -2058,6 +2076,36 @@ func (r *queryResolver) GetInquiry(ctx context.Context, id string) (*gqlmodel.In
 		return nil, nil
 	}
 	return toGraphInquiry(inquiry), nil
+}
+
+// Announcements is the resolver for the announcements field.
+func (r *queryResolver) Announcements(ctx context.Context, limit *int32) ([]*gqlmodel.Announcement, error) {
+	l := 50
+	if limit != nil {
+		l = int(*limit)
+	}
+	list, err := r.ListAnnouncementsUseCase.Execute(ctx, l)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.Announcement, len(list))
+	for i, a := range list {
+		out[i] = toGraphAnnouncement(a)
+	}
+	return out, nil
+}
+
+// Announcement is the resolver for the announcement field.
+func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.Announcement, error) {
+	numericID, err := decodeGraphID(ctx, "announcement", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid announcement id")
+	}
+	a, err := r.GetAnnouncementUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnnouncement(a), nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.

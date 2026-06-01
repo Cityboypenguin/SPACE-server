@@ -177,3 +177,15 @@ func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string)
 		UpdatedAt: profile.UpdatedAt.Format(timeFormat),
 	}
 }
+
+func toGraphAnnouncement(a *model.Announcement) *gqlmodel.Announcement {
+	if a == nil {
+		return nil
+	}
+	return &gqlmodel.Announcement{
+		ID:        encodeGraphID("announcement", a.ID),
+		Title:     a.Title,
+		Body:      a.Body,
+		CreatedAt: a.CreatedAt.Format(timeFormat),
+	}
+}
