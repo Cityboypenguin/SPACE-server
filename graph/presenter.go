@@ -143,6 +143,19 @@ func toGraphNotification(n *model.Notification) *gqlmodel.Notification {
 	return gql
 }
 
+func toGraphInquiry(inq *model.Inquiry) *gqlmodel.Inquiry {
+	return &gqlmodel.Inquiry{
+		ID:        inq.ID,
+		Name:      inq.Name,
+		Email:     inq.Email,
+		Subject:   inq.Subject,
+		Content:   inq.Content,
+		Status:    gqlmodel.InquiryStatus(inq.Status),
+		CreatedAt: inq.CreatedAt.Format(timeFormat),
+		UpdatedAt: inq.UpdatedAt.Format(timeFormat),
+	}
+}
+
 func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string) *gqlmodel.Profile {
 	if user == nil {
 		return nil

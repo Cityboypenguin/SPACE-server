@@ -54,13 +54,16 @@ func (u *CreateInquiryUsecase) Execute(ctx context.Context, input CreateInquiryI
 		return nil, errors.New("content must be 10000 characters or less")
 	}
 
+	now := time.Now()
 	inquiry := &model.Inquiry{
 		ID:        uuid.New().String(),
 		Name:      name,
 		Email:     email,
 		Subject:   subject,
 		Content:   content,
-		CreatedAt: time.Now(),
+		Status:    model.InquiryStatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	if err := u.inquiryRepo.Save(ctx, inquiry); err != nil {

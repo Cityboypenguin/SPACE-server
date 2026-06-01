@@ -102,12 +102,14 @@ type Favorite struct {
 }
 
 type Inquiry struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Subject   string `json:"subject"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Email     string        `json:"email"`
+	Subject   string        `json:"subject"`
+	Content   string        `json:"content"`
+	Status    InquiryStatus `json:"status"`
+	CreatedAt string        `json:"createdAt"`
+	UpdatedAt string        `json:"updatedAt"`
 }
 
 type LoginInput struct {
@@ -271,6 +273,63 @@ type UserReport struct {
 	Status       ReportStatus     `json:"status"`
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
+}
+
+type InquiryStatus string
+
+const (
+	InquiryStatusPending    InquiryStatus = "PENDING"
+	InquiryStatusInProgress InquiryStatus = "IN_PROGRESS"
+	InquiryStatusResolved   InquiryStatus = "RESOLVED"
+)
+
+var AllInquiryStatus = []InquiryStatus{
+	InquiryStatusPending,
+	InquiryStatusInProgress,
+	InquiryStatusResolved,
+}
+
+func (e InquiryStatus) IsValid() bool {
+	switch e {
+	case InquiryStatusPending, InquiryStatusInProgress, InquiryStatusResolved:
+		return true
+	}
+	return false
+}
+
+func (e InquiryStatus) String() string {
+	return string(e)
+}
+
+func (e *InquiryStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InquiryStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InquiryStatus", str)
+	}
+	return nil
+}
+
+func (e InquiryStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e InquiryStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type ReportStatus string
