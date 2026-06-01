@@ -162,7 +162,7 @@ type Mutation {
 }
 
 type Inquiry {
-  ID: ID!
+  id: ID!
   name: String!
   email: String!
   subject: String!
