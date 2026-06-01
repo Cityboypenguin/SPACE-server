@@ -290,26 +290,25 @@ type Subscription {
 }
 
 enum ReportStatus {
-  PENDING    # 未対応
-  REVIEWING  # 確認中
-  RESOLVED   # 解決済み
-  DISMISSED  # 却下（問題なし）
+  PENDING 
+  REVIEWING
+  RESOLVED
+  DISMISSED
 }
 
 enum ReportTargetType {
   POST
-  COMMENT
-  PROMOTION
+  USER
   COMMUNITY
 }
 
 type UserReport {
   ID: ID!
-  reporter: User!        # 通報したユーザーの情報
+  reporter: User!
   targetType: ReportTargetType!
-  targetID: ID!          # 対象（PostやCommunityなど）のID
-  reason: String!        # 通報理由の分類（スパム、嫌がらせ等）
-  customReason: String   # 詳細な理由（自由記述・オプショナル）
+  targetID: ID!
+  reason: String!
+  customReason: String
   status: ReportStatus!
   createdAt: String!
   updatedAt: String!
@@ -323,7 +322,7 @@ input ReportSearchFilter {
 
 input CreateReportInput {
   targetType: ReportTargetType!
-  targetID: ID!          # 通報対象のID
-  reason: String!        # 理由の分類
-  customReason: String   # 詳細理由
+  targetID: ID!
+  reason: String!
+  customReason: String
 }

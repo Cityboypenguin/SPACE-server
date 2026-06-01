@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1025,7 +1026,7 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 
 // CreateReport is the resolver for the createReport field.
 func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.CreateReportInput) (*gqlmodel.UserReport, error) {
-	var userID int64 = 1 
+	var userID int64 = 1
 
 	res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
 		ReporterID:   userID,
@@ -1039,10 +1040,10 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	}
 
 	reporterUser := &gqlmodel.User{
-        ID:        fmt.Sprintf("%d", res.ReporterID),
-        Name:      "通報者",
-        AccountID: "reporter",
-    }
+		ID:        fmt.Sprintf("%d", res.ReporterID),
+		Name:      "通報者",
+		AccountID: "reporter",
+	}
 
 	return &gqlmodel.UserReport{
 		ID:           res.ID,
@@ -1059,34 +1060,32 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 
 // UpdateReportStatus is the resolver for the updateReportStatus field.
 func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, status gqlmodel.ReportStatus) (*gqlmodel.UserReport, error) {
-    if _, err := requireAdminAuth(ctx); err != nil {
-        return nil, err
-    }
-    res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
-    if err != nil {
-        return nil, err
-    }
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
+	if err != nil {
+		return nil, err
+	}
 
-    reporterUser := &gqlmodel.User{
-        ID:        fmt.Sprintf("%d", res.ReporterID),
-        Name:      "通報者",
-        AccountID: "reporter",
-    }
-    
-    return &gqlmodel.UserReport{
-        ID:           res.ID,
-        TargetType:   gqlmodel.ReportTargetType(res.TargetType),
-        TargetID:     res.TargetID,
-        Reason:       res.Reason,
-        CustomReason: res.CustomReason,
-        Status:       status,
-        Reporter:     reporterUser,
-        CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
-    }, nil
+	reporterUser := &gqlmodel.User{
+		ID:        fmt.Sprintf("%d", res.ReporterID),
+		Name:      "通報者",
+		AccountID: "reporter",
+	}
+
+	return &gqlmodel.UserReport{
+		ID:           res.ID,
+		TargetType:   gqlmodel.ReportTargetType(res.TargetType),
+		TargetID:     res.TargetID,
+		Reason:       res.Reason,
+		CustomReason: res.CustomReason,
+		Status:       status,
+		Reporter:     reporterUser,
+		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+	}, nil
 }
-	
-	
 
 // ToggleReportSystem is the resolver for the toggleReportSystem field.
 func (r *mutationResolver) ToggleReportSystem(ctx context.Context, enabled bool) (bool, error) {
@@ -1263,12 +1262,12 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
+	users, err := r.SearchUsersUseCase.Execute(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -1846,10 +1845,23 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 
 	var gqlReports []*gqlmodel.UserReport
 	for _, res := range reports {
+		targetID := res.TargetID
+		if res.TargetType == model.TargetPost {
+			if rawPostID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+				if post, err := r.GetPostByIDUseCase.Execute(ctx, rawPostID); err == nil && post != nil {
+					targetID = post.Content
+				} else {
+					println("Failed to fetch post content for targetID: " + res.TargetID)
+				}
+			} else {
+				println("Failed to parse targetID to int64: " + res.TargetID)
+			}
+		}
+
 		gqlReports = append(gqlReports, &gqlmodel.UserReport{
 			ID:           res.ID,
 			TargetType:   gqlmodel.ReportTargetType(res.TargetType),
-			TargetID:     res.TargetID,
+			TargetID:     targetID,
 			Reason:       res.Reason,
 			CustomReason: res.CustomReason,
 			Status:       gqlmodel.ReportStatus(res.Status),

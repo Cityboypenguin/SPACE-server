@@ -307,21 +307,19 @@ type ReportTargetType string
 
 const (
 	ReportTargetTypePost      ReportTargetType = "POST"
-	ReportTargetTypeComment   ReportTargetType = "COMMENT"
-	ReportTargetTypePromotion ReportTargetType = "PROMOTION"
+	ReportTargetTypeUser      ReportTargetType = "USER"
 	ReportTargetTypeCommunity ReportTargetType = "COMMUNITY"
 )
 
 var AllReportTargetType = []ReportTargetType{
 	ReportTargetTypePost,
-	ReportTargetTypeComment,
-	ReportTargetTypePromotion,
+	ReportTargetTypeUser,
 	ReportTargetTypeCommunity,
 }
 
 func (e ReportTargetType) IsValid() bool {
 	switch e {
-	case ReportTargetTypePost, ReportTargetTypeComment, ReportTargetTypePromotion, ReportTargetTypeCommunity:
+	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity:
 		return true
 	}
 	return false
