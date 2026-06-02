@@ -43,6 +43,25 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
     return nil
 }
 
+func scanReport(s interface {
+	Scan(...any) error
+}) (*model.Report, error) {
+	var r model.Report
+	var targetTypeStr, statusStr string
+	var createdAtUnix, updatedAtUnix int64
+	if err := s.Scan(
+		&r.ID, &r.ReporterID, &targetTypeStr, &r.TargetID,
+		&r.Reason, &r.CustomReason, &statusStr, &createdAtUnix, &updatedAtUnix,
+	); err != nil {
+		return nil, err
+	}
+	r.TargetType = model.ReportTargetType(targetTypeStr)
+	r.Status = model.ReportStatus(statusStr)
+	r.CreatedAt = time.Unix(createdAtUnix, 0)
+	r.UpdatedAt = time.Unix(updatedAtUnix, 0)
+	return &r, nil
+}
+
 func (r *MySQLReportRepository) FindByID(ctx context.Context, id string) (*model.Report, error) {
     query := `
         SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
@@ -50,36 +69,15 @@ func (r *MySQLReportRepository) FindByID(ctx context.Context, id string) (*model
         WHERE id = ?
         LIMIT 1
     `
-
     row := r.DB.QueryRowContext(ctx, query, id)
-
-    var report model.Report
-    var targetTypeStr, statusStr string
-    var createdAtUnix, updatedAtUnix int64
-
-    if err := row.Scan(
-        &report.ID,
-        &report.ReporterID,
-        &targetTypeStr,
-        &report.TargetID,
-        &report.Reason,
-        &report.CustomReason,
-        &statusStr,
-        &createdAtUnix,
-        &updatedAtUnix,
-    ); err != nil {
+    report, err := scanReport(row)
+    if err != nil {
         if err == sql.ErrNoRows {
             return nil, nil
         }
         return nil, fmt.Errorf("failed to scan report: %w", err)
     }
-
-    report.TargetType = model.ReportTargetType(targetTypeStr)
-    report.Status = model.ReportStatus(statusStr)
-    report.CreatedAt = time.Unix(createdAtUnix, 0)
-    report.UpdatedAt = time.Unix(updatedAtUnix, 0)
-
-    return &report, nil
+    return report, nil
 }
 
 func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, status model.ReportStatus) (*model.Report, error) {
@@ -131,30 +129,11 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 
     var reports []*model.Report
     for rows.Next() {
-        var report model.Report
-        var targetTypeStr, statusStr string
-        var createdAtUnix, updatedAtUnix int64
-
-        if err := rows.Scan(
-            &report.ID,
-            &report.ReporterID,
-            &targetTypeStr,
-            &report.TargetID,
-            &report.Reason,
-            &report.CustomReason,
-            &statusStr,
-            &createdAtUnix,
-            &updatedAtUnix,
-        ); err != nil {
+        report, err := scanReport(rows)
+        if err != nil {
             return nil, fmt.Errorf("failed to scan row in search reports: %w", err)
         }
-
-        report.TargetType = model.ReportTargetType(targetTypeStr)
-        report.Status = model.ReportStatus(statusStr)
-        report.CreatedAt = time.Unix(createdAtUnix, 0)
-        report.UpdatedAt = time.Unix(updatedAtUnix, 0)
-
-        reports = append(reports, &report)
+        reports = append(reports, report)
     }
 
     if err := rows.Err(); err != nil {

@@ -86,6 +86,20 @@ func containsInt64(slice []int64, val int64) bool {
 	return false
 }
 
+// reportTargetKind は ReportTargetType を opaqueid のカインド文字列に変換する。
+func reportTargetKind(t gqlmodel.ReportTargetType) string {
+	switch t {
+	case gqlmodel.ReportTargetTypePost:
+		return "post"
+	case gqlmodel.ReportTargetTypeUser:
+		return "user"
+	case gqlmodel.ReportTargetTypeCommunity:
+		return "community"
+	default:
+		return ""
+	}
+}
+
 func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmodel.Profile, error) {
 	p, err := r.GetProfileUseCase.Execute(ctx, u.ID)
 	if err != nil {

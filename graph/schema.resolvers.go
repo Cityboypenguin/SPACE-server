@@ -1122,12 +1122,24 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 
 // CreateReport is the resolver for the createReport field.
 func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.CreateReportInput) (*gqlmodel.UserReport, error) {
-	var userID int64 = 1
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	kind := reportTargetKind(input.TargetType)
+	if kind == "" {
+		return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
+	}
+	numericTargetID, err := decodeGraphID(ctx, kind, input.TargetID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid target id")
+	}
 
 	res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
-		ReporterID:   userID,
+		ReporterID:   claims.ID,
 		TargetType:   model.ReportTargetType(input.TargetType),
-		TargetID:     input.TargetID,
+		TargetID:     fmt.Sprintf("%d", numericTargetID),
 		Reason:       input.Reason,
 		CustomReason: input.CustomReason,
 	})
@@ -1135,20 +1147,19 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, err
 	}
 
-	reporterUser := &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", res.ReporterID),
-		Name:      "通報者",
-		AccountID: "reporter",
+	reporter, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	if err != nil || reporter == nil {
+		return nil, fmt.Errorf("failed to fetch reporter")
 	}
 
 	return &gqlmodel.UserReport{
 		ID:           res.ID,
 		TargetType:   input.TargetType,
-		TargetID:     res.TargetID,
+		TargetID:     encodeGraphID(kind, numericTargetID),
 		Reason:       res.Reason,
 		CustomReason: res.CustomReason,
 		Status:       gqlmodel.ReportStatusPending,
-		Reporter:     reporterUser,
+		Reporter:     toGraphUser(reporter),
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -1164,20 +1175,27 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		return nil, err
 	}
 
-	reporterUser := &gqlmodel.User{
-		ID:        fmt.Sprintf("%d", res.ReporterID),
-		Name:      "通報者",
-		AccountID: "reporter",
+	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
+	if err != nil || reporter == nil {
+		return nil, fmt.Errorf("failed to fetch reporter")
+	}
+
+	targetType := gqlmodel.ReportTargetType(res.TargetType)
+	targetID := res.TargetID
+	if kind := reportTargetKind(targetType); kind != "" {
+		if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+			targetID = encodeGraphID(kind, numericID)
+		}
 	}
 
 	return &gqlmodel.UserReport{
 		ID:           res.ID,
-		TargetType:   gqlmodel.ReportTargetType(res.TargetType),
-		TargetID:     res.TargetID,
+		TargetType:   targetType,
+		TargetID:     targetID,
 		Reason:       res.Reason,
 		CustomReason: res.CustomReason,
 		Status:       status,
-		Reporter:     reporterUser,
+		Reporter:     toGraphUser(reporter),
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -2072,6 +2090,13 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 			t := model.ReportTargetType(*filter.TargetType)
 			domainFilter.TargetType = &t
 		}
+		if filter.ReporterID != nil {
+			numericID, err := decodeGraphID(ctx, "user", *filter.ReporterID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid reporter id")
+			}
+			domainFilter.ReporterID = &numericID
+		}
 	}
 
 	reports, err := r.ManageReportUsecase.Search(ctx, domainFilter)
@@ -2079,28 +2104,50 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		return nil, err
 	}
 
-	var gqlReports []*gqlmodel.UserReport
+	// 通報者をバッチフェッチ (N+1 防止)
+	seen := map[int64]struct{}{}
+	var reporterIDs []int64
 	for _, res := range reports {
-		targetID := res.TargetID
-		if res.TargetType == model.TargetPost {
-			if rawPostID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
-				if post, err := r.GetPostByIDUseCase.Execute(ctx, rawPostID); err == nil && post != nil {
-					targetID = post.Content
-				} else {
-					println("Failed to fetch post content for targetID: " + res.TargetID)
-				}
-			} else {
-				println("Failed to parse targetID to int64: " + res.TargetID)
+		if _, ok := seen[res.ReporterID]; !ok {
+			seen[res.ReporterID] = struct{}{}
+			reporterIDs = append(reporterIDs, res.ReporterID)
+		}
+	}
+	reporterMap := map[int64]*model.User{}
+	if len(reporterIDs) > 0 {
+		reporters, aerr := r.GetUsersByIDsUseCase.Execute(ctx, reporterIDs)
+		if aerr == nil {
+			for _, u := range reporters {
+				reporterMap[u.ID] = u
 			}
+		}
+	}
+
+	gqlReports := make([]*gqlmodel.UserReport, 0, len(reports))
+	for _, res := range reports {
+		targetType := gqlmodel.ReportTargetType(res.TargetType)
+		targetID := res.TargetID
+		if kind := reportTargetKind(targetType); kind != "" {
+			if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+				targetID = encodeGraphID(kind, numericID)
+			}
+		}
+
+		var reporterUser *gqlmodel.User
+		if u, ok := reporterMap[res.ReporterID]; ok {
+			reporterUser = toGraphUser(u)
+		} else {
+			reporterUser = &gqlmodel.User{ID: encodeGraphID("user", res.ReporterID)}
 		}
 
 		gqlReports = append(gqlReports, &gqlmodel.UserReport{
 			ID:           res.ID,
-			TargetType:   gqlmodel.ReportTargetType(res.TargetType),
+			TargetType:   targetType,
 			TargetID:     targetID,
 			Reason:       res.Reason,
 			CustomReason: res.CustomReason,
 			Status:       gqlmodel.ReportStatus(res.Status),
+			Reporter:     reporterUser,
 			CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 		})
