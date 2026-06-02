@@ -1,0 +1,1 @@
+ALTER TABLE favorites ADD UNIQUE KEY unique_user_post (user_id, post_id);

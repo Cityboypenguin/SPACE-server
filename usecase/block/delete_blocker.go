@@ -3,7 +3,6 @@ package block
 import (
 	"context"
 
-	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -24,10 +23,5 @@ func NewDeleteBlockerUseCase(blockRepo repository.BlockerRepository) DeleteBlock
 }
 
 func (uc *deleteBlockerInteractor) Execute(ctx context.Context, blockerID int64, blockedID int64) (bool, error) {
-	block := &model.Blocker{
-		UserID:        blockerID,
-		BlockedUserID: blockedID,
-	}
-
-	return uc.blockRepo.DeleteBlocker(ctx, block.UserID, block.BlockedUserID)
+	return uc.blockRepo.DeleteBlocker(ctx, blockerID, blockedID)
 }

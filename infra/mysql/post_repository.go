@@ -68,7 +68,6 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		validParentID = sql.NullInt64{Valid: false}
 	}
 
-	// 🚨修正箇所： r.DB ではなく tx を使う！
 	result, err := tx.ExecContext(ctx, insertQuery,
 		p.Content,
 		p.CreatedAt.Unix(),

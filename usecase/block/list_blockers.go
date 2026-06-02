@@ -8,7 +8,7 @@ import (
 )
 
 type ListBlockersUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.Blocker, error)
+	Execute(ctx context.Context) ([]*model.Blocker, error)
 }
 
 var _ ListBlockersUseCase = &listBlockersInteractor{}
@@ -23,6 +23,6 @@ func NewListBlockersUseCase(blockRepo repository.BlockerRepository) ListBlockers
 	}
 }
 
-func (uc *listBlockersInteractor) Execute(ctx context.Context, userID int64) ([]*model.Blocker, error) {
+func (uc *listBlockersInteractor) Execute(ctx context.Context) ([]*model.Blocker, error) {
 	return uc.blockRepo.ListBlockers(ctx)
 }

@@ -2427,12 +2427,10 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 
 // ListBlockedUsers is the resolver for the listBlockedUsers field.
 func (r *queryResolver) ListBlockedUsers(ctx context.Context) ([]*gqlmodel.User, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	blockedUsers, err := r.ListBlockersUseCase.Execute(ctx, claims.ID)
+	blockedUsers, err := r.ListBlockersUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLFavoriteRepository struct {
 	DB *sql.DB
 }
 
-func NewMySQLFavoriteRepository(db *sql.DB) repository.FavoriteRepository {
+func NewMySQLFavoriteRepository(db *sql.DB) *MySQLFavoriteRepository {
 	return &MySQLFavoriteRepository{DB: db}
 }
 
@@ -34,6 +33,10 @@ func (r *MySQLFavoriteRepository) ListFavorites(ctx context.Context) ([]*model.F
 		}
 		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
 		favorites = append(favorites, &favorite)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return favorites, nil
@@ -116,6 +119,10 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostID(ctx context.Context, post
 		favorites = append(favorites, &favorite)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return favorites, nil
 }
 
@@ -130,11 +137,17 @@ func (r *MySQLFavoriteRepository) GetFavoritesByUserID(ctx context.Context, user
 	var favorites []*model.Favorite
 	for rows.Next() {
 		var favorite model.Favorite
+		var createdAtUnix int64
 		favorite.UserID = userID
-		if err := rows.Scan(&favorite.ID, &favorite.PostID, &favorite.CreatedAt); err != nil {
+		if err := rows.Scan(&favorite.ID, &favorite.PostID, &createdAtUnix); err != nil {
 			return nil, err
 		}
+		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
 		favorites = append(favorites, &favorite)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return favorites, nil
