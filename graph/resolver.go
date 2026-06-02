@@ -5,8 +5,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	favoriteuser "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
@@ -122,4 +124,17 @@ type Resolver struct {
 	GetAnnouncementUseCase    *announcementusecase.GetAnnouncementUseCase
 
 	PubSub *pubsub.PubSub
+
+	CreateBlockUseCase         block.BlockUserUseCase
+	DeleteBlockUseCase         block.DeleteBlockerUseCase
+	GetBlockersByUserIDUseCase block.GetBlockersByUserIDUseCase
+	ListBlockersUseCase        block.ListBlockersUseCase
+	SearchBlockersUseCase      block.SearchBlockersUseCase
+	CheckBlockRelationUseCase  block.CheckBlockRelationUseCase
+
+	CreateFavoriteUserUseCase      favoriteuser.CreateFavoriteUserUseCase
+	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase
+	GetFavoriteUserByUserIDUseCase favoriteuser.GetFavoriteUsersByUserIDUseCase
+	ListFavoriteUsersUseCase       favoriteuser.ListFavoriteUsersUseCase
+	SearchFavoriteUsersUseCase     favoriteuser.SearchFavoriteUsersUseCase
 }
