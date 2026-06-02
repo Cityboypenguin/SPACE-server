@@ -29,8 +29,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
+	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
@@ -72,6 +74,8 @@ func main() {
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
 	reportRepository := mysql.NewMySQLReportRepository(database)
+	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
+	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
@@ -187,6 +191,19 @@ func main() {
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+
+	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository)
+	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
+	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
+	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)
+	getBlockersByUserIDUseCase := blusecase.NewGetBlockersByUserIDUseCase(blockRepository)
+	checkBlockRelationUseCase := blusecase.NewCheckBlockRelationUseCase(blockRepository)
+
+	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
+	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
+	listFavoriteUsersUseCase := fuusecase.NewListFavoriteUsersUseCase(favoriteuserRepository)
+	searchFavoriteUsersUseCase := fuusecase.NewSearchFavoriteUsersUseCase(favoriteuserRepository)
+	getFavoriteUsersByUserIDUseCase := fuusecase.NewGetFavoriteUsersByUserIDUseCase(favoriteuserRepository)
 	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
 	manageInquiryUseCase := inquiryusecase.NewManageInquiryUsecase(inquiryRepository)
 
@@ -291,6 +308,19 @@ func main() {
 		CreateReportUsecase: *createReportUseCase,
 		ManageReportUsecase: *manageReportUseCase,
 
+		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
+		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
+		ListFavoriteUsersUseCase:       listFavoriteUsersUseCase,
+		SearchFavoriteUsersUseCase:     searchFavoriteUsersUseCase,
+		GetFavoriteUserByUserIDUseCase: getFavoriteUsersByUserIDUseCase,
+
+		CreateBlockUseCase:         createBlockUseCase,
+		DeleteBlockUseCase:         deleteBlockUseCase,
+		ListBlockersUseCase:        listBlockersUseCase,
+		SearchBlockersUseCase:      searchBlockersUseCase,
+		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
+		CheckBlockRelationUseCase:  checkBlockRelationUseCase,
+
 		CreateInquiryUsecase: *createInquiryUseCase,
 		ManageInquiryUsecase: *manageInquiryUseCase,
 
@@ -329,6 +359,7 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
 

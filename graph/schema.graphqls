@@ -41,6 +41,14 @@ type Query {
 
   announcements(limit: Int): [Announcement!]!
   announcement(id: ID!): Announcement!
+
+  listFavoriteUsers: [User!]!
+  searchFavoriteUsers(keyword: String!): [User!]!
+  GetFavoriteUsersByUserID(userID: ID!): [User!]!
+  
+  listBlockedUsers: [User!]!
+  searchBlockedUsers(keyword: String!): [User!]!
+  GetBlockersByUserID(userID: ID!): [User!]!
 }
 
 type User {
@@ -95,6 +103,20 @@ type Favorite {
   ID: ID!
   user: User!
   post: Post!
+  createdAt: String!
+}
+
+type FavoriteUser {
+  ID: ID!
+  userID: ID!
+  favoriteUserID: ID!
+  createdAt: String!
+}
+
+type Blocker {
+  ID: ID!
+  userID: ID!
+  blockedUserID: ID!
   createdAt: String!
 }
 
@@ -161,6 +183,11 @@ type Mutation {
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
   toggleReportSystem(enabled: Boolean!): Boolean!
 
+  createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
+  deleteFavoriteUser(favoriteUserID: ID!): Boolean!
+
+  createBlocker(blockedUserID: ID!): Blocker!
+  deleteBlocker(blockedUserID: ID!): Boolean!
   createInquiry(input: CreateInquiryInput!): Inquiry!
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   markNotificationAsRead(id: ID!): Boolean!
@@ -269,6 +296,7 @@ type Room {
   user: [User!]!
   createdAt: String!
   updatedAt: String!
+  isMessagingDisabled: Boolean!
 }
 
 input CreateFavoriteInput {
@@ -385,7 +413,10 @@ type Notification {
 
 input CreateReportInput {
   targetType: ReportTargetType!
-  targetID: ID!
-  reason: String!
-  customReason: String
+  targetID: ID!          # 通報対象のID
+  reason: String!        # 理由の分類
+  customReason: String   # 詳細理由
 }
+
+
+

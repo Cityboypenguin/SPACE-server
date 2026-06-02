@@ -67,7 +67,9 @@ func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gql
 	if err != nil || rm == nil {
 		return nil, nil
 	}
-	return toGraphRoom(rm), nil
+	gqlRoom := toGraphRoom(rm)
+	gqlRoom.IsMessagingDisabled = false
+	return gqlRoom, nil
 }
 
 // User is the resolver for the user field.
@@ -547,7 +549,9 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return toGraphRoom(room), nil
+	gqlRoom := toGraphRoom(room)
+	gqlRoom.IsMessagingDisabled = false
+	return gqlRoom, nil
 }
 
 // GetOrCreateDMRoom is the resolver for the getOrCreateDMRoom field.
@@ -587,6 +591,13 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 
 	gqlRoom := toGraphRoom(room)
 	gqlRoom.User = members
+	isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, tid)
+	if err != nil {
+		gqlRoom.IsMessagingDisabled = false
+	} else {
+		gqlRoom.IsMessagingDisabled = isBlocked
+	}
+
 	return gqlRoom, nil
 }
 
@@ -1017,6 +1028,29 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room")
+	}
+
+	if room != nil && len(memberIDs) == 2 {
+		var partnerID int64
+		for _, id := range memberIDs {
+			if id != claims.ID {
+				partnerID = id
+				break
+			}
+		}
+
+		isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status")
+		}
+		if isBlocked {
+			return nil, errors.New("ブロック設定によりメッセージを送信できません")
+		}
+	}
+
 	var ucMediaInputs []messageusecase.MediaInput
 	for _, m := range mediaInputs {
 		if m != nil {
@@ -1190,6 +1224,86 @@ func (r *mutationResolver) ToggleReportSystem(ctx context.Context, enabled bool)
 	}
 
 	return r.ManageReportUsecase.ToggleSystem(ctx, enabled)
+}
+
+// CreateFavoriteUser is the resolver for the createFavoriteUser field.
+func (r *mutationResolver) CreateFavoriteUser(ctx context.Context, favoriteUserID string) (*gqlmodel.FavoriteUser, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericTargetID, err := decodeGraphID(ctx, "user", favoriteUserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid favorite user id")
+	}
+
+	id, err := r.CreateFavoriteUserUseCase.Execute(ctx, claims.ID, numericTargetID)
+	if err != nil {
+		return nil, err
+	}
+
+	favoriteUserModel := &model.FavoriteUser{
+		ID:             id,
+		UserID:         claims.ID,
+		FavoriteUserID: numericTargetID,
+		CreatedAt:      time.Now(),
+	}
+	return toGraphFavoriteUser(favoriteUserModel), nil
+}
+
+// DeleteFavoriteUser is the resolver for the deleteFavoriteUser field.
+func (r *mutationResolver) DeleteFavoriteUser(ctx context.Context, favoriteUserID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericTargetID, err := decodeGraphID(ctx, "user", favoriteUserID)
+	if err != nil {
+		return false, fmt.Errorf("invalid favorite user id")
+	}
+
+	return r.DeleteFavoriteUserUseCase.Execute(ctx, claims.ID, numericTargetID)
+}
+
+// CreateBlocker is the resolver for the createBlocker field.
+func (r *mutationResolver) CreateBlocker(ctx context.Context, blockedUserID string) (*gqlmodel.Blocker, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericTargetID, err := decodeGraphID(ctx, "user", blockedUserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid blocked user id")
+	}
+
+	id, err := r.CreateBlockUseCase.Execute(ctx, claims.ID, numericTargetID)
+	if err != nil {
+		return nil, err
+	}
+
+	blockerModel := &model.Blocker{
+		ID:            id,
+		UserID:        claims.ID,
+		BlockedUserID: numericTargetID,
+		CreatedAt:     time.Now(),
+	}
+	return toGraphBlocker(blockerModel), nil
+}
+
+// DeleteBlocker is the resolver for the deleteBlocker field.
+func (r *mutationResolver) DeleteBlocker(ctx context.Context, blockedUserID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericTargetID, err := decodeGraphID(ctx, "user", blockedUserID)
+	if err != nil {
+		return false, fmt.Errorf("invalid blocked user id")
+	}
+
+	return r.DeleteBlockUseCase.Execute(ctx, claims.ID, numericTargetID)
 }
 
 // CreateInquiry is the resolver for the createInquiry field.
@@ -1442,12 +1556,12 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, name string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.SearchUsersUseCase.Execute(ctx, name)
+	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}
@@ -1796,6 +1910,21 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 
 	gqlRoom := toGraphRoom(room)
 	gqlRoom.User = members
+
+	gqlRoom.IsMessagingDisabled = false
+	if len(users) == 2 {
+		var partnerID int64
+		for _, u := range users {
+			if u.ID != claims.ID {
+				partnerID = u.ID
+				break
+			}
+		}
+
+		isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		gqlRoom.IsMessagingDisabled = isBlocked
+	}
+
 	return gqlRoom, nil
 }
 
@@ -1825,12 +1954,18 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
 		members := make([]*gqlmodel.User, 0, len(users))
+		var partnerID int64
 		for _, u := range users {
 			members = append(members, toGraphUser(u))
 		}
 
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
+		gqlRoom.IsMessagingDisabled = false
+		if len(users) == 2 && partnerID != 0 {
+			isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+			gqlRoom.IsMessagingDisabled = isBlocked
+		}
 		result = append(result, gqlRoom)
 	}
 
@@ -2125,7 +2260,6 @@ func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.In
 	if err != nil {
 		return nil, err
 	}
-
 	result := make([]*gqlmodel.Inquiry, 0, len(inquiries))
 	for _, inq := range inquiries {
 		result = append(result, toGraphInquiry(inq))
@@ -2177,6 +2311,146 @@ func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.
 		return nil, err
 	}
 	return toGraphAnnouncement(a), nil
+}
+
+// ListFavoriteUsers is the resolver for the listFavoriteUsers field.
+func (r *queryResolver) ListFavoriteUsers(ctx context.Context) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	favoriteUsers, err := r.ListFavoriteUsersUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range favoriteUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
+}
+
+// SearchFavoriteUsers is the resolver for the searchFavoriteUsers field.
+func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	favoriteUsers, err := r.SearchFavoriteUsersUseCase.Execute(ctx, claims.ID, keyword)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range favoriteUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
+}
+
+// GetFavoriteUsersByUserID is the resolver for the GetFavoriteUsersByUserID field.
+func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range favoriteUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
+}
+
+// ListBlockedUsers is the resolver for the listBlockedUsers field.
+func (r *queryResolver) ListBlockedUsers(ctx context.Context) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	blockedUsers, err := r.ListBlockersUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range blockedUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
+}
+
+// SearchBlockedUsers is the resolver for the searchBlockedUsers field.
+func (r *queryResolver) SearchBlockedUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	blockedUsers, err := r.SearchBlockersUseCase.Execute(ctx, claims.ID, keyword)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range blockedUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
+}
+
+// GetBlockersByUserID is the resolver for the GetBlockersByUserID field.
+func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	if claims.ID != numericUserID && !isAdminRole(claims.Role) {
+		return nil, errors.New("forbidden: cannot view other users' block list")
+	}
+
+	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlUsers []*gqlmodel.User
+	for _, u := range blockedUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+	return gqlUsers, nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.
