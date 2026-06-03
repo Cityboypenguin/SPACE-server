@@ -192,7 +192,7 @@ func main() {
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 
-	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository)
+	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository, txManager)
 	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
 	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
 	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)

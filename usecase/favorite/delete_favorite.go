@@ -14,13 +14,11 @@ var _ DeleteFavoriteUseCase = &DeleteFavoriteInteractor{}
 
 type DeleteFavoriteInteractor struct {
 	favoriteRepo repository.FavoriteRepository
-	postRepo     repository.PostRepository
 }
 
 func NewDeleteFavoriteUseCase(favoriteRepo repository.FavoriteRepository, postRepo repository.PostRepository) DeleteFavoriteUseCase {
 	return &DeleteFavoriteInteractor{
 		favoriteRepo: favoriteRepo,
-		postRepo:     postRepo,
 	}
 }
 
