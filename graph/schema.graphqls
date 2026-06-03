@@ -45,10 +45,12 @@ type Query {
   listFavoriteUsers: [User!]!
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
+  adminGetFavoriteUsers(userID: ID!): [User!]!
   
   listBlockedUsers: [User!]!
   searchBlockedUsers(keyword: String!): [User!]!
   GetBlockersByUserID(userID: ID!): [User!]!
+  adminGetBlockers(userID: ID!): [User!]!
 }
 
 type User {

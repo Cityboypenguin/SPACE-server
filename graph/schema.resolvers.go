@@ -2425,6 +2425,34 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 	return gqlUsers, nil
 }
 
+// AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.
+func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlUsers []*gqlmodel.User
+	for _, u := range favoriteUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+
+	return gqlUsers, nil
+}
+
 // ListBlockedUsers is the resolver for the listBlockedUsers field.
 func (r *queryResolver) ListBlockedUsers(ctx context.Context) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
@@ -2495,6 +2523,34 @@ func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) 
 		}
 		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
 	}
+	return gqlUsers, nil
+}
+
+// AdminGetBlockers is the resolver for the adminGetBlockers field.
+func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlUsers []*gqlmodel.User
+	for _, u := range blockedUsers {
+		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
+		if err != nil || targetUser == nil {
+			continue
+		}
+		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
+	}
+
 	return gqlUsers, nil
 }
 
