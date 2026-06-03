@@ -1364,6 +1364,9 @@ func (r *mutationResolver) MarkNotificationAsRead(ctx context.Context, id string
 	if err := r.MarkAsReadUseCase.Execute(ctx, numericID, claims.ID); err != nil {
 		return false, err
 	}
+	if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
+		r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
+	}
 	return true, nil
 }
 
@@ -1376,6 +1379,7 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	if err := r.MarkAllAsReadUseCase.Execute(ctx, claims.ID); err != nil {
 		return false, err
 	}
+	r.SSEBroker.PublishSyncToUser(claims.ID, 0)
 	return true, nil
 }
 

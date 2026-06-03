@@ -3,6 +3,7 @@ package sse
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
@@ -13,7 +14,7 @@ import (
 // NewHandler は /events 用の Echo ハンドラを返す。
 // 認証は Authorization ヘッダー（JWTAuth middleware 経由）か ?token= クエリパラメータで行う。
 // ブラウザ標準の EventSource はカスタムヘッダーを送れないため、?token= を主な認証手段とする。
-func NewHandler(hub *Broker, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.HandlerFunc {
+func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
@@ -43,15 +44,51 @@ func NewHandler(hub *Broker, revokedTokenRepo repository.RevokedTokenRepository,
 			return echo.NewHTTPError(http.StatusInternalServerError, "streaming unsupported")
 		}
 
-		cl := hub.Subscribe(userID)
+		// Last-Event-ID が送られていれば再接続とみなしてリプレイする
+		// ヘッダーがなければ初回接続（lastEventID = -1 でリプレイなし）
+		lastEventID := -1
+		if raw := req.Header.Get("Last-Event-ID"); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil {
+				lastEventID = n
+			}
+		}
+
+		cl, missed := hub.Subscribe(userID, lastEventID)
 		defer hub.Unsubscribe(userID, cl)
+
+		now := time.Now().Format(time.RFC3339Nano)
 
 		_ = writeSSE(res.Writer, Event{
 			ID:   0,
 			Type: "connected",
 			Data: map[string]any{"ok": true},
-			Time: time.Now().Format(time.RFC3339Nano),
+			Time: now,
 		})
+
+		// 切断中に積まれた未配信イベントをリプレイ
+		// replayed=true を付けることでクライアント側でトーストをスキップさせる
+		for _, ev := range missed {
+			replayEv := ev
+			copied := make(map[string]any, len(ev.Data)+1)
+			for k, v := range ev.Data {
+				copied[k] = v
+			}
+			copied["replayed"] = true
+			replayEv.Data = copied
+			if replayEv.Time == "" {
+				replayEv.Time = now
+			}
+			_ = writeSSE(res.Writer, replayEv)
+		}
+
+		// 現在の未読数を送信（再接続時にバッジ数を正確に同期する）
+		unreadCount, _ := notifRepo.CountUnread(req.Context(), userID)
+		_ = writeSSE(res.Writer, Event{
+			Type: "sync",
+			Data: map[string]any{"unreadCount": unreadCount},
+			Time: now,
+		})
+
 		flusher.Flush()
 
 		ctx := req.Context()

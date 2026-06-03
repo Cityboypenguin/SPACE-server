@@ -333,6 +333,7 @@ func main() {
 		MarkAsReadUseCase:        markAsReadUseCase,
 		MarkAllAsReadUseCase:     markAllAsReadUseCase,
 		CountUnreadUseCase:       countUnreadUseCase,
+		SSEBroker:                sseBroker,
 
 		PubSub: ps,
 	}
@@ -433,7 +434,7 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, revokedTokenRepository, userRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository))
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {

@@ -2,6 +2,7 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
+	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -122,6 +123,8 @@ type Resolver struct {
 	CreateAnnouncementUseCase *announcementusecase.CreateAnnouncementUseCase
 	ListAnnouncementsUseCase  *announcementusecase.ListAnnouncementsUseCase
 	GetAnnouncementUseCase    *announcementusecase.GetAnnouncementUseCase
+
+	SSEBroker *sse.Broker
 
 	PubSub *pubsub.PubSub
 
