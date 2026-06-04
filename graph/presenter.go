@@ -190,6 +190,7 @@ func toGraphAnnouncement(a *model.Announcement) *gqlmodel.Announcement {
 		Title:     a.Title,
 		Body:      a.Body,
 		CreatedAt: a.CreatedAt.Format(timeFormat),
+		UpdatedAt: a.UpdatedAt.Format(timeFormat),
 	}
 }
 

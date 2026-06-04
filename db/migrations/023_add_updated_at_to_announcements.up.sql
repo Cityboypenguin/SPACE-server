@@ -1,0 +1,2 @@
+ALTER TABLE announcements
+    ADD COLUMN updated_at BIGINT NOT NULL DEFAULT 0;

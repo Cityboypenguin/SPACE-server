@@ -218,6 +218,8 @@ func main() {
 	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
 	listAnnouncementsUseCase := announcementusecase.NewListAnnouncementsUseCase(announcementRepository)
 	getAnnouncementUseCase := announcementusecase.NewGetAnnouncementUseCase(announcementRepository)
+	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
+	updateAnnouncementUseCase := announcementusecase.NewUpdateAnnouncementUseCase(announcementRepository)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
@@ -333,6 +335,8 @@ func main() {
 		CreateAnnouncementUseCase: createAnnouncementUseCase,
 		ListAnnouncementsUseCase:  listAnnouncementsUseCase,
 		GetAnnouncementUseCase:    getAnnouncementUseCase,
+		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
+		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
 
 		NotificationPublisher:    notificationPublisher,
 		ListNotificationsUseCase: listNotificationsUseCase,

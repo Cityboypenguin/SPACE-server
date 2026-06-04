@@ -8,4 +8,5 @@ type Announcement struct {
 	Body      string
 	AdminID   int64
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }

@@ -126,6 +126,8 @@ type Resolver struct {
 	CreateAnnouncementUseCase *announcementusecase.CreateAnnouncementUseCase
 	ListAnnouncementsUseCase  *announcementusecase.ListAnnouncementsUseCase
 	GetAnnouncementUseCase    *announcementusecase.GetAnnouncementUseCase
+	DeleteAnnouncementUseCase *announcementusecase.DeleteAnnouncementUseCase
+	UpdateAnnouncementUseCase *announcementusecase.UpdateAnnouncementUseCase
 
 	SSEBroker *sse.Broker
 

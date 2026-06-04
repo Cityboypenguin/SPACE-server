@@ -196,6 +196,8 @@ type Mutation {
   markAllNotificationsAsRead: Boolean!
 
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+  updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
+  deleteAnnouncement(id: ID!): Boolean!
   markRoomAsRead(roomID: ID!): Boolean!
 }
 
@@ -204,9 +206,15 @@ type Announcement {
   title: String!
   body: String!
   createdAt: String!
+  updatedAt: String!
 }
 
 input CreateAnnouncementInput {
+  title: String!
+  body: String!
+}
+
+input UpdateAnnouncementInput {
   title: String!
   body: String!
 }

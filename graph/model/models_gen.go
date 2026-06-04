@@ -33,6 +33,7 @@ type Announcement struct {
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type Blocker struct {
@@ -255,6 +256,11 @@ type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password *string `json:"password,omitempty"`
+}
+
+type UpdateAnnouncementInput struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
 
 type UpdateCommunityInput struct {
