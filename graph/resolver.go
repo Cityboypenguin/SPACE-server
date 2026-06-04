@@ -96,6 +96,9 @@ type Resolver struct {
 	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
 	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
+	MarkRoomAsReadUseCase             roomusecase.MarkRoomAsReadUseCase
+	GetRoomReadStatusUseCase          roomusecase.GetRoomReadStatusUseCase
+	GetMembersUnreadCountsUseCase     roomusecase.GetMembersUnreadCountsUseCase
 
 	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase                communityusecase.GetCommunityUseCase

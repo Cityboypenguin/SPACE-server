@@ -196,6 +196,7 @@ type Mutation {
   markAllNotificationsAsRead: Boolean!
 
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+  markRoomAsRead(roomID: ID!): Boolean!
 }
 
 type Announcement {
@@ -299,6 +300,9 @@ type Room {
   createdAt: String!
   updatedAt: String!
   isMessagingDisabled: Boolean!
+  lastReadAt: String
+  unreadCount: Int!
+  partnerLastReadAt: String
 }
 
 input CreateFavoriteInput {
@@ -344,6 +348,7 @@ type Community {
   name: String!
   description: String!
   avatarURL: String!
+  unreadCount: Int!
   createdAt: String!
   updatedAt: String!
 }
@@ -365,10 +370,22 @@ input UpdateCommunityInput {
   avatarKey: String
 }
 
+type RoomReadStatusUpdate {
+  userID: ID!
+  lastReadAt: String!
+}
+
+type UnreadUpdate {
+  roomID: ID!
+  unreadCount: Int!
+}
+
 type Subscription {
   messageAdded(roomID: ID!): Message!
   messageDeleted(roomID: ID!): Message!
   messageUpdated(roomID: ID!): Message!
+  roomReadStatusUpdated(roomID: ID!): RoomReadStatusUpdate!
+  myUnreadUpdated: UnreadUpdate!
 }
 
 enum ReportStatus {

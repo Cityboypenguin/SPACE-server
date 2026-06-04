@@ -48,6 +48,7 @@ type Community struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	AvatarURL   string `json:"avatarURL"`
+	UnreadCount int32  `json:"unreadCount"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }
@@ -232,9 +233,22 @@ type Room struct {
 	CreatedAt           string  `json:"createdAt"`
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
+	LastReadAt          *string `json:"lastReadAt,omitempty"`
+	UnreadCount         int32   `json:"unreadCount"`
+	PartnerLastReadAt   *string `json:"partnerLastReadAt,omitempty"`
+}
+
+type RoomReadStatusUpdate struct {
+	UserID     string `json:"userID"`
+	LastReadAt string `json:"lastReadAt"`
 }
 
 type Subscription struct {
+}
+
+type UnreadUpdate struct {
+	RoomID      string `json:"roomID"`
+	UnreadCount int32  `json:"unreadCount"`
 }
 
 type UpdateAdministratorInput struct {

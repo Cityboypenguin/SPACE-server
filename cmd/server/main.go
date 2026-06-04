@@ -177,6 +177,9 @@ func main() {
 	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
 	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
+	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
+	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
+	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository)
@@ -293,6 +296,9 @@ func main() {
 		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
 		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
+		MarkRoomAsReadUseCase:             markRoomAsReadUseCase,
+		GetRoomReadStatusUseCase:          getRoomReadStatusUseCase,
+		GetMembersUnreadCountsUseCase:     getMembersUnreadCountsUseCase,
 
 		CreateCommunityUseCase:             createCommunityUseCase,
 		GetCommunityUseCase:                getCommunityUseCase,

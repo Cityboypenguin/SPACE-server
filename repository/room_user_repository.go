@@ -18,4 +18,7 @@ type RoomUserRepository interface {
 	SetRoomUserRole(ctx context.Context, roomID, userID int64, role string) error
 	CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error)
 	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
+	UpdateLastReadAt(ctx context.Context, roomID, userID int64, readAt int64) error
+	GetLastReadAt(ctx context.Context, roomID, userID int64) (*int64, error)
+	GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error)
 }

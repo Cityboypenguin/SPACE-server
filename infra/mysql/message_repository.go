@@ -100,3 +100,13 @@ func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Mes
 	_, err := r.DB.ExecContext(ctx, query, m.Content, m.UpdatedAt.Unix(), m.ID)
 	return err
 }
+
+func (r *MySQLMessageRepository) CountUnreadMessages(ctx context.Context, roomID, userID int64, afterTimestamp int64) (int, error) {
+	query := `
+		SELECT COUNT(*) FROM messages
+		WHERE room_id = ? AND user_id != ? AND created_at > ?
+	`
+	var count int
+	err := r.DB.QueryRowContext(ctx, query, roomID, userID, afterTimestamp).Scan(&count)
+	return count, err
+}

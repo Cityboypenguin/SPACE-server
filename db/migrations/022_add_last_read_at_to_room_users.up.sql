@@ -1,0 +1,1 @@
+ALTER TABLE room_users ADD COLUMN last_read_at BIGINT DEFAULT NULL;

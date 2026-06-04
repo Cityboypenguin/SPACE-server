@@ -232,6 +232,56 @@ func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userI
 	return &room, nil
 }
 
+func (r *MySQLRoomUserRepository) UpdateLastReadAt(ctx context.Context, roomID, userID int64, readAt int64) error {
+	query := "UPDATE room_users SET last_read_at = ? WHERE room_id = ? AND user_id = ?"
+	_, err := r.DB.ExecContext(ctx, query, readAt, roomID, userID)
+	return err
+}
+
+func (r *MySQLRoomUserRepository) GetLastReadAt(ctx context.Context, roomID, userID int64) (*int64, error) {
+	var readAt sql.NullInt64
+	err := r.DB.QueryRowContext(ctx,
+		"SELECT last_read_at FROM room_users WHERE room_id = ? AND user_id = ?",
+		roomID, userID,
+	).Scan(&readAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if !readAt.Valid {
+		return nil, nil
+	}
+	v := readAt.Int64
+	return &v, nil
+}
+
+func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error) {
+	query := "SELECT user_id, last_read_at FROM room_users WHERE room_id = ?"
+	rows, err := r.DB.QueryContext(ctx, query, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]*int64)
+	for rows.Next() {
+		var userID int64
+		var readAt sql.NullInt64
+		if err := rows.Scan(&userID, &readAt); err != nil {
+			return nil, err
+		}
+		if readAt.Valid {
+			v := readAt.Int64
+			result[userID] = &v
+		} else {
+			result[userID] = nil
+		}
+	}
+	return result, rows.Err()
+}
+
 // FindOrCreateDMRoom は2ユーザー間のDMルームをSERIALIZABLEトランザクション内で
 // 検索または作成する。並行リクエストによる重複作成を防ぐ。
 func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error) {
