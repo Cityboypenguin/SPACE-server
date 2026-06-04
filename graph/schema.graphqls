@@ -16,6 +16,7 @@ type Query {
   posts: [Post!]!
   topLevelPosts: [Post!]!
   getPostByID(id: ID!): Post
+  getPostsByUserID(user_id: ID!): [Post!]!
   getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
 

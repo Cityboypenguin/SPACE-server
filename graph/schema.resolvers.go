@@ -1748,6 +1748,25 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 	return toGraphPost(post), nil
 }
 
+// GetPostsByUserID is the resolver for the getPostsByUserID field.
+func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]*gqlmodel.Post, error) {
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	posts, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlPosts []*gqlmodel.Post
+	for _, post := range posts {
+		gqlPosts = append(gqlPosts, toGraphPost(post))
+	}
+	return gqlPosts, nil
+
+}
+
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
 func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) ([]*gqlmodel.Post, error) {
 	numericPostID, err := decodeGraphID(ctx, "post", postID)

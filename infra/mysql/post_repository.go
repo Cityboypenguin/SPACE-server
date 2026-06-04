@@ -241,6 +241,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 
 	return posts, nil
 }
+
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
