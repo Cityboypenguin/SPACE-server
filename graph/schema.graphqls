@@ -37,6 +37,7 @@ type Query {
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   searchReports(filter: ReportSearchFilter): [UserReport!]!
   searchInquiries(status: InquiryStatus): [Inquiry!]!
+  isMaintenance: Boolean!
   getInquiry(id: ID!): Inquiry
 
   announcements(limit: Int): [Announcement!]!
@@ -184,6 +185,7 @@ type Mutation {
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
   toggleReportSystem(enabled: Boolean!): Boolean!
+  toggleMaintenance(enabled: Boolean!): Boolean!
 
   createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
   deleteFavoriteUser(favoriteUserID: ID!): Boolean!

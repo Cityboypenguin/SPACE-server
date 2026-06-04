@@ -26,7 +26,8 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	StorageRepository repository.StorageRepository
+	StorageRepository     repository.StorageRepository
+	MaintenanceRepository repository.MaintenanceRepository
 
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase

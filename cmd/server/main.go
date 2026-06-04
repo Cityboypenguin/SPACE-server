@@ -151,6 +151,7 @@ func main() {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
 	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	maintenanceRepository := infraredis.NewRedisMaintenanceRepository(redisClient)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
@@ -226,7 +227,8 @@ func main() {
 	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
-		StorageRepository: storageRepository,
+		StorageRepository:     storageRepository,
+		MaintenanceRepository: maintenanceRepository,
 
 		CreateUserUseCase:       createUserUseCase,
 		ListUsersUseCase:        listUsersUseCase,
@@ -366,6 +368,7 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	e.Use(authmiddleware.MaintenanceGuard(maintenanceRepository))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
