@@ -419,6 +419,7 @@ type UserReport {
   status: ReportStatus!
   createdAt: String!
   updatedAt: String!
+  content: String
 }
 
 input ReportSearchFilter {

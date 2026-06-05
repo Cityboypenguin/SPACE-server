@@ -320,6 +320,7 @@ type UserReport struct {
 	Status       ReportStatus     `json:"status"`
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
+	Content      *string          `json:"content,omitempty"`
 }
 
 type InquiryStatus string

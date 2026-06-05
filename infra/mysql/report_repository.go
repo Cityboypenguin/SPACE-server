@@ -44,22 +44,22 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
 }
 
 func scanReport(s interface {
-	Scan(...any) error
+    Scan(...any) error
 }) (*model.Report, error) {
-	var r model.Report
-	var targetTypeStr, statusStr string
-	var createdAtUnix, updatedAtUnix int64
-	if err := s.Scan(
-		&r.ID, &r.ReporterID, &targetTypeStr, &r.TargetID,
-		&r.Reason, &r.CustomReason, &statusStr, &createdAtUnix, &updatedAtUnix,
-	); err != nil {
-		return nil, err
-	}
-	r.TargetType = model.ReportTargetType(targetTypeStr)
-	r.Status = model.ReportStatus(statusStr)
-	r.CreatedAt = time.Unix(createdAtUnix, 0)
-	r.UpdatedAt = time.Unix(updatedAtUnix, 0)
-	return &r, nil
+    var r model.Report
+    var targetTypeStr, statusStr string
+    var createdAtUnix, updatedAtUnix int64
+    if err := s.Scan(
+        &r.ID, &r.ReporterID, &targetTypeStr, &r.TargetID,
+        &r.Reason, &r.CustomReason, &statusStr, &createdAtUnix, &updatedAtUnix,
+    ); err != nil {
+        return nil, err
+    }
+    r.TargetType = model.ReportTargetType(targetTypeStr)
+    r.Status = model.ReportStatus(statusStr)
+    r.CreatedAt = time.Unix(createdAtUnix, 0)
+    r.UpdatedAt = time.Unix(updatedAtUnix, 0)
+    return &r, nil
 }
 
 func (r *MySQLReportRepository) FindByID(ctx context.Context, id string) (*model.Report, error) {
@@ -98,28 +98,31 @@ func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, sta
 
 func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.Report, error) {
     query := `
-        SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
-        FROM user_reports
+        SELECT 
+            r.id, r.reporter_id, r.target_type, r.target_id, r.reason, r.custom_reason, r.status, r.created_at, r.updated_at,
+            p.content AS post_content
+        FROM user_reports r
+        LEFT JOIN posts p ON r.target_type = 'POST' AND CAST(r.target_id AS UNSIGNED) = p.id
         WHERE 1=1
     `
     var args []interface{}
 
     if filter != nil {
         if filter.Status != nil {
-            query += " AND status = ?"
+            query += " AND r.status = ?"
             args = append(args, string(*filter.Status))
         }
         if filter.TargetType != nil {
-            query += " AND target_type = ?"
+            query += " AND r.target_type = ?"
             args = append(args, string(*filter.TargetType))
         }
         if filter.ReporterID != nil && *filter.ReporterID != 0 {
-            query += " AND reporter_id = ?"
+            query += " AND r.reporter_id = ?"
             args = append(args, *filter.ReporterID)
         }
     }
 
-    query += " ORDER BY created_at DESC"
+    query += " ORDER BY r.created_at DESC"
 
     rows, err := r.DB.QueryContext(ctx, query, args...)
     if err != nil {
@@ -129,7 +132,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 
     var reports []*model.Report
     for rows.Next() {
-        report, err := scanReport(rows)
+        report, err := r.scanReportWithPost(rows)
         if err != nil {
             return nil, fmt.Errorf("failed to scan row in search reports: %w", err)
         }
@@ -141,4 +144,43 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
     }
 
     return reports, nil
+}
+
+func (r *MySQLReportRepository) scanReportWithPost(rows *sql.Rows) (*model.Report, error) {
+    var report model.Report
+    var targetTypeStr, statusStr string
+    var createdAtUnix, updatedAtUnix int64
+    var customReason sql.NullString
+    var postContent sql.NullString
+
+    err := rows.Scan(
+        &report.ID,
+        &report.ReporterID,
+        &targetTypeStr,
+        &report.TargetID,
+        &report.Reason,
+        &customReason,
+        &report.Status,
+        &createdAtUnix,
+        &updatedAtUnix,
+        &postContent,
+    )
+    if err != nil {
+        return nil, err
+    }
+    
+    report.TargetType = model.ReportTargetType(targetTypeStr)
+    report.Status = model.ReportStatus(statusStr)
+    report.CreatedAt = time.Unix(createdAtUnix, 0)
+    report.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
+    if customReason.Valid {
+        report.CustomReason = &customReason.String
+    }
+    
+    if postContent.Valid {
+        report.PostContent = &postContent.String
+    }
+
+    return &report, nil
 }
