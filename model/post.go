@@ -7,7 +7,6 @@ type Post struct {
 	Content    string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
-	DeteledAt  *time.Time
 	UserID     int64
 	ParentID   *int64
 	DeletedAt  *time.Time
@@ -24,6 +23,8 @@ type CreatePostParam struct {
 }
 
 type UpdatePostParam struct {
+	PostID  int64
+	UserID  int64
 	Content *string
 }
 

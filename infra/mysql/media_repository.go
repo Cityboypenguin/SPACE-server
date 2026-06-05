@@ -100,3 +100,24 @@ func (r *MySQLMediaRepository) ListByMessageID(ctx context.Context, messageID in
 	}
 	return result, rows.Err()
 }
+
+func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
+	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
+	_, err := r.DB.ExecContext(ctx, query, mediaID, userID)
+	return err
+}
+
+func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error) {
+	query := `SELECT MAX(position) FROM post_media WHERE post_id = ?`
+
+	var maxPos sql.NullInt32
+	err := r.DB.QueryRowContext(ctx, query, postID).Scan(&maxPos)
+	if err != nil {
+		return 0, err
+	}
+
+	if maxPos.Valid {
+		return int(maxPos.Int32), nil
+	}
+	return -1, nil
+}

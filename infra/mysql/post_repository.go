@@ -116,19 +116,21 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 }
 
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
-	p.UpdatedAt = time.Now()
-
 	query := `
-		UPDATE posts
-		SET content = ?, updated_at = ?
-		WHERE id = ?
+		UPDATE posts 
+		SET content = ?, updated_at = ? 
+		WHERE id = ? AND user_id = ? AND deleted_at IS NULL
 	`
-	_, err := r.DB.ExecContext(ctx, query,
-		p.Content,
-		p.UpdatedAt.Unix(),
-		p.ID,
-	)
-	return err
+	res, err := r.DB.ExecContext(ctx, query, p.Content, p.UpdatedAt.Unix(), p.ID, p.UserID)
+	if err != nil {
+		return err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return err
+	}
+	return nil
 }
 
 func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, error) {
@@ -153,7 +155,8 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 	}
 
 	deleteQuery := `
-		DELETE FROM posts
+		UPDATE posts
+		SET deleted_at = ?, updated_at = ?
 		WHERE id = ?
 	`
 
@@ -196,8 +199,13 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 }
 
 func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID int64) error {
-	query := `DELETE FROM posts WHERE user_id = ?`
-	_, err := r.DB.ExecContext(ctx, query, userID)
+	query := `
+		UPDATE posts
+		SET deleted_at = ?, updated_at = ?
+		WHERE user_id = ? AND deleted_at IS NULL
+	`
+	now := time.Now().Unix()
+	_, err := r.DB.ExecContext(ctx, query, now, now, userID)
 	return err
 }
 

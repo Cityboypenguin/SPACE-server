@@ -275,6 +275,8 @@ input CreatePostInput {
 input UpdatePostInput {
   id: ID!
   content: String!
+  newMediaInputs: [MediaUploadInput!]
+  deletedMediaIDs: [ID!]
 }
 
 type Profile {

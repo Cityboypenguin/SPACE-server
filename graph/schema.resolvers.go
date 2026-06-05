@@ -408,23 +408,22 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 	return r.DeletePostUseCase.Execute(ctx, numericID)
 }
 
-// UpdatePost is the resolver for the updatePost field.
 func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.UpdatePostInput) (*gqlmodel.Post, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// 1. テキストのバリデーション（CreatePostを踏襲）
 	trimmedContent := strings.TrimSpace(input.Content)
-	if trimmedContent == "" {
-		return nil, fmt.Errorf("content cannot be empty")
-	}
 
+	// 2. 投稿IDのデコード（既存ロジック）
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
+	// 3. 投稿の存在確認と権限チェック（既存ロジック）
 	existing, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post")
@@ -436,9 +435,32 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, errors.New("forbidden: can only update your own posts")
 	}
 
-	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, model.UpdatePostParam{
+	var deletedMediaIDs []int64
+	for _, strID := range input.DeletedMediaIDs {
+		numID, err := decodeGraphID(ctx, "media", strID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid deleted media id format: %s", strID)
+		}
+		deletedMediaIDs = append(deletedMediaIDs, numID)
+	}
+
+	// 5. 追加する画像データの詰め替え（CreatePostと完全に一致）
+	var ucMediaInputs []postusecase.MediaInput
+	for _, m := range input.NewMediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
+	// 6. ユースケースの実行（型が完全に一致した状態）
+	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
+		PostID:  numericID,
+		UserID:  claims.ID,
 		Content: &trimmedContent,
-	})
+	}, ucMediaInputs, deletedMediaIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1764,7 +1786,6 @@ func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]
 		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
-
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.

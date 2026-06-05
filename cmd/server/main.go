@@ -128,7 +128,7 @@ func main() {
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
 	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager)
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)

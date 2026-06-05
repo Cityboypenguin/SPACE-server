@@ -12695,7 +12695,7 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "content"}
+	fieldsInOrder := [...]string{"id", "content", "newMediaInputs", "deletedMediaIDs"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -12716,6 +12716,20 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.Content = data
+		case "newMediaInputs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newMediaInputs"))
+			data, err := ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NewMediaInputs = data
+		case "deletedMediaIDs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deletedMediaIDs"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeletedMediaIDs = data
 		}
 	}
 	return it, nil
@@ -16967,6 +16981,42 @@ func (ec *executionContext) marshalOFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋ
 		return graphql.Null
 	}
 	return ec._Favorite(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {

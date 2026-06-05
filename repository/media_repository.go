@@ -12,4 +12,6 @@ type MediaRepository interface {
 	CreateMessageMedia(ctx context.Context, messageID, mediaID int64, position int) error
 	ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error)
 	ListByMessageID(ctx context.Context, messageID int64) ([]*model.Media, error)
+	DeleteMediaByIDAndUserID(ctx context.Context, mediaID int64, userID int64) error
+	GetMaxPostMediaPosition(ctx context.Context, PostID int64) (int, error)
 }
