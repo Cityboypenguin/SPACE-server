@@ -2303,10 +2303,11 @@ func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType
 	}
 
 	extMap := map[string]string{
-		"image/jpeg": ".jpg",
-		"image/png":  ".png",
-		"image/webp": ".webp",
-		"image/gif":  ".gif",
+		"image/jpeg":    ".jpg",
+		"image/png":     ".png",
+		"image/webp":    ".webp",
+		"image/gif":     ".gif",
+		"image/svg+xml": ".svg",
 	}
 	ext, ok := extMap[contentType]
 	if !ok {
