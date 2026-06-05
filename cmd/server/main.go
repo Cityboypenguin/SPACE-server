@@ -224,6 +224,8 @@ func main() {
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
 	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
+	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
+	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -338,11 +340,13 @@ func main() {
 		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
 		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
 
-		NotificationPublisher:    notificationPublisher,
-		ListNotificationsUseCase: listNotificationsUseCase,
-		MarkAsReadUseCase:        markAsReadUseCase,
-		MarkAllAsReadUseCase:     markAllAsReadUseCase,
-		CountUnreadUseCase:       countUnreadUseCase,
+		NotificationPublisher:          notificationPublisher,
+		ListNotificationsUseCase:       listNotificationsUseCase,
+		MarkAsReadUseCase:              markAsReadUseCase,
+		MarkAllAsReadUseCase:           markAllAsReadUseCase,
+		CountUnreadUseCase:             countUnreadUseCase,
+		DeleteNotificationsUseCase: deleteNotificationsUseCase,
+		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
 		SSEBroker:                sseBroker,
 
 		PubSub: ps,

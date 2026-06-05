@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -95,4 +96,26 @@ func (r *MySQLNotificationRepository) CountUnread(ctx context.Context, userID in
 	var count int
 	err := r.DB.QueryRowContext(ctx, query, userID).Scan(&count)
 	return count, err
+}
+
+func (r *MySQLNotificationRepository) DeleteReadByUserID(ctx context.Context, userID int64) error {
+	query := `DELETE FROM notifications WHERE user_id = ? AND is_read = TRUE`
+	_, err := r.DB.ExecContext(ctx, query, userID)
+	return err
+}
+
+func (r *MySQLNotificationRepository) DeleteByIDs(ctx context.Context, ids []int64, userID int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, userID)
+	query := `DELETE FROM notifications WHERE id IN (` + strings.Join(placeholders, ",") + `) AND user_id = ?`
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
 }

@@ -1402,6 +1402,38 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	return true, nil
 }
 
+// DeleteNotifications is the resolver for the deleteNotifications field.
+func (r *mutationResolver) DeleteNotifications(ctx context.Context, ids []string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericIDs := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		numericID, err := decodeGraphID(ctx, "notification", id)
+		if err != nil {
+			return false, fmt.Errorf("invalid notification id: %s", id)
+		}
+		numericIDs = append(numericIDs, numericID)
+	}
+	if err := r.DeleteNotificationsUseCase.Execute(ctx, numericIDs, claims.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// DeleteReadNotifications is the resolver for the deleteReadNotifications field.
+func (r *mutationResolver) DeleteReadNotifications(ctx context.Context) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	if err := r.DeleteReadNotificationsUseCase.Execute(ctx, claims.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateAnnouncement is the resolver for the createAnnouncement field.
 func (r *mutationResolver) CreateAnnouncement(ctx context.Context, input gqlmodel.CreateAnnouncementInput) (*gqlmodel.Announcement, error) {
 	claims, err := requireAdminAuth(ctx)
@@ -2995,3 +3027,4 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+

@@ -194,6 +194,8 @@ type Mutation {
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   markNotificationAsRead(id: ID!): Boolean!
   markAllNotificationsAsRead: Boolean!
+  deleteNotifications(ids: [ID!]!): Boolean!
+  deleteReadNotifications: Boolean!
 
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
   updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!

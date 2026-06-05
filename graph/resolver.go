@@ -114,11 +114,13 @@ type Resolver struct {
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
 
-	NotificationPublisher    notificationuc.NotificationPublisher
-	ListNotificationsUseCase notificationuc.ListNotificationsUseCase
-	MarkAsReadUseCase        notificationuc.MarkAsReadUseCase
-	MarkAllAsReadUseCase     notificationuc.MarkAllAsReadUseCase
-	CountUnreadUseCase       notificationuc.CountUnreadUseCase
+	NotificationPublisher          notificationuc.NotificationPublisher
+	ListNotificationsUseCase       notificationuc.ListNotificationsUseCase
+	MarkAsReadUseCase              notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase           notificationuc.MarkAllAsReadUseCase
+	CountUnreadUseCase             notificationuc.CountUnreadUseCase
+	DeleteNotificationsUseCase notificationuc.DeleteNotificationsUseCase
+	DeleteReadNotificationsUseCase notificationuc.DeleteReadNotificationsUseCase
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
