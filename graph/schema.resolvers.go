@@ -2158,6 +2158,10 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 		return nil, fmt.Errorf("failed to load room members")
 	}
 
+	blockedSet, _ := r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
+
+	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
@@ -2172,13 +2176,9 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
-		gqlRoom.IsMessagingDisabled = false
-		if len(users) == 2 && partnerID != 0 {
-			isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
-			gqlRoom.IsMessagingDisabled = isBlocked
-		}
+		gqlRoom.IsMessagingDisabled = len(users) == 2 && partnerID != 0 && blockedSet[partnerID]
 
-		if readStatus, err := r.GetRoomReadStatusUseCase.Execute(ctx, room.ID, claims.ID); err == nil {
+		if readStatus := readStatusMap[room.ID]; readStatus != nil {
 			if readStatus.LastReadAt != nil {
 				s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
 				gqlRoom.LastReadAt = &s
@@ -2207,10 +2207,17 @@ func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Communit
 	if err != nil {
 		return nil, err
 	}
+	roomIDs := make([]int64, 0, len(communities))
+	for _, c := range communities {
+		roomIDs = append(roomIDs, c.RoomID)
+	}
+
+	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
 		gqlC := toGraphCommunity(c, r.communityAvatarURL(c))
-		if readStatus, err := r.GetRoomReadStatusUseCase.Execute(ctx, c.RoomID, claims.ID); err == nil {
+		if readStatus := readStatusMap[c.RoomID]; readStatus != nil {
 			gqlC.UnreadCount = int32(readStatus.UnreadCount)
 		}
 		result = append(result, gqlC)
@@ -2666,10 +2673,24 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string) (
 	if err != nil {
 		return nil, err
 	}
+
+	userIDs := make([]int64, 0, len(consents))
+	for _, c := range consents {
+		userIDs = append(userIDs, c.UserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+
 	var result []*gqlmodel.TermsConsentRecord
 	for _, c := range consents {
-		u, err := r.GetUserByIDUseCase.Execute(ctx, c.UserID)
-		if err != nil {
+		u, ok := userMap[c.UserID]
+		if !ok {
 			continue
 		}
 		result = append(result, &gqlmodel.TermsConsentRecord{
@@ -2691,15 +2712,7 @@ func (r *queryResolver) ListFavoriteUsers(ctx context.Context) ([]*gqlmodel.User
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range favoriteUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.favoriteUsersToGQL(ctx, favoriteUsers)
 }
 
 // SearchFavoriteUsers is the resolver for the searchFavoriteUsers field.
@@ -2708,20 +2721,11 @@ func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string)
 	if err != nil {
 		return nil, err
 	}
-
 	favoriteUsers, err := r.SearchFavoriteUsersUseCase.Execute(ctx, claims.ID, keyword)
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range favoriteUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.favoriteUsersToGQL(ctx, favoriteUsers)
 }
 
 // GetFavoriteUsersByUserID is the resolver for the GetFavoriteUsersByUserID field.
@@ -2733,20 +2737,11 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-
 	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range favoriteUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.favoriteUsersToGQL(ctx, favoriteUsers)
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.
@@ -2754,27 +2749,15 @@ func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-
 	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
-
-	var gqlUsers []*gqlmodel.User
-	for _, u := range favoriteUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.FavoriteUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-
-	return gqlUsers, nil
+	return r.favoriteUsersToGQL(ctx, favoriteUsers)
 }
 
 // ListBlockedUsers is the resolver for the listBlockedUsers field.
@@ -2786,15 +2769,7 @@ func (r *queryResolver) ListBlockedUsers(ctx context.Context) ([]*gqlmodel.User,
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range blockedUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.blockedUsersToGQL(ctx, blockedUsers)
 }
 
 // SearchBlockedUsers is the resolver for the searchBlockedUsers field.
@@ -2803,20 +2778,11 @@ func (r *queryResolver) SearchBlockedUsers(ctx context.Context, keyword string) 
 	if err != nil {
 		return nil, err
 	}
-
 	blockedUsers, err := r.SearchBlockersUseCase.Execute(ctx, claims.ID, keyword)
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range blockedUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.blockedUsersToGQL(ctx, blockedUsers)
 }
 
 // GetBlockersByUserID is the resolver for the GetBlockersByUserID field.
@@ -2825,29 +2791,18 @@ func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) 
 	if err != nil {
 		return nil, err
 	}
-
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-
 	if claims.ID != numericUserID && !isAdminRole(claims.Role) {
 		return nil, errors.New("forbidden: cannot view other users' block list")
 	}
-
 	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
-	var gqlUsers []*gqlmodel.User
-	for _, u := range blockedUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-	return gqlUsers, nil
+	return r.blockedUsersToGQL(ctx, blockedUsers)
 }
 
 // AdminGetBlockers is the resolver for the adminGetBlockers field.
@@ -2855,27 +2810,15 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-
 	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
-
-	var gqlUsers []*gqlmodel.User
-	for _, u := range blockedUsers {
-		targetUser, err := r.GetUserByIDUseCase.Execute(ctx, u.BlockedUserID)
-		if err != nil || targetUser == nil {
-			continue
-		}
-		gqlUsers = append(gqlUsers, toGraphUser(targetUser))
-	}
-
-	return gqlUsers, nil
+	return r.blockedUsersToGQL(ctx, blockedUsers)
 }
 
 // MessageAdded is the resolver for the messageAdded field.

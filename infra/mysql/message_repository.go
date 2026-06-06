@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -109,4 +111,73 @@ func (r *MySQLMessageRepository) CountUnreadMessages(ctx context.Context, roomID
 	var count int
 	err := r.DB.QueryRowContext(ctx, query, roomID, userID, afterTimestamp).Scan(&count)
 	return count, err
+}
+
+func (r *MySQLMessageRepository) CountUnreadMessagesByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int)
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT m.room_id, COUNT(*) as unread_count
+		FROM messages m
+		JOIN room_users ru ON ru.room_id = m.room_id AND ru.user_id = ?
+		WHERE m.room_id IN (%s)
+		  AND m.user_id != ?
+		  AND (ru.last_read_at IS NULL OR m.created_at > ru.last_read_at)
+		GROUP BY m.room_id
+	`, placeholders)
+
+	args := make([]interface{}, 0, 2+len(roomIDs))
+	args = append(args, userID)
+	for _, id := range roomIDs {
+		args = append(args, id)
+	}
+	args = append(args, userID)
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var roomID int64
+		var count int
+		if err := rows.Scan(&roomID, &count); err != nil {
+			return nil, err
+		}
+		result[roomID] = count
+	}
+	return result, rows.Err()
+}
+
+func (r *MySQLMessageRepository) CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error) {
+	query := `
+		SELECT ru.user_id, COUNT(m.id) as unread_count
+		FROM room_users ru
+		LEFT JOIN messages m ON m.room_id = ru.room_id
+		  AND m.user_id != ru.user_id
+		  AND m.created_at > COALESCE(ru.last_read_at, 0)
+		WHERE ru.room_id = ?
+		  AND ru.user_id != ?
+		GROUP BY ru.user_id
+	`
+	rows, err := r.DB.QueryContext(ctx, query, roomID, excludeUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]int)
+	for rows.Next() {
+		var userID int64
+		var count int
+		if err := rows.Scan(&userID, &count); err != nil {
+			return nil, err
+		}
+		result[userID] = count
+	}
+	return result, rows.Err()
 }

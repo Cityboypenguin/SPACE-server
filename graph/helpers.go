@@ -108,3 +108,47 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 
 	return toGraphProfile(u, p, r.avatarURLFor(p)), nil
 }
+
+func (r *queryResolver) favoriteUsersToGQL(ctx context.Context, favs []*model.FavoriteUser) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(favs))
+	for _, f := range favs {
+		ids = append(ids, f.FavoriteUserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(favs))
+	for _, f := range favs {
+		if u, ok := userMap[f.FavoriteUserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
+}
+
+func (r *queryResolver) blockedUsersToGQL(ctx context.Context, blockers []*model.Blocker) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(blockers))
+	for _, b := range blockers {
+		ids = append(ids, b.BlockedUserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(blockers))
+	for _, b := range blockers {
+		if u, ok := userMap[b.BlockedUserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
+}

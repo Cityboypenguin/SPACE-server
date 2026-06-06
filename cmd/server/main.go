@@ -180,6 +180,7 @@ func main() {
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
 	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
+	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
@@ -202,6 +203,7 @@ func main() {
 	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)
 	getBlockersByUserIDUseCase := blusecase.NewGetBlockersByUserIDUseCase(blockRepository)
 	checkBlockRelationUseCase := blusecase.NewCheckBlockRelationUseCase(blockRepository)
+	getBlockRelatedUserIDsUseCase := blusecase.NewGetBlockRelatedUserIDsUseCase(blockRepository)
 
 	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
 	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
@@ -311,6 +313,7 @@ func main() {
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
 		MarkRoomAsReadUseCase:             markRoomAsReadUseCase,
 		GetRoomReadStatusUseCase:          getRoomReadStatusUseCase,
+		GetRoomReadStatusBatchUseCase:     getRoomReadStatusBatchUseCase,
 		GetMembersUnreadCountsUseCase:     getMembersUnreadCountsUseCase,
 
 		CreateCommunityUseCase:             createCommunityUseCase,
@@ -338,7 +341,8 @@ func main() {
 		ListBlockersUseCase:        listBlockersUseCase,
 		SearchBlockersUseCase:      searchBlockersUseCase,
 		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
-		CheckBlockRelationUseCase:  checkBlockRelationUseCase,
+		CheckBlockRelationUseCase:           checkBlockRelationUseCase,
+		GetBlockRelatedUserIDsUseCase:       getBlockRelatedUserIDsUseCase,
 
 		CreateInquiryUsecase: *createInquiryUseCase,
 		ManageInquiryUsecase: *manageInquiryUseCase,

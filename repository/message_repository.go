@@ -13,4 +13,6 @@ type MessageRepository interface {
 	ListMessagesByRoomID(ctx context.Context, roomID int64) ([]*model.Message, error)
 	UpdateMessage(ctx context.Context, m *model.Message) error
 	CountUnreadMessages(ctx context.Context, roomID, userID int64, afterTimestamp int64) (int, error)
+	CountUnreadMessagesByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int, error)
+	CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
 }

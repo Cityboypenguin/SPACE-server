@@ -21,4 +21,6 @@ type RoomUserRepository interface {
 	UpdateLastReadAt(ctx context.Context, roomID, userID int64, readAt int64) error
 	GetLastReadAt(ctx context.Context, roomID, userID int64) (*int64, error)
 	GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error)
+	GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*int64, error)
+	GetMembersLastReadAtByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]map[int64]*int64, error)
 }

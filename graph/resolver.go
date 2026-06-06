@@ -97,9 +97,10 @@ type Resolver struct {
 	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
 	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	MarkRoomAsReadUseCase             roomusecase.MarkRoomAsReadUseCase
-	GetRoomReadStatusUseCase          roomusecase.GetRoomReadStatusUseCase
-	GetMembersUnreadCountsUseCase     roomusecase.GetMembersUnreadCountsUseCase
+	MarkRoomAsReadUseCase              roomusecase.MarkRoomAsReadUseCase
+	GetRoomReadStatusUseCase           roomusecase.GetRoomReadStatusUseCase
+	GetRoomReadStatusBatchUseCase      roomusecase.GetRoomReadStatusBatchUseCase
+	GetMembersUnreadCountsUseCase      roomusecase.GetMembersUnreadCountsUseCase
 
 	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase                communityusecase.GetCommunityUseCase
@@ -136,12 +137,13 @@ type Resolver struct {
 
 	PubSub *pubsub.PubSub
 
-	CreateBlockUseCase         block.BlockUserUseCase
-	DeleteBlockUseCase         block.DeleteBlockerUseCase
-	GetBlockersByUserIDUseCase block.GetBlockersByUserIDUseCase
-	ListBlockersUseCase        block.ListBlockersUseCase
-	SearchBlockersUseCase      block.SearchBlockersUseCase
-	CheckBlockRelationUseCase  block.CheckBlockRelationUseCase
+	CreateBlockUseCase              block.BlockUserUseCase
+	DeleteBlockUseCase              block.DeleteBlockerUseCase
+	GetBlockersByUserIDUseCase      block.GetBlockersByUserIDUseCase
+	ListBlockersUseCase             block.ListBlockersUseCase
+	SearchBlockersUseCase           block.SearchBlockersUseCase
+	CheckBlockRelationUseCase       block.CheckBlockRelationUseCase
+	GetBlockRelatedUserIDsUseCase   block.GetBlockRelatedUserIDsUseCase
 
 	CreateFavoriteUserUseCase      favoriteuser.CreateFavoriteUserUseCase
 	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase
