@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -15,20 +16,31 @@ type CreateUserUseCase interface {
 var _ CreateUserUseCase = &CreateUserInteractor{}
 
 type CreateUserInteractor struct {
-	userRepo    repository.UserRepository
-	profileRepo repository.ProfileRepository
-	txManager   repository.TxManager
+	userRepo          repository.UserRepository
+	profileRepo       repository.ProfileRepository
+	txManager         repository.TxManager
+	validationEnabled bool
 }
 
 func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository, txManager repository.TxManager) CreateUserUseCase {
 	return &CreateUserInteractor{
-		userRepo:    userRepo,
-		profileRepo: profileRepo,
-		txManager:   txManager,
+		userRepo:          userRepo,
+		profileRepo:       profileRepo,
+		txManager:         txManager,
+		validationEnabled: os.Getenv("DISABLE_USER_VALIDATION") != "true",
 	}
 }
 
 func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error) {
+	if uc.validationEnabled {
+		if err := model.ValidateUserEmail(param.Email); err != nil {
+			return nil, err
+		}
+		if err := model.ValidateUserPassword(param.Password); err != nil {
+			return nil, err
+		}
+	}
+
 	now := time.Now()
 	param.CreatedAt = now
 	param.UpdatedAt = now
