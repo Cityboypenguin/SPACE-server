@@ -15,6 +15,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -503,12 +504,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		}
 	}
 
-	return &gqlmodel.Favorite{
-		ID:        encodeGraphID("favorite", favorite.ID),
-		CreatedAt: favorite.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", favorite.UserID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", favorite.PostID)},
-	}, nil
+	return toGraphFavorite(favorite), nil
 }
 
 // DeleteFavorite is the resolver for the deleteFavorite field.
@@ -1444,9 +1440,14 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+
+	user, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
+
 	if err != nil {
 		return nil, err
+	}
+	if user == nil {
+		return nil, nil
 	}
 	return toGraphUser(user), nil
 }
@@ -1458,19 +1459,16 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericPostID)
+	// ⭕️ 変更：DataLoader経由で取得
+	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
 	}
 
 	var gqlFavorites []*gqlmodel.Favorite
 	for _, f := range favorites {
-		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        encodeGraphID("favorite", f.ID),
-			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
-			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
-		})
+		// ※君のプロジェクトにある変換関数を利用する
+		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
 	}
 	return gqlFavorites, nil
 }
@@ -1508,13 +1506,13 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 	if obj.DeletedAt != nil {
 		return []*gqlmodel.Post{}, nil
 	}
-
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID)
+	// ⭕️ DataLoader経由で取得
+	replies, err := dataloader.For(ctx).ReplyLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
 	}
@@ -1532,10 +1530,13 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 	if err != nil {
 		return nil, nil
 	}
-	mediaList, err := r.ListMediaByPostIDUseCase.Execute(ctx, numericID)
+
+	// ⭕️ DataLoader経由で取得
+	mediaList, err := dataloader.For(ctx).MediaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}
+
 	var result []*gqlmodel.Media
 	for _, m := range mediaList {
 		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
@@ -1855,12 +1856,7 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 		return nil, nil
 	}
 
-	return &gqlmodel.Favorite{
-		ID:        encodeGraphID("favorite", f.ID),
-		CreatedAt: f.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
-	}, nil
+	return toGraphFavorite(f), nil
 }
 
 // MyProfile is the resolver for the myProfile field.

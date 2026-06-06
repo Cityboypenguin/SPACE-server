@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -120,4 +122,45 @@ func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, post
 		return int(maxPos.Int32), nil
 	}
 	return -1, nil
+}
+
+// ListByPostIDs は複数のPostIDに紐づく画像を1回のSQLで取得し、Mapに分類して返す
+func (r *MySQLMediaRepository) ListByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error) {
+	if len(postIDs) == 0 {
+		return make(map[int64][]*model.Media), nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, len(postIDs))
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, pm.post_id
+		FROM media m
+		JOIN post_media pm ON pm.media_id = m.id
+		WHERE pm.post_id IN (%s)
+		ORDER BY pm.post_id, pm.position ASC
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]*model.Media)
+	for rows.Next() {
+		var m model.Media
+		var createdAt int64
+		var postID int64
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &postID); err != nil {
+			return nil, err
+		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		result[postID] = append(result[postID], &m)
+	}
+	return result, rows.Err()
 }

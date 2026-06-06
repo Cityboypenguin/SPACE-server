@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -254,6 +256,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
 		FROM posts
+		WHERE deleted_at IS NULL
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
 	if err != nil {
@@ -321,7 +324,7 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
 		FROM posts
-		WHERE parent_id = ?
+		WHERE parent_id = ? AND deleted_at IS NULL
 	`
 
 	args := []interface{}{id}
@@ -394,4 +397,57 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 	}
 
 	return posts, nil
+}
+
+// GetRepliesByPostIDs は複数の親PostIDに紐づく返信を1回のSQLで取得する
+func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
+	if len(parentIDs) == 0 {
+		return make(map[int64][]*model.Post), nil
+	}
+
+	placeholders := make([]string, len(parentIDs))
+	args := make([]interface{}, len(parentIDs))
+	for i, id := range parentIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	// ⭕️ AND deleted_at IS NULL で論理削除された返信を除外
+	query := fmt.Sprintf(`
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+		FROM posts
+		WHERE parent_id IN (%s) AND deleted_at IS NULL
+	`, strings.Join(placeholders, ","))
+
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query += " ORDER BY created_at ASC"
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]*model.Post)
+	for rows.Next() {
+		var p model.Post
+		var createdAtUnix, updatedAtUnix int64
+		var parentID sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount); err != nil {
+			return nil, err
+		}
+		if parentID.Valid {
+			p.ParentID = &parentID.Int64
+		} else {
+			p.ParentID = nil
+		}
+
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
+		if p.ParentID != nil {
+			result[*p.ParentID] = append(result[*p.ParentID], &p)
+		}
+	}
+	return result, rows.Err()
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
@@ -136,6 +137,7 @@ func main() {
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
@@ -145,6 +147,7 @@ func main() {
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
 	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
 	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
+	getFavoritesByPostIDsUseCase := favoriteusecase.NewGetFavoritesByPostIDsUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
 	if err != nil {
@@ -158,6 +161,7 @@ func main() {
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
+	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
@@ -362,6 +366,12 @@ func main() {
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(
+		getUsersByIDsUseCase,
+		listMediaByPostIDsUseCase,
+		getRepliesByPostIDsUseCase,
+		getFavoritesByPostIDsUseCase,
+	)))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
