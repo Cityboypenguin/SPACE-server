@@ -104,6 +104,12 @@ type CreateRoomInput struct {
 	Name string `json:"name"`
 }
 
+type CreateTermsOfServiceInput struct {
+	Version       string `json:"version"`
+	ObjectKey     string `json:"objectKey"`
+	EffectiveDate string `json:"effectiveDate"`
+}
+
 type CreateUserInput struct {
 	AccountID string `json:"accountID"`
 	Name      string `json:"name"`
@@ -245,6 +251,25 @@ type RoomReadStatusUpdate struct {
 }
 
 type Subscription struct {
+}
+
+type TermsConsentRecord struct {
+	ID          string `json:"ID"`
+	User        *User  `json:"user"`
+	ConsentedAt string `json:"consentedAt"`
+}
+
+type TermsConsentStatus struct {
+	IsConsented  bool            `json:"isConsented"`
+	CurrentTerms *TermsOfService `json:"currentTerms,omitempty"`
+}
+
+type TermsOfService struct {
+	ID            string `json:"ID"`
+	Version       string `json:"version"`
+	DocumentURL   string `json:"documentUrl"`
+	EffectiveDate string `json:"effectiveDate"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 type UnreadUpdate struct {

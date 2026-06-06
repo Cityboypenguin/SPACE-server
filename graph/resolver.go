@@ -18,6 +18,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -147,4 +148,11 @@ type Resolver struct {
 	GetFavoriteUserByUserIDUseCase favoriteuser.GetFavoriteUsersByUserIDUseCase
 	ListFavoriteUsersUseCase       favoriteuser.ListFavoriteUsersUseCase
 	SearchFavoriteUsersUseCase     favoriteuser.SearchFavoriteUsersUseCase
+
+	CreateTermsUseCase      *termsusecase.CreateTermsUseCase
+	GetCurrentTermsUseCase  *termsusecase.GetCurrentTermsUseCase
+	ConsentToTermsUseCase   *termsusecase.ConsentToTermsUseCase
+	CheckConsentUseCase     *termsusecase.CheckConsentUseCase
+	ListTermsUseCase        *termsusecase.ListTermsUseCase
+	ListConsentsUseCase     *termsusecase.ListConsentsUseCase
 }

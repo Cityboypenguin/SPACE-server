@@ -12,18 +12,18 @@ import (
 )
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
-	if p == nil || p.AvatarKey == nil {
+	if p == nil || p.AvatarMedia == nil {
 		return nil
 	}
-	url := r.StorageRepository.PublicURL(*p.AvatarKey)
+	url := r.StorageRepository.PublicURL(p.AvatarMedia.StorageKey)
 	return &url
 }
 
 func (r *Resolver) communityAvatarURL(c *model.Community) string {
-	if c == nil || c.AvatarKey == "" {
+	if c == nil || c.AvatarMedia == nil {
 		return ""
 	}
-	return r.StorageRepository.PublicURL(c.AvatarKey)
+	return r.StorageRepository.PublicURL(c.AvatarMedia.StorageKey)
 }
 
 func requireAuth(ctx context.Context) (*auth.Claims, error) {

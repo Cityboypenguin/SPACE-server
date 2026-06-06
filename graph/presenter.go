@@ -159,6 +159,19 @@ func toGraphInquiry(inq *model.Inquiry) *gqlmodel.Inquiry {
 	}
 }
 
+func toGraphTerms(t *model.TermsOfService, documentURL string) *gqlmodel.TermsOfService {
+	if t == nil {
+		return nil
+	}
+	return &gqlmodel.TermsOfService{
+		ID:            encodeGraphID("terms", t.ID),
+		Version:       t.Version,
+		DocumentURL:   documentURL,
+		EffectiveDate: t.EffectiveDate.Format(timeFormat),
+		CreatedAt:     t.CreatedAt.Format(timeFormat),
+	}
+}
+
 func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string) *gqlmodel.Profile {
 	if user == nil {
 		return nil

@@ -41,6 +41,7 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -116,7 +117,7 @@ func main() {
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
-	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository)
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
@@ -182,9 +183,9 @@ func main() {
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
-	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository)
+	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
+	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository, mediaRepository)
 	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
 	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
 	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
@@ -213,6 +214,14 @@ func main() {
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
 	sseBroker := sse.NewBroker()
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+
+	termsRepository := mysql.NewMySQLTermsRepository(database)
+	createTermsUseCase := termsusecase.NewCreateTermsUseCase(termsRepository)
+	getCurrentTermsUseCase := termsusecase.NewGetCurrentTermsUseCase(termsRepository)
+	consentToTermsUseCase := termsusecase.NewConsentToTermsUseCase(termsRepository)
+	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
+	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
+	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
 
 	announcementRepository := mysql.NewMySQLAnnouncementRepository(database)
 	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
@@ -339,6 +348,13 @@ func main() {
 		GetAnnouncementUseCase:    getAnnouncementUseCase,
 		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
 		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
+
+		CreateTermsUseCase:     createTermsUseCase,
+		GetCurrentTermsUseCase: getCurrentTermsUseCase,
+		ConsentToTermsUseCase:  consentToTermsUseCase,
+		CheckConsentUseCase:    checkConsentUseCase,
+		ListTermsUseCase:       listTermsUseCase,
+		ListConsentsUseCase:    listConsentsUseCase,
 
 		NotificationPublisher:          notificationPublisher,
 		ListNotificationsUseCase:       listNotificationsUseCase,

@@ -23,6 +23,7 @@ import (
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
+	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/google/uuid"
 )
 
@@ -700,12 +701,7 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 	if err != nil {
 		return nil, err
 	}
-	avatarKey := ""
-	if input.AvatarKey != nil {
-		avatarKey = *input.AvatarKey
-	}
-
-	c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description, avatarKey)
+	c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description, input.AvatarKey)
 	if err != nil {
 		return nil, err
 	}
@@ -796,10 +792,9 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 	c.UpdateCommunity(model.UpdateCommunityParam{
 		Name:        input.Name,
 		Description: input.Description,
-		AvatarKey:   input.AvatarKey,
 	})
 
-	if err := r.UpdateCommunityUseCase.Execute(ctx, c); err != nil {
+	if err := r.UpdateCommunityUseCase.Execute(ctx, c, input.AvatarKey); err != nil {
 		return nil, err
 	}
 
@@ -1515,6 +1510,46 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 		RoomID:      roomID,
 		UnreadCount: 0,
 	})
+	return true, nil
+}
+
+// CreateTermsOfService is the resolver for the createTermsOfService field.
+func (r *mutationResolver) CreateTermsOfService(ctx context.Context, input gqlmodel.CreateTermsOfServiceInput) (*gqlmodel.TermsOfService, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	effectiveDate, err := time.Parse(timeFormat, input.EffectiveDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid effectiveDate format: %w", err)
+	}
+
+	t, err := r.CreateTermsUseCase.Execute(ctx, termsuc.CreateTermsInput{
+		Version:       input.Version,
+		ObjectKey:     input.ObjectKey,
+		EffectiveDate: effectiveDate,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)), nil
+}
+
+// ConsentToTerms is the resolver for the consentToTerms field.
+func (r *mutationResolver) ConsentToTerms(ctx context.Context, termsID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	tid, err := decodeGraphID(ctx, "terms", termsID)
+	if err != nil {
+		return false, fmt.Errorf("invalid terms id")
+	}
+
+	if err := r.ConsentToTermsUseCase.Execute(ctx, claims.ID, tid); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -2392,6 +2427,25 @@ func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, con
 	}, nil
 }
 
+// PresignedTermsDocumentUploadURL is the resolver for the presignedTermsDocumentUploadUrl field.
+func (r *queryResolver) PresignedTermsDocumentUploadURL(ctx context.Context) (*gqlmodel.PresignedUploadURL, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	const termsDocMaxBytes = 5 * 1024 * 1024 // 5 MB
+	objectKey := fmt.Sprintf("terms/%s.md", uuid.New().String())
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, "text/markdown", 15*time.Minute, termsDocMaxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate upload url")
+	}
+
+	return &gqlmodel.PresignedUploadURL{
+		UploadURL: uploadURL,
+		ObjectKey: objectKey,
+	}, nil
+}
+
 // SearchReports is the resolver for the searchReports field.
 func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.ReportSearchFilter) ([]*gqlmodel.UserReport, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -2548,6 +2602,83 @@ func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.
 		return nil, err
 	}
 	return toGraphAnnouncement(a), nil
+}
+
+// CurrentTerms is the resolver for the currentTerms field.
+func (r *queryResolver) CurrentTerms(ctx context.Context) (*gqlmodel.TermsOfService, error) {
+	t, err := r.GetCurrentTermsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	return toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)), nil
+}
+
+// MyTermsConsentStatus is the resolver for the myTermsConsentStatus field.
+func (r *queryResolver) MyTermsConsentStatus(ctx context.Context) (*gqlmodel.TermsConsentStatus, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	status, err := r.CheckConsentUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &gqlmodel.TermsConsentStatus{
+		IsConsented: status.IsConsented,
+	}
+	if status.CurrentTerms != nil {
+		result.CurrentTerms = toGraphTerms(status.CurrentTerms, r.StorageRepository.PublicURL(status.CurrentTerms.ObjectKey))
+	}
+	return result, nil
+}
+
+// AdminListTerms is the resolver for the adminListTerms field.
+func (r *queryResolver) AdminListTerms(ctx context.Context) ([]*gqlmodel.TermsOfService, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	list, err := r.ListTermsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.TermsOfService
+	for _, t := range list {
+		result = append(result, toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)))
+	}
+	return result, nil
+}
+
+// AdminListConsents is the resolver for the adminListConsents field.
+func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string) ([]*gqlmodel.TermsConsentRecord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	tid, err := decodeGraphID(ctx, "terms", termsID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid terms id")
+	}
+	consents, err := r.ListConsentsUseCase.Execute(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.TermsConsentRecord
+	for _, c := range consents {
+		u, err := r.GetUserByIDUseCase.Execute(ctx, c.UserID)
+		if err != nil {
+			continue
+		}
+		result = append(result, &gqlmodel.TermsConsentRecord{
+			ID:          strconv.FormatInt(c.ID, 10),
+			User:        toGraphUser(u),
+			ConsentedAt: c.ConsentedAt.Format(timeFormat),
+		})
+	}
+	return result, nil
 }
 
 // ListFavoriteUsers is the resolver for the listFavoriteUsers field.
@@ -3027,4 +3158,3 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
-

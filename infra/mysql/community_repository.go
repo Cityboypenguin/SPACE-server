@@ -19,7 +19,7 @@ func NewMySQLCommunityRepository(db *sql.DB) repository.CommunityRepository {
 
 // SaveCommunityWithRoom は Room・RoomUser・Community を単一トランザクションで作成する。
 // いずれかのステップで失敗した場合はロールバックし、孤立レコードを残さない。
-func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description, avatarKey string, creatorUserID int64) (*model.Community, error) {
+func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description string, avatarMediaID *int64, creatorUserID int64) (*model.Community, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -53,8 +53,8 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 
 	// 3. communities を作成
 	communityResult, err := tx.ExecContext(ctx,
-		`INSERT INTO communities (room_id, name, description, avatar_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		roomID, name, description, avatarKey, nowUnix, nowUnix,
+		`INSERT INTO communities (room_id, name, description, avatar_media_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		roomID, name, description, avatarMediaID, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -73,34 +73,29 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 		RoomID:      roomID,
 		Name:        name,
 		Description: description,
-		AvatarKey:   avatarKey,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}, nil
 }
 
 func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int64) (*model.Community, error) {
-	row := r.DB.QueryRowContext(ctx,
-		`SELECT id, room_id, name, description, avatar_key, created_at, updated_at FROM communities WHERE id = ?`, id)
-	var c model.Community
-	var createdAt, updatedAt int64
-	var avatarKey sql.NullString
-	if err := row.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &avatarKey, &createdAt, &updatedAt); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	c.AvatarKey = avatarKey.String
-	c.CreatedAt = time.Unix(createdAt, 0)
-	c.UpdatedAt = time.Unix(updatedAt, 0)
-	return &c, nil
+	row := r.DB.QueryRowContext(ctx, `
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
+		FROM communities c
+		LEFT JOIN media m ON m.id = c.avatar_media_id
+		WHERE c.id = ?`, id)
+	return scanCommunity(row)
 }
 
 func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string) ([]*model.Community, error) {
 	query := `
-		SELECT c.id, c.room_id, c.name, c.description, c.avatar_key, c.created_at, c.updated_at
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
 		FROM communities c
+		LEFT JOIN media m ON m.id = c.avatar_media_id
 		WHERE c.name LIKE ?
 		ORDER BY c.created_at DESC
 		LIMIT 50
@@ -121,9 +116,14 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	}
 	defer tx.Rollback()
 
+	var avatarMediaID *int64
+	if c.AvatarMedia != nil {
+		avatarMediaID = &c.AvatarMedia.ID
+	}
+
 	_, err = tx.ExecContext(ctx,
-		`UPDATE communities SET name = ?, description = ?, avatar_key = ?, updated_at = ? WHERE id = ?`,
-		c.Name, c.Description, c.AvatarKey, c.UpdatedAt.Unix(), c.ID,
+		`UPDATE communities SET name = ?, description = ?, avatar_media_id = ?, updated_at = ? WHERE id = ?`,
+		c.Name, c.Description, avatarMediaID, c.UpdatedAt.Unix(), c.ID,
 	)
 	if err != nil {
 		return err
@@ -154,8 +154,11 @@ func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64
 
 func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64) ([]*model.Community, error) {
 	query := `
-		SELECT c.id, c.room_id, c.name, c.description, c.avatar_key, c.created_at, c.updated_at
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
 		FROM communities c
+		LEFT JOIN media m ON m.id = c.avatar_media_id
 		JOIN room_users ru ON c.room_id = ru.room_id
 		WHERE ru.user_id = ?
 		ORDER BY ru.created_at DESC
@@ -169,8 +172,13 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 }
 
 func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context) ([]*model.Community, error) {
-	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, room_id, name, description, avatar_key, created_at, updated_at FROM communities ORDER BY created_at DESC`,
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
+		FROM communities c
+		LEFT JOIN media m ON m.id = c.avatar_media_id
+		ORDER BY c.created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -195,40 +203,100 @@ func (r *MySQLCommunityRepository) IsSoleOwnerWithOtherMembers(ctx context.Conte
 	return count > 0, nil
 }
 
-func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
-	var list []*model.Community
-	for rows.Next() {
-		var c model.Community
-		var createdAt, updatedAt int64
-		var avatarKey sql.NullString
-		if err := rows.Scan(&c.ID, &c.RoomID, &c.Name, &c.Description, &avatarKey, &createdAt, &updatedAt); err != nil {
-			return nil, err
-		}
-		c.AvatarKey = avatarKey.String
-		c.CreatedAt = time.Unix(createdAt, 0)
-		c.UpdatedAt = time.Unix(updatedAt, 0)
-		list = append(list, &c)
-	}
-	return list, rows.Err()
-}
-
 func (r *MySQLCommunityRepository) FindRandom(ctx context.Context, userID int64, limit int) ([]*model.Community, error) {
 	query := `
-        SELECT c.id, c.room_id, c.name, c.description, c.avatar_key, c.created_at, c.updated_at 
-        FROM communities c
-        WHERE c.room_id NOT IN (
-            SELECT ru.room_id 
-            FROM room_users ru 
-            WHERE ru.user_id = ?
-        )
-        ORDER BY RAND() 
-        LIMIT ?
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
+		FROM communities c
+		LEFT JOIN media m ON m.id = c.avatar_media_id
+		WHERE c.room_id NOT IN (
+		    SELECT ru.room_id
+		    FROM room_users ru
+		    WHERE ru.user_id = ?
+		)
+		ORDER BY RAND()
+		LIMIT ?
 	`
 	rows, err := r.DB.QueryContext(ctx, query, userID, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	return scanCommunities(rows)
+}
+
+type communityScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanCommunity(row communityScanner) (*model.Community, error) {
+	var c model.Community
+	var createdAt, updatedAt int64
+	var mediaID sql.NullInt64
+	var mediaUploaderID sql.NullInt64
+	var mediaStorageKey sql.NullString
+	var mediaContentType sql.NullString
+	var mediaCreatedAt sql.NullInt64
+
+	if err := row.Scan(
+		&c.ID, &c.RoomID, &c.Name, &c.Description,
+		&mediaID, &mediaUploaderID, &mediaStorageKey, &mediaContentType, &mediaCreatedAt,
+		&createdAt, &updatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if mediaID.Valid {
+		c.AvatarMedia = &model.Media{
+			ID:             mediaID.Int64,
+			UploaderUserID: mediaUploaderID.Int64,
+			StorageKey:     mediaStorageKey.String,
+			ContentType:    mediaContentType.String,
+			CreatedAt:      time.Unix(mediaCreatedAt.Int64, 0),
+		}
+	}
+
+	c.CreatedAt = time.Unix(createdAt, 0)
+	c.UpdatedAt = time.Unix(updatedAt, 0)
+	return &c, nil
+}
+
+func scanCommunities(rows *sql.Rows) ([]*model.Community, error) {
+	var list []*model.Community
+	for rows.Next() {
+		var c model.Community
+		var createdAt, updatedAt int64
+		var mediaID sql.NullInt64
+		var mediaUploaderID sql.NullInt64
+		var mediaStorageKey sql.NullString
+		var mediaContentType sql.NullString
+		var mediaCreatedAt sql.NullInt64
+
+		if err := rows.Scan(
+			&c.ID, &c.RoomID, &c.Name, &c.Description,
+			&mediaID, &mediaUploaderID, &mediaStorageKey, &mediaContentType, &mediaCreatedAt,
+			&createdAt, &updatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		if mediaID.Valid {
+			c.AvatarMedia = &model.Media{
+				ID:             mediaID.Int64,
+				UploaderUserID: mediaUploaderID.Int64,
+				StorageKey:     mediaStorageKey.String,
+				ContentType:    mediaContentType.String,
+				CreatedAt:      time.Unix(mediaCreatedAt.Int64, 0),
+			}
+		}
+
+		c.CreatedAt = time.Unix(createdAt, 0)
+		c.UpdatedAt = time.Unix(updatedAt, 0)
+		list = append(list, &c)
+	}
+	return list, rows.Err()
 }

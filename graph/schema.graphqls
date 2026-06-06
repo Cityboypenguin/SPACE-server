@@ -35,12 +35,19 @@ type Query {
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
+  presignedTermsDocumentUploadUrl: PresignedUploadUrl!
   searchReports(filter: ReportSearchFilter): [UserReport!]!
   searchInquiries(status: InquiryStatus): [Inquiry!]!
   getInquiry(id: ID!): Inquiry
 
   announcements(limit: Int): [Announcement!]!
   announcement(id: ID!): Announcement!
+
+  currentTerms: TermsOfService
+  myTermsConsentStatus: TermsConsentStatus!
+
+  adminListTerms: [TermsOfService!]!
+  adminListConsents(termsID: ID!): [TermsConsentRecord!]!
 
   listFavoriteUsers: [User!]!
   searchFavoriteUsers(keyword: String!): [User!]!
@@ -201,6 +208,9 @@ type Mutation {
   updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
   deleteAnnouncement(id: ID!): Boolean!
   markRoomAsRead(roomID: ID!): Boolean!
+
+  createTermsOfService(input: CreateTermsOfServiceInput!): TermsOfService!
+  consentToTerms(termsID: ID!): Boolean!
 }
 
 type Announcement {
@@ -445,6 +455,31 @@ input CreateReportInput {
   targetID: ID!          # 通報対象のID
   reason: String!        # 理由の分類
   customReason: String   # 詳細理由
+}
+
+type TermsOfService {
+  ID: ID!
+  version: String!
+  documentUrl: String!
+  effectiveDate: String!
+  createdAt: String!
+}
+
+type TermsConsentStatus {
+  isConsented: Boolean!
+  currentTerms: TermsOfService
+}
+
+type TermsConsentRecord {
+  ID: ID!
+  user: User!
+  consentedAt: String!
+}
+
+input CreateTermsOfServiceInput {
+  version: String!
+  objectKey: String!
+  effectiveDate: String!
 }
 
 
