@@ -16,6 +16,8 @@ type Query {
   posts: [Post!]!
   topLevelPosts: [Post!]!
   getPostByID(id: ID!): Post
+  getPostByIDIncludeDeleted(id: ID!): Post
+  getPostsByUserID(user_id: ID!): [Post!]!
   getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
 
@@ -42,6 +44,8 @@ type Query {
 
   announcements(limit: Int): [Announcement!]!
   announcement(id: ID!): Announcement!
+
+  maintenanceMode: Boolean!
 
   currentTerms: TermsOfService
   myTermsConsentStatus: TermsConsentStatus!
@@ -212,6 +216,8 @@ type Mutation {
 
   createTermsOfService(input: CreateTermsOfServiceInput!): TermsOfService!
   consentToTerms(termsID: ID!): Boolean!
+
+  toggleMaintenanceMode(enabled: Boolean!): Boolean!
 }
 
 type Announcement {
@@ -297,6 +303,8 @@ input CreatePostInput {
 input UpdatePostInput {
   id: ID!
   content: String!
+  newMediaInputs: [MediaUploadInput!]
+  deletedMediaIDs: [ID!]
 }
 
 type Profile {

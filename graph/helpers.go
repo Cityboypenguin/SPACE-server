@@ -3,11 +3,14 @@ package graph
 import (
 	"context"
 	"errors"
+	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
+	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
@@ -75,6 +78,20 @@ func decodeGraphID(ctx context.Context, kind string, value string) (int64, error
 		return 0, err
 	}
 	return id, nil
+}
+
+// scheduleTermsBroadcast broadcasts "terms_updated" immediately if effectiveDate is
+// in the past or present, or schedules a one-shot timer to fire at effectiveDate.
+func scheduleTermsBroadcast(broker *sse.Broker, version string, effectiveDate time.Time) {
+	delay := time.Until(effectiveDate)
+	if delay <= 0 {
+		broker.Broadcast("terms_updated", map[string]any{"version": version})
+		return
+	}
+	time.AfterFunc(delay, func() {
+		broker.Broadcast("terms_updated", map[string]any{"version": version})
+		logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
+	})
 }
 
 func containsInt64(slice []int64, val int64) bool {

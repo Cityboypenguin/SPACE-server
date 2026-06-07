@@ -83,6 +83,33 @@ func (r *MySQLTermsRepository) SaveConsent(ctx context.Context, c *model.TermsCo
 	return nil
 }
 
+func (r *MySQLTermsRepository) FindFuture(ctx context.Context) ([]*model.TermsOfService, error) {
+	now := time.Now().Unix()
+	query := `
+		SELECT id, version, object_key, effective_date, created_at
+		FROM terms_of_service
+		WHERE effective_date > ?
+		ORDER BY effective_date ASC
+	`
+	rows, err := r.DB.QueryContext(ctx, query, now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query future terms_of_service: %w", err)
+	}
+	defer rows.Close()
+	var list []*model.TermsOfService
+	for rows.Next() {
+		var t model.TermsOfService
+		var effectiveDateUnix, createdAtUnix int64
+		if err := rows.Scan(&t.ID, &t.Version, &t.ObjectKey, &effectiveDateUnix, &createdAtUnix); err != nil {
+			return nil, fmt.Errorf("failed to scan terms_of_service: %w", err)
+		}
+		t.EffectiveDate = time.Unix(effectiveDateUnix, 0)
+		t.CreatedAt = time.Unix(createdAtUnix, 0)
+		list = append(list, &t)
+	}
+	return list, rows.Err()
+}
+
 func (r *MySQLTermsRepository) FindAll(ctx context.Context) ([]*model.TermsOfService, error) {
 	query := `
 		SELECT id, version, object_key, effective_date, created_at

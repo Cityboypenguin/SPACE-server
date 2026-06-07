@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"sync/atomic"
+
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -27,7 +29,9 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	StorageRepository repository.StorageRepository
+	StorageRepository     repository.StorageRepository
+	MaintenanceRepository repository.MaintenanceRepository
+	MaintenanceFlag       *atomic.Bool
 
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
@@ -58,15 +62,16 @@ type Resolver struct {
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
-	GetPostByIDUseCase       post.GetPostByIDUseCase
-	CreatePostUseCase        post.CreatePostUseCase
-	ListPostsUseCase         post.ListPostsUseCase
-	DeletePostUseCase        post.DeletePostUseCase
-	UpdatePostUseCase        post.UpdatePostUseCase
-	SearchPostsUseCase       post.SearchPostsUseCase
-	ListTopLevelPostsUseCase post.ListTopLevelPostsUseCase
-	GetRepliesByIDUseCase    post.GetRepliesByIDUseCase
-	GetPostsByUserIDUseCase  post.GetPostsByUserIDUseCase
+	GetPostByIDUseCase               post.GetPostByIDUseCase
+	GetPostByIDIncludeDeletedUseCase post.GetPostByIDIncludeDeletedUseCase
+	CreatePostUseCase                post.CreatePostUseCase
+	ListPostsUseCase                 post.ListPostsUseCase
+	DeletePostUseCase                post.DeletePostUseCase
+	UpdatePostUseCase                post.UpdatePostUseCase
+	SearchPostsUseCase               post.SearchPostsUseCase
+	ListTopLevelPostsUseCase         post.ListTopLevelPostsUseCase
+	GetRepliesByIDUseCase            post.GetRepliesByIDUseCase
+	GetPostsByUserIDUseCase          post.GetPostsByUserIDUseCase
 
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase

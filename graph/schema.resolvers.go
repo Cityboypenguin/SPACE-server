@@ -15,6 +15,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -424,16 +425,16 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
+	// 1. テキストのバリデーション（CreatePostを踏襲）
 	trimmedContent := strings.TrimSpace(input.Content)
-	if trimmedContent == "" {
-		return nil, fmt.Errorf("content cannot be empty")
-	}
 
+	// 2. 投稿IDのデコード（既存ロジック）
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
+	// 3. 投稿の存在確認と権限チェック（既存ロジック）
 	existing, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post")
@@ -445,9 +446,32 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, errors.New("forbidden: can only update your own posts")
 	}
 
-	post, err := r.UpdatePostUseCase.Execute(ctx, numericID, model.UpdatePostParam{
+	var deletedMediaIDs []int64
+	for _, strID := range input.DeletedMediaIDs {
+		numID, err := decodeGraphID(ctx, "media", strID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid deleted media id format: %s", strID)
+		}
+		deletedMediaIDs = append(deletedMediaIDs, numID)
+	}
+
+	// 5. 追加する画像データの詰め替え（CreatePostと完全に一致）
+	var ucMediaInputs []postusecase.MediaInput
+	for _, m := range input.NewMediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
+	// 6. ユースケースの実行（型が完全に一致した状態）
+	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
+		PostID:  numericID,
+		UserID:  claims.ID,
 		Content: &trimmedContent,
-	})
+	}, ucMediaInputs, deletedMediaIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -490,12 +514,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		}
 	}
 
-	return &gqlmodel.Favorite{
-		ID:        encodeGraphID("favorite", favorite.ID),
-		CreatedAt: favorite.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", favorite.UserID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", favorite.PostID)},
-	}, nil
+	return toGraphFavorite(favorite), nil
 }
 
 // DeleteFavorite is the resolver for the deleteFavorite field.
@@ -1540,6 +1559,9 @@ func (r *mutationResolver) CreateTermsOfService(ctx context.Context, input gqlmo
 	if err != nil {
 		return nil, err
 	}
+
+	scheduleTermsBroadcast(r.SSEBroker, t.Version, t.EffectiveDate)
+
 	return toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)), nil
 }
 
@@ -1559,6 +1581,18 @@ func (r *mutationResolver) ConsentToTerms(ctx context.Context, termsID string) (
 		return false, err
 	}
 	return true, nil
+}
+
+// ToggleMaintenanceMode is the resolver for the toggleMaintenanceMode field.
+func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	if err := r.MaintenanceRepository.SetMaintenanceMode(ctx, enabled); err != nil {
+		return false, err
+	}
+	r.MaintenanceFlag.Store(enabled)
+	return enabled, nil
 }
 
 // Actor is the resolver for the actor field on Notification.
@@ -1587,9 +1621,14 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+
+	user, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
+
 	if err != nil {
 		return nil, err
+	}
+	if user == nil {
+		return nil, nil
 	}
 	return toGraphUser(user), nil
 }
@@ -1601,19 +1640,16 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericPostID)
+	// ⭕️ 変更：DataLoader経由で取得
+	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
 	}
 
 	var gqlFavorites []*gqlmodel.Favorite
 	for _, f := range favorites {
-		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        encodeGraphID("favorite", f.ID),
-			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
-			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
-		})
+		// ※君のプロジェクトにある変換関数を利用する
+		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
 	}
 	return gqlFavorites, nil
 }
@@ -1651,13 +1687,13 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 	if obj.DeletedAt != nil {
 		return []*gqlmodel.Post{}, nil
 	}
-
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID)
+	// ⭕️ DataLoader経由で取得
+	replies, err := dataloader.For(ctx).ReplyLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
 	}
@@ -1675,10 +1711,13 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 	if err != nil {
 		return nil, nil
 	}
-	mediaList, err := r.ListMediaByPostIDUseCase.Execute(ctx, numericID)
+
+	// ⭕️ DataLoader経由で取得
+	mediaList, err := dataloader.For(ctx).MediaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}
+
 	var result []*gqlmodel.Media
 	for _, m := range mediaList {
 		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
@@ -1903,7 +1942,8 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 
 // GetPostByID is the resolver for the getPostByID field.
 func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.Post, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	_, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	numericID, err := decodeGraphID(ctx, "post", id)
@@ -1920,6 +1960,49 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 	}
 
 	return toGraphPost(post), nil
+}
+
+// GetPostByIDIncludeDeleted is the resolver for the getPostByIDIncludeDeleted field.
+func (r *queryResolver) GetPostByIDIncludeDeleted(ctx context.Context, id string) (*gqlmodel.Post, error) {
+	_, err := requireAdminAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "post", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+
+	post, err := r.GetPostByIDIncludeDeletedUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, nil
+	}
+
+	return toGraphPost(post), nil
+}
+
+// GetPostsByUserID is the resolver for the getPostsByUserID field.
+func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	posts, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID)
+	if err != nil {
+		return nil, err
+	}
+	var gqlPosts []*gqlmodel.Post
+	for _, post := range posts {
+		gqlPosts = append(gqlPosts, toGraphPost(post))
+	}
+	return gqlPosts, nil
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
@@ -1946,7 +2029,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 
 // SearchPosts is the resolver for the searchPosts field.
 func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
 	posts, err := r.SearchPostsUseCase.Execute(ctx, content)
@@ -1963,7 +2046,9 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 
 // Favorites is the resolver for the favorites field.
 func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	//使ってないけど一応認証は必要にしておく
+	_, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	favorites, err := r.ListFavoritesUseCase.Execute(ctx)
@@ -1985,7 +2070,9 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 
 // GetFavoriteByID is the resolver for the getFavoriteByID field.
 func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmodel.Favorite, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	//使ってないけど一応認証は必要にしておく
+	_, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	numericID, err := decodeGraphID(ctx, "favorite", id)
@@ -2001,12 +2088,7 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 		return nil, nil
 	}
 
-	return &gqlmodel.Favorite{
-		ID:        encodeGraphID("favorite", f.ID),
-		CreatedAt: f.CreatedAt.Format(timeFormat),
-		User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
-		Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
-	}, nil
+	return toGraphFavorite(f), nil
 }
 
 // MyProfile is the resolver for the myProfile field.
@@ -2619,6 +2701,14 @@ func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.
 	return toGraphAnnouncement(a), nil
 }
 
+// MaintenanceMode is the resolver for the maintenanceMode field.
+func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.MaintenanceFlag.Load(), nil
+}
+
 // CurrentTerms is the resolver for the currentTerms field.
 func (r *queryResolver) CurrentTerms(ctx context.Context) (*gqlmodel.TermsOfService, error) {
 	t, err := r.GetCurrentTermsUseCase.Execute(ctx)
@@ -2739,7 +2829,9 @@ func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string)
 // GetFavoriteUsersByUserID is the resolver for the GetFavoriteUsersByUserID field.
 func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
+		if _, err := requireAdminAuth(ctx); err != nil {
+			return nil, err
+		}
 	}
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {

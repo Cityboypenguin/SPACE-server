@@ -179,6 +179,7 @@ type ComplexityRoot struct {
 		SendEmailOtp               func(childComplexity int, email string) int
 		SendMessage                func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                  func(childComplexity int, objectKey string) int
+		ToggleMaintenanceMode      func(childComplexity int, enabled bool) int
 		ToggleReportSystem         func(childComplexity int, enabled bool) int
 		UnfreezeUser               func(childComplexity int, id string) int
 		UpdateAdministrator        func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -250,11 +251,14 @@ type ComplexityRoot struct {
 		GetInquiry                      func(childComplexity int, id string) int
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
 		GetPostByID                     func(childComplexity int, id string) int
+		GetPostByIDIncludeDeleted       func(childComplexity int, id string) int
+		GetPostsByUserID                func(childComplexity int, userID string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
 		GetUserByID                     func(childComplexity int, id string) int
 		ListBlockedUsers                func(childComplexity int) int
 		ListFavoriteUsers               func(childComplexity int) int
+		MaintenanceMode                 func(childComplexity int) int
 		Me                              func(childComplexity int) int
 		Messages                        func(childComplexity int, roomID string) int
 		MyCommunities                   func(childComplexity int) int
@@ -435,6 +439,7 @@ type MutationResolver interface {
 	MarkRoomAsRead(ctx context.Context, roomID string) (bool, error)
 	CreateTermsOfService(ctx context.Context, input model.CreateTermsOfServiceInput) (*model.TermsOfService, error)
 	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
+	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
@@ -459,6 +464,8 @@ type QueryResolver interface {
 	Posts(ctx context.Context) ([]*model.Post, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
+	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
+	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
 	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
@@ -483,6 +490,7 @@ type QueryResolver interface {
 	GetInquiry(ctx context.Context, id string) (*model.Inquiry, error)
 	Announcements(ctx context.Context, limit *int32) ([]*model.Announcement, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
+	MaintenanceMode(ctx context.Context) (bool, error)
 	CurrentTerms(ctx context.Context) (*model.TermsOfService, error)
 	MyTermsConsentStatus(ctx context.Context) (*model.TermsConsentStatus, error)
 	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
@@ -1364,6 +1372,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAvatar(childComplexity, args["objectKey"].(string)), true
+	case "Mutation.toggleMaintenanceMode":
+		if e.ComplexityRoot.Mutation.ToggleMaintenanceMode == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_toggleMaintenanceMode_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ToggleMaintenanceMode(childComplexity, args["enabled"].(bool)), true
 	case "Mutation.toggleReportSystem":
 		if e.ComplexityRoot.Mutation.ToggleReportSystem == nil {
 			break
@@ -1825,6 +1844,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetPostByID(childComplexity, args["id"].(string)), true
+	case "Query.getPostByIDIncludeDeleted":
+		if e.ComplexityRoot.Query.GetPostByIDIncludeDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getPostByIDIncludeDeleted_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetPostByIDIncludeDeleted(childComplexity, args["id"].(string)), true
+	case "Query.getPostsByUserID":
+		if e.ComplexityRoot.Query.GetPostsByUserID == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getPostsByUserID_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetPostsByUserID(childComplexity, args["user_id"].(string)), true
 	case "Query.getProfileByUserID":
 		if e.ComplexityRoot.Query.GetProfileByUserID == nil {
 			break
@@ -1871,6 +1912,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ListFavoriteUsers(childComplexity), true
+	case "Query.maintenanceMode":
+		if e.ComplexityRoot.Query.MaintenanceMode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MaintenanceMode(childComplexity), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -3789,6 +3836,20 @@ func (ec *executionContext) field_Mutation_setAvatar_args(ctx context.Context, r
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_toggleMaintenanceMode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["enabled"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_toggleReportSystem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4181,6 +4242,20 @@ func (ec *executionContext) field_Query_getMyRoleInCommunity_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getPostByIDIncludeDeleted_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getPostByID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4192,6 +4267,20 @@ func (ec *executionContext) field_Query_getPostByID_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getPostsByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "user_id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["user_id"] = arg0
 	return args, nil
 }
 
@@ -8384,6 +8473,50 @@ func (ec *executionContext) fieldContext_Mutation_consentToTerms(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_toggleMaintenanceMode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_toggleMaintenanceMode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ToggleMaintenanceMode(ctx, fc.Args["enabled"].(bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_toggleMaintenanceMode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_toggleMaintenanceMode_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Notification_ID(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9515,6 +9648,94 @@ func (ec *executionContext) fieldContext_Query_getPostByID(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getPostByIDIncludeDeleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetPostByIDIncludeDeleted(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getPostByIDIncludeDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getPostsByUserID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getPostsByUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetPostsByUserID(ctx, fc.Args["user_id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Post) graphql.Marshaler {
+			return ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getPostsByUserID(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getPostsByUserID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_getRepliesByPostID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10497,6 +10718,29 @@ func (ec *executionContext) fieldContext_Query_announcement(ctx context.Context,
 		return fc, err
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Query_maintenanceMode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_maintenanceMode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MaintenanceMode(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_maintenanceMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Query_currentTerms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -14268,7 +14512,7 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "content"}
+	fieldsInOrder := [...]string{"id", "content", "newMediaInputs", "deletedMediaIDs"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -14289,6 +14533,20 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.Content = data
+		case "newMediaInputs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newMediaInputs"))
+			data, err := ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NewMediaInputs = data
+		case "deletedMediaIDs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deletedMediaIDs"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeletedMediaIDs = data
 		}
 	}
 	return it, nil
@@ -15647,6 +15905,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "toggleMaintenanceMode":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_toggleMaintenanceMode(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -16380,6 +16645,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getPostByIDIncludeDeleted":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getPostByIDIncludeDeleted(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getPostsByUserID":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getPostsByUserID(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "getRepliesByPostID":
 			field := field
 
@@ -16881,6 +17187,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_announcement(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "maintenanceMode":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_maintenanceMode(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -19079,6 +19407,42 @@ func (ec *executionContext) marshalOFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋ
 		return graphql.Null
 	}
 	return ec._Favorite(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {

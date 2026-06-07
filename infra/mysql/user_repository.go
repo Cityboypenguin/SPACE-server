@@ -3,11 +3,13 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
+	drivermysql "github.com/go-sql-driver/mysql"
 )
 
 type MySQLUserRepository struct {
@@ -288,7 +290,16 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 		u.UpdatedAt.Unix(),
 		u.ID,
 	)
-	return err
+	if err != nil {
+		if mysqlErr, ok := err.(*drivermysql.MySQLError); ok && mysqlErr.Number == 1062 {
+			if strings.Contains(mysqlErr.Message, "account_id") {
+				return errors.New("account_id is already taken")
+			}
+			return errors.New("email update failed")
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (int64, error) {
@@ -308,6 +319,13 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 		u.UpdatedAt.Unix(),
 	)
 	if err != nil {
+		if mysqlErr, ok := err.(*drivermysql.MySQLError); ok && mysqlErr.Number == 1062 {
+			if strings.Contains(mysqlErr.Message, "account_id") {
+				return 0, errors.New("account_id is already taken")
+			}
+			// メールアドレス重複は詳細を開示しない（ユーザー列挙攻撃対策）
+			return 0, errors.New("registration failed: check your input")
+		}
 		return 0, err
 	}
 	return result.LastInsertId()
