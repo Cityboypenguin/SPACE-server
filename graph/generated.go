@@ -176,6 +176,7 @@ type ComplexityRoot struct {
 		RefreshAdministratorToken  func(childComplexity int, refreshToken string) int
 		RefreshUserToken           func(childComplexity int, refreshToken string) int
 		RemoveUserFromRoom         func(childComplexity int, input model.RemoveUserFromRoomInput) int
+		SendEmailOtp               func(childComplexity int, email string) int
 		SendMessage                func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                  func(childComplexity int, objectKey string) int
 		ToggleReportSystem         func(childComplexity int, enabled bool) int
@@ -377,6 +378,7 @@ type MessageResolver interface {
 	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
 }
 type MutationResolver interface {
+	SendEmailOtp(ctx context.Context, email string) (bool, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
@@ -1329,6 +1331,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveUserFromRoom(childComplexity, args["input"].(model.RemoveUserFromRoomInput)), true
+	case "Mutation.sendEmailOTP":
+		if e.ComplexityRoot.Mutation.SendEmailOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_sendEmailOTP_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SendEmailOtp(childComplexity, args["email"].(string)), true
 	case "Mutation.sendMessage":
 		if e.ComplexityRoot.Mutation.SendMessage == nil {
 			break
@@ -3718,6 +3731,20 @@ func (ec *executionContext) field_Mutation_removeUserFromRoom_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_sendEmailOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5889,6 +5916,50 @@ func (ec *executionContext) _Message_updatedAt(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_Message_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Mutation_sendEmailOTP(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_sendEmailOTP(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SendEmailOtp(ctx, fc.Args["email"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_sendEmailOTP(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_sendEmailOTP_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Mutation_createUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -13829,7 +13900,7 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"accountID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"accountID", "name", "email", "password", "otp"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -13864,6 +13935,13 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 				return it, err
 			}
 			it.Password = data
+		case "otp":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("otp"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Otp = data
 		}
 	}
 	return it, nil
@@ -15170,6 +15248,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
+		case "sendEmailOTP":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_sendEmailOTP(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createUser(ctx, field)

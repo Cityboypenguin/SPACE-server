@@ -103,6 +103,14 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	return result, nil
 }
 
+// SendEmailOtp is the resolver for the sendEmailOTP field.
+func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool, error) {
+	if err := r.SendEmailOTPUseCase.Execute(ctx, email); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
@@ -112,7 +120,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		Password:  input.Password,
 	}
 
-	user, err := r.CreateUserUseCase.Execute(ctx, param)
+	user, err := r.CreateUserUseCase.Execute(ctx, param, input.Otp)
 	if err != nil {
 		return nil, err
 	}

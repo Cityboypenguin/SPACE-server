@@ -29,6 +29,11 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-space-avatars}
       MINIO_USE_SSL: "false"
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
     depends_on:
       mysql:
         condition: service_healthy

@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 )
 
 type CreateUserUseCase interface {
-	Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error)
+	Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error)
 }
 
 var _ CreateUserUseCase = &CreateUserInteractor{}
@@ -18,25 +19,30 @@ var _ CreateUserUseCase = &CreateUserInteractor{}
 type CreateUserInteractor struct {
 	userRepo          repository.UserRepository
 	profileRepo       repository.ProfileRepository
+	otpRepo           repository.EmailOTPRepository
 	txManager         repository.TxManager
 	validationEnabled bool
 }
 
-func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository, txManager repository.TxManager) CreateUserUseCase {
+func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository, otpRepo repository.EmailOTPRepository, txManager repository.TxManager) CreateUserUseCase {
 	return &CreateUserInteractor{
 		userRepo:          userRepo,
 		profileRepo:       profileRepo,
+		otpRepo:           otpRepo,
 		txManager:         txManager,
 		validationEnabled: os.Getenv("DISABLE_USER_VALIDATION") != "true",
 	}
 }
 
-func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam) (*model.User, error) {
+func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error) {
 	if uc.validationEnabled {
 		if err := model.ValidateUserEmail(param.Email); err != nil {
 			return nil, err
 		}
 		if err := model.ValidateUserPassword(param.Password); err != nil {
+			return nil, err
+		}
+		if err := uc.verifyOTP(ctx, param.Email, otp); err != nil {
 			return nil, err
 		}
 	}
@@ -73,4 +79,15 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	}
 
 	return user, nil
+}
+
+func (uc *CreateUserInteractor) verifyOTP(ctx context.Context, email, code string) error {
+	record, err := uc.otpRepo.FindLatestByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if record == nil || record.Code != code {
+		return fmt.Errorf("認証コードが無効または期限切れです")
+	}
+	return uc.otpRepo.Delete(ctx, email)
 }

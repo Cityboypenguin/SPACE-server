@@ -18,6 +18,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
+	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
@@ -105,7 +106,6 @@ func main() {
 		}
 	}
 
-	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, txManager)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
@@ -152,6 +152,10 @@ func main() {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
 	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
+	smtpEmailService := infraemail.NewSMTPEmailService()
+	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, smtpEmailService)
+	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
@@ -244,6 +248,7 @@ func main() {
 		StorageRepository: storageRepository,
 
 		CreateUserUseCase:       createUserUseCase,
+		SendEmailOTPUseCase:     sendEmailOTPUseCase,
 		ListUsersUseCase:        listUsersUseCase,
 		DeleteUserUseCase:       deleteUserUseCase,
 		UpdateUserUseCase:       updateUserUseCase,
