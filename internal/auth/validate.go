@@ -29,12 +29,17 @@ func ValidateAndVerifyToken(
 		return nil, fmt.Errorf("token has been revoked")
 	}
 
-	u, err := userRepo.GetUserByID(ctx, claims.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify user")
-	}
-	if u != nil && u.Status == model.UserStatusFrozen {
-		return nil, fmt.Errorf("account is frozen")
+	if claims.Role != "administrator" {
+		u, err := userRepo.GetUserByID(ctx, claims.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify user")
+		}
+		if u == nil {
+			return nil, fmt.Errorf("user not found")
+		}
+		if u.Status == model.UserStatusFrozen {
+			return nil, fmt.Errorf("account is frozen")
+		}
 	}
 
 	return claims, nil
