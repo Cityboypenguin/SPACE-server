@@ -45,9 +45,9 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 		return err
 	}
 
-	subject := "【SPACE】メールアドレス確認コード"
+	subject := "【Senashu-Universe】メールアドレス確認コード"
 	body := fmt.Sprintf(
-		"SPACEへの新規登録の確認コードは以下の通りです。\n\n確認コード: %s\n\nこのコードは10分間有効です。\n※このメールに心当たりがない場合は、そのまま削除してください。",
+		"Senashu-Universeへの新規登録の確認コードは以下の通りです。\n\n確認コード: %s\n\nこのコードは10分間有効です。\n※このメールに心当たりがない場合は、そのまま削除してください。",
 		code,
 	)
 	return uc.emailService.Send(emailAddr, subject, body)
