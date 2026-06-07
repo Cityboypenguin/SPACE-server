@@ -1551,6 +1551,9 @@ func (r *mutationResolver) CreateTermsOfService(ctx context.Context, input gqlmo
 	if err != nil {
 		return nil, err
 	}
+
+	scheduleTermsBroadcast(r.SSEBroker, t.Version, t.EffectiveDate)
+
 	return toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)), nil
 }
 

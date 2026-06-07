@@ -11,6 +11,8 @@ type TermsRepository interface {
 	FindByID(ctx context.Context, id int64) (*model.TermsOfService, error)
 	// FindCurrent returns the latest version whose effective_date <= now, or nil if none exists.
 	FindCurrent(ctx context.Context) (*model.TermsOfService, error)
+	// FindFuture returns all versions whose effective_date > now, ordered by effective_date ASC.
+	FindFuture(ctx context.Context) ([]*model.TermsOfService, error)
 	FindAll(ctx context.Context) ([]*model.TermsOfService, error)
 	SaveConsent(ctx context.Context, c *model.TermsConsent) error
 	FindConsent(ctx context.Context, userID, termsID int64) (*model.TermsConsent, error)

@@ -482,6 +482,8 @@ func main() {
 	// SSE
 	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository))
 
+	schedulePendingTerms(termsRepository, sseBroker)
+
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
 			e.Logger.Fatal(err)
@@ -509,6 +511,25 @@ func main() {
 	}
 
 	logger.Log.Info().Msg("server stopped")
+}
+
+// schedulePendingTerms fetches all future-dated terms on startup and sets a one-shot
+// timer for each so the SSE broadcast fires exactly when each version becomes effective.
+func schedulePendingTerms(termsRepo repository.TermsRepository, broker *sse.Broker) {
+	pending, err := termsRepo.FindFuture(context.Background())
+	if err != nil {
+		logger.Log.Error().Err(err).Msg("failed to fetch pending future terms on startup")
+		return
+	}
+	for _, t := range pending {
+		version := t.Version
+		delay := time.Until(t.EffectiveDate)
+		time.AfterFunc(delay, func() {
+			broker.Broadcast("terms_updated", map[string]any{"version": version})
+			logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
+		})
+		logger.Log.Info().Str("version", version).Dur("delay", delay).Msg("scheduled terms broadcast timer set")
+	}
 }
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
