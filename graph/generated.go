@@ -237,6 +237,7 @@ type ComplexityRoot struct {
 		GetInquiry                      func(childComplexity int, id string) int
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
 		GetPostByID                     func(childComplexity int, id string) int
+		GetPostByIDIncludeDeleted       func(childComplexity int, id string) int
 		GetPostsByUserID                func(childComplexity int, userID string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
@@ -403,6 +404,7 @@ type QueryResolver interface {
 	Posts(ctx context.Context) ([]*model.Post, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
+	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
 	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
@@ -1645,6 +1647,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetPostByID(childComplexity, args["id"].(string)), true
+	case "Query.getPostByIDIncludeDeleted":
+		if e.ComplexityRoot.Query.GetPostByIDIncludeDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getPostByIDIncludeDeleted_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetPostByIDIncludeDeleted(childComplexity, args["id"].(string)), true
 	case "Query.getPostsByUserID":
 		if e.ComplexityRoot.Query.GetPostsByUserID == nil {
 			break
@@ -3683,6 +3696,20 @@ func (ec *executionContext) field_Query_getMyRoleInCommunity_args(ctx context.Co
 		return nil, err
 	}
 	args["communityID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getPostByIDIncludeDeleted_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -8637,6 +8664,50 @@ func (ec *executionContext) fieldContext_Query_getPostByID(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getPostByID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getPostByIDIncludeDeleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetPostByIDIncludeDeleted(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getPostByIDIncludeDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -14746,6 +14817,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_getPostByID(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getPostByIDIncludeDeleted":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getPostByIDIncludeDeleted(ctx, field)
 				return res
 			}
 

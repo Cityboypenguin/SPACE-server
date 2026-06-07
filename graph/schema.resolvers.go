@@ -409,6 +409,7 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 	return r.DeletePostUseCase.Execute(ctx, numericID)
 }
 
+// UpdatePost is the resolver for the updatePost field.
 func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.UpdatePostInput) (*gqlmodel.Post, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
@@ -1727,6 +1728,10 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	posts, err := r.ListPostsUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
@@ -1741,6 +1746,9 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
 
 // TopLevelPosts is the resolver for the topLevelPosts field.
 func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
 	posts, err := r.ListTopLevelPostsUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
@@ -1755,6 +1763,10 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 
 // GetPostByID is the resolver for the getPostByID field.
 func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.Post, error) {
+	_, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
 	numericID, err := decodeGraphID(ctx, "post", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
@@ -1771,8 +1783,33 @@ func (r *queryResolver) GetPostByID(ctx context.Context, id string) (*gqlmodel.P
 	return toGraphPost(post), nil
 }
 
+// GetPostByIDIncludeDeleted is the resolver for the getPostByIDIncludeDeleted field.
+func (r *queryResolver) GetPostByIDIncludeDeleted(ctx context.Context, id string) (*gqlmodel.Post, error) {
+	_, err := requireAdminAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "post", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+
+	post, err := r.GetPostByIDIncludeDeletedUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, nil
+	}
+
+	return toGraphPost(post), nil
+}
+
 // GetPostsByUserID is the resolver for the getPostsByUserID field.
 func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
@@ -1791,6 +1828,9 @@ func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
 func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) ([]*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
 	numericPostID, err := decodeGraphID(ctx, "post", postID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
@@ -1810,6 +1850,9 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 
 // SearchPosts is the resolver for the searchPosts field.
 func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
 	posts, err := r.SearchPostsUseCase.Execute(ctx, content)
 	if err != nil {
 		return nil, err
@@ -1824,6 +1867,11 @@ func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gql
 
 // Favorites is the resolver for the favorites field.
 func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, error) {
+	//使ってないけど一応認証は必要にしておく
+	_, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
 	favorites, err := r.ListFavoritesUseCase.Execute(ctx)
 	if err != nil {
 		return nil, err
@@ -1843,6 +1891,11 @@ func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, er
 
 // GetFavoriteByID is the resolver for the getFavoriteByID field.
 func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmodel.Favorite, error) {
+	//使ってないけど一応認証は必要にしておく
+	_, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
 	numericID, err := decodeGraphID(ctx, "favorite", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid favorite id: %s", id)
@@ -2441,6 +2494,11 @@ func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string)
 
 // GetFavoriteUsersByUserID is the resolver for the GetFavoriteUsersByUserID field.
 func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		if _, err := requireAdminAuth(ctx); err != nil {
+			return nil, err
+		}
+	}
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")

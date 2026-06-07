@@ -21,14 +21,43 @@ func NewMySQLPostRepository(db *sql.DB) repository.PostRepository {
 
 func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
 		FROM posts
-		WHERE id = ?
+		WHERE id = ? AND deleted_at IS NULL
 	`
 	args := []interface{}{id}
 
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
 	row := r.DB.QueryRowContext(ctx, query, args...)
+
+	var p model.Post
+	var createdAtUnix, updatedAtUnix int64
+	var parentID sql.NullInt64
+	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if parentID.Valid {
+		p.ParentID = &parentID.Int64
+	} else {
+		p.ParentID = nil
+	}
+
+	p.CreatedAt = time.Unix(createdAtUnix, 0)
+	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
+	return &p, nil
+}
+
+func (r *MySQLPostRepository) GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error) {
+	query := `
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+		FROM posts
+		WHERE id = ?
+	`
+	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var p model.Post
 	var createdAtUnix, updatedAtUnix int64
@@ -43,6 +72,13 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 		p.ParentID = &parentID.Int64
 	} else {
 		p.ParentID = nil
+	}
+
+	if deletedAtUnix.Valid {
+		deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+		p.DeletedAt = &deletedAt
+	} else {
+		p.DeletedAt = nil
 	}
 
 	p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -254,9 +290,9 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 
 func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
-		WHERE deleted_at IS NULL
+		ORDER BY created_at DESC
 	`
 	rows, err := r.DB.QueryContext(ctx, query)
 	if err != nil {
@@ -268,14 +304,21 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context) ([]*model.Post, err
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -357,7 +400,6 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	return posts, nil
 }
 
-// 🟢 リカバリ：削除条件から deleted_at を取り除いた ListTopLevelPosts メソッドを再配置しました
 func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
@@ -367,9 +409,6 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 
 	var args []interface{}
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
-	query += `
-		ORDER BY created_at DESC
-	`
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -412,7 +451,6 @@ func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs
 		args[i] = id
 	}
 
-	// ⭕️ AND deleted_at IS NULL で論理削除された返信を除外
 	query := fmt.Sprintf(`
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
 		FROM posts
