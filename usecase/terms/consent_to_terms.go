@@ -11,13 +11,22 @@ import (
 
 type ConsentToTermsUseCase struct {
 	termsRepo repository.TermsRepository
+	userRepo  repository.UserRepository
 }
 
-func NewConsentToTermsUseCase(termsRepo repository.TermsRepository) *ConsentToTermsUseCase {
-	return &ConsentToTermsUseCase{termsRepo: termsRepo}
+func NewConsentToTermsUseCase(termsRepo repository.TermsRepository, userRepo repository.UserRepository) *ConsentToTermsUseCase {
+	return &ConsentToTermsUseCase{termsRepo: termsRepo, userRepo: userRepo}
 }
 
 func (u *ConsentToTermsUseCase) Execute(ctx context.Context, userID, termsID int64) error {
+	user, err := u.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
 	t, err := u.termsRepo.FindByID(ctx, termsID)
 	if err != nil {
 		return err

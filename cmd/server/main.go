@@ -225,7 +225,7 @@ func main() {
 	termsRepository := mysql.NewMySQLTermsRepository(database)
 	createTermsUseCase := termsusecase.NewCreateTermsUseCase(termsRepository)
 	getCurrentTermsUseCase := termsusecase.NewGetCurrentTermsUseCase(termsRepository)
-	consentToTermsUseCase := termsusecase.NewConsentToTermsUseCase(termsRepository)
+	consentToTermsUseCase := termsusecase.NewConsentToTermsUseCase(termsRepository, userRepository)
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
 	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
 	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
