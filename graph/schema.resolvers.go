@@ -1553,6 +1553,18 @@ func (r *mutationResolver) ConsentToTerms(ctx context.Context, termsID string) (
 	return true, nil
 }
 
+// ToggleMaintenanceMode is the resolver for the toggleMaintenanceMode field.
+func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	if err := r.MaintenanceRepository.SetMaintenanceMode(ctx, enabled); err != nil {
+		return false, err
+	}
+	r.MaintenanceFlag.Store(enabled)
+	return enabled, nil
+}
+
 // Actor is the resolver for the actor field on Notification.
 func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.User, error) {
 	if obj.Actor == nil {
@@ -2609,6 +2621,14 @@ func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.
 		return nil, err
 	}
 	return toGraphAnnouncement(a), nil
+}
+
+// MaintenanceMode is the resolver for the maintenanceMode field.
+func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.MaintenanceFlag.Load(), nil
 }
 
 // CurrentTerms is the resolver for the currentTerms field.
