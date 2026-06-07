@@ -43,6 +43,7 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
@@ -80,6 +81,7 @@ func main() {
 	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
+	systemSettingRepository := mysql.NewMySQLSystemSettingRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -209,8 +211,10 @@ func main() {
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
-	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
+
+	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
 	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository, txManager)
 	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
@@ -347,6 +351,7 @@ func main() {
 
 		CreateReportUsecase: *createReportUseCase,
 		ManageReportUsecase: *manageReportUseCase,
+		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,

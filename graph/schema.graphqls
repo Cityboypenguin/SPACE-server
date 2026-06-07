@@ -62,6 +62,8 @@ type Query {
   searchBlockedUsers(keyword: String!): [User!]!
   GetBlockersByUserID(userID: ID!): [User!]!
   adminGetBlockers(userID: ID!): [User!]!
+
+  isReportServiceEnabled: Boolean!
 }
 
 type User {
@@ -217,6 +219,7 @@ type Mutation {
   consentToTerms(termsID: ID!): Boolean!
 
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
+  setReportServiceStatus(enabled: Boolean!): Boolean!
 }
 
 type Announcement {

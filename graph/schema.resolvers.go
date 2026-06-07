@@ -1193,7 +1193,9 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	if err != nil {
 		return nil, err
 	}
-
+	if !isReportServiceEnabled {
+		return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
+	}
 	kind := reportTargetKind(input.TargetType)
 	if kind == "" {
 		return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
@@ -1585,6 +1587,18 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	}
 	r.MaintenanceFlag.Store(enabled)
 	return enabled, nil
+}
+
+var isReportServiceEnabled = true
+
+// SetReportServiceStatus is the resolver for the setReportServiceStatus field.
+func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled bool) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	isReportServiceEnabled = enabled
+
+	return isReportServiceEnabled, nil
 }
 
 // Actor is the resolver for the actor field on Notification.
@@ -2916,6 +2930,11 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 		return nil, err
 	}
 	return r.blockedUsersToGQL(ctx, blockedUsers)
+}
+
+// IsReportServiceEnabled is the resolver for the isReportServiceEnabled field.
+func (r *queryResolver) IsReportServiceEnabled(ctx context.Context) (bool, error) {
+	return isReportServiceEnabled, nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.

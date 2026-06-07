@@ -20,6 +20,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
@@ -162,4 +163,6 @@ type Resolver struct {
 	CheckConsentUseCase     *termsusecase.CheckConsentUseCase
 	ListTermsUseCase        *termsusecase.ListTermsUseCase
 	ListConsentsUseCase     *termsusecase.ListConsentsUseCase
+
+	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
 }
