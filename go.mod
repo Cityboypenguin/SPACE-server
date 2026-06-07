@@ -15,6 +15,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/rs/zerolog v1.35.1
 	github.com/vektah/gqlparser/v2 v2.5.33
+	github.com/vikstrous/dataloadgen v0.0.10
 	golang.org/x/crypto v0.50.0
 )
 
@@ -43,7 +44,6 @@ require (
 	github.com/tinylib/msgp v1.6.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	github.com/vikstrous/dataloadgen v0.0.10 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect

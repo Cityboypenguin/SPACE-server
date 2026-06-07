@@ -132,6 +132,7 @@ func main() {
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
@@ -257,15 +258,16 @@ func main() {
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 
-		GetPostByIDUseCase:       getPostByIDUseCase,
-		CreatePostUseCase:        createPostUseCase,
-		ListPostsUseCase:         listPostsUseCase,
-		DeletePostUseCase:        deletePostUseCase,
-		UpdatePostUseCase:        updatePostUseCase,
-		SearchPostsUseCase:       searchPostsUseCase,
-		ListTopLevelPostsUseCase: listTopLevelPostsUseCase,
-		GetRepliesByIDUseCase:    getRepliesByIDUseCase,
-		GetPostsByUserIDUseCase:  getPostsByUserIDUseCase,
+		GetPostByIDUseCase:               getPostByIDUseCase,
+		GetPostByIDIncludeDeletedUseCase: getPostByIDIncludeDeletedUseCase,
+		CreatePostUseCase:                createPostUseCase,
+		ListPostsUseCase:                 listPostsUseCase,
+		DeletePostUseCase:                deletePostUseCase,
+		UpdatePostUseCase:                updatePostUseCase,
+		SearchPostsUseCase:               searchPostsUseCase,
+		ListTopLevelPostsUseCase:         listTopLevelPostsUseCase,
+		GetRepliesByIDUseCase:            getRepliesByIDUseCase,
+		GetPostsByUserIDUseCase:          getPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
