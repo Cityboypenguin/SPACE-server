@@ -295,8 +295,10 @@ type UpdateCommunityInput struct {
 }
 
 type UpdatePostInput struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
+	ID              string              `json:"id"`
+	Content         string              `json:"content"`
+	NewMediaInputs  []*MediaUploadInput `json:"newMediaInputs,omitempty"`
+	DeletedMediaIDs []string            `json:"deletedMediaIDs,omitempty"`
 }
 
 type UpdateProfileInput struct {

@@ -57,15 +57,16 @@ type Resolver struct {
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
-	GetPostByIDUseCase       post.GetPostByIDUseCase
-	CreatePostUseCase        post.CreatePostUseCase
-	ListPostsUseCase         post.ListPostsUseCase
-	DeletePostUseCase        post.DeletePostUseCase
-	UpdatePostUseCase        post.UpdatePostUseCase
-	SearchPostsUseCase       post.SearchPostsUseCase
-	ListTopLevelPostsUseCase post.ListTopLevelPostsUseCase
-	GetRepliesByIDUseCase    post.GetRepliesByIDUseCase
-	GetPostsByUserIDUseCase  post.GetPostsByUserIDUseCase
+	GetPostByIDUseCase               post.GetPostByIDUseCase
+	GetPostByIDIncludeDeletedUseCase post.GetPostByIDIncludeDeletedUseCase
+	CreatePostUseCase                post.CreatePostUseCase
+	ListPostsUseCase                 post.ListPostsUseCase
+	DeletePostUseCase                post.DeletePostUseCase
+	UpdatePostUseCase                post.UpdatePostUseCase
+	SearchPostsUseCase               post.SearchPostsUseCase
+	ListTopLevelPostsUseCase         post.ListTopLevelPostsUseCase
+	GetRepliesByIDUseCase            post.GetRepliesByIDUseCase
+	GetPostsByUserIDUseCase          post.GetPostsByUserIDUseCase
 
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase

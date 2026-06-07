@@ -230,3 +230,15 @@ func toGraphBlocker(b *model.Blocker) *gqlmodel.Blocker {
 		CreatedAt:     b.CreatedAt.Format(timeFormat),
 	}
 }
+
+func toGraphFavorite(f *model.Favorite) *gqlmodel.Favorite {
+	if f == nil {
+		return nil
+	}
+	return &gqlmodel.Favorite{
+		ID:        encodeGraphID("favorite", f.ID),
+		User:      toGraphUser(&model.User{ID: f.UserID}),
+		Post:      toGraphPost(&model.Post{ID: f.PostID}),
+		CreatedAt: f.CreatedAt.Format(timeFormat),
+	}
+}
