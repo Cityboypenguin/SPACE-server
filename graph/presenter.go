@@ -159,6 +159,19 @@ func toGraphInquiry(inq *model.Inquiry) *gqlmodel.Inquiry {
 	}
 }
 
+func toGraphTerms(t *model.TermsOfService, documentURL string) *gqlmodel.TermsOfService {
+	if t == nil {
+		return nil
+	}
+	return &gqlmodel.TermsOfService{
+		ID:            encodeGraphID("terms", t.ID),
+		Version:       t.Version,
+		DocumentURL:   documentURL,
+		EffectiveDate: t.EffectiveDate.Format(timeFormat),
+		CreatedAt:     t.CreatedAt.Format(timeFormat),
+	}
+}
+
 func toGraphProfile(user *model.User, profile *model.Profile, avatarURL *string) *gqlmodel.Profile {
 	if user == nil {
 		return nil
@@ -215,5 +228,17 @@ func toGraphBlocker(b *model.Blocker) *gqlmodel.Blocker {
 		UserID:        encodeGraphID("user", b.UserID),
 		BlockedUserID: encodeGraphID("user", b.BlockedUserID),
 		CreatedAt:     b.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphFavorite(f *model.Favorite) *gqlmodel.Favorite {
+	if f == nil {
+		return nil
+	}
+	return &gqlmodel.Favorite{
+		ID:        encodeGraphID("favorite", f.ID),
+		User:      toGraphUser(&model.User{ID: f.UserID}),
+		Post:      toGraphPost(&model.Post{ID: f.PostID}),
+		CreatedAt: f.CreatedAt.Format(timeFormat),
 	}
 }

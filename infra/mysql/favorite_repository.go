@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -185,4 +187,44 @@ func (r *MySQLFavoriteRepository) DeleteFavoriteByUserIDAndPostID(ctx context.Co
 	}
 
 	return affected > 0, nil
+}
+
+// GetFavoritesByPostIDs は複数のPostIDに紐づくいいねを1回のSQLで取得する
+func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error) {
+	if len(postIDs) == 0 {
+		return make(map[int64][]*model.Favorite), nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, len(postIDs))
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, post_id, created_at
+		FROM favorites
+		WHERE post_id IN (%s)
+		ORDER BY created_at DESC
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]*model.Favorite)
+	for rows.Next() {
+		var f model.Favorite
+		var createdAtUnix int64
+		// ※DBのカラム構成に合わせてScanする
+		if err := rows.Scan(&f.ID, &f.UserID, &f.PostID, &createdAtUnix); err != nil {
+			return nil, err
+		}
+		f.CreatedAt = time.Unix(createdAtUnix, 0)
+		result[f.PostID] = append(result[f.PostID], &f)
+	}
+	return result, rows.Err()
 }

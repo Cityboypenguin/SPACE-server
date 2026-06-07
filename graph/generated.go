@@ -136,6 +136,7 @@ type ComplexityRoot struct {
 		AdminDeletePost            func(childComplexity int, id string) int
 		AdminUpdateProfile         func(childComplexity int, userID string, input model.UpdateProfileInput) int
 		AdminUpdateUser            func(childComplexity int, id string, input model.UpdateUserInput) int
+		ConsentToTerms             func(childComplexity int, termsID string) int
 		CreateAdministrator        func(childComplexity int, input model.CreateAdministratorInput) int
 		CreateAnnouncement         func(childComplexity int, input model.CreateAnnouncementInput) int
 		CreateBlocker              func(childComplexity int, blockedUserID string) int
@@ -146,6 +147,7 @@ type ComplexityRoot struct {
 		CreatePost                 func(childComplexity int, input model.CreatePostInput) int
 		CreateReport               func(childComplexity int, input model.CreateReportInput) int
 		CreateRoom                 func(childComplexity int, input model.CreateRoomInput) int
+		CreateTermsOfService       func(childComplexity int, input model.CreateTermsOfServiceInput) int
 		CreateUser                 func(childComplexity int, input model.CreateUserInput) int
 		DeleteAdministrator        func(childComplexity int, id string) int
 		DeleteAnnouncement         func(childComplexity int, id string) int
@@ -153,7 +155,9 @@ type ComplexityRoot struct {
 		DeleteFavorite             func(childComplexity int, input model.DeleteFavoriteInput) int
 		DeleteFavoriteUser         func(childComplexity int, favoriteUserID string) int
 		DeleteMessage              func(childComplexity int, roomID string, id string) int
+		DeleteNotifications        func(childComplexity int, ids []string) int
 		DeletePost                 func(childComplexity int, id string) int
+		DeleteReadNotifications    func(childComplexity int) int
 		DeleteUser                 func(childComplexity int, id string) int
 		DemoteFromCommunityOwner   func(childComplexity int, communityID string, userID string) int
 		FreezeUser                 func(childComplexity int, id string) int
@@ -173,6 +177,7 @@ type ComplexityRoot struct {
 		RemoveUserFromRoom         func(childComplexity int, input model.RemoveUserFromRoomInput) int
 		SendMessage                func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                  func(childComplexity int, objectKey string) int
+		ToggleMaintenanceMode      func(childComplexity int, enabled bool) int
 		ToggleReportSystem         func(childComplexity int, enabled bool) int
 		UnfreezeUser               func(childComplexity int, id string) int
 		UpdateAdministrator        func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -228,10 +233,13 @@ type ComplexityRoot struct {
 	Query struct {
 		AdminGetBlockers                func(childComplexity int, userID string) int
 		AdminGetFavoriteUsers           func(childComplexity int, userID string) int
+		AdminListConsents               func(childComplexity int, termsID string) int
+		AdminListTerms                  func(childComplexity int) int
 		Administrators                  func(childComplexity int) int
 		Announcement                    func(childComplexity int, id string) int
 		Announcements                   func(childComplexity int, limit *int32) int
 		Communities                     func(childComplexity int) int
+		CurrentTerms                    func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
 		GetAdministratorByID            func(childComplexity int, id string) int
 		GetBlockersByUserID             func(childComplexity int, userID string) int
@@ -241,22 +249,27 @@ type ComplexityRoot struct {
 		GetInquiry                      func(childComplexity int, id string) int
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
 		GetPostByID                     func(childComplexity int, id string) int
+		GetPostByIDIncludeDeleted       func(childComplexity int, id string) int
+		GetPostsByUserID                func(childComplexity int, userID string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
 		GetUserByID                     func(childComplexity int, id string) int
 		ListBlockedUsers                func(childComplexity int) int
 		ListFavoriteUsers               func(childComplexity int) int
+		MaintenanceMode                 func(childComplexity int) int
 		Me                              func(childComplexity int) int
 		Messages                        func(childComplexity int, roomID string) int
 		MyCommunities                   func(childComplexity int) int
 		MyDMRooms                       func(childComplexity int) int
 		MyNotifications                 func(childComplexity int, limit *int32) int
 		MyProfile                       func(childComplexity int) int
+		MyTermsConsentStatus            func(childComplexity int) int
 		MyUnreadNotificationCount       func(childComplexity int) int
 		Posts                           func(childComplexity int) int
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
 		PresignedMediaUploadURL         func(childComplexity int, contentType string) int
+		PresignedTermsDocumentUploadURL func(childComplexity int) int
 		RandomCommunities               func(childComplexity int, limit int32) int
 		Room                            func(childComplexity int, id string) int
 		SearchAdministrators            func(childComplexity int, name string) int
@@ -296,6 +309,25 @@ type ComplexityRoot struct {
 		MessageUpdated        func(childComplexity int, roomID string) int
 		MyUnreadUpdated       func(childComplexity int) int
 		RoomReadStatusUpdated func(childComplexity int, roomID string) int
+	}
+
+	TermsConsentRecord struct {
+		ConsentedAt func(childComplexity int) int
+		ID          func(childComplexity int) int
+		User        func(childComplexity int) int
+	}
+
+	TermsConsentStatus struct {
+		CurrentTerms func(childComplexity int) int
+		IsConsented  func(childComplexity int) int
+	}
+
+	TermsOfService struct {
+		CreatedAt     func(childComplexity int) int
+		DocumentURL   func(childComplexity int) int
+		EffectiveDate func(childComplexity int) int
+		ID            func(childComplexity int) int
+		Version       func(childComplexity int) int
 	}
 
 	UnreadUpdate struct {
@@ -397,10 +429,15 @@ type MutationResolver interface {
 	UpdateInquiryStatus(ctx context.Context, id string, status model.InquiryStatus) (*model.Inquiry, error)
 	MarkNotificationAsRead(ctx context.Context, id string) (bool, error)
 	MarkAllNotificationsAsRead(ctx context.Context) (bool, error)
+	DeleteNotifications(ctx context.Context, ids []string) (bool, error)
+	DeleteReadNotifications(ctx context.Context) (bool, error)
 	CreateAnnouncement(ctx context.Context, input model.CreateAnnouncementInput) (*model.Announcement, error)
 	UpdateAnnouncement(ctx context.Context, id string, input model.UpdateAnnouncementInput) (*model.Announcement, error)
 	DeleteAnnouncement(ctx context.Context, id string) (bool, error)
 	MarkRoomAsRead(ctx context.Context, roomID string) (bool, error)
+	CreateTermsOfService(ctx context.Context, input model.CreateTermsOfServiceInput) (*model.TermsOfService, error)
+	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
+	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
@@ -425,6 +462,8 @@ type QueryResolver interface {
 	Posts(ctx context.Context) ([]*model.Post, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
+	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
+	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
 	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
@@ -443,11 +482,17 @@ type QueryResolver interface {
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
+	PresignedTermsDocumentUploadURL(ctx context.Context) (*model.PresignedUploadURL, error)
 	SearchReports(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.UserReport, error)
 	SearchInquiries(ctx context.Context, status *model.InquiryStatus) ([]*model.Inquiry, error)
 	GetInquiry(ctx context.Context, id string) (*model.Inquiry, error)
 	Announcements(ctx context.Context, limit *int32) ([]*model.Announcement, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
+	MaintenanceMode(ctx context.Context) (bool, error)
+	CurrentTerms(ctx context.Context) (*model.TermsOfService, error)
+	MyTermsConsentStatus(ctx context.Context) (*model.TermsConsentStatus, error)
+	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
+	AdminListConsents(ctx context.Context, termsID string) ([]*model.TermsConsentRecord, error)
 	ListFavoriteUsers(ctx context.Context) ([]*model.User, error)
 	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
@@ -873,6 +918,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminUpdateUser(childComplexity, args["id"].(string), args["input"].(model.UpdateUserInput)), true
+	case "Mutation.consentToTerms":
+		if e.ComplexityRoot.Mutation.ConsentToTerms == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_consentToTerms_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ConsentToTerms(childComplexity, args["termsID"].(string)), true
 	case "Mutation.createAdministrator":
 		if e.ComplexityRoot.Mutation.CreateAdministrator == nil {
 			break
@@ -983,6 +1039,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateRoom(childComplexity, args["input"].(model.CreateRoomInput)), true
+	case "Mutation.createTermsOfService":
+		if e.ComplexityRoot.Mutation.CreateTermsOfService == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createTermsOfService_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateTermsOfService(childComplexity, args["input"].(model.CreateTermsOfServiceInput)), true
 	case "Mutation.createUser":
 		if e.ComplexityRoot.Mutation.CreateUser == nil {
 			break
@@ -1060,6 +1127,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteMessage(childComplexity, args["roomID"].(string), args["id"].(string)), true
+	case "Mutation.deleteNotifications":
+		if e.ComplexityRoot.Mutation.DeleteNotifications == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteNotifications_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteNotifications(childComplexity, args["ids"].([]string)), true
 	case "Mutation.deletePost":
 		if e.ComplexityRoot.Mutation.DeletePost == nil {
 			break
@@ -1071,6 +1149,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeletePost(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteReadNotifications":
+		if e.ComplexityRoot.Mutation.DeleteReadNotifications == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteReadNotifications(childComplexity), true
 	case "Mutation.deleteUser":
 		if e.ComplexityRoot.Mutation.DeleteUser == nil {
 			break
@@ -1275,6 +1359,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAvatar(childComplexity, args["objectKey"].(string)), true
+	case "Mutation.toggleMaintenanceMode":
+		if e.ComplexityRoot.Mutation.ToggleMaintenanceMode == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_toggleMaintenanceMode_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ToggleMaintenanceMode(childComplexity, args["enabled"].(bool)), true
 	case "Mutation.toggleReportSystem":
 		if e.ComplexityRoot.Mutation.ToggleReportSystem == nil {
 			break
@@ -1585,6 +1680,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminGetFavoriteUsers(childComplexity, args["userID"].(string)), true
+	case "Query.adminListConsents":
+		if e.ComplexityRoot.Query.AdminListConsents == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListConsents_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListConsents(childComplexity, args["termsID"].(string)), true
+	case "Query.adminListTerms":
+		if e.ComplexityRoot.Query.AdminListTerms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminListTerms(childComplexity), true
 	case "Query.administrators":
 		if e.ComplexityRoot.Query.Administrators == nil {
 			break
@@ -1619,6 +1731,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Communities(childComplexity), true
+	case "Query.currentTerms":
+		if e.ComplexityRoot.Query.CurrentTerms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.CurrentTerms(childComplexity), true
 	case "Query.favorites":
 		if e.ComplexityRoot.Query.Favorites == nil {
 			break
@@ -1713,6 +1831,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetPostByID(childComplexity, args["id"].(string)), true
+	case "Query.getPostByIDIncludeDeleted":
+		if e.ComplexityRoot.Query.GetPostByIDIncludeDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getPostByIDIncludeDeleted_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetPostByIDIncludeDeleted(childComplexity, args["id"].(string)), true
+	case "Query.getPostsByUserID":
+		if e.ComplexityRoot.Query.GetPostsByUserID == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getPostsByUserID_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetPostsByUserID(childComplexity, args["user_id"].(string)), true
 	case "Query.getProfileByUserID":
 		if e.ComplexityRoot.Query.GetProfileByUserID == nil {
 			break
@@ -1759,6 +1899,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ListFavoriteUsers(childComplexity), true
+	case "Query.maintenanceMode":
+		if e.ComplexityRoot.Query.MaintenanceMode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MaintenanceMode(childComplexity), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -1805,6 +1951,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyProfile(childComplexity), true
+	case "Query.myTermsConsentStatus":
+		if e.ComplexityRoot.Query.MyTermsConsentStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyTermsConsentStatus(childComplexity), true
 	case "Query.myUnreadNotificationCount":
 		if e.ComplexityRoot.Query.MyUnreadNotificationCount == nil {
 			break
@@ -1850,6 +2002,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedMediaUploadURL(childComplexity, args["contentType"].(string)), true
+	case "Query.presignedTermsDocumentUploadUrl":
+		if e.ComplexityRoot.Query.PresignedTermsDocumentUploadURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PresignedTermsDocumentUploadURL(childComplexity), true
 	case "Query.randomCommunities":
 		if e.ComplexityRoot.Query.RandomCommunities == nil {
 			break
@@ -2104,6 +2262,69 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Subscription.RoomReadStatusUpdated(childComplexity, args["roomID"].(string)), true
 
+	case "TermsConsentRecord.consentedAt":
+		if e.ComplexityRoot.TermsConsentRecord.ConsentedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentRecord.ConsentedAt(childComplexity), true
+	case "TermsConsentRecord.ID":
+		if e.ComplexityRoot.TermsConsentRecord.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentRecord.ID(childComplexity), true
+	case "TermsConsentRecord.user":
+		if e.ComplexityRoot.TermsConsentRecord.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentRecord.User(childComplexity), true
+
+	case "TermsConsentStatus.currentTerms":
+		if e.ComplexityRoot.TermsConsentStatus.CurrentTerms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentStatus.CurrentTerms(childComplexity), true
+	case "TermsConsentStatus.isConsented":
+		if e.ComplexityRoot.TermsConsentStatus.IsConsented == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentStatus.IsConsented(childComplexity), true
+
+	case "TermsOfService.createdAt":
+		if e.ComplexityRoot.TermsOfService.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsOfService.CreatedAt(childComplexity), true
+	case "TermsOfService.documentUrl":
+		if e.ComplexityRoot.TermsOfService.DocumentURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsOfService.DocumentURL(childComplexity), true
+	case "TermsOfService.effectiveDate":
+		if e.ComplexityRoot.TermsOfService.EffectiveDate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsOfService.EffectiveDate(childComplexity), true
+	case "TermsOfService.ID":
+		if e.ComplexityRoot.TermsOfService.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsOfService.ID(childComplexity), true
+	case "TermsOfService.version":
+		if e.ComplexityRoot.TermsOfService.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsOfService.Version(childComplexity), true
+
 	case "UnreadUpdate.roomID":
 		if e.ComplexityRoot.UnreadUpdate.RoomID == nil {
 			break
@@ -2281,6 +2502,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreatePostInput,
 		ec.unmarshalInputCreateReportInput,
 		ec.unmarshalInputCreateRoomInput,
+		ec.unmarshalInputCreateTermsOfServiceInput,
 		ec.unmarshalInputCreateUserInput,
 		ec.unmarshalInputDeleteFavoriteInput,
 		ec.unmarshalInputLoginInput,
@@ -2459,6 +2681,17 @@ func (ec *executionContext) field_Mutation_adminUpdateUser_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_consentToTerms_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "termsID", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["termsID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createAdministrator_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2569,6 +2802,17 @@ func (ec *executionContext) field_Mutation_createRoom_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createTermsOfService_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateTermsOfServiceInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateTermsOfServiceInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2648,6 +2892,17 @@ func (ec *executionContext) field_Mutation_deleteMessage_args(ctx context.Contex
 		return nil, err
 	}
 	args["id"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteNotifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ids", ec.unmarshalNID2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg0
 	return args, nil
 }
 
@@ -2885,6 +3140,17 @@ func (ec *executionContext) field_Mutation_setAvatar_args(ctx context.Context, r
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_toggleMaintenanceMode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled", ec.unmarshalNBoolean2bool)
+	if err != nil {
+		return nil, err
+	}
+	args["enabled"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_toggleReportSystem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3096,6 +3362,17 @@ func (ec *executionContext) field_Query_adminGetFavoriteUsers_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "termsID", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["termsID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_announcement_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3173,6 +3450,17 @@ func (ec *executionContext) field_Query_getMyRoleInCommunity_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getPostByIDIncludeDeleted_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getPostByID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3181,6 +3469,17 @@ func (ec *executionContext) field_Query_getPostByID_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getPostsByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "user_id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["user_id"] = arg0
 	return args, nil
 }
 
@@ -7652,6 +7951,76 @@ func (ec *executionContext) fieldContext_Mutation_markAllNotificationsAsRead(_ c
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_deleteNotifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteNotifications,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteNotifications(ctx, fc.Args["ids"].([]string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteNotifications(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteNotifications_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteReadNotifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteReadNotifications,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Mutation().DeleteReadNotifications(ctx)
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteReadNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createAnnouncement(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7834,6 +8203,141 @@ func (ec *executionContext) fieldContext_Mutation_markRoomAsRead(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_markRoomAsRead_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createTermsOfService(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createTermsOfService,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateTermsOfService(ctx, fc.Args["input"].(model.CreateTermsOfServiceInput))
+		},
+		nil,
+		ec.marshalNTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createTermsOfService(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsOfService_ID(ctx, field)
+			case "version":
+				return ec.fieldContext_TermsOfService_version(ctx, field)
+			case "documentUrl":
+				return ec.fieldContext_TermsOfService_documentUrl(ctx, field)
+			case "effectiveDate":
+				return ec.fieldContext_TermsOfService_effectiveDate(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_TermsOfService_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createTermsOfService_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_consentToTerms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_consentToTerms,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ConsentToTerms(ctx, fc.Args["termsID"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_consentToTerms(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_consentToTerms_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_toggleMaintenanceMode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_toggleMaintenanceMode,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ToggleMaintenanceMode(ctx, fc.Args["enabled"].(bool))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_toggleMaintenanceMode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_toggleMaintenanceMode_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9405,6 +9909,136 @@ func (ec *executionContext) fieldContext_Query_getPostByID(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_getPostByIDIncludeDeleted,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetPostByIDIncludeDeleted(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_getPostByIDIncludeDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Post_ID(ctx, field)
+			case "content":
+				return ec.fieldContext_Post_content(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Post_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Post_updatedAt(ctx, field)
+			case "deletedAt":
+				return ec.fieldContext_Post_deletedAt(ctx, field)
+			case "replyCount":
+				return ec.fieldContext_Post_replyCount(ctx, field)
+			case "user":
+				return ec.fieldContext_Post_user(ctx, field)
+			case "favorites":
+				return ec.fieldContext_Post_favorites(ctx, field)
+			case "parent":
+				return ec.fieldContext_Post_parent(ctx, field)
+			case "replies":
+				return ec.fieldContext_Post_replies(ctx, field)
+			case "media":
+				return ec.fieldContext_Post_media(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getPostByIDIncludeDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getPostsByUserID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_getPostsByUserID,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetPostsByUserID(ctx, fc.Args["user_id"].(string))
+		},
+		nil,
+		ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_getPostsByUserID(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Post_ID(ctx, field)
+			case "content":
+				return ec.fieldContext_Post_content(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Post_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Post_updatedAt(ctx, field)
+			case "deletedAt":
+				return ec.fieldContext_Post_deletedAt(ctx, field)
+			case "replyCount":
+				return ec.fieldContext_Post_replyCount(ctx, field)
+			case "user":
+				return ec.fieldContext_Post_user(ctx, field)
+			case "favorites":
+				return ec.fieldContext_Post_favorites(ctx, field)
+			case "parent":
+				return ec.fieldContext_Post_parent(ctx, field)
+			case "replies":
+				return ec.fieldContext_Post_replies(ctx, field)
+			case "media":
+				return ec.fieldContext_Post_media(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getPostsByUserID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_getRepliesByPostID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10343,6 +10977,41 @@ func (ec *executionContext) fieldContext_Query_presignedCommunityIconUploadUrl(c
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_presignedTermsDocumentUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_presignedTermsDocumentUploadUrl,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PresignedTermsDocumentUploadURL(ctx)
+		},
+		nil,
+		ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_presignedTermsDocumentUploadUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "uploadUrl":
+				return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
+			case "objectKey":
+				return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_searchReports(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10624,6 +11293,201 @@ func (ec *executionContext) fieldContext_Query_announcement(ctx context.Context,
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_announcement_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_maintenanceMode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_maintenanceMode,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MaintenanceMode(ctx)
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_maintenanceMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_currentTerms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_currentTerms,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().CurrentTerms(ctx)
+		},
+		nil,
+		ec.marshalOTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_currentTerms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsOfService_ID(ctx, field)
+			case "version":
+				return ec.fieldContext_TermsOfService_version(ctx, field)
+			case "documentUrl":
+				return ec.fieldContext_TermsOfService_documentUrl(ctx, field)
+			case "effectiveDate":
+				return ec.fieldContext_TermsOfService_effectiveDate(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_TermsOfService_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myTermsConsentStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_myTermsConsentStatus,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyTermsConsentStatus(ctx)
+		},
+		nil,
+		ec.marshalNTermsConsentStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_myTermsConsentStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "isConsented":
+				return ec.fieldContext_TermsConsentStatus_isConsented(ctx, field)
+			case "currentTerms":
+				return ec.fieldContext_TermsConsentStatus_currentTerms(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsConsentStatus", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminListTerms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_adminListTerms,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminListTerms(ctx)
+		},
+		nil,
+		ec.marshalNTermsOfService2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfServiceᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_adminListTerms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsOfService_ID(ctx, field)
+			case "version":
+				return ec.fieldContext_TermsOfService_version(ctx, field)
+			case "documentUrl":
+				return ec.fieldContext_TermsOfService_documentUrl(ctx, field)
+			case "effectiveDate":
+				return ec.fieldContext_TermsOfService_effectiveDate(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_TermsOfService_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminListConsents(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_adminListConsents,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListConsents(ctx, fc.Args["termsID"].(string))
+		},
+		nil,
+		ec.marshalNTermsConsentRecord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecordᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_adminListConsents(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsConsentRecord_ID(ctx, field)
+			case "user":
+				return ec.fieldContext_TermsConsentRecord_user(ctx, field)
+			case "consentedAt":
+				return ec.fieldContext_TermsConsentRecord_consentedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsConsentRecord", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListConsents_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -11895,6 +12759,332 @@ func (ec *executionContext) fieldContext_Subscription_myUnreadUpdated(_ context.
 				return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UnreadUpdate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentRecord_ID(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentRecord_ID,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentRecord_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentRecord_user(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentRecord_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalNUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentRecord_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_User_ID(ctx, field)
+			case "accountID":
+				return ec.fieldContext_User_accountID(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "role":
+				return ec.fieldContext_User_role(ctx, field)
+			case "status":
+				return ec.fieldContext_User_status(ctx, field)
+			case "avatarUrl":
+				return ec.fieldContext_User_avatarUrl(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "posts":
+				return ec.fieldContext_User_posts(ctx, field)
+			case "favorites":
+				return ec.fieldContext_User_favorites(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentRecord_consentedAt(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentRecord_consentedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ConsentedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentRecord_consentedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentStatus_isConsented(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentStatus_isConsented,
+		func(ctx context.Context) (any, error) {
+			return obj.IsConsented, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentStatus_isConsented(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentStatus_currentTerms(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentStatus_currentTerms,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentTerms, nil
+		},
+		nil,
+		ec.marshalOTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentStatus_currentTerms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsOfService_ID(ctx, field)
+			case "version":
+				return ec.fieldContext_TermsOfService_version(ctx, field)
+			case "documentUrl":
+				return ec.fieldContext_TermsOfService_documentUrl(ctx, field)
+			case "effectiveDate":
+				return ec.fieldContext_TermsOfService_effectiveDate(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_TermsOfService_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsOfService_ID(ctx context.Context, field graphql.CollectedField, obj *model.TermsOfService) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsOfService_ID,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsOfService_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsOfService",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsOfService_version(ctx context.Context, field graphql.CollectedField, obj *model.TermsOfService) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsOfService_version,
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsOfService_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsOfService",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsOfService_documentUrl(ctx context.Context, field graphql.CollectedField, obj *model.TermsOfService) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsOfService_documentUrl,
+		func(ctx context.Context) (any, error) {
+			return obj.DocumentURL, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsOfService_documentUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsOfService",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsOfService_effectiveDate(ctx context.Context, field graphql.CollectedField, obj *model.TermsOfService) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsOfService_effectiveDate,
+		func(ctx context.Context) (any, error) {
+			return obj.EffectiveDate, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsOfService_effectiveDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsOfService",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsOfService_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.TermsOfService) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsOfService_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsOfService_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsOfService",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -14550,6 +15740,50 @@ func (ec *executionContext) unmarshalInputCreateRoomInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCreateTermsOfServiceInput(ctx context.Context, obj any) (model.CreateTermsOfServiceInput, error) {
+	var it model.CreateTermsOfServiceInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"version", "objectKey", "effectiveDate"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "version":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("version"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Version = data
+		case "objectKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("objectKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ObjectKey = data
+		case "effectiveDate":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("effectiveDate"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EffectiveDate = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, obj any) (model.CreateUserInput, error) {
 	var it model.CreateUserInput
 	if obj == nil {
@@ -14922,7 +16156,7 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "content"}
+	fieldsInOrder := [...]string{"id", "content", "newMediaInputs", "deletedMediaIDs"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -14943,6 +16177,20 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.Content = data
+		case "newMediaInputs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newMediaInputs"))
+			data, err := ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NewMediaInputs = data
+		case "deletedMediaIDs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deletedMediaIDs"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeletedMediaIDs = data
 		}
 	}
 	return it, nil
@@ -16238,6 +17486,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "deleteNotifications":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteNotifications(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteReadNotifications":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteReadNotifications(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createAnnouncement":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createAnnouncement(ctx, field)
@@ -16262,6 +17524,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "markRoomAsRead":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_markRoomAsRead(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createTermsOfService":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createTermsOfService(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "consentToTerms":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_consentToTerms(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toggleMaintenanceMode":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_toggleMaintenanceMode(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -16999,6 +18282,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getPostByIDIncludeDeleted":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getPostByIDIncludeDeleted(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getPostsByUserID":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getPostsByUserID(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "getRepliesByPostID":
 			field := field
 
@@ -17383,6 +18707,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedTermsDocumentUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedTermsDocumentUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "searchReports":
 			field := field
 
@@ -17478,6 +18824,113 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_announcement(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "maintenanceMode":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_maintenanceMode(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "currentTerms":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_currentTerms(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myTermsConsentStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myTermsConsentStatus(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListTerms":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListTerms(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListConsents":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListConsents(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -17847,6 +19300,155 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
+}
+
+var termsConsentRecordImplementors = []string{"TermsConsentRecord"}
+
+func (ec *executionContext) _TermsConsentRecord(ctx context.Context, sel ast.SelectionSet, obj *model.TermsConsentRecord) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, termsConsentRecordImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TermsConsentRecord")
+		case "ID":
+			out.Values[i] = ec._TermsConsentRecord_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "user":
+			out.Values[i] = ec._TermsConsentRecord_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "consentedAt":
+			out.Values[i] = ec._TermsConsentRecord_consentedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var termsConsentStatusImplementors = []string{"TermsConsentStatus"}
+
+func (ec *executionContext) _TermsConsentStatus(ctx context.Context, sel ast.SelectionSet, obj *model.TermsConsentStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, termsConsentStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TermsConsentStatus")
+		case "isConsented":
+			out.Values[i] = ec._TermsConsentStatus_isConsented(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentTerms":
+			out.Values[i] = ec._TermsConsentStatus_currentTerms(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var termsOfServiceImplementors = []string{"TermsOfService"}
+
+func (ec *executionContext) _TermsOfService(ctx context.Context, sel ast.SelectionSet, obj *model.TermsOfService) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, termsOfServiceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TermsOfService")
+		case "ID":
+			out.Values[i] = ec._TermsOfService_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._TermsOfService_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "documentUrl":
+			out.Values[i] = ec._TermsOfService_documentUrl(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "effectiveDate":
+			out.Values[i] = ec._TermsOfService_effectiveDate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._TermsOfService_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
 }
 
 var unreadUpdateImplementors = []string{"UnreadUpdate"}
@@ -18677,6 +20279,11 @@ func (ec *executionContext) unmarshalNCreateRoomInput2githubᚗcomᚋCityboypeng
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCreateTermsOfServiceInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateTermsOfServiceInput(ctx context.Context, v any) (model.CreateTermsOfServiceInput, error) {
+	res, err := ec.unmarshalInputCreateTermsOfServiceInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCreateUserInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateUserInput(ctx context.Context, v any) (model.CreateUserInput, error) {
 	res, err := ec.unmarshalInputCreateUserInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -18745,6 +20352,36 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNInquiry2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiry(ctx context.Context, sel ast.SelectionSet, v model.Inquiry) graphql.Marshaler {
@@ -19036,6 +20673,76 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNTermsConsentRecord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecordᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TermsConsentRecord) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTermsConsentRecord2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecord(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTermsConsentRecord2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecord(ctx context.Context, sel ast.SelectionSet, v *model.TermsConsentRecord) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TermsConsentRecord(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTermsConsentStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentStatus(ctx context.Context, sel ast.SelectionSet, v model.TermsConsentStatus) graphql.Marshaler {
+	return ec._TermsConsentStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTermsConsentStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentStatus(ctx context.Context, sel ast.SelectionSet, v *model.TermsConsentStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TermsConsentStatus(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTermsOfService2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService(ctx context.Context, sel ast.SelectionSet, v model.TermsOfService) graphql.Marshaler {
+	return ec._TermsOfService(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTermsOfService2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfServiceᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TermsOfService) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService(ctx context.Context, sel ast.SelectionSet, v *model.TermsOfService) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TermsOfService(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUnreadUpdate2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v model.UnreadUpdate) graphql.Marshaler {
@@ -19341,6 +21048,42 @@ func (ec *executionContext) marshalOFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋ
 	return ec._Favorite(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -19495,6 +21238,13 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	_ = ctx
 	res := graphql.MarshalString(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOTermsOfService2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsOfService(ctx context.Context, sel ast.SelectionSet, v *model.TermsOfService) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._TermsOfService(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {

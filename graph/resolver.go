@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"sync/atomic"
+
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -18,6 +20,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -26,7 +29,9 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 type Resolver struct {
-	StorageRepository repository.StorageRepository
+	StorageRepository     repository.StorageRepository
+	MaintenanceRepository repository.MaintenanceRepository
+	MaintenanceFlag       *atomic.Bool
 
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
@@ -56,15 +61,16 @@ type Resolver struct {
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
-	GetPostByIDUseCase       post.GetPostByIDUseCase
-	CreatePostUseCase        post.CreatePostUseCase
-	ListPostsUseCase         post.ListPostsUseCase
-	DeletePostUseCase        post.DeletePostUseCase
-	UpdatePostUseCase        post.UpdatePostUseCase
-	SearchPostsUseCase       post.SearchPostsUseCase
-	ListTopLevelPostsUseCase post.ListTopLevelPostsUseCase
-	GetRepliesByIDUseCase    post.GetRepliesByIDUseCase
-	GetPostsByUserIDUseCase  post.GetPostsByUserIDUseCase
+	GetPostByIDUseCase               post.GetPostByIDUseCase
+	GetPostByIDIncludeDeletedUseCase post.GetPostByIDIncludeDeletedUseCase
+	CreatePostUseCase                post.CreatePostUseCase
+	ListPostsUseCase                 post.ListPostsUseCase
+	DeletePostUseCase                post.DeletePostUseCase
+	UpdatePostUseCase                post.UpdatePostUseCase
+	SearchPostsUseCase               post.SearchPostsUseCase
+	ListTopLevelPostsUseCase         post.ListTopLevelPostsUseCase
+	GetRepliesByIDUseCase            post.GetRepliesByIDUseCase
+	GetPostsByUserIDUseCase          post.GetPostsByUserIDUseCase
 
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase
@@ -96,9 +102,10 @@ type Resolver struct {
 	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
 	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	MarkRoomAsReadUseCase             roomusecase.MarkRoomAsReadUseCase
-	GetRoomReadStatusUseCase          roomusecase.GetRoomReadStatusUseCase
-	GetMembersUnreadCountsUseCase     roomusecase.GetMembersUnreadCountsUseCase
+	MarkRoomAsReadUseCase              roomusecase.MarkRoomAsReadUseCase
+	GetRoomReadStatusUseCase           roomusecase.GetRoomReadStatusUseCase
+	GetRoomReadStatusBatchUseCase      roomusecase.GetRoomReadStatusBatchUseCase
+	GetMembersUnreadCountsUseCase      roomusecase.GetMembersUnreadCountsUseCase
 
 	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase                communityusecase.GetCommunityUseCase
@@ -114,11 +121,13 @@ type Resolver struct {
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
 
-	NotificationPublisher    notificationuc.NotificationPublisher
-	ListNotificationsUseCase notificationuc.ListNotificationsUseCase
-	MarkAsReadUseCase        notificationuc.MarkAsReadUseCase
-	MarkAllAsReadUseCase     notificationuc.MarkAllAsReadUseCase
-	CountUnreadUseCase       notificationuc.CountUnreadUseCase
+	NotificationPublisher          notificationuc.NotificationPublisher
+	ListNotificationsUseCase       notificationuc.ListNotificationsUseCase
+	MarkAsReadUseCase              notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase           notificationuc.MarkAllAsReadUseCase
+	CountUnreadUseCase             notificationuc.CountUnreadUseCase
+	DeleteNotificationsUseCase notificationuc.DeleteNotificationsUseCase
+	DeleteReadNotificationsUseCase notificationuc.DeleteReadNotificationsUseCase
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
@@ -133,16 +142,24 @@ type Resolver struct {
 
 	PubSub *pubsub.PubSub
 
-	CreateBlockUseCase         block.BlockUserUseCase
-	DeleteBlockUseCase         block.DeleteBlockerUseCase
-	GetBlockersByUserIDUseCase block.GetBlockersByUserIDUseCase
-	ListBlockersUseCase        block.ListBlockersUseCase
-	SearchBlockersUseCase      block.SearchBlockersUseCase
-	CheckBlockRelationUseCase  block.CheckBlockRelationUseCase
+	CreateBlockUseCase              block.BlockUserUseCase
+	DeleteBlockUseCase              block.DeleteBlockerUseCase
+	GetBlockersByUserIDUseCase      block.GetBlockersByUserIDUseCase
+	ListBlockersUseCase             block.ListBlockersUseCase
+	SearchBlockersUseCase           block.SearchBlockersUseCase
+	CheckBlockRelationUseCase       block.CheckBlockRelationUseCase
+	GetBlockRelatedUserIDsUseCase   block.GetBlockRelatedUserIDsUseCase
 
 	CreateFavoriteUserUseCase      favoriteuser.CreateFavoriteUserUseCase
 	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase
 	GetFavoriteUserByUserIDUseCase favoriteuser.GetFavoriteUsersByUserIDUseCase
 	ListFavoriteUsersUseCase       favoriteuser.ListFavoriteUsersUseCase
 	SearchFavoriteUsersUseCase     favoriteuser.SearchFavoriteUsersUseCase
+
+	CreateTermsUseCase      *termsusecase.CreateTermsUseCase
+	GetCurrentTermsUseCase  *termsusecase.GetCurrentTermsUseCase
+	ConsentToTermsUseCase   *termsusecase.ConsentToTermsUseCase
+	CheckConsentUseCase     *termsusecase.CheckConsentUseCase
+	ListTermsUseCase        *termsusecase.ListTermsUseCase
+	ListConsentsUseCase     *termsusecase.ListConsentsUseCase
 }

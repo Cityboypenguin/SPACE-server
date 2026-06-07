@@ -282,6 +282,82 @@ func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, room
 	return result, rows.Err()
 }
 
+func (r *MySQLRoomUserRepository) GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*int64, error) {
+	if len(roomIDs) == 0 {
+		return map[int64]*int64{}, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	query := fmt.Sprintf(
+		"SELECT room_id, last_read_at FROM room_users WHERE user_id = ? AND room_id IN (%s)",
+		placeholders,
+	)
+	args := make([]interface{}, 0, 1+len(roomIDs))
+	args = append(args, userID)
+	for _, id := range roomIDs {
+		args = append(args, id)
+	}
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]*int64)
+	for rows.Next() {
+		var roomID int64
+		var readAt sql.NullInt64
+		if err := rows.Scan(&roomID, &readAt); err != nil {
+			return nil, err
+		}
+		if readAt.Valid {
+			v := readAt.Int64
+			result[roomID] = &v
+		} else {
+			result[roomID] = nil
+		}
+	}
+	return result, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) GetMembersLastReadAtByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]map[int64]*int64, error) {
+	if len(roomIDs) == 0 {
+		return map[int64]map[int64]*int64{}, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	query := fmt.Sprintf(
+		"SELECT room_id, user_id, last_read_at FROM room_users WHERE room_id IN (%s)",
+		placeholders,
+	)
+	args := make([]interface{}, len(roomIDs))
+	for i, id := range roomIDs {
+		args[i] = id
+	}
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]map[int64]*int64)
+	for rows.Next() {
+		var roomID, userID int64
+		var readAt sql.NullInt64
+		if err := rows.Scan(&roomID, &userID, &readAt); err != nil {
+			return nil, err
+		}
+		if result[roomID] == nil {
+			result[roomID] = make(map[int64]*int64)
+		}
+		if readAt.Valid {
+			v := readAt.Int64
+			result[roomID][userID] = &v
+		} else {
+			result[roomID][userID] = nil
+		}
+	}
+	return result, rows.Err()
+}
+
 // FindOrCreateDMRoom は2ユーザー間のDMルームをSERIALIZABLEトランザクション内で
 // 検索または作成する。並行リクエストによる重複作成を防ぐ。
 func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error) {

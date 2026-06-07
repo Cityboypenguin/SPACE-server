@@ -87,7 +87,7 @@ func GenerateAccessToken(id int64, role string) (string, error) {
 }
 
 func GenerateRefreshToken(id int64, role string) (string, error) {
-	expirationMinutes := tokenExpirationMinutes("JWT_REFRESH_EXPIRATION_MINUTES", 60*24*14)
+	expirationMinutes := tokenExpirationMinutes("JWT_REFRESH_EXPIRATION_MINUTES", 60*24*30)
 	return generateTokenWithType(id, role, "refresh", expirationMinutes)
 }
 

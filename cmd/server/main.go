@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
@@ -41,6 +43,7 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -116,7 +119,7 @@ func main() {
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
-	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository)
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
@@ -128,14 +131,16 @@ func main() {
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
 	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager)
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
@@ -145,12 +150,22 @@ func main() {
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
 	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
 	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
+	getFavoritesByPostIDsUseCase := favoriteusecase.NewGetFavoritesByPostIDsUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
 	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	maintenanceRepository := infraredis.NewRedisMaintenanceRepository(redisClient)
+
+	maintenanceFlag := &atomic.Bool{}
+	if enabled, err := maintenanceRepository.IsMaintenanceModeEnabled(context.Background()); err != nil {
+		logger.Log.Warn().Err(err).Msg("failed to load maintenance mode from redis; defaulting to false")
+	} else {
+		maintenanceFlag.Store(enabled)
+	}
+
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
@@ -158,6 +173,7 @@ func main() {
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
+	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
@@ -179,12 +195,13 @@ func main() {
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
 	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
+	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
-	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository)
+	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
+	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository, mediaRepository)
 	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
 	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
 	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
@@ -201,6 +218,7 @@ func main() {
 	searchBlockersUseCase := blusecase.NewSearchBlockersUseCase(blockRepository)
 	getBlockersByUserIDUseCase := blusecase.NewGetBlockersByUserIDUseCase(blockRepository)
 	checkBlockRelationUseCase := blusecase.NewCheckBlockRelationUseCase(blockRepository)
+	getBlockRelatedUserIDsUseCase := blusecase.NewGetBlockRelatedUserIDsUseCase(blockRepository)
 
 	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
 	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
@@ -214,6 +232,14 @@ func main() {
 	sseBroker := sse.NewBroker()
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 
+	termsRepository := mysql.NewMySQLTermsRepository(database)
+	createTermsUseCase := termsusecase.NewCreateTermsUseCase(termsRepository)
+	getCurrentTermsUseCase := termsusecase.NewGetCurrentTermsUseCase(termsRepository)
+	consentToTermsUseCase := termsusecase.NewConsentToTermsUseCase(termsRepository, userRepository)
+	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
+	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
+	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
+
 	announcementRepository := mysql.NewMySQLAnnouncementRepository(database)
 	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
 	listAnnouncementsUseCase := announcementusecase.NewListAnnouncementsUseCase(announcementRepository)
@@ -224,11 +250,15 @@ func main() {
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
 	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
+	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
+	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
-		StorageRepository: storageRepository,
+		StorageRepository:     storageRepository,
+		MaintenanceRepository: maintenanceRepository,
+		MaintenanceFlag:       maintenanceFlag,
 
 		CreateUserUseCase:       createUserUseCase,
 		ListUsersUseCase:        listUsersUseCase,
@@ -258,15 +288,16 @@ func main() {
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 
-		GetPostByIDUseCase:       getPostByIDUseCase,
-		CreatePostUseCase:        createPostUseCase,
-		ListPostsUseCase:         listPostsUseCase,
-		DeletePostUseCase:        deletePostUseCase,
-		UpdatePostUseCase:        updatePostUseCase,
-		SearchPostsUseCase:       searchPostsUseCase,
-		ListTopLevelPostsUseCase: listTopLevelPostsUseCase,
-		GetRepliesByIDUseCase:    getRepliesByIDUseCase,
-		GetPostsByUserIDUseCase:  getPostsByUserIDUseCase,
+		GetPostByIDUseCase:               getPostByIDUseCase,
+		GetPostByIDIncludeDeletedUseCase: getPostByIDIncludeDeletedUseCase,
+		CreatePostUseCase:                createPostUseCase,
+		ListPostsUseCase:                 listPostsUseCase,
+		DeletePostUseCase:                deletePostUseCase,
+		UpdatePostUseCase:                updatePostUseCase,
+		SearchPostsUseCase:               searchPostsUseCase,
+		ListTopLevelPostsUseCase:         listTopLevelPostsUseCase,
+		GetRepliesByIDUseCase:            getRepliesByIDUseCase,
+		GetPostsByUserIDUseCase:          getPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
@@ -300,6 +331,7 @@ func main() {
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
 		MarkRoomAsReadUseCase:             markRoomAsReadUseCase,
 		GetRoomReadStatusUseCase:          getRoomReadStatusUseCase,
+		GetRoomReadStatusBatchUseCase:     getRoomReadStatusBatchUseCase,
 		GetMembersUnreadCountsUseCase:     getMembersUnreadCountsUseCase,
 
 		CreateCommunityUseCase:             createCommunityUseCase,
@@ -327,7 +359,8 @@ func main() {
 		ListBlockersUseCase:        listBlockersUseCase,
 		SearchBlockersUseCase:      searchBlockersUseCase,
 		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
-		CheckBlockRelationUseCase:  checkBlockRelationUseCase,
+		CheckBlockRelationUseCase:           checkBlockRelationUseCase,
+		GetBlockRelatedUserIDsUseCase:       getBlockRelatedUserIDsUseCase,
 
 		CreateInquiryUsecase: *createInquiryUseCase,
 		ManageInquiryUsecase: *manageInquiryUseCase,
@@ -338,11 +371,20 @@ func main() {
 		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
 		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
 
-		NotificationPublisher:    notificationPublisher,
-		ListNotificationsUseCase: listNotificationsUseCase,
-		MarkAsReadUseCase:        markAsReadUseCase,
-		MarkAllAsReadUseCase:     markAllAsReadUseCase,
-		CountUnreadUseCase:       countUnreadUseCase,
+		CreateTermsUseCase:     createTermsUseCase,
+		GetCurrentTermsUseCase: getCurrentTermsUseCase,
+		ConsentToTermsUseCase:  consentToTermsUseCase,
+		CheckConsentUseCase:    checkConsentUseCase,
+		ListTermsUseCase:       listTermsUseCase,
+		ListConsentsUseCase:    listConsentsUseCase,
+
+		NotificationPublisher:          notificationPublisher,
+		ListNotificationsUseCase:       listNotificationsUseCase,
+		MarkAsReadUseCase:              markAsReadUseCase,
+		MarkAllAsReadUseCase:           markAllAsReadUseCase,
+		CountUnreadUseCase:             countUnreadUseCase,
+		DeleteNotificationsUseCase: deleteNotificationsUseCase,
+		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
 		SSEBroker:                sseBroker,
 
 		PubSub: ps,
@@ -370,9 +412,16 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(
+		getUsersByIDsUseCase,
+		listMediaByPostIDsUseCase,
+		getRepliesByPostIDsUseCase,
+		getFavoritesByPostIDsUseCase,
+	)))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -446,6 +495,8 @@ func main() {
 	// SSE
 	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository))
 
+	schedulePendingTerms(termsRepository, sseBroker)
+
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
 			e.Logger.Fatal(err)
@@ -473,6 +524,25 @@ func main() {
 	}
 
 	logger.Log.Info().Msg("server stopped")
+}
+
+// schedulePendingTerms fetches all future-dated terms on startup and sets a one-shot
+// timer for each so the SSE broadcast fires exactly when each version becomes effective.
+func schedulePendingTerms(termsRepo repository.TermsRepository, broker *sse.Broker) {
+	pending, err := termsRepo.FindFuture(context.Background())
+	if err != nil {
+		logger.Log.Error().Err(err).Msg("failed to fetch pending future terms on startup")
+		return
+	}
+	for _, t := range pending {
+		version := t.Version
+		delay := time.Until(t.EffectiveDate)
+		time.AfterFunc(delay, func() {
+			broker.Broadcast("terms_updated", map[string]any{"version": version})
+			logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
+		})
+		logger.Log.Info().Str("version", version).Dur("delay", delay).Msg("scheduled terms broadcast timer set")
+	}
 }
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.

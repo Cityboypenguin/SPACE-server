@@ -112,6 +112,25 @@ func (b *Broker) PublishSyncToUser(userID int64, unreadCount int) {
 	}
 }
 
+// Broadcast は現在接続中の全ユーザーにイベントを送信する。
+// terms_updated など全員対象のシステムイベントに使う。履歴には記録しない。
+func (b *Broker) Broadcast(eventType string, data map[string]any) {
+	ev := Event{Type: eventType, Data: data}
+	b.mu.Lock()
+	var all []*Client
+	for _, clients := range b.clients {
+		all = append(all, clients...)
+	}
+	b.mu.Unlock()
+
+	for _, c := range all {
+		select {
+		case c.ch <- ev:
+		default:
+		}
+	}
+}
+
 func (b *Broker) PublishToUser(userID int64, eventType string, data map[string]any) {
 	b.mu.Lock()
 	id := b.nextID

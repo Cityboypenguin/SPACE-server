@@ -3,11 +3,11 @@ package model
 import "time"
 
 type Profile struct {
-	UserID    int64
-	Bio       string
-	AvatarKey *string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	UserID      int64
+	Bio         string
+	AvatarMedia *Media
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type UpdateProfileParam struct {

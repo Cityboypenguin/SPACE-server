@@ -3,27 +3,30 @@ package graph
 import (
 	"context"
 	"errors"
+	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
+	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
-	if p == nil || p.AvatarKey == nil {
+	if p == nil || p.AvatarMedia == nil {
 		return nil
 	}
-	url := r.StorageRepository.PublicURL(*p.AvatarKey)
+	url := r.StorageRepository.PublicURL(p.AvatarMedia.StorageKey)
 	return &url
 }
 
 func (r *Resolver) communityAvatarURL(c *model.Community) string {
-	if c == nil || c.AvatarKey == "" {
+	if c == nil || c.AvatarMedia == nil {
 		return ""
 	}
-	return r.StorageRepository.PublicURL(c.AvatarKey)
+	return r.StorageRepository.PublicURL(c.AvatarMedia.StorageKey)
 }
 
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
@@ -77,6 +80,20 @@ func decodeGraphID(ctx context.Context, kind string, value string) (int64, error
 	return id, nil
 }
 
+// scheduleTermsBroadcast broadcasts "terms_updated" immediately if effectiveDate is
+// in the past or present, or schedules a one-shot timer to fire at effectiveDate.
+func scheduleTermsBroadcast(broker *sse.Broker, version string, effectiveDate time.Time) {
+	delay := time.Until(effectiveDate)
+	if delay <= 0 {
+		broker.Broadcast("terms_updated", map[string]any{"version": version})
+		return
+	}
+	time.AfterFunc(delay, func() {
+		broker.Broadcast("terms_updated", map[string]any{"version": version})
+		logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
+	})
+}
+
 func containsInt64(slice []int64, val int64) bool {
 	for _, v := range slice {
 		if v == val {
@@ -107,4 +124,48 @@ func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmo
 	}
 
 	return toGraphProfile(u, p, r.avatarURLFor(p)), nil
+}
+
+func (r *queryResolver) favoriteUsersToGQL(ctx context.Context, favs []*model.FavoriteUser) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(favs))
+	for _, f := range favs {
+		ids = append(ids, f.FavoriteUserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(favs))
+	for _, f := range favs {
+		if u, ok := userMap[f.FavoriteUserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
+}
+
+func (r *queryResolver) blockedUsersToGQL(ctx context.Context, blockers []*model.Blocker) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(blockers))
+	for _, b := range blockers {
+		ids = append(ids, b.BlockedUserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(blockers))
+	for _, b := range blockers {
+		if u, ok := userMap[b.BlockedUserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
 }

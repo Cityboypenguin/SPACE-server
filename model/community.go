@@ -7,15 +7,7 @@ type Community struct {
 	RoomID      int64
 	Name        string
 	Description string
-	AvatarKey   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
-type CreateCommunityParam struct {
-	Name        string
-	Description string
-	AvatarKey   string
+	AvatarMedia *Media
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -23,16 +15,6 @@ type CreateCommunityParam struct {
 type UpdateCommunityParam struct {
 	Name        *string
 	Description *string
-	AvatarKey   *string
-}
-
-func (c *Community) CreateCommunity(param CreateCommunityParam, roomID int64) {
-	c.RoomID = roomID
-	c.Name = param.Name
-	c.Description = param.Description
-	c.AvatarKey = param.AvatarKey
-	c.CreatedAt = param.CreatedAt
-	c.UpdatedAt = param.UpdatedAt
 }
 
 func (c *Community) UpdateCommunity(param UpdateCommunityParam) {
@@ -41,9 +23,6 @@ func (c *Community) UpdateCommunity(param UpdateCommunityParam) {
 	}
 	if param.Description != nil {
 		c.Description = *param.Description
-	}
-	if param.AvatarKey != nil {
-		c.AvatarKey = *param.AvatarKey
 	}
 	c.UpdatedAt = time.Now()
 }

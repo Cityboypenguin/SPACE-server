@@ -85,8 +85,7 @@ func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, sta
     query := `
         UPDATE user_reports
         SET status = ?, updated_at = ?
-        WHERE id = ?
-    `
+        WHERE id = ?`
 
     _, err := r.DB.ExecContext(ctx, query, string(status), now.Unix(), id)
     if err != nil {
@@ -98,31 +97,28 @@ func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, sta
 
 func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.Report, error) {
     query := `
-        SELECT 
-            r.id, r.reporter_id, r.target_type, r.target_id, r.reason, r.custom_reason, r.status, r.created_at, r.updated_at,
-            p.content AS post_content
-        FROM user_reports r
-        LEFT JOIN posts p ON r.target_type = 'POST' AND CAST(r.target_id AS UNSIGNED) = p.id
+        SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
+        FROM user_reports
         WHERE 1=1
     `
     var args []interface{}
 
     if filter != nil {
         if filter.Status != nil {
-            query += " AND r.status = ?"
+            query += " AND status = ?"
             args = append(args, string(*filter.Status))
         }
         if filter.TargetType != nil {
-            query += " AND r.target_type = ?"
+            query += " AND target_type = ?"
             args = append(args, string(*filter.TargetType))
         }
         if filter.ReporterID != nil && *filter.ReporterID != 0 {
-            query += " AND r.reporter_id = ?"
+            query += " AND reporter_id = ?"
             args = append(args, *filter.ReporterID)
         }
     }
 
-    query += " ORDER BY r.created_at DESC"
+    query += " ORDER BY created_at DESC"
 
     rows, err := r.DB.QueryContext(ctx, query, args...)
     if err != nil {
@@ -132,7 +128,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 
     var reports []*model.Report
     for rows.Next() {
-        report, err := r.scanReportWithPost(rows)
+        report, err := scanReport(rows)
         if err != nil {
             return nil, fmt.Errorf("failed to scan row in search reports: %w", err)
         }

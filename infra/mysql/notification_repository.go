@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -39,11 +40,36 @@ func (r *MySQLNotificationRepository) Save(ctx context.Context, n *model.Notific
 }
 
 func (r *MySQLNotificationRepository) SaveBatch(ctx context.Context, ns []*model.Notification) error {
-	for _, n := range ns {
-		if err := r.Save(ctx, n); err != nil {
-			return err
-		}
+	if len(ns) == 0 {
+		return nil
 	}
+
+	now := time.Now()
+	placeholders := make([]string, len(ns))
+	args := make([]any, 0, len(ns)*8)
+	for i, n := range ns {
+		n.CreatedAt = now
+		placeholders[i] = "(?, ?, ?, ?, ?, ?, ?, ?)"
+		args = append(args, n.UserID, n.Type, n.ActorID, n.TargetType, n.TargetID, n.Message, n.IsRead, n.CreatedAt.Unix())
+	}
+
+	query := `INSERT INTO notifications (user_id, type, actor_id, target_type, target_id, message, is_read, created_at) VALUES ` +
+		strings.Join(placeholders, ", ")
+
+	result, err := r.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+
+	firstID, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	for i, n := range ns {
+		n.ID = firstID + int64(i)
+	}
+
 	return nil
 }
 
@@ -95,4 +121,26 @@ func (r *MySQLNotificationRepository) CountUnread(ctx context.Context, userID in
 	var count int
 	err := r.DB.QueryRowContext(ctx, query, userID).Scan(&count)
 	return count, err
+}
+
+func (r *MySQLNotificationRepository) DeleteReadByUserID(ctx context.Context, userID int64) error {
+	query := `DELETE FROM notifications WHERE user_id = ? AND is_read = TRUE`
+	_, err := r.DB.ExecContext(ctx, query, userID)
+	return err
+}
+
+func (r *MySQLNotificationRepository) DeleteByIDs(ctx context.Context, ids []int64, userID int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, userID)
+	query := `DELETE FROM notifications WHERE id IN (` + strings.Join(placeholders, ",") + `) AND user_id = ?`
+	_, err := r.DB.ExecContext(ctx, query, args...)
+	return err
 }
