@@ -10,7 +10,9 @@ import (
 )
 
 const otpKeyPrefix = "email_otp:"
+const otpRateLimitPrefix = "email_otp_rate:"
 const otpTTL = 10 * time.Minute
+const otpRateLimitTTL = 1 * time.Minute
 
 var _ repository.EmailOTPRepository = &RedisEmailOTPRepository{}
 
@@ -47,4 +49,16 @@ func (r *RedisEmailOTPRepository) FindLatestByEmail(ctx context.Context, email s
 
 func (r *RedisEmailOTPRepository) Delete(ctx context.Context, email string) error {
 	return r.client.Del(ctx, otpKeyPrefix+email).Err()
+}
+
+func (r *RedisEmailOTPRepository) IsRateLimited(ctx context.Context, email string) (bool, error) {
+	exists, err := r.client.Exists(ctx, otpRateLimitPrefix+email).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+func (r *RedisEmailOTPRepository) MarkRateLimited(ctx context.Context, email string) error {
+	return r.client.Set(ctx, otpRateLimitPrefix+email, "1", otpRateLimitTTL).Err()
 }
