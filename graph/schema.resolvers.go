@@ -734,6 +734,16 @@ func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input
 		return nil, err
 	}
 
+	if input.AccountID == nil || *input.AccountID == "" {
+		return nil, fmt.Errorf("accountID は必須です")
+	}
+	if input.Name == nil || *input.Name == "" {
+		return nil, fmt.Errorf("name は必須です")
+	}
+	if input.Email == nil || *input.Email == "" {
+		return nil, fmt.Errorf("email は必須です")
+	}
+
 	numericID, err := decodeGraphID(ctx, "user", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
@@ -1011,6 +1021,22 @@ func (r *mutationResolver) SetAvatar(ctx context.Context, objectKey string) (*gq
 	}
 
 	p, err := r.SetAvatarUseCase.Execute(ctx, claims.ID, objectKey)
+	if err != nil {
+		return nil, err
+	}
+
+	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+}
+
+// DeleteAvatar is the resolver for the deleteAvatar field.
+func (r *mutationResolver) DeleteAvatar(ctx context.Context) (*gqlmodel.Profile, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := r.DeleteAvatarUseCase.Execute(ctx, claims.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -1588,8 +1614,6 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	r.MaintenanceFlag.Store(enabled)
 	return enabled, nil
 }
-
-var isReportServiceEnabled = true
 
 // SetReportServiceStatus is the resolver for the setReportServiceStatus field.
 func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled bool) (bool, error) {

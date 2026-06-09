@@ -14,6 +14,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+var isReportServiceEnabled = true
+
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarMedia == nil {
 		return nil

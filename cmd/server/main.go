@@ -122,6 +122,7 @@ func main() {
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
+	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
@@ -278,7 +279,8 @@ func main() {
 		LogoutUserUseCase:       logoutUserUseCase,
 		FreezeUserUseCase:       freezeUserUseCase,
 		UnfreezeUserUseCase:     unfreezeUserUseCase,
-		SetAvatarUseCase:        setAvatarUseCase,
+		SetAvatarUseCase:    setAvatarUseCase,
+		DeleteAvatarUseCase: deleteAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,

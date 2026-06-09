@@ -191,6 +191,7 @@ type Mutation {
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
   setAvatar(objectKey: String!): Profile!
+  deleteAvatar: Profile!
   joinRoom(roomID: ID!): Boolean!
   sendMessage(roomID: ID!, content: String!, mediaInputs: [MediaUploadInput!]): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!

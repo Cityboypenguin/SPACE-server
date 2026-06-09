@@ -50,6 +50,7 @@ type Resolver struct {
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
 	SetAvatarUseCase     profile.SetAvatarUseCase
+	DeleteAvatarUseCase  profile.DeleteAvatarUseCase
 
 	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase
