@@ -212,6 +212,7 @@ type ComplexityRoot struct {
 		Parent     func(childComplexity int) int
 		Replies    func(childComplexity int) int
 		ReplyCount func(childComplexity int) int
+		RootPost   func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 		User       func(childComplexity int) int
 	}
@@ -253,6 +254,7 @@ type ComplexityRoot struct {
 		GetPostsByUserID                func(childComplexity int, userID string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
+		GetRootPost                     func(childComplexity int) int
 		GetUserByID                     func(childComplexity int, id string) int
 		ListBlockedUsers                func(childComplexity int) int
 		ListFavoriteUsers               func(childComplexity int) int
@@ -441,6 +443,7 @@ type NotificationResolver interface {
 }
 type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
+	RootPost(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post) ([]*model.Post, error)
@@ -458,6 +461,7 @@ type QueryResolver interface {
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
 	Posts(ctx context.Context) ([]*model.Post, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
+	GetRootPost(ctx context.Context) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
@@ -1580,6 +1584,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.ReplyCount(childComplexity), true
+	case "Post.rootPost":
+		if e.ComplexityRoot.Post.RootPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.RootPost(childComplexity), true
 	case "Post.updatedAt":
 		if e.ComplexityRoot.Post.UpdatedAt == nil {
 			break
@@ -1860,6 +1870,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetRepliesByPostID(childComplexity, args["post_id"].(string)), true
+	case "Query.getRootPost":
+		if e.ComplexityRoot.Query.GetRootPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.GetRootPost(childComplexity), true
 	case "Query.getUserByID":
 		if e.ComplexityRoot.Query.GetUserByID == nil {
 			break
@@ -2816,6 +2832,8 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 		return ec.fieldContext_Post_replyCount(ctx, field)
 	case "user":
 		return ec.fieldContext_Post_user(ctx, field)
+	case "rootPost":
+		return ec.fieldContext_Post_rootPost(ctx, field)
 	case "favorites":
 		return ec.fieldContext_Post_favorites(ctx, field)
 	case "parent":
@@ -8730,6 +8748,38 @@ func (ec *executionContext) fieldContext_Post_user(_ context.Context, field grap
 	return fc, nil
 }
 
+func (ec *executionContext) _Post_rootPost(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_rootPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().RootPost(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Post_rootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Post_favorites(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9442,6 +9492,38 @@ func (ec *executionContext) _Query_topLevelPosts(ctx context.Context, field grap
 	)
 }
 func (ec *executionContext) fieldContext_Query_topLevelPosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getRootPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().GetRootPost(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -15911,6 +15993,39 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rootPost":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_rootPost(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "favorites":
 			field := field
 
@@ -16423,6 +16538,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getRootPost":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getRootPost(ctx, field)
 				return res
 			}
 

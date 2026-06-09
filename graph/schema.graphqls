@@ -15,6 +15,7 @@ type Query {
 
   posts: [Post!]!
   topLevelPosts: [Post!]!
+  getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
   getPostsByUserID(user_id: ID!): [Post!]!
@@ -104,6 +105,7 @@ type Post {
   deletedAt: String
   replyCount: Int!
   user: User!
+  rootPost: Post
   favorites: [Favorite!]!
   parent: Post
   replies: [Post!]!
