@@ -197,6 +197,7 @@ type Post struct {
 	DeletedAt  *string     `json:"deletedAt,omitempty"`
 	ReplyCount int32       `json:"replyCount"`
 	User       *User       `json:"user"`
+	RootPost   *Post       `json:"rootPost,omitempty"`
 	Favorites  []*Favorite `json:"favorites"`
 	Parent     *Post       `json:"parent,omitempty"`
 	Replies    []*Post     `json:"replies"`

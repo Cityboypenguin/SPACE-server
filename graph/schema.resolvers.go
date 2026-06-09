@@ -1639,6 +1639,23 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 	return toGraphUser(user), nil
 }
 
+// RootPost is the resolver for the rootPost field.
+func (r *postResolver) RootPost(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.Post, error) {
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+
+	rootPost, err := r.GetRootPostUseCase.Execute(ctx, numericPostID)
+	if err != nil {
+		return nil, err
+	}
+	if rootPost == nil {
+		return nil, nil
+	}
+	return toGraphPost(rootPost), nil
+}
+
 // Favorites is the resolver for the favorites field on Post.
 func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Favorite, error) {
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
@@ -1688,20 +1705,37 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 	return gqlPost, nil
 }
 
-// Replies is the resolver for the replies field on Post.
+// Replies is the resolver for the replies field.
 func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Post, error) {
-	if obj.DeletedAt != nil {
-		return []*gqlmodel.Post{}, nil
+	// 1. 権限判定
+	isAdmin := false
+	if _, adminErr := requireAdminAuth(ctx); adminErr == nil {
+		isAdmin = true
+	} else {
+		if _, userErr := requireAuth(ctx); userErr != nil {
+			return nil, userErr
+		} else if obj.DeletedAt != nil {
+			return nil, nil // ユーザーには削除済みを見せない
+		}
 	}
+
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	// ⭕️ DataLoader経由で取得
-	replies, err := dataloader.For(ctx).ReplyLoader.Load(ctx, numericPostID)
-	if err != nil {
-		return nil, err
+	// 2. ⭕️ 権限に応じて DataLoader を切り替える（N+1回避とクリーンアーキテクチャの両立）
+	var replies []*model.Post
+	var loaderErr error
+
+	if isAdmin {
+		replies, loaderErr = dataloader.For(ctx).AdminReplyLoader.Load(ctx, numericPostID)
+	} else {
+		replies, loaderErr = dataloader.For(ctx).ReplyLoader.Load(ctx, numericPostID)
+	}
+
+	if loaderErr != nil {
+		return nil, loaderErr
 	}
 
 	var gqlReplies []*gqlmodel.Post
@@ -1944,6 +1978,11 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, er
 		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
+}
+
+// GetRootPost is the resolver for the getRootPost field.
+func (r *queryResolver) GetRootPost(ctx context.Context) (*gqlmodel.Post, error) {
+	panic(fmt.Errorf("not implemented: GetRootPost - getRootPost"))
 }
 
 // GetPostByID is the resolver for the getPostByID field.
@@ -2844,6 +2883,7 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 			return nil, err
 		}
 	}
+
 	numericUserID, err := decodeGraphID(ctx, "user", userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
