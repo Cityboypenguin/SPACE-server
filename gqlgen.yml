@@ -156,6 +156,8 @@ models:
         resolver: true
       media:
         resolver: true
+      rootPost:
+        resolver: true
   Message:
     fields:
       user:

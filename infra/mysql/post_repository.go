@@ -410,6 +410,8 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context) ([]*model.P
 	var args []interface{}
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
 
+	query += " ORDER BY created_at DESC"
+
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -488,4 +490,104 @@ func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs
 		}
 	}
 	return result, rows.Err()
+}
+
+func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
+	if len(parentIDs) == 0 {
+		return make(map[int64][]*model.Post), nil
+	}
+
+	placeholders := make([]string, len(parentIDs))
+	args := make([]interface{}, len(parentIDs))
+	for i, id := range parentIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	// ⭕️ AND deleted_at IS NULL を除外
+	query := fmt.Sprintf(`
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+		FROM posts
+		WHERE parent_id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query += " ORDER BY created_at ASC"
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]*model.Post)
+	for rows.Next() {
+		var p model.Post
+		var createdAtUnix, updatedAtUnix int64
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
+			return nil, err
+		}
+		if parentID.Valid {
+			p.ParentID = &parentID.Int64
+		}
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		}
+
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
+		if p.ParentID != nil {
+			result[*p.ParentID] = append(result[*p.ParentID], &p)
+		}
+	}
+	return result, rows.Err()
+}
+
+// infra/mysql/post_repository.go
+
+func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*model.Post, error) {
+	query := `
+		WITH RECURSIVE ancestors AS (
+			SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+			FROM posts
+			WHERE id = ?
+			
+			UNION ALL
+			
+			SELECT p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.deleted_at, p.reply_count
+			FROM posts p
+			INNER JOIN ancestors a ON a.parent_id = p.id
+		)
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+		FROM ancestors
+		WHERE parent_id IS NULL AND id != ?
+		LIMIT 1
+	`
+
+	row := r.DB.QueryRowContext(ctx, query, postID, postID)
+
+	var p model.Post
+	var createdAtUnix, updatedAtUnix int64
+	var parentID, deletedAtUnix sql.NullInt64
+	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if parentID.Valid {
+		p.ParentID = &parentID.Int64
+	}
+	if deletedAtUnix.Valid {
+		deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+		p.DeletedAt = &deletedAt
+	}
+	p.CreatedAt = time.Unix(createdAtUnix, 0)
+	p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+
+	return &p, nil
 }

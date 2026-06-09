@@ -213,6 +213,7 @@ type ComplexityRoot struct {
 		Parent     func(childComplexity int) int
 		Replies    func(childComplexity int) int
 		ReplyCount func(childComplexity int) int
+		RootPost   func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 		User       func(childComplexity int) int
 	}
@@ -254,6 +255,7 @@ type ComplexityRoot struct {
 		GetPostsByUserID                func(childComplexity int, userID string) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
+		GetRootPost                     func(childComplexity int) int
 		GetUserByID                     func(childComplexity int, id string) int
 		IsReportServiceEnabled          func(childComplexity int) int
 		ListBlockedUsers                func(childComplexity int) int
@@ -447,6 +449,7 @@ type NotificationResolver interface {
 }
 type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
+	RootPost(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post) ([]*model.Post, error)
@@ -464,6 +467,7 @@ type QueryResolver interface {
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
 	Posts(ctx context.Context) ([]*model.Post, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
+	GetRootPost(ctx context.Context) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
@@ -1610,6 +1614,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.ReplyCount(childComplexity), true
+	case "Post.rootPost":
+		if e.ComplexityRoot.Post.RootPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.RootPost(childComplexity), true
 	case "Post.updatedAt":
 		if e.ComplexityRoot.Post.UpdatedAt == nil {
 			break
@@ -1890,6 +1900,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetRepliesByPostID(childComplexity, args["post_id"].(string)), true
+	case "Query.getRootPost":
+		if e.ComplexityRoot.Query.GetRootPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.GetRootPost(childComplexity), true
 	case "Query.getUserByID":
 		if e.ComplexityRoot.Query.GetUserByID == nil {
 			break
@@ -2643,6 +2659,530 @@ var sources = []*ast.Source{
 	{Name: "schema.graphqls", Input: sourceData("schema.graphqls"), BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
+
+// childFields_* functions provide shared child field context lookups.
+// Each function is generated once per unique object type, deduplicating the
+// switch statements that were previously inlined in every fieldContext_* function.
+
+func (ec *executionContext) childFields_Administrator(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Administrator_ID(ctx, field)
+	case "name":
+		return ec.fieldContext_Administrator_name(ctx, field)
+	case "email":
+		return ec.fieldContext_Administrator_email(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Administrator_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Administrator_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Administrator", field.Name)
+}
+
+func (ec *executionContext) childFields_AdministratorAuthPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "token":
+		return ec.fieldContext_AdministratorAuthPayload_token(ctx, field)
+	case "refreshToken":
+		return ec.fieldContext_AdministratorAuthPayload_refreshToken(ctx, field)
+	case "administrator":
+		return ec.fieldContext_AdministratorAuthPayload_administrator(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdministratorAuthPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_Announcement(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Announcement_ID(ctx, field)
+	case "title":
+		return ec.fieldContext_Announcement_title(ctx, field)
+	case "body":
+		return ec.fieldContext_Announcement_body(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Announcement_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Announcement_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Announcement", field.Name)
+}
+
+func (ec *executionContext) childFields_Blocker(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Blocker_ID(ctx, field)
+	case "userID":
+		return ec.fieldContext_Blocker_userID(ctx, field)
+	case "blockedUserID":
+		return ec.fieldContext_Blocker_blockedUserID(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Blocker_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Blocker", field.Name)
+}
+
+func (ec *executionContext) childFields_Community(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Community_ID(ctx, field)
+	case "roomID":
+		return ec.fieldContext_Community_roomID(ctx, field)
+	case "name":
+		return ec.fieldContext_Community_name(ctx, field)
+	case "description":
+		return ec.fieldContext_Community_description(ctx, field)
+	case "avatarURL":
+		return ec.fieldContext_Community_avatarURL(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_Community_unreadCount(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Community_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Community_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityMember(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "user":
+		return ec.fieldContext_CommunityMember_user(ctx, field)
+	case "role":
+		return ec.fieldContext_CommunityMember_role(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityMember", field.Name)
+}
+
+func (ec *executionContext) childFields_Favorite(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Favorite_ID(ctx, field)
+	case "user":
+		return ec.fieldContext_Favorite_user(ctx, field)
+	case "post":
+		return ec.fieldContext_Favorite_post(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Favorite_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Favorite", field.Name)
+}
+
+func (ec *executionContext) childFields_FavoriteUser(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_FavoriteUser_ID(ctx, field)
+	case "userID":
+		return ec.fieldContext_FavoriteUser_userID(ctx, field)
+	case "favoriteUserID":
+		return ec.fieldContext_FavoriteUser_favoriteUserID(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_FavoriteUser_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FavoriteUser", field.Name)
+}
+
+func (ec *executionContext) childFields_Inquiry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Inquiry_id(ctx, field)
+	case "name":
+		return ec.fieldContext_Inquiry_name(ctx, field)
+	case "email":
+		return ec.fieldContext_Inquiry_email(ctx, field)
+	case "subject":
+		return ec.fieldContext_Inquiry_subject(ctx, field)
+	case "content":
+		return ec.fieldContext_Inquiry_content(ctx, field)
+	case "status":
+		return ec.fieldContext_Inquiry_status(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Inquiry_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Inquiry_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Inquiry", field.Name)
+}
+
+func (ec *executionContext) childFields_Media(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Media_ID(ctx, field)
+	case "url":
+		return ec.fieldContext_Media_url(ctx, field)
+	case "contentType":
+		return ec.fieldContext_Media_contentType(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Media_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+}
+
+func (ec *executionContext) childFields_Message(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Message_ID(ctx, field)
+	case "roomID":
+		return ec.fieldContext_Message_roomID(ctx, field)
+	case "room":
+		return ec.fieldContext_Message_room(ctx, field)
+	case "userID":
+		return ec.fieldContext_Message_userID(ctx, field)
+	case "user":
+		return ec.fieldContext_Message_user(ctx, field)
+	case "content":
+		return ec.fieldContext_Message_content(ctx, field)
+	case "media":
+		return ec.fieldContext_Message_media(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Message_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Message_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Message", field.Name)
+}
+
+func (ec *executionContext) childFields_Notification(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Notification_ID(ctx, field)
+	case "type":
+		return ec.fieldContext_Notification_type(ctx, field)
+	case "actor":
+		return ec.fieldContext_Notification_actor(ctx, field)
+	case "targetType":
+		return ec.fieldContext_Notification_targetType(ctx, field)
+	case "targetID":
+		return ec.fieldContext_Notification_targetID(ctx, field)
+	case "message":
+		return ec.fieldContext_Notification_message(ctx, field)
+	case "isRead":
+		return ec.fieldContext_Notification_isRead(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Notification_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+}
+
+func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Post_ID(ctx, field)
+	case "content":
+		return ec.fieldContext_Post_content(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Post_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Post_updatedAt(ctx, field)
+	case "deletedAt":
+		return ec.fieldContext_Post_deletedAt(ctx, field)
+	case "replyCount":
+		return ec.fieldContext_Post_replyCount(ctx, field)
+	case "user":
+		return ec.fieldContext_Post_user(ctx, field)
+	case "rootPost":
+		return ec.fieldContext_Post_rootPost(ctx, field)
+	case "favorites":
+		return ec.fieldContext_Post_favorites(ctx, field)
+	case "parent":
+		return ec.fieldContext_Post_parent(ctx, field)
+	case "replies":
+		return ec.fieldContext_Post_replies(ctx, field)
+	case "media":
+		return ec.fieldContext_Post_media(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+}
+
+func (ec *executionContext) childFields_PresignedUploadUrl(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "uploadUrl":
+		return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
+	case "objectKey":
+		return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
+}
+
+func (ec *executionContext) childFields_Profile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "user":
+		return ec.fieldContext_Profile_user(ctx, field)
+	case "username":
+		return ec.fieldContext_Profile_username(ctx, field)
+	case "bio":
+		return ec.fieldContext_Profile_bio(ctx, field)
+	case "avatarUrl":
+		return ec.fieldContext_Profile_avatarUrl(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Profile_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Profile_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Profile", field.Name)
+}
+
+func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Room_ID(ctx, field)
+	case "content":
+		return ec.fieldContext_Room_content(ctx, field)
+	case "name":
+		return ec.fieldContext_Room_name(ctx, field)
+	case "type":
+		return ec.fieldContext_Room_type(ctx, field)
+	case "user":
+		return ec.fieldContext_Room_user(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Room_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Room_updatedAt(ctx, field)
+	case "isMessagingDisabled":
+		return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
+	case "lastReadAt":
+		return ec.fieldContext_Room_lastReadAt(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_Room_unreadCount(ctx, field)
+	case "partnerLastReadAt":
+		return ec.fieldContext_Room_partnerLastReadAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
+}
+
+func (ec *executionContext) childFields_RoomReadStatusUpdate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "userID":
+		return ec.fieldContext_RoomReadStatusUpdate_userID(ctx, field)
+	case "lastReadAt":
+		return ec.fieldContext_RoomReadStatusUpdate_lastReadAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RoomReadStatusUpdate", field.Name)
+}
+
+func (ec *executionContext) childFields_TermsConsentRecord(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_TermsConsentRecord_ID(ctx, field)
+	case "user":
+		return ec.fieldContext_TermsConsentRecord_user(ctx, field)
+	case "consentedAt":
+		return ec.fieldContext_TermsConsentRecord_consentedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TermsConsentRecord", field.Name)
+}
+
+func (ec *executionContext) childFields_TermsConsentStatus(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "isConsented":
+		return ec.fieldContext_TermsConsentStatus_isConsented(ctx, field)
+	case "currentTerms":
+		return ec.fieldContext_TermsConsentStatus_currentTerms(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TermsConsentStatus", field.Name)
+}
+
+func (ec *executionContext) childFields_TermsOfService(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_TermsOfService_ID(ctx, field)
+	case "version":
+		return ec.fieldContext_TermsOfService_version(ctx, field)
+	case "documentUrl":
+		return ec.fieldContext_TermsOfService_documentUrl(ctx, field)
+	case "effectiveDate":
+		return ec.fieldContext_TermsOfService_effectiveDate(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_TermsOfService_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+}
+
+func (ec *executionContext) childFields_UnreadUpdate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "roomID":
+		return ec.fieldContext_UnreadUpdate_roomID(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UnreadUpdate", field.Name)
+}
+
+func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_User_ID(ctx, field)
+	case "accountID":
+		return ec.fieldContext_User_accountID(ctx, field)
+	case "name":
+		return ec.fieldContext_User_name(ctx, field)
+	case "email":
+		return ec.fieldContext_User_email(ctx, field)
+	case "role":
+		return ec.fieldContext_User_role(ctx, field)
+	case "status":
+		return ec.fieldContext_User_status(ctx, field)
+	case "avatarUrl":
+		return ec.fieldContext_User_avatarUrl(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_User_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_User_updatedAt(ctx, field)
+	case "posts":
+		return ec.fieldContext_User_posts(ctx, field)
+	case "favorites":
+		return ec.fieldContext_User_favorites(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+}
+
+func (ec *executionContext) childFields_UserAuthPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "token":
+		return ec.fieldContext_UserAuthPayload_token(ctx, field)
+	case "refreshToken":
+		return ec.fieldContext_UserAuthPayload_refreshToken(ctx, field)
+	case "user":
+		return ec.fieldContext_UserAuthPayload_user(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UserAuthPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_UserReport(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_UserReport_ID(ctx, field)
+	case "reporter":
+		return ec.fieldContext_UserReport_reporter(ctx, field)
+	case "targetType":
+		return ec.fieldContext_UserReport_targetType(ctx, field)
+	case "targetID":
+		return ec.fieldContext_UserReport_targetID(ctx, field)
+	case "reason":
+		return ec.fieldContext_UserReport_reason(ctx, field)
+	case "customReason":
+		return ec.fieldContext_UserReport_customReason(ctx, field)
+	case "status":
+		return ec.fieldContext_UserReport_status(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_UserReport_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_UserReport_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UserReport", field.Name)
+}
+
+func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext___Directive_name(ctx, field)
+	case "description":
+		return ec.fieldContext___Directive_description(ctx, field)
+	case "isRepeatable":
+		return ec.fieldContext___Directive_isRepeatable(ctx, field)
+	case "locations":
+		return ec.fieldContext___Directive_locations(ctx, field)
+	case "args":
+		return ec.fieldContext___Directive_args(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __Directive", field.Name)
+}
+
+func (ec *executionContext) childFields___EnumValue(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext___EnumValue_name(ctx, field)
+	case "description":
+		return ec.fieldContext___EnumValue_description(ctx, field)
+	case "isDeprecated":
+		return ec.fieldContext___EnumValue_isDeprecated(ctx, field)
+	case "deprecationReason":
+		return ec.fieldContext___EnumValue_deprecationReason(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __EnumValue", field.Name)
+}
+
+func (ec *executionContext) childFields___Field(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext___Field_name(ctx, field)
+	case "description":
+		return ec.fieldContext___Field_description(ctx, field)
+	case "args":
+		return ec.fieldContext___Field_args(ctx, field)
+	case "type":
+		return ec.fieldContext___Field_type(ctx, field)
+	case "isDeprecated":
+		return ec.fieldContext___Field_isDeprecated(ctx, field)
+	case "deprecationReason":
+		return ec.fieldContext___Field_deprecationReason(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __Field", field.Name)
+}
+
+func (ec *executionContext) childFields___InputValue(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext___InputValue_name(ctx, field)
+	case "description":
+		return ec.fieldContext___InputValue_description(ctx, field)
+	case "type":
+		return ec.fieldContext___InputValue_type(ctx, field)
+	case "defaultValue":
+		return ec.fieldContext___InputValue_defaultValue(ctx, field)
+	case "isDeprecated":
+		return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+	case "deprecationReason":
+		return ec.fieldContext___InputValue_deprecationReason(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
+}
+
+func (ec *executionContext) childFields___Schema(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "description":
+		return ec.fieldContext___Schema_description(ctx, field)
+	case "types":
+		return ec.fieldContext___Schema_types(ctx, field)
+	case "queryType":
+		return ec.fieldContext___Schema_queryType(ctx, field)
+	case "mutationType":
+		return ec.fieldContext___Schema_mutationType(ctx, field)
+	case "subscriptionType":
+		return ec.fieldContext___Schema_subscriptionType(ctx, field)
+	case "directives":
+		return ec.fieldContext___Schema_directives(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+}
+
+func (ec *executionContext) childFields___Type(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext___Type_kind(ctx, field)
+	case "name":
+		return ec.fieldContext___Type_name(ctx, field)
+	case "description":
+		return ec.fieldContext___Type_description(ctx, field)
+	case "specifiedByURL":
+		return ec.fieldContext___Type_specifiedByURL(ctx, field)
+	case "fields":
+		return ec.fieldContext___Type_fields(ctx, field)
+	case "interfaces":
+		return ec.fieldContext___Type_interfaces(ctx, field)
+	case "possibleTypes":
+		return ec.fieldContext___Type_possibleTypes(ctx, field)
+	case "enumValues":
+		return ec.fieldContext___Type_enumValues(ctx, field)
+	case "inputFields":
+		return ec.fieldContext___Type_inputFields(ctx, field)
+	case "ofType":
+		return ec.fieldContext___Type_ofType(ctx, field)
+	case "isOneOf":
+		return ec.fieldContext___Type_isOneOf(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
+}
 
 // endregion ************************** generated!.gotpl **************************
 
@@ -8900,6 +9440,38 @@ func (ec *executionContext) fieldContext_Post_user(_ context.Context, field grap
 	return fc, nil
 }
 
+func (ec *executionContext) _Post_rootPost(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_rootPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().RootPost(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Post_rootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Post_favorites(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9912,6 +10484,38 @@ func (ec *executionContext) fieldContext_Query_topLevelPosts(_ context.Context, 
 				return ec.fieldContext_Post_media(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getRootPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().GetRootPost(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
 		},
 	}
 	return fc, nil
@@ -17851,6 +18455,39 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rootPost":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_rootPost(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "favorites":
 			field := field
 
@@ -18363,6 +19000,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getRootPost":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getRootPost(ctx, field)
 				return res
 			}
 

@@ -136,11 +136,13 @@ func main() {
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	getRootPostUseCase := postusecase.NewGetRootPostUseCase(postRepository)
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
+	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 
@@ -292,16 +294,18 @@ func main() {
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 
-		GetPostByIDUseCase:               getPostByIDUseCase,
-		GetPostByIDIncludeDeletedUseCase: getPostByIDIncludeDeletedUseCase,
-		CreatePostUseCase:                createPostUseCase,
-		ListPostsUseCase:                 listPostsUseCase,
-		DeletePostUseCase:                deletePostUseCase,
-		UpdatePostUseCase:                updatePostUseCase,
-		SearchPostsUseCase:               searchPostsUseCase,
-		ListTopLevelPostsUseCase:         listTopLevelPostsUseCase,
-		GetRepliesByIDUseCase:            getRepliesByIDUseCase,
-		GetPostsByUserIDUseCase:          getPostsByUserIDUseCase,
+		GetPostByIDUseCase:                       getPostByIDUseCase,
+		GetRootPostUseCase:                       getRootPostUseCase,
+		GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
+		CreatePostUseCase:                        createPostUseCase,
+		ListPostsUseCase:                         listPostsUseCase,
+		DeletePostUseCase:                        deletePostUseCase,
+		UpdatePostUseCase:                        updatePostUseCase,
+		SearchPostsUseCase:                       searchPostsUseCase,
+		ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
+		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
+		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
+		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
@@ -333,10 +337,10 @@ func main() {
 		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
 		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
 		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
-		MarkRoomAsReadUseCase:             markRoomAsReadUseCase,
-		GetRoomReadStatusUseCase:          getRoomReadStatusUseCase,
-		GetRoomReadStatusBatchUseCase:     getRoomReadStatusBatchUseCase,
-		GetMembersUnreadCountsUseCase:     getMembersUnreadCountsUseCase,
+		MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
+		GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
+		GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
+		GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
 
 		CreateCommunityUseCase:             createCommunityUseCase,
 		GetCommunityUseCase:                getCommunityUseCase,
@@ -359,13 +363,13 @@ func main() {
 		SearchFavoriteUsersUseCase:     searchFavoriteUsersUseCase,
 		GetFavoriteUserByUserIDUseCase: getFavoriteUsersByUserIDUseCase,
 
-		CreateBlockUseCase:         createBlockUseCase,
-		DeleteBlockUseCase:         deleteBlockUseCase,
-		ListBlockersUseCase:        listBlockersUseCase,
-		SearchBlockersUseCase:      searchBlockersUseCase,
-		GetBlockersByUserIDUseCase: getBlockersByUserIDUseCase,
-		CheckBlockRelationUseCase:           checkBlockRelationUseCase,
-		GetBlockRelatedUserIDsUseCase:       getBlockRelatedUserIDsUseCase,
+		CreateBlockUseCase:            createBlockUseCase,
+		DeleteBlockUseCase:            deleteBlockUseCase,
+		ListBlockersUseCase:           listBlockersUseCase,
+		SearchBlockersUseCase:         searchBlockersUseCase,
+		GetBlockersByUserIDUseCase:    getBlockersByUserIDUseCase,
+		CheckBlockRelationUseCase:     checkBlockRelationUseCase,
+		GetBlockRelatedUserIDsUseCase: getBlockRelatedUserIDsUseCase,
 
 		CreateInquiryUsecase: *createInquiryUseCase,
 		ManageInquiryUsecase: *manageInquiryUseCase,
@@ -388,9 +392,9 @@ func main() {
 		MarkAsReadUseCase:              markAsReadUseCase,
 		MarkAllAsReadUseCase:           markAllAsReadUseCase,
 		CountUnreadUseCase:             countUnreadUseCase,
-		DeleteNotificationsUseCase: deleteNotificationsUseCase,
+		DeleteNotificationsUseCase:     deleteNotificationsUseCase,
 		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
-		SSEBroker:                sseBroker,
+		SSEBroker:                      sseBroker,
 
 		PubSub: ps,
 	}
@@ -425,6 +429,7 @@ func main() {
 		getUsersByIDsUseCase,
 		listMediaByPostIDsUseCase,
 		getRepliesByPostIDsUseCase,
+		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,
 	)))
 
