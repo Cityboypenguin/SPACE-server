@@ -209,6 +209,11 @@ type Notification struct {
 	CreatedAt  string  `json:"createdAt"`
 }
 
+type NotificationPage struct {
+	Items []*Notification `json:"items"`
+	Total int32           `json:"total"`
+}
+
 type Post struct {
 	ID         string      `json:"ID"`
 	Content    string      `json:"content"`

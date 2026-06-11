@@ -1861,16 +1861,13 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gql
 }
 
 // MyNotifications is the resolver for the myNotifications field.
-func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32) ([]*gqlmodel.Notification, error) {
+func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.NotificationPage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	lim := 0
-	if limit != nil {
-		lim = int(*limit)
-	}
-	notifications, err := r.ListNotificationsUseCase.Execute(ctx, claims.ID, lim)
+	l, o := resolvePagination(limit, offset)
+	notifications, total, err := r.ListNotificationsUseCase.Execute(ctx, claims.ID, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -1896,11 +1893,11 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32) ([]*g
 		}
 	}
 
-	var result []*gqlmodel.Notification
+	items := make([]*gqlmodel.Notification, 0, len(notifications))
 	for _, n := range notifications {
-		result = append(result, toGraphNotification(n, actorMap))
+		items = append(items, toGraphNotification(n, actorMap))
 	}
-	return result, nil
+	return &gqlmodel.NotificationPage{Items: items, Total: int32(total)}, nil
 }
 
 // MyUnreadNotificationCount is the resolver for the myUnreadNotificationCount field.
@@ -2746,23 +2743,20 @@ func (r *queryResolver) GetInquiry(ctx context.Context, id string) (*gqlmodel.In
 }
 
 // Announcements is the resolver for the announcements field.
-func (r *queryResolver) Announcements(ctx context.Context, limit *int32) ([]*gqlmodel.Announcement, error) {
+func (r *queryResolver) Announcements(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.AnnouncementPage, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	l := 50
-	if limit != nil {
-		l = int(*limit)
-	}
-	list, _, err := r.ListAnnouncementsUseCase.Execute(ctx, l, 0)
+	l, o := resolvePagination(limit, offset)
+	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*gqlmodel.Announcement, len(list))
-	for i, a := range list {
-		out[i] = toGraphAnnouncement(a)
+	items := make([]*gqlmodel.Announcement, 0, len(list))
+	for _, a := range list {
+		items = append(items, toGraphAnnouncement(a))
 	}
-	return out, nil
+	return &gqlmodel.AnnouncementPage{Items: items, Total: int32(total)}, nil
 }
 
 // Announcement is the resolver for the announcement field.

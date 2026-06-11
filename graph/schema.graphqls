@@ -6,7 +6,7 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!): [User!]!
-  myNotifications(limit: Int): [Notification!]!
+  myNotifications(limit: Int = 20, offset: Int = 0): NotificationPage!
   myUnreadNotificationCount: Int!
 
   administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
@@ -43,7 +43,7 @@ type Query {
   searchInquiries(status: InquiryStatus, limit: Int = 20, offset: Int = 0): InquiryPage!
   getInquiry(id: ID!): Inquiry
 
-  announcements(limit: Int): [Announcement!]!
+  announcements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
   announcement(id: ID!): Announcement!
   adminListAnnouncements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
 
@@ -524,6 +524,11 @@ type ReportPage {
 
 type AnnouncementPage {
   items: [Announcement!]!
+  total: Int!
+}
+
+type NotificationPage {
+  items: [Notification!]!
   total: Int!
 }
 

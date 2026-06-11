@@ -224,6 +224,11 @@ type ComplexityRoot struct {
 		Type       func(childComplexity int) int
 	}
 
+	NotificationPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Post struct {
 		Content    func(childComplexity int) int
 		CreatedAt  func(childComplexity int) int
@@ -266,7 +271,7 @@ type ComplexityRoot struct {
 		AdminListTerms                  func(childComplexity int) int
 		Administrators                  func(childComplexity int, limit *int32, offset *int32) int
 		Announcement                    func(childComplexity int, id string) int
-		Announcements                   func(childComplexity int, limit *int32) int
+		Announcements                   func(childComplexity int, limit *int32, offset *int32) int
 		Communities                     func(childComplexity int, limit *int32, offset *int32) int
 		CurrentTerms                    func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
@@ -292,7 +297,7 @@ type ComplexityRoot struct {
 		Messages                        func(childComplexity int, roomID string) int
 		MyCommunities                   func(childComplexity int) int
 		MyDMRooms                       func(childComplexity int) int
-		MyNotifications                 func(childComplexity int, limit *int32) int
+		MyNotifications                 func(childComplexity int, limit *int32, offset *int32) int
 		MyProfile                       func(childComplexity int) int
 		MyTermsConsentStatus            func(childComplexity int) int
 		MyUnreadNotificationCount       func(childComplexity int) int
@@ -503,7 +508,7 @@ type QueryResolver interface {
 	Me(ctx context.Context) (*model.User, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
 	SearchUsers(ctx context.Context, keyword string) ([]*model.User, error)
-	MyNotifications(ctx context.Context, limit *int32) ([]*model.Notification, error)
+	MyNotifications(ctx context.Context, limit *int32, offset *int32) (*model.NotificationPage, error)
 	MyUnreadNotificationCount(ctx context.Context) (int32, error)
 	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
@@ -536,7 +541,7 @@ type QueryResolver interface {
 	SearchReports(ctx context.Context, filter *model.ReportSearchFilter, limit *int32, offset *int32) (*model.ReportPage, error)
 	SearchInquiries(ctx context.Context, status *model.InquiryStatus, limit *int32, offset *int32) (*model.InquiryPage, error)
 	GetInquiry(ctx context.Context, id string) (*model.Inquiry, error)
-	Announcements(ctx context.Context, limit *int32) ([]*model.Announcement, error)
+	Announcements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	MaintenanceMode(ctx context.Context) (bool, error)
@@ -1662,6 +1667,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Notification.Type(childComplexity), true
 
+	case "NotificationPage.items":
+		if e.ComplexityRoot.NotificationPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationPage.Items(childComplexity), true
+	case "NotificationPage.total":
+		if e.ComplexityRoot.NotificationPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationPage.Total(childComplexity), true
+
 	case "Post.content":
 		if e.ComplexityRoot.Post.Content == nil {
 			break
@@ -1880,7 +1898,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Announcements(childComplexity, args["limit"].(*int32)), true
+		return e.ComplexityRoot.Query.Announcements(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.communities":
 		if e.ComplexityRoot.Query.Communities == nil {
 			break
@@ -2117,7 +2135,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["limit"].(*int32)), true
+		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.myProfile":
 		if e.ComplexityRoot.Query.MyProfile == nil {
 			break
@@ -3667,6 +3685,11 @@ func (ec *executionContext) field_Query_announcements_args(ctx context.Context, 
 		return nil, err
 	}
 	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -3826,6 +3849,11 @@ func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context
 		return nil, err
 	}
 	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -9325,6 +9353,82 @@ func (ec *executionContext) fieldContext_Notification_createdAt(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _NotificationPage_items(ctx context.Context, field graphql.CollectedField, obj *model.NotificationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_NotificationPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNNotification2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_NotificationPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Notification_ID(ctx, field)
+			case "type":
+				return ec.fieldContext_Notification_type(ctx, field)
+			case "actor":
+				return ec.fieldContext_Notification_actor(ctx, field)
+			case "targetType":
+				return ec.fieldContext_Notification_targetType(ctx, field)
+			case "targetID":
+				return ec.fieldContext_Notification_targetID(ctx, field)
+			case "message":
+				return ec.fieldContext_Notification_message(ctx, field)
+			case "isRead":
+				return ec.fieldContext_Notification_isRead(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Notification_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationPage_total(ctx context.Context, field graphql.CollectedField, obj *model.NotificationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_NotificationPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_NotificationPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Post_ID(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10373,10 +10477,10 @@ func (ec *executionContext) _Query_myNotifications(ctx context.Context, field gr
 		ec.fieldContext_Query_myNotifications,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["limit"].(*int32))
+			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNNotification2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationᚄ,
+		ec.marshalNNotificationPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationPage,
 		true,
 		true,
 	)
@@ -10390,24 +10494,12 @@ func (ec *executionContext) fieldContext_Query_myNotifications(ctx context.Conte
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Notification_ID(ctx, field)
-			case "type":
-				return ec.fieldContext_Notification_type(ctx, field)
-			case "actor":
-				return ec.fieldContext_Notification_actor(ctx, field)
-			case "targetType":
-				return ec.fieldContext_Notification_targetType(ctx, field)
-			case "targetID":
-				return ec.fieldContext_Notification_targetID(ctx, field)
-			case "message":
-				return ec.fieldContext_Notification_message(ctx, field)
-			case "isRead":
-				return ec.fieldContext_Notification_isRead(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Notification_createdAt(ctx, field)
+			case "items":
+				return ec.fieldContext_NotificationPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_NotificationPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type NotificationPage", field.Name)
 		},
 	}
 	defer func() {
@@ -12102,10 +12194,10 @@ func (ec *executionContext) _Query_announcements(ctx context.Context, field grap
 		ec.fieldContext_Query_announcements,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Announcements(ctx, fc.Args["limit"].(*int32))
+			return ec.Resolvers.Query().Announcements(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNAnnouncement2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementᚄ,
+		ec.marshalNAnnouncementPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementPage,
 		true,
 		true,
 	)
@@ -12119,18 +12211,12 @@ func (ec *executionContext) fieldContext_Query_announcements(ctx context.Context
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Announcement_ID(ctx, field)
-			case "title":
-				return ec.fieldContext_Announcement_title(ctx, field)
-			case "body":
-				return ec.fieldContext_Announcement_body(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Announcement_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Announcement_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_AnnouncementPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_AnnouncementPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Announcement", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type AnnouncementPage", field.Name)
 		},
 	}
 	defer func() {
@@ -19063,6 +19149,50 @@ func (ec *executionContext) _Notification(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var notificationPageImplementors = []string{"NotificationPage"}
+
+func (ec *executionContext) _NotificationPage(ctx context.Context, sel ast.SelectionSet, obj *model.NotificationPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationPage")
+		case "items":
+			out.Values[i] = ec._NotificationPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._NotificationPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var postImplementors = []string{"Post"}
 
 func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj *model.Post) graphql.Marshaler {
@@ -22253,6 +22383,20 @@ func (ec *executionContext) marshalNNotification2ᚖgithubᚗcomᚋCityboypengui
 		return graphql.Null
 	}
 	return ec._Notification(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNotificationPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationPage(ctx context.Context, sel ast.SelectionSet, v model.NotificationPage) graphql.Marshaler {
+	return ec._NotificationPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNNotificationPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationPage(ctx context.Context, sel ast.SelectionSet, v *model.NotificationPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotificationPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPost2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx context.Context, sel ast.SelectionSet, v model.Post) graphql.Marshaler {
