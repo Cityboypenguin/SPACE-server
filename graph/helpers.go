@@ -96,6 +96,21 @@ func scheduleTermsBroadcast(broker *sse.Broker, version string, effectiveDate ti
 	})
 }
 
+func resolvePagination(limit *int32, offset *int32) (int, int) {
+	l := 20
+	if limit != nil && *limit > 0 {
+		l = int(*limit)
+		if l > 100 {
+			l = 100
+		}
+	}
+	o := 0
+	if offset != nil && *offset > 0 {
+		o = int(*offset)
+	}
+	return l, o
+}
+
 func containsInt64(slice []int64, val int64) bool {
 	for _, v := range slice {
 		if v == val {

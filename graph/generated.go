@@ -56,12 +56,22 @@ type ComplexityRoot struct {
 		Token         func(childComplexity int) int
 	}
 
+	AdministratorPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Announcement struct {
 		Body      func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
 		Title     func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
+	}
+
+	AnnouncementPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	Blocker struct {
@@ -87,6 +97,11 @@ type ComplexityRoot struct {
 		User func(childComplexity int) int
 	}
 
+	CommunityPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Favorite struct {
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
@@ -110,6 +125,11 @@ type ComplexityRoot struct {
 		Status    func(childComplexity int) int
 		Subject   func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
+	}
+
+	InquiryPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	Media struct {
@@ -219,6 +239,11 @@ type ComplexityRoot struct {
 		User       func(childComplexity int) int
 	}
 
+	PostPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	PresignedUploadUrl struct {
 		ObjectKey func(childComplexity int) int
 		UploadURL func(childComplexity int) int
@@ -236,12 +261,13 @@ type ComplexityRoot struct {
 	Query struct {
 		AdminGetBlockers                func(childComplexity int, userID string) int
 		AdminGetFavoriteUsers           func(childComplexity int, userID string) int
-		AdminListConsents               func(childComplexity int, termsID string) int
+		AdminListAnnouncements          func(childComplexity int, limit *int32, offset *int32) int
+		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int) int
-		Administrators                  func(childComplexity int) int
+		Administrators                  func(childComplexity int, limit *int32, offset *int32) int
 		Announcement                    func(childComplexity int, id string) int
 		Announcements                   func(childComplexity int, limit *int32) int
-		Communities                     func(childComplexity int) int
+		Communities                     func(childComplexity int, limit *int32, offset *int32) int
 		CurrentTerms                    func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
 		GetAdministratorByID            func(childComplexity int, id string) int
@@ -270,7 +296,7 @@ type ComplexityRoot struct {
 		MyProfile                       func(childComplexity int) int
 		MyTermsConsentStatus            func(childComplexity int) int
 		MyUnreadNotificationCount       func(childComplexity int) int
-		Posts                           func(childComplexity int) int
+		Posts                           func(childComplexity int, limit *int32, offset *int32) int
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
 		PresignedMediaUploadURL         func(childComplexity int, contentType string) int
@@ -281,12 +307,17 @@ type ComplexityRoot struct {
 		SearchBlockedUsers              func(childComplexity int, keyword string) int
 		SearchCommunities               func(childComplexity int, name string) int
 		SearchFavoriteUsers             func(childComplexity int, keyword string) int
-		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus) int
+		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus, limit *int32, offset *int32) int
 		SearchPosts                     func(childComplexity int, content string) int
-		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter) int
+		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string) int
 		TopLevelPosts                   func(childComplexity int) int
-		Users                           func(childComplexity int) int
+		Users                           func(childComplexity int, limit *int32, offset *int32) int
+	}
+
+	ReportPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	Room struct {
@@ -314,6 +345,11 @@ type ComplexityRoot struct {
 		MessageUpdated        func(childComplexity int, roomID string) int
 		MyUnreadUpdated       func(childComplexity int) int
 		RoomReadStatusUpdated func(childComplexity int, roomID string) int
+	}
+
+	TermsConsentPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	TermsConsentRecord struct {
@@ -358,6 +394,11 @@ type ComplexityRoot struct {
 		RefreshToken func(childComplexity int) int
 		Token        func(childComplexity int) int
 		User         func(childComplexity int) int
+	}
+
+	UserPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	UserReport struct {
@@ -458,16 +499,16 @@ type PostResolver interface {
 	Media(ctx context.Context, obj *model.Post) ([]*model.Media, error)
 }
 type QueryResolver interface {
-	Users(ctx context.Context) ([]*model.User, error)
+	Users(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	Me(ctx context.Context) (*model.User, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
 	SearchUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	MyNotifications(ctx context.Context, limit *int32) ([]*model.Notification, error)
 	MyUnreadNotificationCount(ctx context.Context) (int32, error)
-	Administrators(ctx context.Context) ([]*model.Administrator, error)
+	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
-	Posts(ctx context.Context) ([]*model.Post, error)
+	Posts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
 	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
 	GetRootPost(ctx context.Context) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
@@ -484,7 +525,7 @@ type QueryResolver interface {
 	MyDMRooms(ctx context.Context) ([]*model.Room, error)
 	MyCommunities(ctx context.Context) ([]*model.Community, error)
 	SearchCommunities(ctx context.Context, name string) ([]*model.Community, error)
-	Communities(ctx context.Context) ([]*model.Community, error)
+	Communities(ctx context.Context, limit *int32, offset *int32) (*model.CommunityPage, error)
 	RandomCommunities(ctx context.Context, limit int32) ([]*model.Community, error)
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
 	GetCommunityMembers(ctx context.Context, communityID string) ([]*model.CommunityMember, error)
@@ -492,16 +533,17 @@ type QueryResolver interface {
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedTermsDocumentUploadURL(ctx context.Context) (*model.PresignedUploadURL, error)
-	SearchReports(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.UserReport, error)
-	SearchInquiries(ctx context.Context, status *model.InquiryStatus) ([]*model.Inquiry, error)
+	SearchReports(ctx context.Context, filter *model.ReportSearchFilter, limit *int32, offset *int32) (*model.ReportPage, error)
+	SearchInquiries(ctx context.Context, status *model.InquiryStatus, limit *int32, offset *int32) (*model.InquiryPage, error)
 	GetInquiry(ctx context.Context, id string) (*model.Inquiry, error)
 	Announcements(ctx context.Context, limit *int32) ([]*model.Announcement, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
+	AdminListAnnouncements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	MaintenanceMode(ctx context.Context) (bool, error)
 	CurrentTerms(ctx context.Context) (*model.TermsOfService, error)
 	MyTermsConsentStatus(ctx context.Context) (*model.TermsConsentStatus, error)
 	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
-	AdminListConsents(ctx context.Context, termsID string) ([]*model.TermsConsentRecord, error)
+	AdminListConsents(ctx context.Context, termsID string, limit *int32, offset *int32) (*model.TermsConsentPage, error)
 	ListFavoriteUsers(ctx context.Context) ([]*model.User, error)
 	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
@@ -587,6 +629,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AdministratorAuthPayload.Token(childComplexity), true
 
+	case "AdministratorPage.items":
+		if e.ComplexityRoot.AdministratorPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdministratorPage.Items(childComplexity), true
+	case "AdministratorPage.total":
+		if e.ComplexityRoot.AdministratorPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdministratorPage.Total(childComplexity), true
+
 	case "Announcement.body":
 		if e.ComplexityRoot.Announcement.Body == nil {
 			break
@@ -617,6 +672,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Announcement.UpdatedAt(childComplexity), true
+
+	case "AnnouncementPage.items":
+		if e.ComplexityRoot.AnnouncementPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnnouncementPage.Items(childComplexity), true
+	case "AnnouncementPage.total":
+		if e.ComplexityRoot.AnnouncementPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnnouncementPage.Total(childComplexity), true
 
 	case "Blocker.blockedUserID":
 		if e.ComplexityRoot.Blocker.BlockedUserID == nil {
@@ -704,6 +772,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CommunityMember.User(childComplexity), true
+
+	case "CommunityPage.items":
+		if e.ComplexityRoot.CommunityPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityPage.Items(childComplexity), true
+	case "CommunityPage.total":
+		if e.ComplexityRoot.CommunityPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityPage.Total(childComplexity), true
 
 	case "Favorite.createdAt":
 		if e.ComplexityRoot.Favorite.CreatedAt == nil {
@@ -803,6 +884,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Inquiry.UpdatedAt(childComplexity), true
+
+	case "InquiryPage.items":
+		if e.ComplexityRoot.InquiryPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InquiryPage.Items(childComplexity), true
+	case "InquiryPage.total":
+		if e.ComplexityRoot.InquiryPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InquiryPage.Total(childComplexity), true
 
 	case "Media.contentType":
 		if e.ComplexityRoot.Media.ContentType == nil {
@@ -1641,6 +1735,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Post.User(childComplexity), true
 
+	case "PostPage.items":
+		if e.ComplexityRoot.PostPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPage.Items(childComplexity), true
+	case "PostPage.total":
+		if e.ComplexityRoot.PostPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPage.Total(childComplexity), true
+
 	case "PresignedUploadUrl.objectKey":
 		if e.ComplexityRoot.PresignedUploadUrl.ObjectKey == nil {
 			break
@@ -1713,6 +1820,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminGetFavoriteUsers(childComplexity, args["userID"].(string)), true
+	case "Query.adminListAnnouncements":
+		if e.ComplexityRoot.Query.AdminListAnnouncements == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListAnnouncements_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListAnnouncements(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListConsents":
 		if e.ComplexityRoot.Query.AdminListConsents == nil {
 			break
@@ -1723,7 +1841,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.AdminListConsents(childComplexity, args["termsID"].(string)), true
+		return e.ComplexityRoot.Query.AdminListConsents(childComplexity, args["termsID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListTerms":
 		if e.ComplexityRoot.Query.AdminListTerms == nil {
 			break
@@ -1735,7 +1853,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.Administrators(childComplexity), true
+		args, err := ec.field_Query_administrators_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Administrators(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.announcement":
 		if e.ComplexityRoot.Query.Announcement == nil {
 			break
@@ -1763,7 +1886,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.Communities(childComplexity), true
+		args, err := ec.field_Query_communities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Communities(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.currentTerms":
 		if e.ComplexityRoot.Query.CurrentTerms == nil {
 			break
@@ -2013,7 +2141,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.Posts(childComplexity), true
+		args, err := ec.field_Query_posts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Posts(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.presignedAvatarUploadUrl":
 		if e.ComplexityRoot.Query.PresignedAvatarUploadURL == nil {
 			break
@@ -2129,7 +2262,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchInquiries(childComplexity, args["status"].(*model.InquiryStatus)), true
+		return e.ComplexityRoot.Query.SearchInquiries(childComplexity, args["status"].(*model.InquiryStatus), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.searchPosts":
 		if e.ComplexityRoot.Query.SearchPosts == nil {
 			break
@@ -2151,7 +2284,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchReports(childComplexity, args["filter"].(*model.ReportSearchFilter)), true
+		return e.ComplexityRoot.Query.SearchReports(childComplexity, args["filter"].(*model.ReportSearchFilter), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.searchUsers":
 		if e.ComplexityRoot.Query.SearchUsers == nil {
 			break
@@ -2174,7 +2307,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.Users(childComplexity), true
+		args, err := ec.field_Query_users_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Users(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+
+	case "ReportPage.items":
+		if e.ComplexityRoot.ReportPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportPage.Items(childComplexity), true
+	case "ReportPage.total":
+		if e.ComplexityRoot.ReportPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportPage.Total(childComplexity), true
 
 	case "Room.content":
 		if e.ComplexityRoot.Room.Content == nil {
@@ -2306,6 +2457,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.RoomReadStatusUpdated(childComplexity, args["roomID"].(string)), true
+
+	case "TermsConsentPage.items":
+		if e.ComplexityRoot.TermsConsentPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentPage.Items(childComplexity), true
+	case "TermsConsentPage.total":
+		if e.ComplexityRoot.TermsConsentPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TermsConsentPage.Total(childComplexity), true
 
 	case "TermsConsentRecord.consentedAt":
 		if e.ComplexityRoot.TermsConsentRecord.ConsentedAt == nil {
@@ -2468,6 +2632,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserAuthPayload.User(childComplexity), true
+
+	case "UserPage.items":
+		if e.ComplexityRoot.UserPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserPage.Items(childComplexity), true
+	case "UserPage.total":
+		if e.ComplexityRoot.UserPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserPage.Total(childComplexity), true
 
 	case "UserReport.content":
 		if e.ComplexityRoot.UserReport.Content == nil {
@@ -3418,6 +3595,22 @@ func (ec *executionContext) field_Query_adminGetFavoriteUsers_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminListAnnouncements_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3426,6 +3619,32 @@ func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Conte
 		return nil, err
 	}
 	args["termsID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_administrators_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -3448,6 +3667,22 @@ func (ec *executionContext) field_Query_announcements_args(ctx context.Context, 
 		return nil, err
 	}
 	args["limit"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_communities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -3594,6 +3829,22 @@ func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_posts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_presignedAvatarUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3701,6 +3952,16 @@ func (ec *executionContext) field_Query_searchInquiries_args(ctx context.Context
 		return nil, err
 	}
 	args["status"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -3723,6 +3984,16 @@ func (ec *executionContext) field_Query_searchReports_args(ctx context.Context, 
 		return nil, err
 	}
 	args["filter"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -3734,6 +4005,22 @@ func (ec *executionContext) field_Query_searchUsers_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["keyword"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_users_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -4077,6 +4364,76 @@ func (ec *executionContext) fieldContext_AdministratorAuthPayload_administrator(
 	return fc, nil
 }
 
+func (ec *executionContext) _AdministratorPage_items(ctx context.Context, field graphql.CollectedField, obj *model.AdministratorPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AdministratorPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNAdministrator2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AdministratorPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdministratorPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Administrator_ID(ctx, field)
+			case "name":
+				return ec.fieldContext_Administrator_name(ctx, field)
+			case "email":
+				return ec.fieldContext_Administrator_email(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Administrator_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Administrator_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Administrator", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdministratorPage_total(ctx context.Context, field graphql.CollectedField, obj *model.AdministratorPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AdministratorPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AdministratorPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdministratorPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Announcement_ID(ctx context.Context, field graphql.CollectedField, obj *model.Announcement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4217,6 +4574,76 @@ func (ec *executionContext) fieldContext_Announcement_updatedAt(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AnnouncementPage_items(ctx context.Context, field graphql.CollectedField, obj *model.AnnouncementPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AnnouncementPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNAnnouncement2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AnnouncementPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AnnouncementPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Announcement_ID(ctx, field)
+			case "title":
+				return ec.fieldContext_Announcement_title(ctx, field)
+			case "body":
+				return ec.fieldContext_Announcement_body(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Announcement_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Announcement_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Announcement", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AnnouncementPage_total(ctx context.Context, field graphql.CollectedField, obj *model.AnnouncementPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AnnouncementPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AnnouncementPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AnnouncementPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -4647,6 +5074,82 @@ func (ec *executionContext) fieldContext_CommunityMember_role(_ context.Context,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityPage_items(ctx context.Context, field graphql.CollectedField, obj *model.CommunityPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CommunityPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CommunityPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Community_ID(ctx, field)
+			case "roomID":
+				return ec.fieldContext_Community_roomID(ctx, field)
+			case "name":
+				return ec.fieldContext_Community_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Community_description(ctx, field)
+			case "avatarURL":
+				return ec.fieldContext_Community_avatarURL(ctx, field)
+			case "unreadCount":
+				return ec.fieldContext_Community_unreadCount(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Community_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Community_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityPage_total(ctx context.Context, field graphql.CollectedField, obj *model.CommunityPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CommunityPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CommunityPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5161,6 +5664,82 @@ func (ec *executionContext) fieldContext_Inquiry_updatedAt(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InquiryPage_items(ctx context.Context, field graphql.CollectedField, obj *model.InquiryPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_InquiryPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNInquiry2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_InquiryPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InquiryPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Inquiry_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Inquiry_name(ctx, field)
+			case "email":
+				return ec.fieldContext_Inquiry_email(ctx, field)
+			case "subject":
+				return ec.fieldContext_Inquiry_subject(ctx, field)
+			case "content":
+				return ec.fieldContext_Inquiry_content(ctx, field)
+			case "status":
+				return ec.fieldContext_Inquiry_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Inquiry_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Inquiry_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Inquiry", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InquiryPage_total(ctx context.Context, field graphql.CollectedField, obj *model.InquiryPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_InquiryPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_InquiryPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InquiryPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -9216,6 +9795,90 @@ func (ec *executionContext) fieldContext_Post_media(_ context.Context, field gra
 	return fc, nil
 }
 
+func (ec *executionContext) _PostPage_items(ctx context.Context, field graphql.CollectedField, obj *model.PostPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Post_ID(ctx, field)
+			case "content":
+				return ec.fieldContext_Post_content(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Post_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Post_updatedAt(ctx, field)
+			case "deletedAt":
+				return ec.fieldContext_Post_deletedAt(ctx, field)
+			case "replyCount":
+				return ec.fieldContext_Post_replyCount(ctx, field)
+			case "user":
+				return ec.fieldContext_Post_user(ctx, field)
+			case "rootPost":
+				return ec.fieldContext_Post_rootPost(ctx, field)
+			case "favorites":
+				return ec.fieldContext_Post_favorites(ctx, field)
+			case "parent":
+				return ec.fieldContext_Post_parent(ctx, field)
+			case "replies":
+				return ec.fieldContext_Post_replies(ctx, field)
+			case "media":
+				return ec.fieldContext_Post_media(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostPage_total(ctx context.Context, field graphql.CollectedField, obj *model.PostPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PresignedUploadUrl_uploadUrl(ctx context.Context, field graphql.CollectedField, obj *model.PresignedUploadURL) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9479,16 +10142,17 @@ func (ec *executionContext) _Query_users(ctx context.Context, field graphql.Coll
 		field,
 		ec.fieldContext_Query_users,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().Users(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Users(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ,
+		ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_users(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_users(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9496,31 +10160,24 @@ func (ec *executionContext) fieldContext_Query_users(_ context.Context, field gr
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_User_ID(ctx, field)
-			case "accountID":
-				return ec.fieldContext_User_accountID(ctx, field)
-			case "name":
-				return ec.fieldContext_User_name(ctx, field)
-			case "email":
-				return ec.fieldContext_User_email(ctx, field)
-			case "role":
-				return ec.fieldContext_User_role(ctx, field)
-			case "status":
-				return ec.fieldContext_User_status(ctx, field)
-			case "avatarUrl":
-				return ec.fieldContext_User_avatarUrl(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_User_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_User_updatedAt(ctx, field)
-			case "posts":
-				return ec.fieldContext_User_posts(ctx, field)
-			case "favorites":
-				return ec.fieldContext_User_favorites(ctx, field)
+			case "items":
+				return ec.fieldContext_UserPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_UserPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_users_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -9803,16 +10460,17 @@ func (ec *executionContext) _Query_administrators(ctx context.Context, field gra
 		field,
 		ec.fieldContext_Query_administrators,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().Administrators(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Administrators(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNAdministrator2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorᚄ,
+		ec.marshalNAdministratorPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_administrators(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_administrators(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9820,19 +10478,24 @@ func (ec *executionContext) fieldContext_Query_administrators(_ context.Context,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Administrator_ID(ctx, field)
-			case "name":
-				return ec.fieldContext_Administrator_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Administrator_email(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Administrator_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Administrator_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_AdministratorPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_AdministratorPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Administrator", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type AdministratorPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_administrators_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -9950,16 +10613,17 @@ func (ec *executionContext) _Query_posts(ctx context.Context, field graphql.Coll
 		field,
 		ec.fieldContext_Query_posts,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().Posts(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Posts(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ,
+		ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_posts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_posts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9967,33 +10631,24 @@ func (ec *executionContext) fieldContext_Query_posts(_ context.Context, field gr
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Post_ID(ctx, field)
-			case "content":
-				return ec.fieldContext_Post_content(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Post_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Post_updatedAt(ctx, field)
-			case "deletedAt":
-				return ec.fieldContext_Post_deletedAt(ctx, field)
-			case "replyCount":
-				return ec.fieldContext_Post_replyCount(ctx, field)
-			case "user":
-				return ec.fieldContext_Post_user(ctx, field)
-			case "rootPost":
-				return ec.fieldContext_Post_rootPost(ctx, field)
-			case "favorites":
-				return ec.fieldContext_Post_favorites(ctx, field)
-			case "parent":
-				return ec.fieldContext_Post_parent(ctx, field)
-			case "replies":
-				return ec.fieldContext_Post_replies(ctx, field)
-			case "media":
-				return ec.fieldContext_Post_media(ctx, field)
+			case "items":
+				return ec.fieldContext_PostPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_PostPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type PostPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_posts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -10923,16 +11578,17 @@ func (ec *executionContext) _Query_communities(ctx context.Context, field graphq
 		field,
 		ec.fieldContext_Query_communities,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().Communities(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Communities(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		ec.marshalNCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_communities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_communities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -10940,25 +11596,24 @@ func (ec *executionContext) fieldContext_Query_communities(_ context.Context, fi
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Community_ID(ctx, field)
-			case "roomID":
-				return ec.fieldContext_Community_roomID(ctx, field)
-			case "name":
-				return ec.fieldContext_Community_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Community_description(ctx, field)
-			case "avatarURL":
-				return ec.fieldContext_Community_avatarURL(ctx, field)
-			case "unreadCount":
-				return ec.fieldContext_Community_unreadCount(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Community_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Community_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_CommunityPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_CommunityPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type CommunityPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_communities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -11294,10 +11949,10 @@ func (ec *executionContext) _Query_searchReports(ctx context.Context, field grap
 		ec.fieldContext_Query_searchReports,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchReports(ctx, fc.Args["filter"].(*model.ReportSearchFilter))
+			return ec.Resolvers.Query().SearchReports(ctx, fc.Args["filter"].(*model.ReportSearchFilter), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNUserReport2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserReportᚄ,
+		ec.marshalNReportPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportPage,
 		true,
 		true,
 	)
@@ -11311,28 +11966,12 @@ func (ec *executionContext) fieldContext_Query_searchReports(ctx context.Context
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_UserReport_ID(ctx, field)
-			case "reporter":
-				return ec.fieldContext_UserReport_reporter(ctx, field)
-			case "targetType":
-				return ec.fieldContext_UserReport_targetType(ctx, field)
-			case "targetID":
-				return ec.fieldContext_UserReport_targetID(ctx, field)
-			case "reason":
-				return ec.fieldContext_UserReport_reason(ctx, field)
-			case "customReason":
-				return ec.fieldContext_UserReport_customReason(ctx, field)
-			case "status":
-				return ec.fieldContext_UserReport_status(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_UserReport_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_UserReport_updatedAt(ctx, field)
-			case "content":
-				return ec.fieldContext_UserReport_content(ctx, field)
+			case "items":
+				return ec.fieldContext_ReportPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_ReportPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type UserReport", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type ReportPage", field.Name)
 		},
 	}
 	defer func() {
@@ -11357,10 +11996,10 @@ func (ec *executionContext) _Query_searchInquiries(ctx context.Context, field gr
 		ec.fieldContext_Query_searchInquiries,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchInquiries(ctx, fc.Args["status"].(*model.InquiryStatus))
+			return ec.Resolvers.Query().SearchInquiries(ctx, fc.Args["status"].(*model.InquiryStatus), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNInquiry2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryᚄ,
+		ec.marshalNInquiryPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryPage,
 		true,
 		true,
 	)
@@ -11374,24 +12013,12 @@ func (ec *executionContext) fieldContext_Query_searchInquiries(ctx context.Conte
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_Inquiry_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Inquiry_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Inquiry_email(ctx, field)
-			case "subject":
-				return ec.fieldContext_Inquiry_subject(ctx, field)
-			case "content":
-				return ec.fieldContext_Inquiry_content(ctx, field)
-			case "status":
-				return ec.fieldContext_Inquiry_status(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Inquiry_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Inquiry_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_InquiryPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_InquiryPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Inquiry", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type InquiryPage", field.Name)
 		},
 	}
 	defer func() {
@@ -11573,6 +12200,53 @@ func (ec *executionContext) fieldContext_Query_announcement(ctx context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_adminListAnnouncements(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_adminListAnnouncements,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListAnnouncements(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		ec.marshalNAnnouncementPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementPage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_adminListAnnouncements(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "items":
+				return ec.fieldContext_AnnouncementPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_AnnouncementPage_total(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AnnouncementPage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListAnnouncements_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_maintenanceMode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11727,10 +12401,10 @@ func (ec *executionContext) _Query_adminListConsents(ctx context.Context, field 
 		ec.fieldContext_Query_adminListConsents,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().AdminListConsents(ctx, fc.Args["termsID"].(string))
+			return ec.Resolvers.Query().AdminListConsents(ctx, fc.Args["termsID"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNTermsConsentRecord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecordᚄ,
+		ec.marshalNTermsConsentPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentPage,
 		true,
 		true,
 	)
@@ -11744,14 +12418,12 @@ func (ec *executionContext) fieldContext_Query_adminListConsents(ctx context.Con
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_TermsConsentRecord_ID(ctx, field)
-			case "user":
-				return ec.fieldContext_TermsConsentRecord_user(ctx, field)
-			case "consentedAt":
-				return ec.fieldContext_TermsConsentRecord_consentedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_TermsConsentPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_TermsConsentPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type TermsConsentRecord", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type TermsConsentPage", field.Name)
 		},
 	}
 	defer func() {
@@ -12396,6 +13068,86 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReportPage_items(ctx context.Context, field graphql.CollectedField, obj *model.ReportPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ReportPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNUserReport2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserReportᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ReportPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_UserReport_ID(ctx, field)
+			case "reporter":
+				return ec.fieldContext_UserReport_reporter(ctx, field)
+			case "targetType":
+				return ec.fieldContext_UserReport_targetType(ctx, field)
+			case "targetID":
+				return ec.fieldContext_UserReport_targetID(ctx, field)
+			case "reason":
+				return ec.fieldContext_UserReport_reason(ctx, field)
+			case "customReason":
+				return ec.fieldContext_UserReport_customReason(ctx, field)
+			case "status":
+				return ec.fieldContext_UserReport_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserReport_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserReport_updatedAt(ctx, field)
+			case "content":
+				return ec.fieldContext_UserReport_content(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserReport", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReportPage_total(ctx context.Context, field graphql.CollectedField, obj *model.ReportPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ReportPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ReportPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -13062,6 +13814,72 @@ func (ec *executionContext) fieldContext_Subscription_myUnreadUpdated(_ context.
 				return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UnreadUpdate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentPage_items(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNTermsConsentRecord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecordᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_TermsConsentRecord_ID(ctx, field)
+			case "user":
+				return ec.fieldContext_TermsConsentRecord_user(ctx, field)
+			case "consentedAt":
+				return ec.fieldContext_TermsConsentRecord_consentedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TermsConsentRecord", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TermsConsentPage_total(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TermsConsentPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TermsConsentPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TermsConsentPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -13912,6 +14730,88 @@ func (ec *executionContext) fieldContext_UserAuthPayload_user(_ context.Context,
 				return ec.fieldContext_User_favorites(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserPage_items(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UserPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UserPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_User_ID(ctx, field)
+			case "accountID":
+				return ec.fieldContext_User_accountID(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "role":
+				return ec.fieldContext_User_role(ctx, field)
+			case "status":
+				return ec.fieldContext_User_status(ctx, field)
+			case "avatarUrl":
+				return ec.fieldContext_User_avatarUrl(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "posts":
+				return ec.fieldContext_User_posts(ctx, field)
+			case "favorites":
+				return ec.fieldContext_User_favorites(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserPage_total(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UserPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UserPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -16735,6 +17635,50 @@ func (ec *executionContext) _AdministratorAuthPayload(ctx context.Context, sel a
 	return out
 }
 
+var administratorPageImplementors = []string{"AdministratorPage"}
+
+func (ec *executionContext) _AdministratorPage(ctx context.Context, sel ast.SelectionSet, obj *model.AdministratorPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, administratorPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdministratorPage")
+		case "items":
+			out.Values[i] = ec._AdministratorPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._AdministratorPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var announcementImplementors = []string{"Announcement"}
 
 func (ec *executionContext) _Announcement(ctx context.Context, sel ast.SelectionSet, obj *model.Announcement) graphql.Marshaler {
@@ -16768,6 +17712,50 @@ func (ec *executionContext) _Announcement(ctx context.Context, sel ast.Selection
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Announcement_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var announcementPageImplementors = []string{"AnnouncementPage"}
+
+func (ec *executionContext) _AnnouncementPage(ctx context.Context, sel ast.SelectionSet, obj *model.AnnouncementPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, announcementPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AnnouncementPage")
+		case "items":
+			out.Values[i] = ec._AnnouncementPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._AnnouncementPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -16940,6 +17928,50 @@ func (ec *executionContext) _CommunityMember(ctx context.Context, sel ast.Select
 			}
 		case "role":
 			out.Values[i] = ec._CommunityMember_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var communityPageImplementors = []string{"CommunityPage"}
+
+func (ec *executionContext) _CommunityPage(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityPage")
+		case "items":
+			out.Values[i] = ec._CommunityPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._CommunityPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -17184,6 +18216,50 @@ func (ec *executionContext) _Inquiry(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Inquiry_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var inquiryPageImplementors = []string{"InquiryPage"}
+
+func (ec *executionContext) _InquiryPage(ctx context.Context, sel ast.SelectionSet, obj *model.InquiryPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inquiryPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InquiryPage")
+		case "items":
+			out.Values[i] = ec._InquiryPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._InquiryPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -18258,6 +19334,50 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var postPageImplementors = []string{"PostPage"}
+
+func (ec *executionContext) _PostPage(ctx context.Context, sel ast.SelectionSet, obj *model.PostPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostPage")
+		case "items":
+			out.Values[i] = ec._PostPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._PostPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var presignedUploadUrlImplementors = []string{"PresignedUploadUrl"}
 
 func (ec *executionContext) _PresignedUploadUrl(ctx context.Context, sel ast.SelectionSet, obj *model.PresignedUploadURL) graphql.Marshaler {
@@ -19207,6 +20327,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListAnnouncements":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListAnnouncements(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "maintenanceMode":
 			field := field
 
@@ -19543,6 +20685,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 	return out
 }
 
+var reportPageImplementors = []string{"ReportPage"}
+
+func (ec *executionContext) _ReportPage(ctx context.Context, sel ast.SelectionSet, obj *model.ReportPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportPage")
+		case "items":
+			out.Values[i] = ec._ReportPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._ReportPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var roomImplementors = []string{"Room"}
 
 func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj *model.Room) graphql.Marshaler {
@@ -19693,6 +20879,50 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
+}
+
+var termsConsentPageImplementors = []string{"TermsConsentPage"}
+
+func (ec *executionContext) _TermsConsentPage(ctx context.Context, sel ast.SelectionSet, obj *model.TermsConsentPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, termsConsentPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TermsConsentPage")
+		case "items":
+			out.Values[i] = ec._TermsConsentPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._TermsConsentPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
 }
 
 var termsConsentRecordImplementors = []string{"TermsConsentRecord"}
@@ -20028,6 +21258,50 @@ func (ec *executionContext) _UserAuthPayload(ctx context.Context, sel ast.Select
 			}
 		case "user":
 			out.Values[i] = ec._UserAuthPayload_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var userPageImplementors = []string{"UserPage"}
+
+func (ec *executionContext) _UserPage(ctx context.Context, sel ast.SelectionSet, obj *model.UserPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserPage")
+		case "items":
+			out.Values[i] = ec._UserPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._UserPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -20516,6 +21790,20 @@ func (ec *executionContext) marshalNAdministratorAuthPayload2ᚖgithubᚗcomᚋC
 	return ec._AdministratorAuthPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAdministratorPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorPage(ctx context.Context, sel ast.SelectionSet, v model.AdministratorPage) graphql.Marshaler {
+	return ec._AdministratorPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAdministratorPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministratorPage(ctx context.Context, sel ast.SelectionSet, v *model.AdministratorPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdministratorPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNAnnouncement2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncement(ctx context.Context, sel ast.SelectionSet, v model.Announcement) graphql.Marshaler {
 	return ec._Announcement(ctx, sel, &v)
 }
@@ -20544,6 +21832,20 @@ func (ec *executionContext) marshalNAnnouncement2ᚖgithubᚗcomᚋCityboypengui
 		return graphql.Null
 	}
 	return ec._Announcement(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAnnouncementPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementPage(ctx context.Context, sel ast.SelectionSet, v model.AnnouncementPage) graphql.Marshaler {
+	return ec._AnnouncementPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAnnouncementPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncementPage(ctx context.Context, sel ast.SelectionSet, v *model.AnnouncementPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AnnouncementPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBlocker2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐBlocker(ctx context.Context, sel ast.SelectionSet, v model.Blocker) graphql.Marshaler {
@@ -20630,6 +21932,20 @@ func (ec *executionContext) marshalNCommunityMember2ᚖgithubᚗcomᚋCityboypen
 		return graphql.Null
 	}
 	return ec._CommunityMember(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityPage(ctx context.Context, sel ast.SelectionSet, v model.CommunityPage) graphql.Marshaler {
+	return ec._CommunityPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityPage(ctx context.Context, sel ast.SelectionSet, v *model.CommunityPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCreateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateAdministratorInput(ctx context.Context, v any) (model.CreateAdministratorInput, error) {
@@ -20807,6 +22123,20 @@ func (ec *executionContext) marshalNInquiry2ᚖgithubᚗcomᚋCityboypenguinᚋS
 	return ec._Inquiry(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInquiryPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryPage(ctx context.Context, sel ast.SelectionSet, v model.InquiryPage) graphql.Marshaler {
+	return ec._InquiryPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNInquiryPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryPage(ctx context.Context, sel ast.SelectionSet, v *model.InquiryPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InquiryPage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNInquiryStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryStatus(ctx context.Context, v any) (model.InquiryStatus, error) {
 	var res model.InquiryStatus
 	err := res.UnmarshalGQL(v)
@@ -20955,6 +22285,20 @@ func (ec *executionContext) marshalNPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPAC
 	return ec._Post(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNPostPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage(ctx context.Context, sel ast.SelectionSet, v model.PostPage) graphql.Marshaler {
+	return ec._PostPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage(ctx context.Context, sel ast.SelectionSet, v *model.PostPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNPresignedUploadUrl2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL(ctx context.Context, sel ast.SelectionSet, v model.PresignedUploadURL) graphql.Marshaler {
 	return ec._PresignedUploadUrl(ctx, sel, &v)
 }
@@ -20986,6 +22330,20 @@ func (ec *executionContext) marshalNProfile2ᚖgithubᚗcomᚋCityboypenguinᚋS
 func (ec *executionContext) unmarshalNRemoveUserFromRoomInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRemoveUserFromRoomInput(ctx context.Context, v any) (model.RemoveUserFromRoomInput, error) {
 	res, err := ec.unmarshalInputRemoveUserFromRoomInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNReportPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportPage(ctx context.Context, sel ast.SelectionSet, v model.ReportPage) graphql.Marshaler {
+	return ec._ReportPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNReportPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportPage(ctx context.Context, sel ast.SelectionSet, v *model.ReportPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReportPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNReportStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportStatus(ctx context.Context, v any) (model.ReportStatus, error) {
@@ -21066,6 +22424,20 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNTermsConsentPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentPage(ctx context.Context, sel ast.SelectionSet, v model.TermsConsentPage) graphql.Marshaler {
+	return ec._TermsConsentPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTermsConsentPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentPage(ctx context.Context, sel ast.SelectionSet, v *model.TermsConsentPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TermsConsentPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNTermsConsentRecord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTermsConsentRecordᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TermsConsentRecord) graphql.Marshaler {
@@ -21224,6 +22596,20 @@ func (ec *executionContext) marshalNUserAuthPayload2ᚖgithubᚗcomᚋCityboypen
 		return graphql.Null
 	}
 	return ec._UserAuthPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUserPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage(ctx context.Context, sel ast.SelectionSet, v model.UserPage) graphql.Marshaler {
+	return ec._UserPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage(ctx context.Context, sel ast.SelectionSet, v *model.UserPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUserReport2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserReport(ctx context.Context, sel ast.SelectionSet, v model.UserReport) graphql.Marshaler {

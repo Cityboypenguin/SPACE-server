@@ -15,7 +15,7 @@ type CommunityRepository interface {
 	UpdateCommunity(ctx context.Context, c *model.Community) error
 	DeleteCommunity(ctx context.Context, id int64) (bool, error)
 	ListCommunitiesByUserID(ctx context.Context, userID int64) ([]*model.Community, error)
-	ListAllCommunities(ctx context.Context) ([]*model.Community, error)
+	ListAllCommunities(ctx context.Context, limit, offset int) ([]*model.Community, int, error)
 	// IsSoleOwnerWithOtherMembers は指定ユーザーが他メンバーのいるコミュニティの唯一オーナーかどうかを返す。
 	IsSoleOwnerWithOtherMembers(ctx context.Context, userID int64) (bool, error)
 	FindRandom(ctx context.Context, userID int64, limit int) ([]*model.Community, error)

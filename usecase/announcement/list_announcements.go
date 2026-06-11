@@ -15,9 +15,9 @@ func NewListAnnouncementsUseCase(repo repository.AnnouncementRepository) *ListAn
 	return &ListAnnouncementsUseCase{announcementRepo: repo}
 }
 
-func (u *ListAnnouncementsUseCase) Execute(ctx context.Context, limit int) ([]*model.Announcement, error) {
+func (u *ListAnnouncementsUseCase) Execute(ctx context.Context, limit, offset int) ([]*model.Announcement, int, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return u.announcementRepo.ListAll(ctx, limit)
+	return u.announcementRepo.ListAll(ctx, limit, offset)
 }

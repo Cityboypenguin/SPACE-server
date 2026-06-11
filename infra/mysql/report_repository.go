@@ -95,7 +95,30 @@ func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, sta
 	return r.FindByID(ctx, id)
 }
 
-func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.Report, error) {
+func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter, limit, offset int) ([]*model.Report, int, error) {
+	countQuery := `SELECT COUNT(*) FROM user_reports WHERE 1=1`
+	var countArgs []interface{}
+
+	if filter != nil {
+		if filter.Status != nil {
+			countQuery += " AND status = ?"
+			countArgs = append(countArgs, string(*filter.Status))
+		}
+		if filter.TargetType != nil {
+			countQuery += " AND target_type = ?"
+			countArgs = append(countArgs, string(*filter.TargetType))
+		}
+		if filter.ReporterID != nil && *filter.ReporterID != 0 {
+			countQuery += " AND reporter_id = ?"
+			countArgs = append(countArgs, *filter.ReporterID)
+		}
+	}
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count reports: %w", err)
+	}
+
 	query := `
         SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
         FROM user_reports
@@ -118,11 +141,12 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 		}
 	}
 
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query reports: %w", err)
+		return nil, 0, fmt.Errorf("failed to query reports: %w", err)
 	}
 	defer rows.Close()
 
@@ -130,14 +154,14 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 	for rows.Next() {
 		report, err := scanReport(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan row in search reports: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan row in search reports: %w", err)
 		}
 		reports = append(reports, report)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return reports, nil
+	return reports, total, nil
 }

@@ -98,14 +98,20 @@ func (r *MySQLAdministratorRepository) DeleteAdministrator(ctx context.Context, 
 	return affected > 0, nil
 }
 
-func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) ([]*model.Administrator, error) {
-	query := `
+func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context, limit, offset int) ([]*model.Administrator, int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM administrators`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, email, hashed_password, created_at, updated_at
 		FROM administrators
-	`
-	rows, err := r.db.QueryContext(ctx, query)
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -121,16 +127,16 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context) (
 			&createdAtUnix,
 			&updatedAtUnix,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		a.CreatedAt = time.Unix(createdAtUnix, 0)
 		a.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		administrators = append(administrators, &a)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return administrators, nil
+	return administrators, total, nil
 }
 
 func (r *MySQLAdministratorRepository) FindByEmail(ctx context.Context, email string) (*model.Administrator, error) {

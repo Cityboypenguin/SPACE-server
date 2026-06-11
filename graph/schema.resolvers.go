@@ -1790,21 +1790,22 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 }
 
 // Users is the resolver for the users field.
-func (r *queryResolver) Users(ctx context.Context) ([]*gqlmodel.User, error) {
+func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	users, err := r.ListUsersUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	users, total, err := r.ListUsersUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
 
-	var gqlUsers []*gqlmodel.User
+	items := make([]*gqlmodel.User, 0, len(users))
 	for _, user := range users {
-		gqlUsers = append(gqlUsers, toGraphUser(user))
+		items = append(items, toGraphUser(user))
 	}
-	return gqlUsers, nil
+	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
 // Me is the resolver for the me field.
@@ -1916,21 +1917,22 @@ func (r *queryResolver) MyUnreadNotificationCount(ctx context.Context) (int32, e
 }
 
 // Administrators is the resolver for the administrators field.
-func (r *queryResolver) Administrators(ctx context.Context) ([]*gqlmodel.Administrator, error) {
+func (r *queryResolver) Administrators(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.AdministratorPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	admins, err := r.ListAdministratorsUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	admins, total, err := r.ListAdministratorsUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
 
-	var gqlAdmins []*gqlmodel.Administrator
+	items := make([]*gqlmodel.Administrator, 0, len(admins))
 	for _, admin := range admins {
-		gqlAdmins = append(gqlAdmins, toGraphAdministrator(admin))
+		items = append(items, toGraphAdministrator(admin))
 	}
-	return gqlAdmins, nil
+	return &gqlmodel.AdministratorPage{Items: items, Total: int32(total)}, nil
 }
 
 // GetAdministratorByID is the resolver for the getAdministratorByID field.
@@ -1971,20 +1973,21 @@ func (r *queryResolver) SearchAdministrators(ctx context.Context, name string) (
 }
 
 // Posts is the resolver for the posts field.
-func (r *queryResolver) Posts(ctx context.Context) ([]*gqlmodel.Post, error) {
-	if _, err := requireAuth(ctx); err != nil {
+func (r *queryResolver) Posts(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	posts, err := r.ListPostsUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	posts, total, err := r.ListPostsUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
 
-	var gqlPosts []*gqlmodel.Post
+	items := make([]*gqlmodel.Post, 0, len(posts))
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post))
+		items = append(items, toGraphPost(post))
 	}
-	return gqlPosts, nil
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
 }
 
 // TopLevelPosts is the resolver for the topLevelPosts field.
@@ -2401,19 +2404,20 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*
 }
 
 // Communities is the resolver for the communities field.
-func (r *queryResolver) Communities(ctx context.Context) ([]*gqlmodel.Community, error) {
+func (r *queryResolver) Communities(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.CommunityPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	communities, err := r.ListAllCommunitiesUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	communities, total, err := r.ListAllCommunitiesUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]*gqlmodel.Community, 0, len(communities))
+	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
+		items = append(items, toGraphCommunity(c, r.communityAvatarURL(c)))
 	}
-	return result, nil
+	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
 
 // RandomCommunities is the resolver for the randomCommunities field.
@@ -2613,7 +2617,7 @@ func (r *queryResolver) PresignedTermsDocumentUploadURL(ctx context.Context) (*g
 }
 
 // SearchReports is the resolver for the searchReports field.
-func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.ReportSearchFilter) ([]*gqlmodel.UserReport, error) {
+func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.ReportSearchFilter, limit *int32, offset *int32) (*gqlmodel.ReportPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2638,7 +2642,8 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		}
 	}
 
-	reports, err := r.ManageReportUsecase.Search(ctx, domainFilter)
+	l, o := resolvePagination(limit, offset)
+	reports, total, err := r.ManageReportUsecase.Search(ctx, domainFilter, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2697,11 +2702,11 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 		})
 	}
-	return gqlReports, nil
+	return &gqlmodel.ReportPage{Items: gqlReports, Total: int32(total)}, nil
 }
 
 // SearchInquiries is the resolver for the searchInquiries field.
-func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.InquiryStatus) ([]*gqlmodel.Inquiry, error) {
+func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.InquiryStatus, limit *int32, offset *int32) (*gqlmodel.InquiryPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2712,15 +2717,16 @@ func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.In
 		domainStatus = &s
 	}
 
-	inquiries, err := r.ManageInquiryUsecase.Search(ctx, domainStatus)
+	l, o := resolvePagination(limit, offset)
+	inquiries, total, err := r.ManageInquiryUsecase.Search(ctx, domainStatus, l, o)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]*gqlmodel.Inquiry, 0, len(inquiries))
+	items := make([]*gqlmodel.Inquiry, 0, len(inquiries))
 	for _, inq := range inquiries {
-		result = append(result, toGraphInquiry(inq))
+		items = append(items, toGraphInquiry(inq))
 	}
-	return result, nil
+	return &gqlmodel.InquiryPage{Items: items, Total: int32(total)}, nil
 }
 
 // GetInquiry is the resolver for the getInquiry field.
@@ -2748,7 +2754,7 @@ func (r *queryResolver) Announcements(ctx context.Context, limit *int32) ([]*gql
 	if limit != nil {
 		l = int(*limit)
 	}
-	list, err := r.ListAnnouncementsUseCase.Execute(ctx, l)
+	list, _, err := r.ListAnnouncementsUseCase.Execute(ctx, l, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -2773,6 +2779,23 @@ func (r *queryResolver) Announcement(ctx context.Context, id string) (*gqlmodel.
 		return nil, err
 	}
 	return toGraphAnnouncement(a), nil
+}
+
+// AdminListAnnouncements is the resolver for the adminListAnnouncements field.
+func (r *queryResolver) AdminListAnnouncements(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.AnnouncementPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	l, o := resolvePagination(limit, offset)
+	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, l, o)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.Announcement, 0, len(list))
+	for _, a := range list {
+		items = append(items, toGraphAnnouncement(a))
+	}
+	return &gqlmodel.AnnouncementPage{Items: items, Total: int32(total)}, nil
 }
 
 // MaintenanceMode is the resolver for the maintenanceMode field.
@@ -2833,7 +2856,7 @@ func (r *queryResolver) AdminListTerms(ctx context.Context) ([]*gqlmodel.TermsOf
 }
 
 // AdminListConsents is the resolver for the adminListConsents field.
-func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string) ([]*gqlmodel.TermsConsentRecord, error) {
+func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string, limit *int32, offset *int32) (*gqlmodel.TermsConsentPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2841,7 +2864,8 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string) (
 	if err != nil {
 		return nil, fmt.Errorf("invalid terms id")
 	}
-	consents, err := r.ListConsentsUseCase.Execute(ctx, tid)
+	l, o := resolvePagination(limit, offset)
+	consents, total, err := r.ListConsentsUseCase.Execute(ctx, tid, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2859,19 +2883,19 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string) (
 		userMap[u.ID] = u
 	}
 
-	var result []*gqlmodel.TermsConsentRecord
+	items := make([]*gqlmodel.TermsConsentRecord, 0, len(consents))
 	for _, c := range consents {
 		u, ok := userMap[c.UserID]
 		if !ok {
 			continue
 		}
-		result = append(result, &gqlmodel.TermsConsentRecord{
+		items = append(items, &gqlmodel.TermsConsentRecord{
 			ID:          strconv.FormatInt(c.ID, 10),
 			User:        toGraphUser(u),
 			ConsentedAt: c.ConsentedAt.Format(timeFormat),
 		})
 	}
-	return result, nil
+	return &gqlmodel.TermsConsentPage{Items: items, Total: int32(total)}, nil
 }
 
 // ListFavoriteUsers is the resolver for the listFavoriteUsers field.

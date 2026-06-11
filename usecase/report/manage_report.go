@@ -16,8 +16,8 @@ func NewManageReportUsecase(reportRepo repository.ReportRepository) *ManageRepor
 	return &ManageReportUsecase{reportRepo: reportRepo}
 }
 
-func (u *ManageReportUsecase) Search(ctx context.Context, filter *model.ReportSearchFilter) ([]*model.Report, error) {
-	return u.reportRepo.Search(ctx, filter)
+func (u *ManageReportUsecase) Search(ctx context.Context, filter *model.ReportSearchFilter, limit, offset int) ([]*model.Report, int, error) {
+	return u.reportRepo.Search(ctx, filter, limit, offset)
 }
 
 func (u *ManageReportUsecase) UpdateStatus(ctx context.Context, id string, status model.ReportStatus) (*model.Report, error) {

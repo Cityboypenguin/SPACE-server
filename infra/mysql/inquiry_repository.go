@@ -41,7 +41,18 @@ func (r *MySQLInquiryRepository) Save(ctx context.Context, inquiry *model.Inquir
 	return nil
 }
 
-func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.InquiryStatus) ([]*model.Inquiry, error) {
+func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.InquiryStatus, limit, offset int) ([]*model.Inquiry, int, error) {
+	countQuery := `SELECT COUNT(*) FROM inquiries WHERE 1=1`
+	var countArgs []interface{}
+	if status != nil {
+		countQuery += " AND status = ?"
+		countArgs = append(countArgs, string(*status))
+	}
+	var total int
+	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count inquiries: %w", err)
+	}
+
 	query := `
 		SELECT id, name, email, subject, content, status, created_at, updated_at
 		FROM inquiries
@@ -52,11 +63,12 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 		query += " AND status = ?"
 		args = append(args, string(*status))
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query inquiries: %w", err)
+		return nil, 0, fmt.Errorf("failed to query inquiries: %w", err)
 	}
 	defer rows.Close()
 
@@ -64,11 +76,11 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 	for rows.Next() {
 		inq, err := scanInquiry(rows)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		inquiries = append(inquiries, inq)
 	}
-	return inquiries, rows.Err()
+	return inquiries, total, rows.Err()
 }
 
 func (r *MySQLInquiryRepository) FindByID(ctx context.Context, id string) (*model.Inquiry, error) {

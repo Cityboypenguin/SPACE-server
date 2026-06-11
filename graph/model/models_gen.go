@@ -28,12 +28,22 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type AdministratorPage struct {
+	Items []*Administrator `json:"items"`
+	Total int32            `json:"total"`
+}
+
 type Announcement struct {
 	ID        string `json:"ID"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type AnnouncementPage struct {
+	Items []*Announcement `json:"items"`
+	Total int32           `json:"total"`
 }
 
 type Blocker struct {
@@ -57,6 +67,11 @@ type Community struct {
 type CommunityMember struct {
 	User *User  `json:"user"`
 	Role string `json:"role"`
+}
+
+type CommunityPage struct {
+	Items []*Community `json:"items"`
+	Total int32        `json:"total"`
 }
 
 type CreateAdministratorInput struct {
@@ -146,6 +161,11 @@ type Inquiry struct {
 	UpdatedAt string        `json:"updatedAt"`
 }
 
+type InquiryPage struct {
+	Items []*Inquiry `json:"items"`
+	Total int32      `json:"total"`
+}
+
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -204,6 +224,11 @@ type Post struct {
 	Media      []*Media    `json:"media"`
 }
 
+type PostPage struct {
+	Items []*Post `json:"items"`
+	Total int32   `json:"total"`
+}
+
 type PresignedUploadURL struct {
 	UploadURL string `json:"uploadUrl"`
 	ObjectKey string `json:"objectKey"`
@@ -224,6 +249,11 @@ type Query struct {
 type RemoveUserFromRoomInput struct {
 	RoomID string `json:"roomID"`
 	UserID string `json:"userID"`
+}
+
+type ReportPage struct {
+	Items []*UserReport `json:"items"`
+	Total int32         `json:"total"`
 }
 
 type ReportSearchFilter struct {
@@ -252,6 +282,11 @@ type RoomReadStatusUpdate struct {
 }
 
 type Subscription struct {
+}
+
+type TermsConsentPage struct {
+	Items []*TermsConsentRecord `json:"items"`
+	Total int32                 `json:"total"`
 }
 
 type TermsConsentRecord struct {
@@ -336,6 +371,11 @@ type UserAuthPayload struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refreshToken"`
 	User         *User  `json:"user"`
+}
+
+type UserPage struct {
+	Items []*User `json:"items"`
+	Total int32   `json:"total"`
 }
 
 type UserReport struct {

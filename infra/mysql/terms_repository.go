@@ -135,16 +135,20 @@ func (r *MySQLTermsRepository) FindAll(ctx context.Context) ([]*model.TermsOfSer
 	return list, rows.Err()
 }
 
-func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64) ([]*model.TermsConsent, error) {
-	query := `
+func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64, limit, offset int) ([]*model.TermsConsent, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM terms_consents WHERE terms_id = ?`, termsID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count terms_consents: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, user_id, terms_id, consented_at
 		FROM terms_consents
 		WHERE terms_id = ?
 		ORDER BY consented_at DESC
-	`
-	rows, err := r.DB.QueryContext(ctx, query, termsID)
+		LIMIT ? OFFSET ?`, termsID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query terms_consents: %w", err)
+		return nil, 0, fmt.Errorf("failed to query terms_consents: %w", err)
 	}
 	defer rows.Close()
 	var list []*model.TermsConsent
@@ -152,12 +156,12 @@ func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsI
 		var c model.TermsConsent
 		var consentedAtUnix int64
 		if err := rows.Scan(&c.ID, &c.UserID, &c.TermsID, &consentedAtUnix); err != nil {
-			return nil, fmt.Errorf("failed to scan terms_consent: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan terms_consent: %w", err)
 		}
 		c.ConsentedAt = time.Unix(consentedAtUnix, 0)
 		list = append(list, &c)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 func (r *MySQLTermsRepository) FindConsent(ctx context.Context, userID, termsID int64) (*model.TermsConsent, error) {
