@@ -2505,10 +2505,11 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 	}
 
 	extMap := map[string]string{
-		"image/jpeg": ".jpg",
-		"image/png":  ".png",
-		"image/webp": ".webp",
-		"image/gif":  ".gif",
+		"image/jpeg":    ".jpg",
+		"image/png":     ".png",
+		"image/webp":    ".webp",
+		"image/gif":     ".gif",
+		"image/svg+xml": ".svg",
 	}
 	ext, ok := extMap[contentType]
 	if !ok {
@@ -2570,10 +2571,11 @@ func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, con
 	}
 
 	extMap := map[string]string{
-		"image/jpeg": ".jpg",
-		"image/png":  ".png",
-		"image/webp": ".webp",
-		"image/gif":  ".gif",
+		"image/jpeg":    ".jpg",
+		"image/png":     ".png",
+		"image/webp":    ".webp",
+		"image/gif":     ".gif",
+		"image/svg+xml": ".svg",
 	}
 	ext, ok := extMap[contentType]
 	if !ok {
