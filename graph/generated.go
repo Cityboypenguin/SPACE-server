@@ -151,6 +151,12 @@ type ComplexityRoot struct {
 		UserID    func(childComplexity int) int
 	}
 
+	MessagePage struct {
+		HasMoreAfter  func(childComplexity int) int
+		HasMoreBefore func(childComplexity int) int
+		Items         func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AddUserToRoom              func(childComplexity int, input model.AddUserToRoomInput) int
 		AdminDeletePost            func(childComplexity int, id string) int
@@ -284,19 +290,19 @@ type ComplexityRoot struct {
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
 		GetPostByID                     func(childComplexity int, id string) int
 		GetPostByIDIncludeDeleted       func(childComplexity int, id string) int
-		GetPostsByUserID                func(childComplexity int, userID string) int
+		GetPostsByUserID                func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
 		GetRootPost                     func(childComplexity int) int
 		GetUserByID                     func(childComplexity int, id string) int
 		IsReportServiceEnabled          func(childComplexity int) int
-		ListBlockedUsers                func(childComplexity int) int
-		ListFavoriteUsers               func(childComplexity int) int
+		ListBlockedUsers                func(childComplexity int, limit *int32, offset *int32) int
+		ListFavoriteUsers               func(childComplexity int, limit *int32, offset *int32) int
 		MaintenanceMode                 func(childComplexity int) int
 		Me                              func(childComplexity int) int
-		Messages                        func(childComplexity int, roomID string) int
-		MyCommunities                   func(childComplexity int) int
-		MyDMRooms                       func(childComplexity int) int
+		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string) int
+		MyCommunities                   func(childComplexity int, limit *int32, offset *int32) int
+		MyDMRooms                       func(childComplexity int, limit *int32, offset *int32) int
 		MyNotifications                 func(childComplexity int, limit *int32, offset *int32) int
 		MyProfile                       func(childComplexity int) int
 		MyTermsConsentStatus            func(childComplexity int) int
@@ -310,13 +316,13 @@ type ComplexityRoot struct {
 		Room                            func(childComplexity int, id string) int
 		SearchAdministrators            func(childComplexity int, name string) int
 		SearchBlockedUsers              func(childComplexity int, keyword string) int
-		SearchCommunities               func(childComplexity int, name string) int
+		SearchCommunities               func(childComplexity int, name string, limit *int32, offset *int32) int
 		SearchFavoriteUsers             func(childComplexity int, keyword string) int
 		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus, limit *int32, offset *int32) int
 		SearchPosts                     func(childComplexity int, content string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
-		SearchUsers                     func(childComplexity int, keyword string) int
-		TopLevelPosts                   func(childComplexity int) int
+		SearchUsers                     func(childComplexity int, keyword string, limit *int32, offset *int32) int
+		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
 		Users                           func(childComplexity int, limit *int32, offset *int32) int
 	}
 
@@ -337,6 +343,11 @@ type ComplexityRoot struct {
 		UnreadCount         func(childComplexity int) int
 		UpdatedAt           func(childComplexity int) int
 		User                func(childComplexity int) int
+	}
+
+	RoomPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	RoomReadStatusUpdate struct {
@@ -507,29 +518,29 @@ type QueryResolver interface {
 	Users(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	Me(ctx context.Context) (*model.User, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
-	SearchUsers(ctx context.Context, keyword string) ([]*model.User, error)
+	SearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*model.UserPage, error)
 	MyNotifications(ctx context.Context, limit *int32, offset *int32) (*model.NotificationPage, error)
 	MyUnreadNotificationCount(ctx context.Context) (int32, error)
 	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
 	Posts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
-	TopLevelPosts(ctx context.Context) ([]*model.Post, error)
+	TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
 	GetRootPost(ctx context.Context) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
-	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
+	GetPostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
 	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
 	GetProfileByUserID(ctx context.Context, userID string) (*model.Profile, error)
-	Messages(ctx context.Context, roomID string) ([]*model.Message, error)
+	Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string) (*model.MessagePage, error)
 	Room(ctx context.Context, id string) (*model.Room, error)
-	MyDMRooms(ctx context.Context) ([]*model.Room, error)
-	MyCommunities(ctx context.Context) ([]*model.Community, error)
-	SearchCommunities(ctx context.Context, name string) ([]*model.Community, error)
+	MyDMRooms(ctx context.Context, limit *int32, offset *int32) (*model.RoomPage, error)
+	MyCommunities(ctx context.Context, limit *int32, offset *int32) (*model.CommunityPage, error)
+	SearchCommunities(ctx context.Context, name string, limit *int32, offset *int32) (*model.CommunityPage, error)
 	Communities(ctx context.Context, limit *int32, offset *int32) (*model.CommunityPage, error)
 	RandomCommunities(ctx context.Context, limit int32) ([]*model.Community, error)
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
@@ -549,11 +560,11 @@ type QueryResolver interface {
 	MyTermsConsentStatus(ctx context.Context) (*model.TermsConsentStatus, error)
 	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
 	AdminListConsents(ctx context.Context, termsID string, limit *int32, offset *int32) (*model.TermsConsentPage, error)
-	ListFavoriteUsers(ctx context.Context) ([]*model.User, error)
+	ListFavoriteUsers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 	AdminGetFavoriteUsers(ctx context.Context, userID string) ([]*model.User, error)
-	ListBlockedUsers(ctx context.Context) ([]*model.User, error)
+	ListBlockedUsers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	SearchBlockedUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetBlockersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 	AdminGetBlockers(ctx context.Context, userID string) ([]*model.User, error)
@@ -982,6 +993,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.UserID(childComplexity), true
+
+	case "MessagePage.hasMoreAfter":
+		if e.ComplexityRoot.MessagePage.HasMoreAfter == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MessagePage.HasMoreAfter(childComplexity), true
+	case "MessagePage.hasMoreBefore":
+		if e.ComplexityRoot.MessagePage.HasMoreBefore == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MessagePage.HasMoreBefore(childComplexity), true
+	case "MessagePage.items":
+		if e.ComplexityRoot.MessagePage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MessagePage.Items(childComplexity), true
 
 	case "Mutation.addUserToRoom":
 		if e.ComplexityRoot.Mutation.AddUserToRoom == nil {
@@ -2031,7 +2061,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.GetPostsByUserID(childComplexity, args["user_id"].(string)), true
+		return e.ComplexityRoot.Query.GetPostsByUserID(childComplexity, args["user_id"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.getProfileByUserID":
 		if e.ComplexityRoot.Query.GetProfileByUserID == nil {
 			break
@@ -2083,13 +2113,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.ListBlockedUsers(childComplexity), true
+		args, err := ec.field_Query_listBlockedUsers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ListBlockedUsers(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.listFavoriteUsers":
 		if e.ComplexityRoot.Query.ListFavoriteUsers == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Query.ListFavoriteUsers(childComplexity), true
+		args, err := ec.field_Query_listFavoriteUsers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ListFavoriteUsers(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.maintenanceMode":
 		if e.ComplexityRoot.Query.MaintenanceMode == nil {
 			break
@@ -2112,19 +2152,29 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string)), true
+		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string), args["limit"].(*int32), args["before"].(*string), args["after"].(*string), args["afterTime"].(*string)), true
 	case "Query.myCommunities":
 		if e.ComplexityRoot.Query.MyCommunities == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Query.MyCommunities(childComplexity), true
+		args, err := ec.field_Query_myCommunities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyCommunities(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.myDMRooms":
 		if e.ComplexityRoot.Query.MyDMRooms == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Query.MyDMRooms(childComplexity), true
+		args, err := ec.field_Query_myDMRooms_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyDMRooms(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.myNotifications":
 		if e.ComplexityRoot.Query.MyNotifications == nil {
 			break
@@ -2258,7 +2308,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchCommunities(childComplexity, args["name"].(string)), true
+		return e.ComplexityRoot.Query.SearchCommunities(childComplexity, args["name"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.searchFavoriteUsers":
 		if e.ComplexityRoot.Query.SearchFavoriteUsers == nil {
 			break
@@ -2313,13 +2363,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchUsers(childComplexity, args["keyword"].(string)), true
+		return e.ComplexityRoot.Query.SearchUsers(childComplexity, args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.topLevelPosts":
 		if e.ComplexityRoot.Query.TopLevelPosts == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Query.TopLevelPosts(childComplexity), true
+		args, err := ec.field_Query_topLevelPosts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TopLevelPosts(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.users":
 		if e.ComplexityRoot.Query.Users == nil {
 			break
@@ -2411,6 +2466,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.User(childComplexity), true
+
+	case "RoomPage.items":
+		if e.ComplexityRoot.RoomPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RoomPage.Items(childComplexity), true
+	case "RoomPage.total":
+		if e.ComplexityRoot.RoomPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RoomPage.Total(childComplexity), true
 
 	case "RoomReadStatusUpdate.lastReadAt":
 		if e.ComplexityRoot.RoomReadStatusUpdate.LastReadAt == nil {
@@ -3794,6 +3862,16 @@ func (ec *executionContext) field_Query_getPostsByUserID_args(ctx context.Contex
 		return nil, err
 	}
 	args["user_id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -3830,6 +3908,38 @@ func (ec *executionContext) field_Query_getUserByID_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_listBlockedUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_listFavoriteUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_messages_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3838,6 +3948,58 @@ func (ec *executionContext) field_Query_messages_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "afterTime", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["afterTime"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_myCommunities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_myDMRooms_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -3958,6 +4120,16 @@ func (ec *executionContext) field_Query_searchCommunities_args(ctx context.Conte
 		return nil, err
 	}
 	args["name"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -4033,6 +4205,32 @@ func (ec *executionContext) field_Query_searchUsers_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["keyword"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_topLevelPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
 	return args, nil
 }
 
@@ -6203,6 +6401,113 @@ func (ec *executionContext) fieldContext_Message_updatedAt(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MessagePage_items(ctx context.Context, field graphql.CollectedField, obj *model.MessagePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MessagePage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNMessage2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessageᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MessagePage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MessagePage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Message_ID(ctx, field)
+			case "roomID":
+				return ec.fieldContext_Message_roomID(ctx, field)
+			case "room":
+				return ec.fieldContext_Message_room(ctx, field)
+			case "userID":
+				return ec.fieldContext_Message_userID(ctx, field)
+			case "user":
+				return ec.fieldContext_Message_user(ctx, field)
+			case "content":
+				return ec.fieldContext_Message_content(ctx, field)
+			case "media":
+				return ec.fieldContext_Message_media(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Message_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Message_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Message", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MessagePage_hasMoreBefore(ctx context.Context, field graphql.CollectedField, obj *model.MessagePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MessagePage_hasMoreBefore,
+		func(ctx context.Context) (any, error) {
+			return obj.HasMoreBefore, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MessagePage_hasMoreBefore(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MessagePage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MessagePage_hasMoreAfter(ctx context.Context, field graphql.CollectedField, obj *model.MessagePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MessagePage_hasMoreAfter,
+		func(ctx context.Context) (any, error) {
+			return obj.HasMoreAfter, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MessagePage_hasMoreAfter(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MessagePage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -10412,10 +10717,10 @@ func (ec *executionContext) _Query_searchUsers(ctx context.Context, field graphq
 		ec.fieldContext_Query_searchUsers,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchUsers(ctx, fc.Args["keyword"].(string))
+			return ec.Resolvers.Query().SearchUsers(ctx, fc.Args["keyword"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ,
+		ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage,
 		true,
 		true,
 	)
@@ -10429,30 +10734,12 @@ func (ec *executionContext) fieldContext_Query_searchUsers(ctx context.Context, 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_User_ID(ctx, field)
-			case "accountID":
-				return ec.fieldContext_User_accountID(ctx, field)
-			case "name":
-				return ec.fieldContext_User_name(ctx, field)
-			case "email":
-				return ec.fieldContext_User_email(ctx, field)
-			case "role":
-				return ec.fieldContext_User_role(ctx, field)
-			case "status":
-				return ec.fieldContext_User_status(ctx, field)
-			case "avatarUrl":
-				return ec.fieldContext_User_avatarUrl(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_User_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_User_updatedAt(ctx, field)
-			case "posts":
-				return ec.fieldContext_User_posts(ctx, field)
-			case "favorites":
-				return ec.fieldContext_User_favorites(ctx, field)
+			case "items":
+				return ec.fieldContext_UserPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_UserPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
 	}
 	defer func() {
@@ -10752,16 +11039,17 @@ func (ec *executionContext) _Query_topLevelPosts(ctx context.Context, field grap
 		field,
 		ec.fieldContext_Query_topLevelPosts,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().TopLevelPosts(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TopLevelPosts(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ,
+		ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_topLevelPosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_topLevelPosts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -10769,33 +11057,24 @@ func (ec *executionContext) fieldContext_Query_topLevelPosts(_ context.Context, 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Post_ID(ctx, field)
-			case "content":
-				return ec.fieldContext_Post_content(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Post_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Post_updatedAt(ctx, field)
-			case "deletedAt":
-				return ec.fieldContext_Post_deletedAt(ctx, field)
-			case "replyCount":
-				return ec.fieldContext_Post_replyCount(ctx, field)
-			case "user":
-				return ec.fieldContext_Post_user(ctx, field)
-			case "rootPost":
-				return ec.fieldContext_Post_rootPost(ctx, field)
-			case "favorites":
-				return ec.fieldContext_Post_favorites(ctx, field)
-			case "parent":
-				return ec.fieldContext_Post_parent(ctx, field)
-			case "replies":
-				return ec.fieldContext_Post_replies(ctx, field)
-			case "media":
-				return ec.fieldContext_Post_media(ctx, field)
+			case "items":
+				return ec.fieldContext_PostPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_PostPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type PostPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_topLevelPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -10997,10 +11276,10 @@ func (ec *executionContext) _Query_getPostsByUserID(ctx context.Context, field g
 		ec.fieldContext_Query_getPostsByUserID,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().GetPostsByUserID(ctx, fc.Args["user_id"].(string))
+			return ec.Resolvers.Query().GetPostsByUserID(ctx, fc.Args["user_id"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ,
+		ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage,
 		true,
 		true,
 	)
@@ -11014,32 +11293,12 @@ func (ec *executionContext) fieldContext_Query_getPostsByUserID(ctx context.Cont
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Post_ID(ctx, field)
-			case "content":
-				return ec.fieldContext_Post_content(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Post_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Post_updatedAt(ctx, field)
-			case "deletedAt":
-				return ec.fieldContext_Post_deletedAt(ctx, field)
-			case "replyCount":
-				return ec.fieldContext_Post_replyCount(ctx, field)
-			case "user":
-				return ec.fieldContext_Post_user(ctx, field)
-			case "rootPost":
-				return ec.fieldContext_Post_rootPost(ctx, field)
-			case "favorites":
-				return ec.fieldContext_Post_favorites(ctx, field)
-			case "parent":
-				return ec.fieldContext_Post_parent(ctx, field)
-			case "replies":
-				return ec.fieldContext_Post_replies(ctx, field)
-			case "media":
-				return ec.fieldContext_Post_media(ctx, field)
+			case "items":
+				return ec.fieldContext_PostPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_PostPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type PostPage", field.Name)
 		},
 	}
 	defer func() {
@@ -11386,10 +11645,10 @@ func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.C
 		ec.fieldContext_Query_messages,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Messages(ctx, fc.Args["roomID"].(string))
+			return ec.Resolvers.Query().Messages(ctx, fc.Args["roomID"].(string), fc.Args["limit"].(*int32), fc.Args["before"].(*string), fc.Args["after"].(*string), fc.Args["afterTime"].(*string))
 		},
 		nil,
-		ec.marshalNMessage2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessageᚄ,
+		ec.marshalNMessagePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessagePage,
 		true,
 		true,
 	)
@@ -11403,26 +11662,14 @@ func (ec *executionContext) fieldContext_Query_messages(ctx context.Context, fie
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Message_ID(ctx, field)
-			case "roomID":
-				return ec.fieldContext_Message_roomID(ctx, field)
-			case "room":
-				return ec.fieldContext_Message_room(ctx, field)
-			case "userID":
-				return ec.fieldContext_Message_userID(ctx, field)
-			case "user":
-				return ec.fieldContext_Message_user(ctx, field)
-			case "content":
-				return ec.fieldContext_Message_content(ctx, field)
-			case "media":
-				return ec.fieldContext_Message_media(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Message_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Message_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_MessagePage_items(ctx, field)
+			case "hasMoreBefore":
+				return ec.fieldContext_MessagePage_hasMoreBefore(ctx, field)
+			case "hasMoreAfter":
+				return ec.fieldContext_MessagePage_hasMoreAfter(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Message", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type MessagePage", field.Name)
 		},
 	}
 	defer func() {
@@ -11511,16 +11758,17 @@ func (ec *executionContext) _Query_myDMRooms(ctx context.Context, field graphql.
 		field,
 		ec.fieldContext_Query_myDMRooms,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().MyDMRooms(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyDMRooms(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNRoom2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomᚄ,
+		ec.marshalNRoomPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_myDMRooms(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -11528,31 +11776,24 @@ func (ec *executionContext) fieldContext_Query_myDMRooms(_ context.Context, fiel
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Room_ID(ctx, field)
-			case "content":
-				return ec.fieldContext_Room_content(ctx, field)
-			case "name":
-				return ec.fieldContext_Room_name(ctx, field)
-			case "type":
-				return ec.fieldContext_Room_type(ctx, field)
-			case "user":
-				return ec.fieldContext_Room_user(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Room_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Room_updatedAt(ctx, field)
-			case "isMessagingDisabled":
-				return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
-			case "lastReadAt":
-				return ec.fieldContext_Room_lastReadAt(ctx, field)
-			case "unreadCount":
-				return ec.fieldContext_Room_unreadCount(ctx, field)
-			case "partnerLastReadAt":
-				return ec.fieldContext_Room_partnerLastReadAt(ctx, field)
+			case "items":
+				return ec.fieldContext_RoomPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_RoomPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type RoomPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myDMRooms_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -11564,16 +11805,17 @@ func (ec *executionContext) _Query_myCommunities(ctx context.Context, field grap
 		field,
 		ec.fieldContext_Query_myCommunities,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().MyCommunities(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyCommunities(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		ec.marshalNCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_myCommunities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_myCommunities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -11581,25 +11823,24 @@ func (ec *executionContext) fieldContext_Query_myCommunities(_ context.Context, 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Community_ID(ctx, field)
-			case "roomID":
-				return ec.fieldContext_Community_roomID(ctx, field)
-			case "name":
-				return ec.fieldContext_Community_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Community_description(ctx, field)
-			case "avatarURL":
-				return ec.fieldContext_Community_avatarURL(ctx, field)
-			case "unreadCount":
-				return ec.fieldContext_Community_unreadCount(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Community_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Community_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_CommunityPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_CommunityPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type CommunityPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myCommunities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -11612,10 +11853,10 @@ func (ec *executionContext) _Query_searchCommunities(ctx context.Context, field 
 		ec.fieldContext_Query_searchCommunities,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchCommunities(ctx, fc.Args["name"].(string))
+			return ec.Resolvers.Query().SearchCommunities(ctx, fc.Args["name"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityᚄ,
+		ec.marshalNCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityPage,
 		true,
 		true,
 	)
@@ -11629,24 +11870,12 @@ func (ec *executionContext) fieldContext_Query_searchCommunities(ctx context.Con
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_Community_ID(ctx, field)
-			case "roomID":
-				return ec.fieldContext_Community_roomID(ctx, field)
-			case "name":
-				return ec.fieldContext_Community_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Community_description(ctx, field)
-			case "avatarURL":
-				return ec.fieldContext_Community_avatarURL(ctx, field)
-			case "unreadCount":
-				return ec.fieldContext_Community_unreadCount(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Community_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Community_updatedAt(ctx, field)
+			case "items":
+				return ec.fieldContext_CommunityPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_CommunityPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type CommunityPage", field.Name)
 		},
 	}
 	defer func() {
@@ -12533,16 +12762,17 @@ func (ec *executionContext) _Query_listFavoriteUsers(ctx context.Context, field 
 		field,
 		ec.fieldContext_Query_listFavoriteUsers,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().ListFavoriteUsers(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ListFavoriteUsers(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ,
+		ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_listFavoriteUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_listFavoriteUsers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -12550,31 +12780,24 @@ func (ec *executionContext) fieldContext_Query_listFavoriteUsers(_ context.Conte
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_User_ID(ctx, field)
-			case "accountID":
-				return ec.fieldContext_User_accountID(ctx, field)
-			case "name":
-				return ec.fieldContext_User_name(ctx, field)
-			case "email":
-				return ec.fieldContext_User_email(ctx, field)
-			case "role":
-				return ec.fieldContext_User_role(ctx, field)
-			case "status":
-				return ec.fieldContext_User_status(ctx, field)
-			case "avatarUrl":
-				return ec.fieldContext_User_avatarUrl(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_User_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_User_updatedAt(ctx, field)
-			case "posts":
-				return ec.fieldContext_User_posts(ctx, field)
-			case "favorites":
-				return ec.fieldContext_User_favorites(ctx, field)
+			case "items":
+				return ec.fieldContext_UserPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_UserPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listFavoriteUsers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -12781,16 +13004,17 @@ func (ec *executionContext) _Query_listBlockedUsers(ctx context.Context, field g
 		field,
 		ec.fieldContext_Query_listBlockedUsers,
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().ListBlockedUsers(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ListBlockedUsers(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ,
+		ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_listBlockedUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_listBlockedUsers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -12798,31 +13022,24 @@ func (ec *executionContext) fieldContext_Query_listBlockedUsers(_ context.Contex
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "ID":
-				return ec.fieldContext_User_ID(ctx, field)
-			case "accountID":
-				return ec.fieldContext_User_accountID(ctx, field)
-			case "name":
-				return ec.fieldContext_User_name(ctx, field)
-			case "email":
-				return ec.fieldContext_User_email(ctx, field)
-			case "role":
-				return ec.fieldContext_User_role(ctx, field)
-			case "status":
-				return ec.fieldContext_User_status(ctx, field)
-			case "avatarUrl":
-				return ec.fieldContext_User_avatarUrl(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_User_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_User_updatedAt(ctx, field)
-			case "posts":
-				return ec.fieldContext_User_posts(ctx, field)
-			case "favorites":
-				return ec.fieldContext_User_favorites(ctx, field)
+			case "items":
+				return ec.fieldContext_UserPage_items(ctx, field)
+			case "total":
+				return ec.fieldContext_UserPage_total(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listBlockedUsers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -13577,6 +13794,88 @@ func (ec *executionContext) fieldContext_Room_partnerLastReadAt(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RoomPage_items(ctx context.Context, field graphql.CollectedField, obj *model.RoomPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RoomPage_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNRoom2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RoomPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RoomPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "ID":
+				return ec.fieldContext_Room_ID(ctx, field)
+			case "content":
+				return ec.fieldContext_Room_content(ctx, field)
+			case "name":
+				return ec.fieldContext_Room_name(ctx, field)
+			case "type":
+				return ec.fieldContext_Room_type(ctx, field)
+			case "user":
+				return ec.fieldContext_Room_user(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Room_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Room_updatedAt(ctx, field)
+			case "isMessagingDisabled":
+				return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
+			case "lastReadAt":
+				return ec.fieldContext_Room_lastReadAt(ctx, field)
+			case "unreadCount":
+				return ec.fieldContext_Room_unreadCount(ctx, field)
+			case "partnerLastReadAt":
+				return ec.fieldContext_Room_partnerLastReadAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Room", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RoomPage_total(ctx context.Context, field graphql.CollectedField, obj *model.RoomPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RoomPage_total,
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RoomPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RoomPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -18598,6 +18897,55 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 	return out
 }
 
+var messagePageImplementors = []string{"MessagePage"}
+
+func (ec *executionContext) _MessagePage(ctx context.Context, sel ast.SelectionSet, obj *model.MessagePage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, messagePageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MessagePage")
+		case "items":
+			out.Values[i] = ec._MessagePage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasMoreBefore":
+			out.Values[i] = ec._MessagePage_hasMoreBefore(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasMoreAfter":
+			out.Values[i] = ec._MessagePage_hasMoreAfter(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -20939,6 +21287,50 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var roomPageImplementors = []string{"RoomPage"}
+
+func (ec *executionContext) _RoomPage(ctx context.Context, sel ast.SelectionSet, obj *model.RoomPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, roomPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RoomPage")
+		case "items":
+			out.Values[i] = ec._RoomPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._RoomPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var roomReadStatusUpdateImplementors = []string{"RoomReadStatusUpdate"}
 
 func (ec *executionContext) _RoomReadStatusUpdate(ctx context.Context, sel ast.SelectionSet, obj *model.RoomReadStatusUpdate) graphql.Marshaler {
@@ -22359,6 +22751,20 @@ func (ec *executionContext) marshalNMessage2ᚖgithubᚗcomᚋCityboypenguinᚋS
 	return ec._Message(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMessagePage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessagePage(ctx context.Context, sel ast.SelectionSet, v model.MessagePage) graphql.Marshaler {
+	return ec._MessagePage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMessagePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessagePage(ctx context.Context, sel ast.SelectionSet, v *model.MessagePage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MessagePage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNNotification2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Notification) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -22538,6 +22944,20 @@ func (ec *executionContext) marshalNRoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPAC
 		return graphql.Null
 	}
 	return ec._Room(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRoomPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomPage(ctx context.Context, sel ast.SelectionSet, v model.RoomPage) graphql.Marshaler {
+	return ec._RoomPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRoomPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomPage(ctx context.Context, sel ast.SelectionSet, v *model.RoomPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RoomPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNRoomReadStatusUpdate2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoomReadStatusUpdate(ctx context.Context, sel ast.SelectionSet, v model.RoomReadStatusUpdate) graphql.Marshaler {

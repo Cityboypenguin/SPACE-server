@@ -71,15 +71,41 @@ func (r *MySQLMessageRepository) DeleteMessage(ctx context.Context, id int64) (b
 	return rowsAffected > 0, nil
 }
 
-func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomID int64) ([]*model.Message, error) {
-	query := `
-		SELECT id, room_id, user_id, content, created_at, updated_at
-		FROM messages WHERE room_id = ?
-		ORDER BY created_at ASC
-	`
-	rows, err := r.DB.QueryContext(ctx, query, roomID)
+func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomID int64, limit int, beforeID *int64, afterID *int64, afterTime *time.Time) ([]*model.Message, bool, bool, error) {
+	var query string
+	var args []interface{}
+	var ascOrder bool
+
+	switch {
+	case afterTime != nil:
+		// 未読起点: afterTime より新しいメッセージを昇順で取得
+		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+			FROM messages WHERE room_id = ? AND created_at > ? ORDER BY id ASC LIMIT ?`
+		args = []interface{}{roomID, afterTime.Unix(), limit + 1}
+		ascOrder = true
+	case afterID != nil:
+		// 新着ページング: afterID より新しいメッセージを昇順で取得
+		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+			FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?`
+		args = []interface{}{roomID, *afterID, limit + 1}
+		ascOrder = true
+	case beforeID != nil:
+		// 過去ページング: beforeID より古いメッセージを降順で取得して反転
+		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+			FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?`
+		args = []interface{}{roomID, *beforeID, limit + 1}
+		ascOrder = false
+	default:
+		// 初回ロード（未読なし）: 最新メッセージを降順で取得して反転
+		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+			FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?`
+		args = []interface{}{roomID, limit + 1}
+		ascOrder = false
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	defer rows.Close()
 
@@ -88,13 +114,42 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 		var m model.Message
 		var createdAt, updatedAt int64
 		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt); err != nil {
-			return nil, err
+			return nil, false, false, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
 		m.UpdatedAt = time.Unix(updatedAt, 0)
 		messages = append(messages, &m)
 	}
-	return messages, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, false, err
+	}
+
+	hasExtraRow := len(messages) > limit
+	if hasExtraRow {
+		messages = messages[:limit]
+	}
+
+	if !ascOrder {
+		// DESC で取得したので昇順（古い順）に戻す
+		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+			messages[i], messages[j] = messages[j], messages[i]
+		}
+	}
+
+	var hasMoreBefore, hasMoreAfter bool
+	switch {
+	case afterTime != nil || afterID != nil:
+		hasMoreBefore = true // after 系は常に古いメッセージが存在する
+		hasMoreAfter = hasExtraRow
+	case beforeID != nil:
+		hasMoreBefore = hasExtraRow
+		hasMoreAfter = true // before 系は常に新しいメッセージが存在する
+	default:
+		hasMoreBefore = hasExtraRow
+		hasMoreAfter = false // 最新端なので after はなし（WebSocket が担う）
+	}
+
+	return messages, hasMoreBefore, hasMoreAfter, nil
 }
 
 func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Message) error {

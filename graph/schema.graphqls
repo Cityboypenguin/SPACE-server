@@ -5,7 +5,7 @@ type Query {
   users(limit: Int = 20, offset: Int = 0): UserPage!
   me: User!
   getUserByID(id: ID!): User
-  searchUsers(keyword: String!): [User!]!
+  searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
   myNotifications(limit: Int = 20, offset: Int = 0): NotificationPage!
   myUnreadNotificationCount: Int!
 
@@ -14,11 +14,11 @@ type Query {
   searchAdministrators(name: String!): [Administrator!]!
 
   posts(limit: Int = 20, offset: Int = 0): PostPage!
-  topLevelPosts: [Post!]!
+  topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
   getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
-  getPostsByUserID(user_id: ID!): [Post!]!
+  getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
   getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
 
@@ -26,11 +26,11 @@ type Query {
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
-  messages(roomID: ID!): [Message!]!
+  messages(roomID: ID!, limit: Int = 50, before: ID, after: ID, afterTime: String): MessagePage!
   room(id: ID!): Room
-  myDMRooms: [Room!]!
-  myCommunities: [Community!]!
-  searchCommunities(name: String!): [Community!]!
+  myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
+  myCommunities(limit: Int = 20, offset: Int = 0): CommunityPage!
+  searchCommunities(name: String!, limit: Int = 20, offset: Int = 0): CommunityPage!
   communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
@@ -55,12 +55,12 @@ type Query {
   adminListTerms: [TermsOfService!]!
   adminListConsents(termsID: ID!, limit: Int = 20, offset: Int = 0): TermsConsentPage!
 
-  listFavoriteUsers: [User!]!
+  listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
   adminGetFavoriteUsers(userID: ID!): [User!]!
   
-  listBlockedUsers: [User!]!
+  listBlockedUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchBlockedUsers(keyword: String!): [User!]!
   GetBlockersByUserID(userID: ID!): [User!]!
   adminGetBlockers(userID: ID!): [User!]!
@@ -374,6 +374,12 @@ type Message {
   updatedAt: String!
 }
 
+type MessagePage {
+  items: [Message!]!
+  hasMoreBefore: Boolean!
+  hasMoreAfter: Boolean!
+}
+
 input CreateRoomInput {
   name: String!
 }
@@ -405,6 +411,11 @@ type Community {
 
 type CommunityPage {
   items: [Community!]!
+  total: Int!
+}
+
+type RoomPage {
+  items: [Room!]!
   total: Int!
 }
 

@@ -89,8 +89,17 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 	return scanCommunity(row)
 }
 
-func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string) ([]*model.Community, error) {
-	query := `
+func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, limit, offset int) ([]*model.Community, int, error) {
+	searchParam := "%" + name + "%"
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM communities WHERE name LIKE ?`, searchParam,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT c.id, c.room_id, c.name, c.description,
 		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
 		       c.created_at, c.updated_at
@@ -98,14 +107,17 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		WHERE c.name LIKE ?
 		ORDER BY c.created_at DESC
-		LIMIT 50
-	`
-	rows, err := r.DB.QueryContext(ctx, query, "%"+name+"%")
+		LIMIT ? OFFSET ?
+	`, searchParam, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	return scanCommunities(rows)
+	items, err := scanCommunities(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model.Community) error {
@@ -152,8 +164,16 @@ func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64
 	return n > 0, nil
 }
 
-func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64) ([]*model.Community, error) {
-	query := `
+func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Community, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM communities c JOIN room_users ru ON c.room_id = ru.room_id WHERE ru.user_id = ?`,
+		userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT c.id, c.room_id, c.name, c.description,
 		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
 		       c.created_at, c.updated_at
@@ -162,13 +182,18 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 		JOIN room_users ru ON c.room_id = ru.room_id
 		WHERE ru.user_id = ?
 		ORDER BY ru.created_at DESC
-	`
-	rows, err := r.DB.QueryContext(ctx, query, userID)
+		LIMIT ? OFFSET ?`,
+		userID, limit, offset,
+	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	return scanCommunities(rows)
+	communities, err := scanCommunities(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return communities, total, nil
 }
 
 func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, limit, offset int) ([]*model.Community, int, error) {

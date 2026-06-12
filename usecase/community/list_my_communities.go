@@ -9,7 +9,7 @@ import (
 )
 
 type ListMyCommunitiesUseCase interface {
-	Execute(ctx context.Context) ([]*model.Community, error)
+	Execute(ctx context.Context, limit, offset int) ([]*model.Community, int, error)
 }
 
 var _ ListMyCommunitiesUseCase = &ListMyCommunitiesInteractor{}
@@ -22,10 +22,10 @@ func NewListMyCommunitiesUseCase(communityRepo repository.CommunityRepository) L
 	return &ListMyCommunitiesInteractor{communityRepo: communityRepo}
 }
 
-func (uc *ListMyCommunitiesInteractor) Execute(ctx context.Context) ([]*model.Community, error) {
+func (uc *ListMyCommunitiesInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Community, int, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return uc.communityRepo.ListCommunitiesByUserID(ctx, claims.ID)
+	return uc.communityRepo.ListCommunitiesByUserID(ctx, claims.ID, limit, offset)
 }

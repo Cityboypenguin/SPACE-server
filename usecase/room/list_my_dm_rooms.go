@@ -8,7 +8,7 @@ import (
 )
 
 type ListMyDMRoomsUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.Room, error)
+	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error)
 }
 
 var _ ListMyDMRoomsUseCase = &ListMyDMRoomsInteractor{}
@@ -21,6 +21,6 @@ func NewListMyDMRoomsUseCase(roomUserRepo repository.RoomUserRepository) ListMyD
 	return &ListMyDMRoomsInteractor{roomUserRepo: roomUserRepo}
 }
 
-func (uc *ListMyDMRoomsInteractor) Execute(ctx context.Context, userID int64) ([]*model.Room, error) {
-	return uc.roomUserRepo.ListDMRoomsByUserID(ctx, userID)
+func (uc *ListMyDMRoomsInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error) {
+	return uc.roomUserRepo.ListDMRoomsByUserID(ctx, userID, limit, offset)
 }
