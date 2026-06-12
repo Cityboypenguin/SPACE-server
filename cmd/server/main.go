@@ -353,8 +353,8 @@ func main() {
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
 		GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
 
-		CreateReportUsecase: *createReportUseCase,
-		ManageReportUsecase: *manageReportUseCase,
+		CreateReportUsecase:        *createReportUseCase,
+		ManageReportUsecase:        *manageReportUseCase,
 		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,

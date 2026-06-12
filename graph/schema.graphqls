@@ -58,7 +58,7 @@ type Query {
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
   adminGetFavoriteUsers(userID: ID!): [User!]!
-  
+
   listBlockedUsers: [User!]!
   searchBlockedUsers(keyword: String!): [User!]!
   GetBlockersByUserID(userID: ID!): [User!]!
@@ -192,7 +192,11 @@ type Mutation {
   unfreezeUser(id: ID!): Boolean!
   setAvatar(objectKey: String!): Profile!
   joinRoom(roomID: ID!): Boolean!
-  sendMessage(roomID: ID!, content: String!, mediaInputs: [MediaUploadInput!]): Message!
+  sendMessage(
+    roomID: ID!
+    content: String!
+    mediaInputs: [MediaUploadInput!]
+  ): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
   updateMessage(roomID: ID!, id: ID!, content: String!): Message!
 
@@ -243,9 +247,9 @@ input UpdateAnnouncementInput {
 }
 
 enum InquiryStatus {
-  PENDING      # 未対応
-  IN_PROGRESS  # 対応中
-  RESOLVED     # 解決済み
+  PENDING # 未対応
+  IN_PROGRESS # 対応中
+  RESOLVED # 解決済み
 }
 
 type Inquiry {
@@ -422,7 +426,7 @@ type Subscription {
 }
 
 enum ReportStatus {
-  PENDING 
+  PENDING
   REVIEWING
   RESOLVED
   DISMISSED
@@ -466,9 +470,9 @@ type Notification {
 
 input CreateReportInput {
   targetType: ReportTargetType!
-  targetID: ID!          # 通報対象のID
-  reason: String!        # 理由の分類
-  customReason: String   # 詳細理由
+  targetID: ID! # 通報対象のID
+  reason: String! # 理由の分類
+  customReason: String # 詳細理由
 }
 
 type TermsOfService {
@@ -495,6 +499,3 @@ input CreateTermsOfServiceInput {
   objectKey: String!
   effectiveDate: String!
 }
-
-
-
