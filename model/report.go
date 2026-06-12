@@ -31,6 +31,8 @@ type Report struct {
 	Status       ReportStatus
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	PostID       *int64  `json:"postId"`
+    PostContent  *string `json:"postContent"`
 }
 
 type ReportSearchFilter struct {

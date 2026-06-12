@@ -25,7 +25,7 @@ services:
       MINIO_ENDPOINT: s3.${AWS_REGION:-ap-northeast-1}.amazonaws.com
       MINIO_ACCESS_KEY: ${AWS_ACCESS_KEY_ID}
       MINIO_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET:-space-avatars}
+      MINIO_BUCKET: ${MINIO_BUCKET:-space-storage}
       MINIO_USE_SSL: "true"
       MINIO_REGION: ${AWS_REGION:-ap-northeast-1}
       MINIO_BUCKET_LOOKUP: dns

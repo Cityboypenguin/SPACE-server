@@ -24,5 +24,10 @@ func NewSearchPostsUseCase(postRepo repository.PostRepository) SearchPostsUseCas
 }
 
 func (uc *SearchPostsInteractor) Execute(ctx context.Context, query string) ([]*model.Post, error) {
-	return uc.postRepo.SearchPosts(ctx, query)
+	posts, err := uc.postRepo.SearchPosts(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return posts, nil
 }

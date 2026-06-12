@@ -28,12 +28,22 @@ type AdministratorAuthPayload struct {
 	Administrator *Administrator `json:"administrator"`
 }
 
+type AdministratorPage struct {
+	Items []*Administrator `json:"items"`
+	Total int32            `json:"total"`
+}
+
 type Announcement struct {
 	ID        string `json:"ID"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type AnnouncementPage struct {
+	Items []*Announcement `json:"items"`
+	Total int32           `json:"total"`
 }
 
 type Blocker struct {
@@ -49,6 +59,8 @@ type Community struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	AvatarURL   string `json:"avatarURL"`
+	MemberCount int32  `json:"memberCount"`
+	IsMember    bool   `json:"isMember"`
 	UnreadCount int32  `json:"unreadCount"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
@@ -57,6 +69,11 @@ type Community struct {
 type CommunityMember struct {
 	User *User  `json:"user"`
 	Role string `json:"role"`
+}
+
+type CommunityPage struct {
+	Items []*Community `json:"items"`
+	Total int32        `json:"total"`
 }
 
 type CreateAdministratorInput struct {
@@ -147,6 +164,11 @@ type Inquiry struct {
 	UpdatedAt string        `json:"updatedAt"`
 }
 
+type InquiryPage struct {
+	Items []*Inquiry `json:"items"`
+	Total int32      `json:"total"`
+}
+
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -176,6 +198,12 @@ type Message struct {
 	UpdatedAt string   `json:"updatedAt"`
 }
 
+type MessagePage struct {
+	Items         []*Message `json:"items"`
+	HasMoreBefore bool       `json:"hasMoreBefore"`
+	HasMoreAfter  bool       `json:"hasMoreAfter"`
+}
+
 type Mutation struct {
 }
 
@@ -190,6 +218,11 @@ type Notification struct {
 	CreatedAt  string  `json:"createdAt"`
 }
 
+type NotificationPage struct {
+	Items []*Notification `json:"items"`
+	Total int32           `json:"total"`
+}
+
 type Post struct {
 	ID         string      `json:"ID"`
 	Content    string      `json:"content"`
@@ -198,10 +231,16 @@ type Post struct {
 	DeletedAt  *string     `json:"deletedAt,omitempty"`
 	ReplyCount int32       `json:"replyCount"`
 	User       *User       `json:"user"`
+	RootPost   *Post       `json:"rootPost,omitempty"`
 	Favorites  []*Favorite `json:"favorites"`
 	Parent     *Post       `json:"parent,omitempty"`
 	Replies    []*Post     `json:"replies"`
 	Media      []*Media    `json:"media"`
+}
+
+type PostPage struct {
+	Items []*Post `json:"items"`
+	Total int32   `json:"total"`
 }
 
 type PresignedUploadURL struct {
@@ -226,6 +265,11 @@ type RemoveUserFromRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type ReportPage struct {
+	Items []*UserReport `json:"items"`
+	Total int32         `json:"total"`
+}
+
 type ReportSearchFilter struct {
 	Status     *ReportStatus     `json:"status,omitempty"`
 	TargetType *ReportTargetType `json:"targetType,omitempty"`
@@ -246,12 +290,22 @@ type Room struct {
 	PartnerLastReadAt   *string `json:"partnerLastReadAt,omitempty"`
 }
 
+type RoomPage struct {
+	Items []*Room `json:"items"`
+	Total int32   `json:"total"`
+}
+
 type RoomReadStatusUpdate struct {
 	UserID     string `json:"userID"`
 	LastReadAt string `json:"lastReadAt"`
 }
 
 type Subscription struct {
+}
+
+type TermsConsentPage struct {
+	Items []*TermsConsentRecord `json:"items"`
+	Total int32                 `json:"total"`
 }
 
 type TermsConsentRecord struct {
@@ -338,6 +392,11 @@ type UserAuthPayload struct {
 	User         *User  `json:"user"`
 }
 
+type UserPage struct {
+	Items []*User `json:"items"`
+	Total int32   `json:"total"`
+}
+
 type UserReport struct {
 	ID           string           `json:"ID"`
 	Reporter     *User            `json:"reporter"`
@@ -348,6 +407,7 @@ type UserReport struct {
 	Status       ReportStatus     `json:"status"`
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
+	Content      *string          `json:"content,omitempty"`
 }
 
 type InquiryStatus string

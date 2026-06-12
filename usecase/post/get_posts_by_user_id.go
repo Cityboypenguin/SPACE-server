@@ -8,7 +8,7 @@ import (
 )
 
 type GetPostsByUserIDUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.Post, error)
+	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 }
 
 var _ GetPostsByUserIDUseCase = &GetPostsByUserIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetPostsByUserIDUseCase(postRepo repository.PostRepository) GetPostsByUs
 	}
 }
 
-func (uc *GetPostsByUserIDInteractor) Execute(ctx context.Context, userID int64) ([]*model.Post, error) {
-	return uc.postRepo.GetPostsByUserID(ctx, userID)
+func (uc *GetPostsByUserIDInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+	return uc.postRepo.GetPostsByUserID(ctx, userID, limit, offset)
 }

@@ -44,6 +44,7 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	"github.com/gorilla/websocket"
@@ -81,6 +82,7 @@ func main() {
 	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
+	systemSettingRepository := mysql.NewMySQLSystemSettingRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -120,6 +122,7 @@ func main() {
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
+	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
@@ -134,11 +137,13 @@ func main() {
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	getRootPostUseCase := postusecase.NewGetRootPostUseCase(postRepository)
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
+	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 
@@ -213,8 +218,10 @@ func main() {
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
 	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
-	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository)
+
+	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
+	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
 	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository, txManager)
 	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
@@ -277,7 +284,8 @@ func main() {
 		LogoutUserUseCase:       logoutUserUseCase,
 		FreezeUserUseCase:       freezeUserUseCase,
 		UnfreezeUserUseCase:     unfreezeUserUseCase,
-		SetAvatarUseCase:        setAvatarUseCase,
+		SetAvatarUseCase:    setAvatarUseCase,
+		DeleteAvatarUseCase: deleteAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
@@ -293,16 +301,18 @@ func main() {
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 
-		GetPostByIDUseCase:               getPostByIDUseCase,
-		GetPostByIDIncludeDeletedUseCase: getPostByIDIncludeDeletedUseCase,
-		CreatePostUseCase:                createPostUseCase,
-		ListPostsUseCase:                 listPostsUseCase,
-		DeletePostUseCase:                deletePostUseCase,
-		UpdatePostUseCase:                updatePostUseCase,
-		SearchPostsUseCase:               searchPostsUseCase,
-		ListTopLevelPostsUseCase:         listTopLevelPostsUseCase,
-		GetRepliesByIDUseCase:            getRepliesByIDUseCase,
-		GetPostsByUserIDUseCase:          getPostsByUserIDUseCase,
+		GetPostByIDUseCase:                       getPostByIDUseCase,
+		GetRootPostUseCase:                       getRootPostUseCase,
+		GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
+		CreatePostUseCase:                        createPostUseCase,
+		ListPostsUseCase:                         listPostsUseCase,
+		DeletePostUseCase:                        deletePostUseCase,
+		UpdatePostUseCase:                        updatePostUseCase,
+		SearchPostsUseCase:                       searchPostsUseCase,
+		ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
+		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
+		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
+		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
@@ -350,8 +360,9 @@ func main() {
 		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
 		GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
 
-		CreateReportUsecase: *createReportUseCase,
-		ManageReportUsecase: *manageReportUseCase,
+		CreateReportUsecase:        *createReportUseCase,
+		ManageReportUsecase:        *manageReportUseCase,
+		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
@@ -425,6 +436,7 @@ func main() {
 		getUsersByIDsUseCase,
 		listMediaByPostIDsUseCase,
 		getRepliesByPostIDsUseCase,
+		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,
 	)))
 

@@ -8,7 +8,7 @@ import (
 )
 
 type ListPostsUseCase interface {
-	Execute(ctx context.Context) ([]*model.Post, error)
+	Execute(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
 }
 
 var _ ListPostsUseCase = &ListPostsInteractor{}
@@ -23,6 +23,6 @@ func NewListPostsUseCase(postRepo repository.PostRepository) ListPostsUseCase {
 	}
 }
 
-func (uc *ListPostsInteractor) Execute(ctx context.Context) ([]*model.Post, error) {
-	return uc.postRepo.ListPosts(ctx)
+func (uc *ListPostsInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
+	return uc.postRepo.ListPosts(ctx, limit, offset)
 }

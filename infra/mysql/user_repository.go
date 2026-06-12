@@ -123,14 +123,20 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 	return affected > 0, nil
 }
 
-func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, error) {
-	query := `
+func (r *MySQLUserRepository) ListUsers(ctx context.Context, limit, offset int) ([]*model.User, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
-	`
-	rows, err := r.DB.QueryContext(ctx, query)
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -149,30 +155,39 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context) ([]*model.User, err
 			&createdAtUnix,
 			&updatedAtUnix,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		u.CreatedAt = time.Unix(createdAtUnix, 0)
 		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return users, nil
+	return users, total, nil
 }
 
-func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword string) ([]*model.User, error) {
-	query := `
+func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword string, limit, offset int) ([]*model.User, int, error) {
+	searchParam := "%" + keyword + "%"
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		searchParam, searchParam,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE name LIKE ? OR account_id LIKE ?
-	`
-
-	searchParam := "%" + keyword + "%"
-	rows, err := r.DB.QueryContext(ctx, query, searchParam, searchParam)
+		ORDER BY name ASC
+		LIMIT ? OFFSET ?
+	`, searchParam, searchParam, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -191,17 +206,17 @@ func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword 
 			&createdAtUnix,
 			&updatedAtUnix,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		u.CreatedAt = time.Unix(createdAtUnix, 0)
 		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		users = append(users, &u)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return users, nil
+	return users, total, nil
 }
 
 func (r *MySQLUserRepository) FindByAccountID(ctx context.Context, accountID string) (*model.User, error) {

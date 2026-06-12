@@ -11,7 +11,7 @@ type RoomUserRepository interface {
 	RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error
 	GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error)
 	ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error)
-	ListDMRoomsByUserID(ctx context.Context, userID int64) ([]*model.Room, error)
+	ListDMRoomsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error)
 	FindDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error)
 	FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error)
 	GetRoomUserRole(ctx context.Context, roomID, userID int64) (string, error)

@@ -9,7 +9,7 @@ import (
 type BlockerRepository interface {
 	CreateBlocker(ctx context.Context, blocker *model.Blocker) (int64, error)
 	DeleteBlocker(ctx context.Context, userID int64, blockedID int64) (bool, error)
-	ListBlockers(ctx context.Context) ([]*model.Blocker, error)
+	ListBlockers(ctx context.Context, userID int64, limit, offset int) ([]*model.Blocker, int, error)
 	SearchBlockers(ctx context.Context, userID int64, keyword string) ([]*model.Blocker, error)
 	GetBlockersByUserID(ctx context.Context, userID int64) ([]*model.Blocker, error)
 	ExistsBlockRelation(ctx context.Context, userA int64, userB int64) (bool, error)

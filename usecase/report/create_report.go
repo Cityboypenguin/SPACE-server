@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -11,42 +12,55 @@ import (
 )
 
 type CreateReportUsecase struct {
-	reportRepo repository.ReportRepository
+    reportRepo  repository.ReportRepository
+    settingRepo repository.SystemSettingRepository
 }
 
-func NewCreateReportUsecase(reportRepo repository.ReportRepository) *CreateReportUsecase {
-	return &CreateReportUsecase{reportRepo: reportRepo}
+func NewCreateReportUsecase(reportRepo repository.ReportRepository, settingRepo repository.SystemSettingRepository) *CreateReportUsecase {
+    return &CreateReportUsecase{
+        reportRepo:  reportRepo,
+        settingRepo: settingRepo,
+    }
 }
 
 type CreateReportInput struct {
-	ReporterID   int64
-	TargetType   model.ReportTargetType
-	TargetID     string
-	Reason       string
-	CustomReason *string
+    ReporterID   int64
+    TargetType   model.ReportTargetType
+    TargetID     string
+    Reason       string
+    CustomReason *string
 }
 
 func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInput) (*model.Report, error) {
-	if input.TargetID == "" || input.Reason == "" {
-		return nil, errors.New("invalid report input: targetID and reason are required")
-	}
+    isEnabled, err := u.settingRepo.GetBool(ctx, "is_report_enabled")
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch system setting: %w", err)
+    }
+    
+    if !isEnabled {
+        return nil, errors.New("現在、システム全体の通報機能は一時的に停止されています")
+    }
 
-	now := time.Now()
-	report := &model.Report{
-		ID:           uuid.New().String(),
-		ReporterID:   input.ReporterID,
-		TargetType:   input.TargetType,
-		TargetID:     input.TargetID,
-		Reason:       input.Reason,
-		CustomReason: input.CustomReason,
-		Status:       model.StatusPending,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
+    if input.TargetID == "" || input.Reason == "" {
+        return nil, errors.New("invalid report input: targetID and reason are required")
+    }
 
-	if err := u.reportRepo.Save(ctx, report); err != nil {
-		return nil, err
-	}
+    now := time.Now()
+    report := &model.Report{
+        ID:           uuid.New().String(),
+        ReporterID:   input.ReporterID,
+        TargetType:   input.TargetType,
+        TargetID:     input.TargetID,
+        Reason:       input.Reason,
+        CustomReason: input.CustomReason,
+        Status:       model.StatusPending,
+        CreatedAt:    now,
+        UpdatedAt:    now,
+    }
 
-	return report, nil
+    if err := u.reportRepo.Save(ctx, report); err != nil {
+        return nil, err
+    }
+
+    return report, nil
 }

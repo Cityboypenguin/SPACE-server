@@ -60,16 +60,19 @@ func (r *MySQLAnnouncementRepository) FindByID(ctx context.Context, id int64) (*
 	return &a, nil
 }
 
-func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, limit int) ([]*model.Announcement, error) {
-	query := `
+func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, limit, offset int) ([]*model.Announcement, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM announcements`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count announcements: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, title, body, admin_id, created_at, updated_at
 		FROM announcements
 		ORDER BY created_at DESC
-		LIMIT ?
-	`
-	rows, err := r.DB.QueryContext(ctx, query, limit)
+		LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query announcements: %w", err)
+		return nil, 0, fmt.Errorf("failed to query announcements: %w", err)
 	}
 	defer rows.Close()
 
@@ -78,13 +81,13 @@ func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, limit int) ([
 		var a model.Announcement
 		var createdAtUnix, updatedAtUnix int64
 		if err := rows.Scan(&a.ID, &a.Title, &a.Body, &a.AdminID, &createdAtUnix, &updatedAtUnix); err != nil {
-			return nil, fmt.Errorf("failed to scan announcement: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan announcement: %w", err)
 		}
 		a.CreatedAt = time.Unix(createdAtUnix, 0)
 		a.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		list = append(list, &a)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 func (r *MySQLAnnouncementRepository) Delete(ctx context.Context, id int64) error {

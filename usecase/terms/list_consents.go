@@ -15,6 +15,6 @@ func NewListConsentsUseCase(r repository.TermsRepository) *ListConsentsUseCase {
 	return &ListConsentsUseCase{TermsRepository: r}
 }
 
-func (uc *ListConsentsUseCase) Execute(ctx context.Context, termsID int64) ([]*model.TermsConsent, error) {
-	return uc.TermsRepository.FindConsentsByTermsID(ctx, termsID)
+func (uc *ListConsentsUseCase) Execute(ctx context.Context, termsID int64, limit, offset int) ([]*model.TermsConsent, int, error) {
+	return uc.TermsRepository.FindConsentsByTermsID(ctx, termsID, limit, offset)
 }

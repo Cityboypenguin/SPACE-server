@@ -2,22 +2,23 @@
 #
 # https://gqlgen.com/getting-started/
 type Query {
-  users: [User!]!
+  users(limit: Int = 20, offset: Int = 0): UserPage!
   me: User!
   getUserByID(id: ID!): User
-  searchUsers(keyword: String!): [User!]!
-  myNotifications(limit: Int): [Notification!]!
+  searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
+  myNotifications(limit: Int = 20, offset: Int = 0): NotificationPage!
   myUnreadNotificationCount: Int!
 
-  administrators: [Administrator!]!
+  administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
 
-  posts: [Post!]!
-  topLevelPosts: [Post!]!
+  posts(limit: Int = 20, offset: Int = 0): PostPage!
+  topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
+  getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
-  getPostsByUserID(user_id: ID!): [Post!]!
+  getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
   getRepliesByPostID(post_id: ID!): [Post!]!
   searchPosts(content: String!): [Post!]!
 
@@ -25,12 +26,12 @@ type Query {
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
-  messages(roomID: ID!): [Message!]!
+  messages(roomID: ID!, limit: Int = 50, before: ID, after: ID, afterTime: String): MessagePage!
   room(id: ID!): Room
-  myDMRooms: [Room!]!
-  myCommunities: [Community!]!
-  searchCommunities(name: String!): [Community!]!
-  communities: [Community!]!
+  myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
+  myCommunities(limit: Int = 20, offset: Int = 0): CommunityPage!
+  searchCommunities(name: String!, limit: Int = 20, offset: Int = 0): CommunityPage!
+  communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
@@ -38,12 +39,13 @@ type Query {
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedTermsDocumentUploadUrl: PresignedUploadUrl!
-  searchReports(filter: ReportSearchFilter): [UserReport!]!
-  searchInquiries(status: InquiryStatus): [Inquiry!]!
+  searchReports(filter: ReportSearchFilter, limit: Int = 20, offset: Int = 0): ReportPage!
+  searchInquiries(status: InquiryStatus, limit: Int = 20, offset: Int = 0): InquiryPage!
   getInquiry(id: ID!): Inquiry
 
-  announcements(limit: Int): [Announcement!]!
+  announcements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
   announcement(id: ID!): Announcement!
+  adminListAnnouncements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
 
   maintenanceMode: Boolean!
 
@@ -51,17 +53,19 @@ type Query {
   myTermsConsentStatus: TermsConsentStatus!
 
   adminListTerms: [TermsOfService!]!
-  adminListConsents(termsID: ID!): [TermsConsentRecord!]!
+  adminListConsents(termsID: ID!, limit: Int = 20, offset: Int = 0): TermsConsentPage!
 
-  listFavoriteUsers: [User!]!
+  listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
   adminGetFavoriteUsers(userID: ID!): [User!]!
-  
-  listBlockedUsers: [User!]!
+
+  listBlockedUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchBlockedUsers(keyword: String!): [User!]!
   GetBlockersByUserID(userID: ID!): [User!]!
   adminGetBlockers(userID: ID!): [User!]!
+
+  isReportServiceEnabled: Boolean!
 }
 
 type User {
@@ -78,6 +82,11 @@ type User {
   favorites: [Favorite!]!
 }
 
+type UserPage {
+  items: [User!]!
+  total: Int!
+}
+
 type PresignedUploadUrl {
   uploadUrl: String!
   objectKey: String!
@@ -89,6 +98,11 @@ type Administrator {
   email: String!
   createdAt: String!
   updatedAt: String!
+}
+
+type AdministratorPage {
+  items: [Administrator!]!
+  total: Int!
 }
 
 type Media {
@@ -106,6 +120,7 @@ type Post {
   deletedAt: String
   replyCount: Int!
   user: User!
+  rootPost: Post
   favorites: [Favorite!]!
   parent: Post
   replies: [Post!]!
@@ -188,8 +203,13 @@ type Mutation {
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
   setAvatar(objectKey: String!): Profile!
+  deleteAvatar: Profile!
   joinRoom(roomID: ID!): Boolean!
-  sendMessage(roomID: ID!, content: String!, mediaInputs: [MediaUploadInput!]): Message!
+  sendMessage(
+    roomID: ID!
+    content: String!
+    mediaInputs: [MediaUploadInput!]
+  ): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
   updateMessage(roomID: ID!, id: ID!, content: String!): Message!
 
@@ -218,6 +238,7 @@ type Mutation {
   consentToTerms(termsID: ID!): Boolean!
 
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
+  setReportServiceStatus(enabled: Boolean!): Boolean!
 }
 
 type Announcement {
@@ -239,9 +260,9 @@ input UpdateAnnouncementInput {
 }
 
 enum InquiryStatus {
-  PENDING      # 未対応
-  IN_PROGRESS  # 対応中
-  RESOLVED     # 解決済み
+  PENDING # 未対応
+  IN_PROGRESS # 対応中
+  RESOLVED # 解決済み
 }
 
 type Inquiry {
@@ -253,6 +274,11 @@ type Inquiry {
   status: InquiryStatus!
   createdAt: String!
   updatedAt: String!
+}
+
+type InquiryPage {
+  items: [Inquiry!]!
+  total: Int!
 }
 
 input CreateInquiryInput {
@@ -354,6 +380,12 @@ type Message {
   updatedAt: String!
 }
 
+type MessagePage {
+  items: [Message!]!
+  hasMoreBefore: Boolean!
+  hasMoreAfter: Boolean!
+}
+
 input CreateRoomInput {
   name: String!
 }
@@ -378,9 +410,21 @@ type Community {
   name: String!
   description: String!
   avatarURL: String!
+  memberCount: Int!
+  isMember: Boolean!
   unreadCount: Int!
   createdAt: String!
   updatedAt: String!
+}
+
+type CommunityPage {
+  items: [Community!]!
+  total: Int!
+}
+
+type RoomPage {
+  items: [Room!]!
+  total: Int!
 }
 
 type CommunityMember {
@@ -419,7 +463,7 @@ type Subscription {
 }
 
 enum ReportStatus {
-  PENDING 
+  PENDING
   REVIEWING
   RESOLVED
   DISMISSED
@@ -441,6 +485,7 @@ type UserReport {
   status: ReportStatus!
   createdAt: String!
   updatedAt: String!
+  content: String
 }
 
 input ReportSearchFilter {
@@ -462,9 +507,9 @@ type Notification {
 
 input CreateReportInput {
   targetType: ReportTargetType!
-  targetID: ID!          # 通報対象のID
-  reason: String!        # 理由の分類
-  customReason: String   # 詳細理由
+  targetID: ID! # 通報対象のID
+  reason: String! # 理由の分類
+  customReason: String # 詳細理由
 }
 
 type TermsOfService {
@@ -486,11 +531,33 @@ type TermsConsentRecord {
   consentedAt: String!
 }
 
+type PostPage {
+  items: [Post!]!
+  total: Int!
+}
+
+type ReportPage {
+  items: [UserReport!]!
+  total: Int!
+}
+
+type AnnouncementPage {
+  items: [Announcement!]!
+  total: Int!
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  total: Int!
+}
+
+type TermsConsentPage {
+  items: [TermsConsentRecord!]!
+  total: Int!
+}
+
 input CreateTermsOfServiceInput {
   version: String!
   objectKey: String!
   effectiveDate: String!
 }
-
-
-
