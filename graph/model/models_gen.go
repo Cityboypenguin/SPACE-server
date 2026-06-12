@@ -59,6 +59,8 @@ type Community struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	AvatarURL   string `json:"avatarURL"`
+	MemberCount int32  `json:"memberCount"`
+	IsMember    bool   `json:"isMember"`
 	UnreadCount int32  `json:"unreadCount"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`

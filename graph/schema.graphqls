@@ -408,6 +408,8 @@ type Community {
   name: String!
   description: String!
   avatarURL: String!
+  memberCount: Int!
+  isMember: Boolean!
   unreadCount: Int!
   createdAt: String!
   updatedAt: String!

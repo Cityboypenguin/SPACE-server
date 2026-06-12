@@ -716,7 +716,7 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 
 // CreateCommunity is the resolver for the createCommunity field.
 func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.CreateCommunityInput) (*gqlmodel.Community, error) {
-	_, err := requireAuth(ctx)
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -725,7 +725,7 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 		return nil, err
 	}
 
-	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
+	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
@@ -827,7 +827,7 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, err
 	}
 
-	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
+	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
 }
 
 // KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
@@ -2412,7 +2412,10 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC := toGraphCommunity(c, r.communityAvatarURL(c))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
 		if readStatus := readStatusMap[c.RoomID]; readStatus != nil {
 			gqlC.UnreadCount = int32(readStatus.UnreadCount)
 		}
@@ -2423,7 +2426,8 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 
 // SearchCommunities is the resolver for the searchCommunities field.
 func (r *queryResolver) SearchCommunities(ctx context.Context, name string, limit *int32, offset *int32) (*gqlmodel.CommunityPage, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	l, o := resolvePagination(limit, offset)
@@ -2433,7 +2437,11 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string, limi
 	}
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		items = append(items, toGraphCommunity(c, r.communityAvatarURL(c)))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, gqlC)
 	}
 	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
@@ -2450,7 +2458,11 @@ func (r *queryResolver) Communities(ctx context.Context, limit *int32, offset *i
 	}
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		items = append(items, toGraphCommunity(c, r.communityAvatarURL(c)))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, nil)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, gqlC)
 	}
 	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
@@ -2469,7 +2481,11 @@ func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*
 
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, gqlC)
 	}
 	return result, nil
 }

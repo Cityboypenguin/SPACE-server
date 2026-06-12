@@ -87,6 +87,8 @@ type ComplexityRoot struct {
 		CreatedAt   func(childComplexity int) int
 		Description func(childComplexity int) int
 		ID          func(childComplexity int) int
+		IsMember    func(childComplexity int) int
+		MemberCount func(childComplexity int) int
 		Name        func(childComplexity int) int
 		RoomID      func(childComplexity int) int
 		UnreadCount func(childComplexity int) int
@@ -760,6 +762,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Community.ID(childComplexity), true
+	case "Community.isMember":
+		if e.ComplexityRoot.Community.IsMember == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.IsMember(childComplexity), true
+	case "Community.memberCount":
+		if e.ComplexityRoot.Community.MemberCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Community.MemberCount(childComplexity), true
 	case "Community.name":
 		if e.ComplexityRoot.Community.Name == nil {
 			break
@@ -3034,6 +3048,10 @@ func (ec *executionContext) childFields_Community(ctx context.Context, field gra
 		return ec.fieldContext_Community_description(ctx, field)
 	case "avatarURL":
 		return ec.fieldContext_Community_avatarURL(ctx, field)
+	case "memberCount":
+		return ec.fieldContext_Community_memberCount(ctx, field)
+	case "isMember":
+		return ec.fieldContext_Community_isMember(ctx, field)
 	case "unreadCount":
 		return ec.fieldContext_Community_unreadCount(ctx, field)
 	case "createdAt":
@@ -6065,6 +6083,52 @@ func (ec *executionContext) _Community_avatarURL(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_Community_avatarURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Community", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Community_memberCount(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Community_memberCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MemberCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Community_memberCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Community", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Community_isMember(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Community_isMember(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsMember, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Community_isMember(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Community", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Community_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.Community) (ret graphql.Marshaler) {
@@ -16721,6 +16785,16 @@ func (ec *executionContext) _Community(ctx context.Context, sel ast.SelectionSet
 			}
 		case "avatarURL":
 			out.Values[i] = ec._Community_avatarURL(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "memberCount":
+			out.Values[i] = ec._Community_memberCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isMember":
+			out.Values[i] = ec._Community_isMember(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
