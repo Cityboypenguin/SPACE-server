@@ -23,9 +23,9 @@ func NewSearchCommunityUseCase(communityRepo repository.CommunityRepository) Sea
 }
 
 func (uc *SearchCommunityInteractor) Execute(ctx context.Context, name string, limit, offset int) ([]*model.Community, int, error) {
-	_, err := authz.RequireAuth(ctx)
+	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	return uc.communityRepo.SearchCommunities(ctx, name, limit, offset)
+	return uc.communityRepo.SearchCommunities(ctx, name, claims.ID, limit, offset)
 }

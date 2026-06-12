@@ -89,12 +89,13 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 	return scanCommunity(row)
 }
 
-func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, limit, offset int) ([]*model.Community, int, error) {
+func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, userID int64, limit, offset int) ([]*model.Community, int, error) {
 	searchParam := "%" + name + "%"
 
 	var total int
 	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM communities WHERE name LIKE ?`, searchParam,
+		`SELECT COUNT(*) FROM communities WHERE name LIKE ? AND room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)`,
+		searchParam, userID,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -106,9 +107,10 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 		FROM communities c
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		WHERE c.name LIKE ?
+		  AND c.room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)
 		ORDER BY c.created_at DESC
 		LIMIT ? OFFSET ?
-	`, searchParam, limit, offset)
+	`, searchParam, userID, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
