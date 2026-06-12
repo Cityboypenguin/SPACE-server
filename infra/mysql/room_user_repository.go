@@ -120,18 +120,25 @@ func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID
 	return ids, nil
 }
 
-func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64) ([]*model.Room, error) {
-	query := `
+func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM rooms r JOIN room_users ru ON r.id = ru.room_id WHERE ru.user_id = ? AND r.type = 'dm'`,
+		userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT r.id, r.name, r.type, r.created_at, r.updated_at
 		FROM rooms r
 		JOIN room_users ru ON r.id = ru.room_id
 		WHERE ru.user_id = ? AND r.type = 'dm'
 		ORDER BY r.updated_at DESC
-	`
-
-	rows, err := r.DB.QueryContext(ctx, query, userID)
+		LIMIT ? OFFSET ?
+	`, userID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -140,17 +147,17 @@ func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userI
 		var room model.Room
 		var createdAt, updatedAt int64
 		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		room.CreatedAt = time.Unix(createdAt, 0)
 		room.UpdatedAt = time.Unix(updatedAt, 0)
 		rooms = append(rooms, &room)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return rooms, nil
+	return rooms, total, nil
 }
 
 func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error) {
