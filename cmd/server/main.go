@@ -21,6 +21,7 @@ import (
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
+	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -162,6 +163,8 @@ func main() {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
 	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
+	passwordResetRepository := infraredis.NewRedisPasswordResetRepository(redisClient)
+	mailer := infrasmtp.NewSMTPMailer()
 	maintenanceRepository := infraredis.NewRedisMaintenanceRepository(redisClient)
 
 	maintenanceFlag := &atomic.Bool{}
@@ -175,6 +178,9 @@ func main() {
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
+	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer)
+	verifyPasswordResetOTPUseCase := userusecase.NewVerifyPasswordResetOTPUseCase(passwordResetRepository)
+	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository)
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
@@ -274,11 +280,14 @@ func main() {
 		GetUserByIDUseCase:      getUserByIDUseCase,
 		GetUsersByIDsUseCase:    getUsersByIDsUseCase,
 		SearchUsersUseCase:      searchUsersUseCase,
-		LoginUserUseCase:        loginUserUseCase,
-		RefreshUserTokenUseCase: refreshUserTokenUseCase,
-		LogoutUserUseCase:       logoutUserUseCase,
-		FreezeUserUseCase:       freezeUserUseCase,
-		UnfreezeUserUseCase:     unfreezeUserUseCase,
+		LoginUserUseCase:              loginUserUseCase,
+		RefreshUserTokenUseCase:       refreshUserTokenUseCase,
+		LogoutUserUseCase:             logoutUserUseCase,
+		FreezeUserUseCase:             freezeUserUseCase,
+		UnfreezeUserUseCase:           unfreezeUserUseCase,
+		RequestPasswordResetUseCase:   requestPasswordResetUseCase,
+		VerifyPasswordResetOTPUseCase: verifyPasswordResetOTPUseCase,
+		ResetPasswordUseCase:          resetPasswordUseCase,
 		SetAvatarUseCase:    setAvatarUseCase,
 		DeleteAvatarUseCase: deleteAvatarUseCase,
 
@@ -422,7 +431,7 @@ func main() {
 	}))
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
@@ -468,7 +477,7 @@ func main() {
 				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
 			}
 
-			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository)
+			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -505,7 +514,7 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository, passwordResetRepository))
 
 	schedulePendingTerms(termsRepository, sseBroker)
 

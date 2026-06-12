@@ -172,6 +172,9 @@ type Mutation {
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
+  requestPasswordReset(email: String!): Boolean!
+  verifyPasswordResetOTP(email: String!, otp: String!): String!
+  resetPassword(resetToken: String!, newPassword: String!): Boolean!
 
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!

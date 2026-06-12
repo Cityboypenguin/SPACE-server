@@ -214,6 +214,27 @@ func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, 
 	return true, nil
 }
 
+// RequestPasswordReset is the resolver for the requestPasswordReset field.
+func (r *mutationResolver) RequestPasswordReset(ctx context.Context, email string) (bool, error) {
+	if err := r.RequestPasswordResetUseCase.Execute(ctx, email); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// VerifyPasswordResetOtp is the resolver for the verifyPasswordResetOTP field.
+func (r *mutationResolver) VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error) {
+	panic(fmt.Errorf("not implemented: VerifyPasswordResetOtp - verifyPasswordResetOTP"))
+}
+
+// ResetPassword is the resolver for the resetPassword field.
+func (r *mutationResolver) ResetPassword(ctx context.Context, resetToken string, newPassword string) (bool, error) {
+	if err := r.ResetPasswordUseCase.Execute(ctx, resetToken, newPassword); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
 	if claims, ok := auth.ClaimsFromContext(ctx); ok {
@@ -3366,3 +3387,19 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *mutationResolver) VerifyPasswordResetOTP(ctx context.Context, email string, otp string) (string, error) {
+	token, err := r.VerifyPasswordResetOTPUseCase.Execute(ctx, email, otp)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+*/
