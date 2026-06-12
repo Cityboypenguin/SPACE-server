@@ -16,5 +16,5 @@ type TermsRepository interface {
 	FindAll(ctx context.Context) ([]*model.TermsOfService, error)
 	SaveConsent(ctx context.Context, c *model.TermsConsent) error
 	FindConsent(ctx context.Context, userID, termsID int64) (*model.TermsConsent, error)
-	FindConsentsByTermsID(ctx context.Context, termsID int64) ([]*model.TermsConsent, error)
+	FindConsentsByTermsID(ctx context.Context, termsID int64, limit, offset int) ([]*model.TermsConsent, int, error)
 }

@@ -94,3 +94,11 @@ func (r *MySQLProfileRepository) SetAvatarMedia(ctx context.Context, userID int6
 	_, err := r.DB.ExecContext(ctx, query, userID, mediaID, now, now)
 	return err
 }
+
+func (r *MySQLProfileRepository) ClearAvatarMedia(ctx context.Context, userID int64) error {
+	query := `
+		UPDATE profiles SET avatar_media_id = NULL, updated_at = ? WHERE user_id = ?
+	`
+	_, err := r.DB.ExecContext(ctx, query, time.Now().Unix(), userID)
+	return err
+}

@@ -14,6 +14,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+var isReportServiceEnabled = true
+
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarMedia == nil {
 		return nil
@@ -92,6 +94,21 @@ func scheduleTermsBroadcast(broker *sse.Broker, version string, effectiveDate ti
 		broker.Broadcast("terms_updated", map[string]any{"version": version})
 		logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
 	})
+}
+
+func resolvePagination(limit *int32, offset *int32) (int, int) {
+	l := 20
+	if limit != nil && *limit > 0 {
+		l = int(*limit)
+		if l > 100 {
+			l = 100
+		}
+	}
+	o := 0
+	if offset != nil && *offset > 0 {
+		o = int(*offset)
+	}
+	return l, o
 }
 
 func containsInt64(slice []int64, val int64) bool {

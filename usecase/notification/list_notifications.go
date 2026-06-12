@@ -10,7 +10,7 @@ import (
 const defaultLimit = 30
 
 type ListNotificationsUseCase interface {
-	Execute(ctx context.Context, userID int64, limit int) ([]*model.Notification, error)
+	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Notification, int, error)
 }
 
 var _ ListNotificationsUseCase = &listNotificationsInteractor{}
@@ -23,9 +23,9 @@ func NewListNotificationsUseCase(repo repository.NotificationRepository) ListNot
 	return &listNotificationsInteractor{repo: repo}
 }
 
-func (uc *listNotificationsInteractor) Execute(ctx context.Context, userID int64, limit int) ([]*model.Notification, error) {
+func (uc *listNotificationsInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Notification, int, error) {
 	if limit <= 0 {
 		limit = defaultLimit
 	}
-	return uc.repo.ListByUserID(ctx, userID, limit)
+	return uc.repo.ListByUserID(ctx, userID, limit, offset)
 }

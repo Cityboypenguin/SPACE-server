@@ -2,18 +2,18 @@
 #
 # https://gqlgen.com/getting-started/
 type Query {
-  users: [User!]!
+  users(limit: Int = 20, offset: Int = 0): UserPage!
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!): [User!]!
-  myNotifications(limit: Int): [Notification!]!
+  myNotifications(limit: Int = 20, offset: Int = 0): NotificationPage!
   myUnreadNotificationCount: Int!
 
-  administrators: [Administrator!]!
+  administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
   getAdministratorByID(id: ID!): Administrator
   searchAdministrators(name: String!): [Administrator!]!
 
-  posts: [Post!]!
+  posts(limit: Int = 20, offset: Int = 0): PostPage!
   topLevelPosts: [Post!]!
   getRootPost: Post
   getPostByID(id: ID!): Post
@@ -31,7 +31,7 @@ type Query {
   myDMRooms: [Room!]!
   myCommunities: [Community!]!
   searchCommunities(name: String!): [Community!]!
-  communities: [Community!]!
+  communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
@@ -39,12 +39,13 @@ type Query {
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedTermsDocumentUploadUrl: PresignedUploadUrl!
-  searchReports(filter: ReportSearchFilter): [UserReport!]!
-  searchInquiries(status: InquiryStatus): [Inquiry!]!
+  searchReports(filter: ReportSearchFilter, limit: Int = 20, offset: Int = 0): ReportPage!
+  searchInquiries(status: InquiryStatus, limit: Int = 20, offset: Int = 0): InquiryPage!
   getInquiry(id: ID!): Inquiry
 
-  announcements(limit: Int): [Announcement!]!
+  announcements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
   announcement(id: ID!): Announcement!
+  adminListAnnouncements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
 
   maintenanceMode: Boolean!
 
@@ -52,7 +53,7 @@ type Query {
   myTermsConsentStatus: TermsConsentStatus!
 
   adminListTerms: [TermsOfService!]!
-  adminListConsents(termsID: ID!): [TermsConsentRecord!]!
+  adminListConsents(termsID: ID!, limit: Int = 20, offset: Int = 0): TermsConsentPage!
 
   listFavoriteUsers: [User!]!
   searchFavoriteUsers(keyword: String!): [User!]!
@@ -81,6 +82,11 @@ type User {
   favorites: [Favorite!]!
 }
 
+type UserPage {
+  items: [User!]!
+  total: Int!
+}
+
 type PresignedUploadUrl {
   uploadUrl: String!
   objectKey: String!
@@ -92,6 +98,11 @@ type Administrator {
   email: String!
   createdAt: String!
   updatedAt: String!
+}
+
+type AdministratorPage {
+  items: [Administrator!]!
+  total: Int!
 }
 
 type Media {
@@ -191,6 +202,7 @@ type Mutation {
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
   setAvatar(objectKey: String!): Profile!
+  deleteAvatar: Profile!
   joinRoom(roomID: ID!): Boolean!
   sendMessage(
     roomID: ID!
@@ -261,6 +273,11 @@ type Inquiry {
   status: InquiryStatus!
   createdAt: String!
   updatedAt: String!
+}
+
+type InquiryPage {
+  items: [Inquiry!]!
+  total: Int!
 }
 
 input CreateInquiryInput {
@@ -390,6 +407,11 @@ type Community {
   updatedAt: String!
 }
 
+type CommunityPage {
+  items: [Community!]!
+  total: Int!
+}
+
 type CommunityMember {
   user: User!
   role: String!
@@ -492,6 +514,31 @@ type TermsConsentRecord {
   ID: ID!
   user: User!
   consentedAt: String!
+}
+
+type PostPage {
+  items: [Post!]!
+  total: Int!
+}
+
+type ReportPage {
+  items: [UserReport!]!
+  total: Int!
+}
+
+type AnnouncementPage {
+  items: [Announcement!]!
+  total: Int!
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  total: Int!
+}
+
+type TermsConsentPage {
+  items: [TermsConsentRecord!]!
+  total: Int!
 }
 
 input CreateTermsOfServiceInput {

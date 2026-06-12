@@ -73,17 +73,23 @@ func (r *MySQLNotificationRepository) SaveBatch(ctx context.Context, ns []*model
 	return nil
 }
 
-func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*model.Notification, error) {
-	query := `
+func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Notification, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM notifications WHERE user_id = ?`, userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, user_id, type, actor_id, target_type, target_id, message, is_read, created_at
 		FROM notifications
 		WHERE user_id = ?
 		ORDER BY created_at DESC
-		LIMIT ?
-	`
-	rows, err := r.DB.QueryContext(ctx, query, userID, limit)
+		LIMIT ? OFFSET ?
+	`, userID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -96,12 +102,12 @@ func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID i
 			&n.ActorID, &n.TargetType, &n.TargetID,
 			&n.Message, &n.IsRead, &createdAtUnix,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		n.CreatedAt = time.Unix(createdAtUnix, 0)
 		notifications = append(notifications, &n)
 	}
-	return notifications, nil
+	return notifications, total, rows.Err()
 }
 
 func (r *MySQLNotificationRepository) MarkAsRead(ctx context.Context, id int64, userID int64) error {
