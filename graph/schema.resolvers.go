@@ -232,7 +232,7 @@ func (r *mutationResolver) RequestPasswordReset(ctx context.Context, email strin
 
 // VerifyPasswordResetOtp is the resolver for the verifyPasswordResetOTP field.
 func (r *mutationResolver) VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error) {
-	panic(fmt.Errorf("not implemented: VerifyPasswordResetOtp - verifyPasswordResetOTP"))
+	return r.VerifyPasswordResetOTPUseCase.Execute(ctx, email, otp)
 }
 
 // ResetPassword is the resolver for the resetPassword field.
