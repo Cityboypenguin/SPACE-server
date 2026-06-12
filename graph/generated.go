@@ -205,8 +205,7 @@ type ComplexityRoot struct {
 		RefreshAdministratorToken  func(childComplexity int, refreshToken string) int
 		RefreshUserToken           func(childComplexity int, refreshToken string) int
 		RemoveUserFromRoom         func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		RequestPasswordReset       func(childComplexity int, email string) int
-		ResetPassword              func(childComplexity int, resetToken string, newPassword string) int
+		SendEmailOtp               func(childComplexity int, email string) int
 		SendMessage                func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                  func(childComplexity int, objectKey string) int
 		SetReportServiceStatus     func(childComplexity int, enabled bool) int
@@ -222,7 +221,6 @@ type ComplexityRoot struct {
 		UpdateProfile              func(childComplexity int, input model.UpdateProfileInput) int
 		UpdateReportStatus         func(childComplexity int, id string, status model.ReportStatus) int
 		UpdateUser                 func(childComplexity int, input model.UpdateUserInput) int
-		VerifyPasswordResetOtp     func(childComplexity int, email string, otp string) int
 	}
 
 	Notification struct {
@@ -453,15 +451,13 @@ type MessageResolver interface {
 	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
 }
 type MutationResolver interface {
+	SendEmailOtp(ctx context.Context, email string) (bool, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
 	LoginUser(ctx context.Context, input model.LoginInput) (*model.UserAuthPayload, error)
 	RefreshUserToken(ctx context.Context, refreshToken string) (*model.UserAuthPayload, error)
 	LogoutUser(ctx context.Context, token string) (bool, error)
-	RequestPasswordReset(ctx context.Context, email string) (bool, error)
-	VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error)
-	ResetPassword(ctx context.Context, resetToken string, newPassword string) (bool, error)
 	CreateAdministrator(ctx context.Context, input model.CreateAdministratorInput) (*model.Administrator, error)
 	DeleteAdministrator(ctx context.Context, id string) (bool, error)
 	UpdateAdministrator(ctx context.Context, id string, input model.UpdateAdministratorInput) (*model.Administrator, error)
@@ -1511,28 +1507,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveUserFromRoom(childComplexity, args["input"].(model.RemoveUserFromRoomInput)), true
-	case "Mutation.requestPasswordReset":
-		if e.ComplexityRoot.Mutation.RequestPasswordReset == nil {
+	case "Mutation.sendEmailOTP":
+		if e.ComplexityRoot.Mutation.SendEmailOtp == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_requestPasswordReset_args(ctx, rawArgs)
+		args, err := ec.field_Mutation_sendEmailOTP_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.RequestPasswordReset(childComplexity, args["email"].(string)), true
-	case "Mutation.resetPassword":
-		if e.ComplexityRoot.Mutation.ResetPassword == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_resetPassword_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.ResetPassword(childComplexity, args["resetToken"].(string), args["newPassword"].(string)), true
+		return e.ComplexityRoot.Mutation.SendEmailOtp(childComplexity, args["email"].(string)), true
 	case "Mutation.sendMessage":
 		if e.ComplexityRoot.Mutation.SendMessage == nil {
 			break
@@ -1698,17 +1683,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateUser(childComplexity, args["input"].(model.UpdateUserInput)), true
-	case "Mutation.verifyPasswordResetOTP":
-		if e.ComplexityRoot.Mutation.VerifyPasswordResetOtp == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_verifyPasswordResetOTP_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.VerifyPasswordResetOtp(childComplexity, args["email"].(string), args["otp"].(string)), true
 
 	case "Notification.actor":
 		if e.ComplexityRoot.Notification.Actor == nil {
@@ -4261,7 +4235,7 @@ func (ec *executionContext) field_Mutation_removeUserFromRoom_args(ctx context.C
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_requestPasswordReset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Mutation_sendEmailOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email",
@@ -4272,28 +4246,6 @@ func (ec *executionContext) field_Mutation_requestPasswordReset_args(ctx context
 		return nil, err
 	}
 	args["email"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_resetPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "resetToken",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNString2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["resetToken"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "newPassword",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNString2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["newPassword"] = arg1
 	return args, nil
 }
 
@@ -4576,28 +4528,6 @@ func (ec *executionContext) field_Mutation_updateUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_verifyPasswordResetOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNString2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["email"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "otp",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNString2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["otp"] = arg1
 	return args, nil
 }
 
@@ -7252,6 +7182,50 @@ func (ec *executionContext) fieldContext_MessagePage_hasMoreAfter(_ context.Cont
 	return graphql.NewScalarFieldContext("MessagePage", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Mutation_sendEmailOTP(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_sendEmailOTP(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SendEmailOtp(ctx, fc.Args["email"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_sendEmailOTP(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_sendEmailOTP_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7510,138 +7484,6 @@ func (ec *executionContext) fieldContext_Mutation_logoutUser(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_logoutUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_requestPasswordReset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_requestPasswordReset(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().RequestPasswordReset(ctx, fc.Args["email"].(string))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_requestPasswordReset(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_requestPasswordReset_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_verifyPasswordResetOTP(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_verifyPasswordResetOTP(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().VerifyPasswordResetOtp(ctx, fc.Args["email"].(string), fc.Args["otp"].(string))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_verifyPasswordResetOTP(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_verifyPasswordResetOTP_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_resetPassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_resetPassword(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ResetPassword(ctx, fc.Args["resetToken"].(string), fc.Args["newPassword"].(string))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_resetPassword(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_resetPassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -16145,7 +15987,7 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"accountID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"accountID", "name", "email", "password", "otp"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -16180,6 +16022,13 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 				return it, err
 			}
 			it.Password = data
+		case "otp":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("otp"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Otp = data
 		}
 	}
 	return it, nil
@@ -17735,6 +17584,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
+		case "sendEmailOTP":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_sendEmailOTP(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createUser(ctx, field)
@@ -17773,27 +17629,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "logoutUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_logoutUser(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "requestPasswordReset":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_requestPasswordReset(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "verifyPasswordResetOTP":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_verifyPasswordResetOTP(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "resetPassword":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_resetPassword(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

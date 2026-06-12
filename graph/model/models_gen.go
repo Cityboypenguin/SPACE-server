@@ -132,6 +132,7 @@ type CreateUserInput struct {
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	Password  string `json:"password"`
+	Otp       string `json:"otp"`
 }
 
 type DeleteFavoriteInput struct {

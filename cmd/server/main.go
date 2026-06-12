@@ -18,6 +18,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/db"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
+	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
@@ -110,7 +111,6 @@ func main() {
 		}
 	}
 
-	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, txManager)
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
@@ -174,6 +174,10 @@ func main() {
 		maintenanceFlag.Store(enabled)
 	}
 
+	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
+	smtpEmailService := infraemail.NewSMTPEmailService()
+	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
@@ -274,6 +278,7 @@ func main() {
 		MaintenanceFlag:       maintenanceFlag,
 
 		CreateUserUseCase:       createUserUseCase,
+		SendEmailOTPUseCase:     sendEmailOTPUseCase,
 		ListUsersUseCase:        listUsersUseCase,
 		DeleteUserUseCase:       deleteUserUseCase,
 		UpdateUserUseCase:       updateUserUseCase,
