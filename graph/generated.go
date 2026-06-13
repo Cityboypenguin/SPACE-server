@@ -314,7 +314,7 @@ type ComplexityRoot struct {
 		SearchCommunities               func(childComplexity int, name string) int
 		SearchFavoriteUsers             func(childComplexity int, keyword string) int
 		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus, limit *int32, offset *int32) int
-		SearchPosts                     func(childComplexity int, content string) int
+		SearchPosts                     func(childComplexity int, keyword string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string) int
 		TopLevelPosts                   func(childComplexity int) int
@@ -525,7 +525,7 @@ type QueryResolver interface {
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string) ([]*model.Post, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
-	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
+	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
@@ -2300,7 +2300,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchPosts(childComplexity, args["content"].(string)), true
+		return e.ComplexityRoot.Query.SearchPosts(childComplexity, args["keyword"].(string)), true
 	case "Query.searchReports":
 		if e.ComplexityRoot.Query.SearchReports == nil {
 			break
@@ -4969,14 +4969,14 @@ func (ec *executionContext) field_Query_searchInquiries_args(ctx context.Context
 func (ec *executionContext) field_Query_searchPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "content",
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
 		func(ctx context.Context, v any) (string, error) {
 			return ec.unmarshalNString2string(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["content"] = arg0
+	args["keyword"] = arg0
 	return args, nil
 }
 
@@ -10758,7 +10758,7 @@ func (ec *executionContext) _Query_searchPosts(ctx context.Context, field graphq
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchPosts(ctx, fc.Args["content"].(string))
+			return ec.Resolvers.Query().SearchPosts(ctx, fc.Args["keyword"].(string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*model.Post) graphql.Marshaler {

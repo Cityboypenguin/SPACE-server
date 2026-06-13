@@ -2097,12 +2097,12 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 }
 
 // SearchPosts is the resolver for the searchPosts field.
-func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) SearchPosts(ctx context.Context, keyword string) ([]*gqlmodel.Post, error) {
 	_, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	posts, err := r.SearchPostsUseCase.Execute(ctx, content)
+	posts, err := r.SearchPostsUseCase.Execute(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}

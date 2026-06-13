@@ -333,9 +333,10 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) 
 
 func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
 	searchQuery := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count, deleted_at
 		FROM posts
-		WHERE content LIKE ?
+		WHERE content LIKE ?  AND deleted_at IS NULL
+		ORDER BY created_at DESC
 	`
 	rows, err := r.DB.QueryContext(ctx, searchQuery, "%"+query+"%")
 	if err != nil {
@@ -347,14 +348,20 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
-		var parentID sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount); err != nil {
+		var parentID, deletedAtUnix sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount, &deletedAtUnix); err != nil {
 			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
 		} else {
 			p.ParentID = nil
+		}
+		if deletedAtUnix.Valid {
+			deletedAt := time.Unix(deletedAtUnix.Int64, 0)
+			p.DeletedAt = &deletedAt
+		} else {
+			p.DeletedAt = nil
 		}
 
 		p.CreatedAt = time.Unix(createdAtUnix, 0)
