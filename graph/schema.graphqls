@@ -198,6 +198,7 @@ type Mutation {
   kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
   demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+  updateCommunityMembers(communityID: ID!, updates: [CommunityMemberUpdateInput!]!): Boolean!
   adminDeletePost(id: ID!): Boolean!
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
@@ -440,6 +441,17 @@ input UpdateCommunityInput {
   name: String
   description: String
   avatarKey: String
+}
+
+enum CommunityMemberAction {
+  PROMOTE
+  DEMOTE
+  KICK
+}
+
+input CommunityMemberUpdateInput {
+  userID: ID!
+  action: CommunityMemberAction!
 }
 
 type RoomReadStatusUpdate {

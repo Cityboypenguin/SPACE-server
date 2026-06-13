@@ -2,15 +2,16 @@ package graph
 
 import (
 	"context"
+	"errors"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-// promoteNewOwnerIfNeeded promotes the earliest-joined non-leaving member to owner
-// if the leaving user is the last owner and other members remain.
-func (r *mutationResolver) promoteNewOwnerIfNeeded(ctx context.Context, roomID, leavingUserID int64) error {
+// checkCanLeaveCommunity returns an error if the leaving user is the sole owner
+// while other members remain, preventing an ownerless community.
+func (r *mutationResolver) checkCanLeaveCommunity(ctx context.Context, roomID, leavingUserID int64) error {
 	members, err := r.ListRoomMembersWithRolesUseCase.Execute(ctx, roomID)
 	if err != nil {
 		return err
@@ -18,6 +19,7 @@ func (r *mutationResolver) promoteNewOwnerIfNeeded(ctx context.Context, roomID, 
 
 	leavingIsOwner := false
 	ownerCount := 0
+	hasOtherMembers := false
 	for _, m := range members {
 		if m.Role == model.RoomUserRoleOwner {
 			ownerCount++
@@ -25,28 +27,14 @@ func (r *mutationResolver) promoteNewOwnerIfNeeded(ctx context.Context, roomID, 
 				leavingIsOwner = true
 			}
 		}
-	}
-
-	if !leavingIsOwner || ownerCount > 1 {
-		return nil
-	}
-
-	// Find another member to promote (first non-leaving member)
-	for _, m := range members {
 		if m.User.ID != leavingUserID {
-			if err := r.SetRoomUserRoleUseCase.Execute(ctx, roomID, m.User.ID, model.RoomUserRoleOwner); err != nil {
-				return err
-			}
-			logger.Log.Info().
-				Int64("room_id", roomID).
-				Int64("new_owner_id", m.User.ID).
-				Int64("leaving_user_id", leavingUserID).
-				Msg("auto-promoted member to owner on owner leave")
-			return nil
+			hasOtherMembers = true
 		}
 	}
 
-	// No other members — allow leave (community will be auto-deleted)
+	if leavingIsOwner && ownerCount == 1 && hasOtherMembers {
+		return errors.New("cannot leave: you are the last owner; transfer ownership to another member first")
+	}
 	return nil
 }
 

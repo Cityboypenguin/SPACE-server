@@ -6,13 +6,23 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+// UpdateCommunityAvatarParam はコミュニティアバター更新時に渡すメディア情報。
+// コミュニティ更新とメディア挿入を同一トランザクションで処理するために使用する。
+type UpdateCommunityAvatarParam struct {
+	StorageKey     string
+	UploaderUserID int64
+	ContentType    string
+}
+
 type CommunityRepository interface {
 	// SaveCommunityWithRoom は Room・RoomUser・Community を単一トランザクションで作成する。
 	// いずれかのステップで失敗した場合はロールバックし、孤立レコードを残さない。
 	SaveCommunityWithRoom(ctx context.Context, name, description string, avatarMediaID *int64, creatorUserID int64) (*model.Community, error)
 	GetCommunityByID(ctx context.Context, id int64) (*model.Community, error)
 	SearchCommunities(ctx context.Context, name string, userID int64, limit, offset int) ([]*model.Community, int, error)
-	UpdateCommunity(ctx context.Context, c *model.Community) error
+	// UpdateCommunity はコミュニティ情報を更新する。avatar が nil でない場合はメディアレコードの
+	// 作成も同一トランザクション内で行い、孤立レコードが生じないことを保証する。
+	UpdateCommunity(ctx context.Context, c *model.Community, avatar *UpdateCommunityAvatarParam) error
 	DeleteCommunity(ctx context.Context, id int64) (bool, error)
 	ListCommunitiesByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Community, int, error)
 	ListAllCommunities(ctx context.Context, limit, offset int) ([]*model.Community, int, error)

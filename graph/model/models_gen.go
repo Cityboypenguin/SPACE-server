@@ -71,6 +71,11 @@ type CommunityMember struct {
 	Role string `json:"role"`
 }
 
+type CommunityMemberUpdateInput struct {
+	UserID string                `json:"userID"`
+	Action CommunityMemberAction `json:"action"`
+}
+
 type CommunityPage struct {
 	Items []*Community `json:"items"`
 	Total int32        `json:"total"`
@@ -407,6 +412,63 @@ type UserReport struct {
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
 	Content      *string          `json:"content,omitempty"`
+}
+
+type CommunityMemberAction string
+
+const (
+	CommunityMemberActionPromote CommunityMemberAction = "PROMOTE"
+	CommunityMemberActionDemote  CommunityMemberAction = "DEMOTE"
+	CommunityMemberActionKick    CommunityMemberAction = "KICK"
+)
+
+var AllCommunityMemberAction = []CommunityMemberAction{
+	CommunityMemberActionPromote,
+	CommunityMemberActionDemote,
+	CommunityMemberActionKick,
+}
+
+func (e CommunityMemberAction) IsValid() bool {
+	switch e {
+	case CommunityMemberActionPromote, CommunityMemberActionDemote, CommunityMemberActionKick:
+		return true
+	}
+	return false
+}
+
+func (e CommunityMemberAction) String() string {
+	return string(e)
+}
+
+func (e *CommunityMemberAction) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CommunityMemberAction(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CommunityMemberAction", str)
+	}
+	return nil
+}
+
+func (e CommunityMemberAction) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type InquiryStatus string

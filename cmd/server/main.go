@@ -207,10 +207,11 @@ func main() {
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository, mediaRepository)
+	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
 	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
 	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
 	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
+	updateCommunityMembersUseCase := communityusecase.NewUpdateCommunityMembersUseCase(communityRepository, roomUserRepository, txManager)
 	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
@@ -349,6 +350,7 @@ func main() {
 		CreateCommunityUseCase:             createCommunityUseCase,
 		GetCommunityUseCase:                getCommunityUseCase,
 		UpdateCommunityUseCase:             updateCommunityUseCase,
+		UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
 		SearchCommunityUseCase:             searchCommunityUseCase,
 		ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
 		ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,

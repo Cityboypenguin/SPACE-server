@@ -44,7 +44,7 @@ func (r *MySQLRoomUserRepository) GetRoomUserRole(ctx context.Context, roomID, u
 
 func (r *MySQLRoomUserRepository) SetRoomUserRole(ctx context.Context, roomID, userID int64, role string) error {
 	now := time.Now().Unix()
-	_, err := r.DB.ExecContext(ctx,
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		"UPDATE room_users SET role = ?, updated_at = ? WHERE room_id = ? AND user_id = ?",
 		role, now, roomID, userID,
 	)
@@ -93,8 +93,10 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 }
 
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {
-	query := "DELETE FROM room_users WHERE room_id = ? AND user_id = ?"
-	_, err := r.DB.ExecContext(ctx, query, roomID, userID)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		"DELETE FROM room_users WHERE room_id = ? AND user_id = ?",
+		roomID, userID,
+	)
 	return err
 }
 

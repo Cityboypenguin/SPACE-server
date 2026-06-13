@@ -115,6 +115,7 @@ type Resolver struct {
 	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase                communityusecase.GetCommunityUseCase
 	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
+	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
 	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
 	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
