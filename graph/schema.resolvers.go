@@ -716,7 +716,7 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 
 // CreateCommunity is the resolver for the createCommunity field.
 func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.CreateCommunityInput) (*gqlmodel.Community, error) {
-	_, err := requireAuth(ctx)
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -725,7 +725,7 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 		return nil, err
 	}
 
-	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
+	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
@@ -827,7 +827,7 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, err
 	}
 
-	return toGraphCommunity(c, r.communityAvatarURL(c)), nil
+	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
 }
 
 // KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
@@ -1843,21 +1843,20 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 }
 
 // SearchUsers is the resolver for the searchUsers field.
-func (r *queryResolver) SearchUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	users, err := r.SearchUsersUseCase.Execute(ctx, keyword)
+	l, o := resolvePagination(limit, offset)
+	users, total, err := r.SearchUsersUseCase.Execute(ctx, keyword, l, o)
 	if err != nil {
 		return nil, err
 	}
-
-	var gqlUsers []*gqlmodel.User
+	items := make([]*gqlmodel.User, 0, len(users))
 	for _, user := range users {
-		gqlUsers = append(gqlUsers, toGraphUser(user))
+		items = append(items, toGraphUser(user))
 	}
-	return gqlUsers, nil
+	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
 // MyNotifications is the resolver for the myNotifications field.
@@ -1988,20 +1987,21 @@ func (r *queryResolver) Posts(ctx context.Context, limit *int32, offset *int32) 
 }
 
 // TopLevelPosts is the resolver for the topLevelPosts field.
-func (r *queryResolver) TopLevelPosts(ctx context.Context) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	posts, err := r.ListTopLevelPostsUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	posts, total, err := r.ListTopLevelPostsUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
 
-	var gqlPosts []*gqlmodel.Post
+	items := make([]*gqlmodel.Post, 0, len(posts))
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post))
+		items = append(items, toGraphPost(post))
 	}
-	return gqlPosts, nil
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
 }
 
 // GetRootPost is the resolver for the getRootPost field.
@@ -2054,7 +2054,7 @@ func (r *queryResolver) GetPostByIDIncludeDeleted(ctx context.Context, id string
 }
 
 // GetPostsByUserID is the resolver for the getPostsByUserID field.
-func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2063,15 +2063,16 @@ func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string) ([]
 		return nil, fmt.Errorf("invalid user id")
 	}
 
-	posts, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID)
+	l, o := resolvePagination(limit, offset)
+	posts, total, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
 	if err != nil {
 		return nil, err
 	}
-	var gqlPosts []*gqlmodel.Post
+	items := make([]*gqlmodel.Post, 0, len(posts))
 	for _, post := range posts {
-		gqlPosts = append(gqlPosts, toGraphPost(post))
+		items = append(items, toGraphPost(post))
 	}
-	return gqlPosts, nil
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
@@ -2198,7 +2199,7 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 }
 
 // Messages is the resolver for the messages field.
-func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmodel.Message, error) {
+func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string) (*gqlmodel.MessagePage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -2217,16 +2218,50 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string) ([]*gqlmode
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	msgs, err := r.ListMessagesUseCase.Execute(ctx, rid)
+	l := 50
+	if limit != nil && *limit > 0 {
+		l = int(*limit)
+		if l > 200 {
+			l = 200
+		}
+	}
+	var beforeID *int64
+	if before != nil {
+		id, err := decodeGraphID(ctx, "message", *before)
+		if err != nil {
+			return nil, fmt.Errorf("invalid before id")
+		}
+		beforeID = &id
+	}
+
+	var afterID *int64
+	if after != nil {
+		id, err := decodeGraphID(ctx, "message", *after)
+		if err != nil {
+			return nil, fmt.Errorf("invalid after id")
+		}
+		afterID = &id
+	}
+
+	var afterTimeVal *time.Time
+	if afterTime != nil {
+		t, err := time.Parse(time.RFC3339, *afterTime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid afterTime format, use RFC3339")
+		}
+		afterTimeVal = &t
+	}
+
+	msgs, hasMoreBefore, hasMoreAfter, err := r.ListMessagesUseCase.Execute(ctx, rid, l, beforeID, afterID, afterTimeVal)
 	if err != nil {
 		return nil, err
 	}
 
-	var result []*gqlmodel.Message
+	items := make([]*gqlmodel.Message, 0, len(msgs))
 	for _, msg := range msgs {
-		result = append(result, toGraphMessage(msg))
+		items = append(items, toGraphMessage(msg))
 	}
-	return result, nil
+	return &gqlmodel.MessagePage{Items: items, HasMoreBefore: hasMoreBefore, HasMoreAfter: hasMoreAfter}, nil
 }
 
 // Room is the resolver for the room field.
@@ -2297,13 +2332,14 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 }
 
 // MyDMRooms is the resolver for the myDMRooms field.
-func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error) {
+func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.RoomPage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rooms, err := r.ListMyDMRoomsUseCase.Execute(ctx, claims.ID)
+	l, o := resolvePagination(limit, offset)
+	rooms, total, err := r.ListMyDMRoomsUseCase.Execute(ctx, claims.ID, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2353,17 +2389,17 @@ func (r *queryResolver) MyDMRooms(ctx context.Context) ([]*gqlmodel.Room, error)
 		result = append(result, gqlRoom)
 	}
 
-	return result, nil
+	return &gqlmodel.RoomPage{Items: result, Total: int32(total)}, nil
 }
 
 // MyCommunities is the resolver for the myCommunities field.
-func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Community, error) {
+func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.CommunityPage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	communities, err := r.ListMyCommunitiesUseCase.Execute(ctx)
+	l, o := resolvePagination(limit, offset)
+	communities, total, err := r.ListMyCommunitiesUseCase.Execute(ctx, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2374,31 +2410,40 @@ func (r *queryResolver) MyCommunities(ctx context.Context) ([]*gqlmodel.Communit
 
 	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
 
-	result := make([]*gqlmodel.Community, 0, len(communities))
+	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC := toGraphCommunity(c, r.communityAvatarURL(c))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
 		if readStatus := readStatusMap[c.RoomID]; readStatus != nil {
 			gqlC.UnreadCount = int32(readStatus.UnreadCount)
 		}
-		result = append(result, gqlC)
+		items = append(items, gqlC)
 	}
-	return result, nil
+	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
 
 // SearchCommunities is the resolver for the searchCommunities field.
-func (r *queryResolver) SearchCommunities(ctx context.Context, name string) ([]*gqlmodel.Community, error) {
-	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
-	}
-	communities, err := r.SearchCommunityUseCase.Execute(ctx, name)
+func (r *queryResolver) SearchCommunities(ctx context.Context, name string, limit *int32, offset *int32) (*gqlmodel.CommunityPage, error) {
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]*gqlmodel.Community, 0, len(communities))
-	for _, c := range communities {
-		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
+	l, o := resolvePagination(limit, offset)
+	communities, total, err := r.SearchCommunityUseCase.Execute(ctx, name, l, o)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+	items := make([]*gqlmodel.Community, 0, len(communities))
+	for _, c := range communities {
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, gqlC)
+	}
+	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
 
 // Communities is the resolver for the communities field.
@@ -2413,7 +2458,11 @@ func (r *queryResolver) Communities(ctx context.Context, limit *int32, offset *i
 	}
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		items = append(items, toGraphCommunity(c, r.communityAvatarURL(c)))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, nil)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, gqlC)
 	}
 	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
@@ -2432,7 +2481,11 @@ func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*
 
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		result = append(result, toGraphCommunity(c, r.communityAvatarURL(c)))
+		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, gqlC)
 	}
 	return result, nil
 }
@@ -2896,16 +2949,21 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string, l
 }
 
 // ListFavoriteUsers is the resolver for the listFavoriteUsers field.
-func (r *queryResolver) ListFavoriteUsers(ctx context.Context) ([]*gqlmodel.User, error) {
+func (r *queryResolver) ListFavoriteUsers(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	favoriteUsers, err := r.ListFavoriteUsersUseCase.Execute(ctx, claims.ID)
+	l, o := resolvePagination(limit, offset)
+	favoriteUsers, total, err := r.ListFavoriteUsersUseCase.Execute(ctx, claims.ID, l, o)
 	if err != nil {
 		return nil, err
 	}
-	return r.favoriteUsersToGQL(ctx, favoriteUsers)
+	items, err := r.favoriteUsersToGQL(ctx, favoriteUsers)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
 // SearchFavoriteUsers is the resolver for the searchFavoriteUsers field.
@@ -2957,15 +3015,21 @@ func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string
 }
 
 // ListBlockedUsers is the resolver for the listBlockedUsers field.
-func (r *queryResolver) ListBlockedUsers(ctx context.Context) ([]*gqlmodel.User, error) {
-	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
-	}
-	blockedUsers, err := r.ListBlockersUseCase.Execute(ctx)
+func (r *queryResolver) ListBlockedUsers(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
+	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return r.blockedUsersToGQL(ctx, blockedUsers)
+	l, o := resolvePagination(limit, offset)
+	blockedUsers, total, err := r.ListBlockersUseCase.Execute(ctx, claims.ID, l, o)
+	if err != nil {
+		return nil, err
+	}
+	items, err := r.blockedUsersToGQL(ctx, blockedUsers)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
 // SearchBlockedUsers is the resolver for the searchBlockedUsers field.

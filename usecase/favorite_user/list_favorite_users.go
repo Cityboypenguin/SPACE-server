@@ -8,7 +8,7 @@ import (
 )
 
 type ListFavoriteUsersUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.FavoriteUser, error)
+	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error)
 }
 
 var _ ListFavoriteUsersUseCase = &listFavoritesInteractor{}
@@ -23,6 +23,6 @@ func NewListFavoriteUsersUseCase(favoriteUserRepo repository.FavoriteUserReposit
 	}
 }
 
-func (uc *listFavoritesInteractor) Execute(ctx context.Context, userID int64) ([]*model.FavoriteUser, error) {
-	return uc.favoriteUserRepo.ListFavoriteUsers(ctx)
+func (uc *listFavoritesInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error) {
+	return uc.favoriteUserRepo.ListFavoriteUsers(ctx, userID, limit, offset)
 }

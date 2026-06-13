@@ -59,6 +59,8 @@ type Community struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	AvatarURL   string `json:"avatarURL"`
+	MemberCount int32  `json:"memberCount"`
+	IsMember    bool   `json:"isMember"`
 	UnreadCount int32  `json:"unreadCount"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
@@ -195,6 +197,12 @@ type Message struct {
 	UpdatedAt string   `json:"updatedAt"`
 }
 
+type MessagePage struct {
+	Items         []*Message `json:"items"`
+	HasMoreBefore bool       `json:"hasMoreBefore"`
+	HasMoreAfter  bool       `json:"hasMoreAfter"`
+}
+
 type Mutation struct {
 }
 
@@ -279,6 +287,11 @@ type Room struct {
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`
 	PartnerLastReadAt   *string `json:"partnerLastReadAt,omitempty"`
+}
+
+type RoomPage struct {
+	Items []*Room `json:"items"`
+	Total int32   `json:"total"`
 }
 
 type RoomReadStatusUpdate struct {

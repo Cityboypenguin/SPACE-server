@@ -55,11 +55,20 @@ func (r *MySQLBlockRepository) DeleteBlocker(ctx context.Context, userID int64, 
 	return affected > 0, nil
 }
 
-func (r *MySQLBlockRepository) ListBlockers(ctx context.Context) ([]*model.Blocker, error) {
-	query := "SELECT id, user_id, blocked_user_id, created_at FROM blocks"
-	rows, err := r.DB.QueryContext(ctx, query)
+func (r *MySQLBlockRepository) ListBlockers(ctx context.Context, userID int64, limit, offset int) ([]*model.Blocker, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM blocks WHERE user_id = ?`, userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		userID, limit, offset,
+	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -68,16 +77,16 @@ func (r *MySQLBlockRepository) ListBlockers(ctx context.Context) ([]*model.Block
 		var block model.Blocker
 		var createdAtUnix int64
 		if err := rows.Scan(&block.ID, &block.UserID, &block.BlockedUserID, &createdAtUnix); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		block.CreatedAt = time.Unix(createdAtUnix, 0)
 		blocks = append(blocks, &block)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return blocks, nil
+	return blocks, total, nil
 }
 
 func (r *MySQLBlockRepository) GetBlockersByUserID(ctx context.Context, userID int64) ([]*model.Blocker, error) {
