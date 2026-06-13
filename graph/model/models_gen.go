@@ -54,16 +54,17 @@ type Blocker struct {
 }
 
 type Community struct {
-	ID          string `json:"ID"`
-	RoomID      string `json:"roomID"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	AvatarURL   string `json:"avatarURL"`
-	MemberCount int32  `json:"memberCount"`
-	IsMember    bool   `json:"isMember"`
-	UnreadCount int32  `json:"unreadCount"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"ID"`
+	RoomID      string  `json:"roomID"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	AvatarURL   string  `json:"avatarURL"`
+	MemberCount int32   `json:"memberCount"`
+	IsMember    bool    `json:"isMember"`
+	UnreadCount int32   `json:"unreadCount"`
+	LastMessage *string `json:"lastMessage,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 type CommunityMember struct {

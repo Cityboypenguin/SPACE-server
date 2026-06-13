@@ -412,6 +412,7 @@ type Community {
   memberCount: Int!
   isMember: Boolean!
   unreadCount: Int!
+  lastMessage: String
   createdAt: String!
   updatedAt: String!
 }
