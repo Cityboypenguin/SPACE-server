@@ -88,11 +88,12 @@ type Resolver struct {
 	ListMediaByPostIDUseCase    mediausecase.ListMediaByPostIDUseCase
 	ListMediaByMessageIDUseCase mediausecase.ListMediaByMessageIDUseCase
 
-	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase              messageusecase.SendMessageUseCase
-	ListMessagesUseCase             messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	GetMessageByIDUseCase              messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase                 messageusecase.SendMessageUseCase
+	ListMessagesUseCase                messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase               messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase               messageusecase.UpdateMessageUseCase
+	GetLastMessagesByRoomIDsUseCase    messageusecase.GetLastMessagesByRoomIDsUseCase
 	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase

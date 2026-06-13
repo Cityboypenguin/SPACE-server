@@ -2350,6 +2350,8 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 
 	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
 
+	lastMessageMap, _ := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
@@ -2365,6 +2367,10 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
 		gqlRoom.IsMessagingDisabled = len(users) == 2 && partnerID != 0 && blockedSet[partnerID]
+
+		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
+			gqlRoom.Content = &lastMsg.Content
+		}
 
 		if readStatus := readStatusMap[room.ID]; readStatus != nil {
 			if readStatus.LastReadAt != nil {

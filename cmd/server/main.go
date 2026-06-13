@@ -185,6 +185,7 @@ func main() {
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
 	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
+	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
 	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
@@ -321,11 +322,12 @@ func main() {
 		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
 		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
 
-		GetMessageByIDUseCase:           getMessageByIDUseCase,
-		SendMessageUseCase:              sendMessageUseCase,
-		ListMessagesUseCase:             listMessagesUseCase,
-		DeleteMessageUseCase:            deleteMessageUseCase,
-		UpdateMessageUseCase:            updateMessageUseCase,
+		GetMessageByIDUseCase:              getMessageByIDUseCase,
+		SendMessageUseCase:                 sendMessageUseCase,
+		ListMessagesUseCase:                listMessagesUseCase,
+		DeleteMessageUseCase:               deleteMessageUseCase,
+		UpdateMessageUseCase:               updateMessageUseCase,
+		GetLastMessagesByRoomIDsUseCase:    getLastMessagesByRoomIDsUseCase,
 		CreateRoomUseCase:               createRoomUseCase,
 		GetRoomUseCase:                  getRoomUseCase,
 		DeleteRoomUseCase:               deleteRoomUseCase,
