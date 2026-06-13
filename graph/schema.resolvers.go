@@ -2018,11 +2018,12 @@ func (r *queryResolver) Posts(ctx context.Context, limit *int32, offset *int32) 
 
 // TopLevelPosts is the resolver for the topLevelPosts field.
 func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.ListTopLevelPostsUseCase.Execute(ctx, l, o)
+	posts, total, err := r.GetFeedPostsUseCase.Execute(ctx, claims.ID, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2032,6 +2033,23 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset 
 		items = append(items, toGraphPost(post))
 	}
 	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
+// NewFeedPostsCount is the resolver for the newFeedPostsCount field.
+func (r *queryResolver) NewFeedPostsCount(ctx context.Context, since string) (int32, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	sinceTime, err := time.Parse(time.RFC3339, since)
+	if err != nil {
+		return 0, fmt.Errorf("invalid since format: %w", err)
+	}
+	count, err := r.CountNewFeedPostsUseCase.Execute(ctx, claims.ID, sinceTime)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
 }
 
 // GetRootPost is the resolver for the getRootPost field.

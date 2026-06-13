@@ -72,6 +72,8 @@ type Resolver struct {
 	UpdatePostUseCase                        post.UpdatePostUseCase
 	SearchPostsUseCase                       post.SearchPostsUseCase
 	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
+	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
+	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
 	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
 	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
 	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase

@@ -145,6 +145,8 @@ func main() {
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+	getFeedPostsUseCase := postusecase.NewGetFeedPostsUseCase(postRepository)
+	countNewFeedPostsUseCase := postusecase.NewCountNewFeedPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
@@ -307,6 +309,8 @@ func main() {
 		UpdatePostUseCase:                        updatePostUseCase,
 		SearchPostsUseCase:                       searchPostsUseCase,
 		ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
+		GetFeedPostsUseCase:                      getFeedPostsUseCase,
+		CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,
 		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
 		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
 		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,

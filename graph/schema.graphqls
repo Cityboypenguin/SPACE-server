@@ -15,6 +15,7 @@ type Query {
 
   posts(limit: Int = 20, offset: Int = 0): PostPage!
   topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
+  newFeedPostsCount(since: String!): Int!
   getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
