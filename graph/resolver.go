@@ -87,8 +87,7 @@ type Resolver struct {
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
 	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
-	ListMediaByPostIDUseCase    mediausecase.ListMediaByPostIDUseCase
-	ListMediaByMessageIDUseCase mediausecase.ListMediaByMessageIDUseCase
+	ListMediaByPostIDUseCase mediausecase.ListMediaByPostIDUseCase
 
 	GetMessageByIDUseCase              messageusecase.GetMessageByIDUseCase
 	SendMessageUseCase                 messageusecase.SendMessageUseCase

@@ -76,33 +76,6 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 	return result, rows.Err()
 }
 
-func (r *MySQLMediaRepository) ListByMessageID(ctx context.Context, messageID int64) ([]*model.Media, error) {
-	query := `
-		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at
-		FROM media m
-		JOIN message_media mm ON mm.media_id = m.id
-		WHERE mm.message_id = ?
-		ORDER BY mm.position ASC
-	`
-	rows, err := r.DB.QueryContext(ctx, query, messageID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []*model.Media
-	for rows.Next() {
-		var m model.Media
-		var createdAt int64
-		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt); err != nil {
-			return nil, err
-		}
-		m.CreatedAt = time.Unix(createdAt, 0)
-		result = append(result, &m)
-	}
-	return result, rows.Err()
-}
-
 func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
 	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
 	_, err := r.DB.ExecContext(ctx, query, mediaID, userID)
@@ -124,26 +97,25 @@ func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, post
 	return -1, nil
 }
 
-func (r *MySQLMediaRepository) ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error) {
+func (r *MySQLMediaRepository) listByParentIDs(ctx context.Context, ids []int64, joinTable, fkColumn string) (map[int64][]*model.Media, error) {
 	result := make(map[int64][]*model.Media)
-	if len(messageIDs) == 0 {
+	if len(ids) == 0 {
 		return result, nil
 	}
 
-	placeholders := make([]string, len(messageIDs))
-	args := make([]interface{}, len(messageIDs))
-	for i, id := range messageIDs {
-		placeholders[i] = "?"
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
 		args[i] = id
 	}
 
 	query := fmt.Sprintf(`
-		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, mm.message_id
+		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, jt.%s
 		FROM media m
-		JOIN message_media mm ON mm.media_id = m.id
-		WHERE mm.message_id IN (%s)
-		ORDER BY mm.message_id, mm.position ASC
-	`, strings.Join(placeholders, ","))
+		JOIN %s jt ON jt.media_id = m.id
+		WHERE jt.%s IN (%s)
+		ORDER BY jt.%s, jt.position ASC
+	`, fkColumn, joinTable, fkColumn, placeholders, fkColumn)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -153,54 +125,20 @@ func (r *MySQLMediaRepository) ListByMessageIDs(ctx context.Context, messageIDs 
 
 	for rows.Next() {
 		var m model.Media
-		var createdAt int64
-		var messageID int64
-		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &messageID); err != nil {
+		var createdAt, parentID int64
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &parentID); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
-		result[messageID] = append(result[messageID], &m)
+		result[parentID] = append(result[parentID], &m)
 	}
 	return result, rows.Err()
 }
 
-// ListByPostIDs は複数のPostIDに紐づく画像を1回のSQLで取得し、Mapに分類して返す
+func (r *MySQLMediaRepository) ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error) {
+	return r.listByParentIDs(ctx, messageIDs, "message_media", "message_id")
+}
+
 func (r *MySQLMediaRepository) ListByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error) {
-	if len(postIDs) == 0 {
-		return make(map[int64][]*model.Media), nil
-	}
-
-	placeholders := make([]string, len(postIDs))
-	args := make([]interface{}, len(postIDs))
-	for i, id := range postIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-
-	query := fmt.Sprintf(`
-		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, pm.post_id
-		FROM media m
-		JOIN post_media pm ON pm.media_id = m.id
-		WHERE pm.post_id IN (%s)
-		ORDER BY pm.post_id, pm.position ASC
-	`, strings.Join(placeholders, ","))
-
-	rows, err := r.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make(map[int64][]*model.Media)
-	for rows.Next() {
-		var m model.Media
-		var createdAt int64
-		var postID int64
-		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &postID); err != nil {
-			return nil, err
-		}
-		m.CreatedAt = time.Unix(createdAt, 0)
-		result[postID] = append(result[postID], &m)
-	}
-	return result, rows.Err()
+	return r.listByParentIDs(ctx, postIDs, "post_media", "post_id")
 }

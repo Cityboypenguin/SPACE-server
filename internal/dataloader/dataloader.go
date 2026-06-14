@@ -35,12 +35,34 @@ type ctxKey string
 const loadersKey = ctxKey("dataloaders")
 
 type Loaders struct {
-	UserLoader          *dataloadgen.Loader[int64, *model.User]
-	MediaLoader         *dataloadgen.Loader[int64, []*model.Media]
-	MessageMediaLoader  *dataloadgen.Loader[int64, []*model.Media]
-	ReplyLoader         *dataloadgen.Loader[int64, []*model.Post]
-	AdminReplyLoader    *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
-	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
+	UserLoader         *dataloadgen.Loader[int64, *model.User]
+	MediaLoader        *dataloadgen.Loader[int64, []*model.Media]
+	MessageMediaLoader *dataloadgen.Loader[int64, []*model.Media]
+	ReplyLoader        *dataloadgen.Loader[int64, []*model.Post]
+	AdminReplyLoader   *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
+	FavoriteLoader     *dataloadgen.Loader[int64, []*model.Favorite]
+}
+
+// batchFromMap は「IDのスライスを受け取り map[ID]V を返す関数」を DataLoader が要求する
+// 「IDと同じ長さの []V スライスを返す関数」に変換する汎用ヘルパー。
+func batchFromMap[V any](
+	fetch func(context.Context, []int64) (map[int64]V, error),
+) func(context.Context, []int64) ([]V, []error) {
+	return func(ctx context.Context, ids []int64) ([]V, []error) {
+		m, err := fetch(ctx, ids)
+		errs := make([]error, len(ids))
+		if err != nil {
+			for i := range errs {
+				errs[i] = err
+			}
+			return nil, errs
+		}
+		result := make([]V, len(ids))
+		for i, id := range ids {
+			result[i] = m[id]
+		}
+		return result, errs
+	}
 }
 
 func Middleware(
@@ -76,100 +98,13 @@ func Middleware(
 				return result, errs
 			}
 
-			fetchMedia := func(ctx context.Context, postIDs []int64) ([][]*model.Media, []error) {
-				mediaMap, err := listMediaUseCase.Execute(ctx, postIDs)
-				if err != nil {
-					errs := make([]error, len(postIDs))
-					for i := range errs {
-						errs[i] = err
-					}
-					return nil, errs
-				}
-				result := make([][]*model.Media, len(postIDs))
-				errs := make([]error, len(postIDs))
-				for i, id := range postIDs {
-					result[i] = mediaMap[id]
-				}
-				return result, errs
-			}
-
-			// --- 一般ユーザー用 Reply Batch ---
-			fetchReplies := func(ctx context.Context, postIDs []int64) ([][]*model.Post, []error) {
-				replyMap, err := getRepliesUseCase.Execute(ctx, postIDs)
-				if err != nil {
-					errs := make([]error, len(postIDs))
-					for i := range errs {
-						errs[i] = err
-					}
-					return nil, errs
-				}
-				result := make([][]*model.Post, len(postIDs))
-				errs := make([]error, len(postIDs))
-				for i, id := range postIDs {
-					result[i] = replyMap[id]
-				}
-				return result, errs
-			}
-
-			// ⭕️ 追加：管理者用 Reply Batch ---
-			fetchAdminReplies := func(ctx context.Context, postIDs []int64) ([][]*model.Post, []error) {
-				replyMap, err := getAdminRepliesUseCase.Execute(ctx, postIDs)
-				if err != nil {
-					errs := make([]error, len(postIDs))
-					for i := range errs {
-						errs[i] = err
-					}
-					return nil, errs
-				}
-				result := make([][]*model.Post, len(postIDs))
-				errs := make([]error, len(postIDs))
-				for i, id := range postIDs {
-					result[i] = replyMap[id]
-				}
-				return result, errs
-			}
-
-			fetchMessageMedia := func(ctx context.Context, messageIDs []int64) ([][]*model.Media, []error) {
-				mediaMap, err := listMessageMediaUseCase.Execute(ctx, messageIDs)
-				if err != nil {
-					errs := make([]error, len(messageIDs))
-					for i := range errs {
-						errs[i] = err
-					}
-					return nil, errs
-				}
-				result := make([][]*model.Media, len(messageIDs))
-				errs := make([]error, len(messageIDs))
-				for i, id := range messageIDs {
-					result[i] = mediaMap[id]
-				}
-				return result, errs
-			}
-
-			fetchFavorites := func(ctx context.Context, postIDs []int64) ([][]*model.Favorite, []error) {
-				favMap, err := getFavoritesUseCase.Execute(ctx, postIDs)
-				if err != nil {
-					errs := make([]error, len(postIDs))
-					for i := range errs {
-						errs[i] = err
-					}
-					return nil, errs
-				}
-				result := make([][]*model.Favorite, len(postIDs))
-				errs := make([]error, len(postIDs))
-				for i, id := range postIDs {
-					result[i] = favMap[id]
-				}
-				return result, errs
-			}
-
 			loaders := &Loaders{
 				UserLoader:         dataloadgen.NewLoader(fetchUsers, dataloadgen.WithWait(10*time.Millisecond)),
-				MediaLoader:        dataloadgen.NewLoader(fetchMedia, dataloadgen.WithWait(10*time.Millisecond)),
-				MessageMediaLoader: dataloadgen.NewLoader(fetchMessageMedia, dataloadgen.WithWait(10*time.Millisecond)),
-				ReplyLoader:        dataloadgen.NewLoader(fetchReplies, dataloadgen.WithWait(10*time.Millisecond)),
-				AdminReplyLoader:   dataloadgen.NewLoader(fetchAdminReplies, dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
-				FavoriteLoader:     dataloadgen.NewLoader(fetchFavorites, dataloadgen.WithWait(10*time.Millisecond)),
+				MediaLoader:        dataloadgen.NewLoader(batchFromMap(listMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				MessageMediaLoader: dataloadgen.NewLoader(batchFromMap(listMessageMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				ReplyLoader:        dataloadgen.NewLoader(batchFromMap(getRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				AdminReplyLoader:   dataloadgen.NewLoader(batchFromMap(getAdminRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
+				FavoriteLoader:     dataloadgen.NewLoader(batchFromMap(getFavoritesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 			}
 
 			ctx = context.WithValue(ctx, loadersKey, loaders)

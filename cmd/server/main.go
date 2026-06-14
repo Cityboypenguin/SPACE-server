@@ -179,7 +179,6 @@ func main() {
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
-	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
 	listMediaByMessageIDsUseCase := mediausecase.NewListMediaByMessageIDsUseCase(mediaRepository)
 
@@ -325,8 +324,7 @@ func main() {
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
 		ListFavoritesUseCase:                   listFavoritesUseCase,
 
-		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
-		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
+		ListMediaByPostIDUseCase: listMediaByPostIDUseCase,
 
 		GetMessageByIDUseCase:              getMessageByIDUseCase,
 		SendMessageUseCase:                 sendMessageUseCase,
