@@ -40,6 +40,10 @@ func NewCreatePostUseCase(
 }
 
 func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []MediaInput) (*model.Post, error) {
+	if err := validatePostContent(param.Content); err != nil {
+		return nil, err
+	}
+
 	prefix := fmt.Sprintf("media/%d/", param.UserID)
 	for _, input := range mediaInputs {
 		if !strings.HasPrefix(input.StorageKey, prefix) {

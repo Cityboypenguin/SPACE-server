@@ -30,6 +30,12 @@ func NewUpdatePostUseCase(postRepo repository.PostRepository, mediaRepo reposito
 }
 
 func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
+	if param.Content != nil {
+		if err := validatePostContent(*param.Content); err != nil {
+			return nil, err
+		}
+	}
+
 	prefix := fmt.Sprintf("media/%d/", param.UserID)
 	for _, input := range newMediaInputs {
 		if !strings.HasPrefix(input.StorageKey, prefix) {
