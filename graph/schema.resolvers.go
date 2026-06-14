@@ -81,7 +81,7 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 	if err != nil {
 		return nil, nil
 	}
-	u, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericID)
 	if err != nil || u == nil {
 		return nil, nil
 	}
@@ -94,7 +94,7 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	if err != nil {
 		return nil, nil
 	}
-	mediaList, err := r.ListMediaByMessageIDUseCase.Execute(ctx, numericID)
+	mediaList, err := dataloader.For(ctx).MessageMediaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}

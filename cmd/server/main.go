@@ -181,6 +181,7 @@ func main() {
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByMessageIDUseCase := mediausecase.NewListMediaByMessageIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
+	listMediaByMessageIDsUseCase := mediausecase.NewListMediaByMessageIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
@@ -438,6 +439,7 @@ func main() {
 	e.Use(echo.WrapMiddleware(dataloader.Middleware(
 		getUsersByIDsUseCase,
 		listMediaByPostIDsUseCase,
+		listMediaByMessageIDsUseCase,
 		getRepliesByPostIDsUseCase,
 		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,

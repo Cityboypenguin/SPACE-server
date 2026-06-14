@@ -124,6 +124,46 @@ func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, post
 	return -1, nil
 }
 
+func (r *MySQLMediaRepository) ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error) {
+	result := make(map[int64][]*model.Media)
+	if len(messageIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, len(messageIDs))
+	for i, id := range messageIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, mm.message_id
+		FROM media m
+		JOIN message_media mm ON mm.media_id = m.id
+		WHERE mm.message_id IN (%s)
+		ORDER BY mm.message_id, mm.position ASC
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m model.Media
+		var createdAt int64
+		var messageID int64
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &messageID); err != nil {
+			return nil, err
+		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		result[messageID] = append(result[messageID], &m)
+	}
+	return result, rows.Err()
+}
+
 // ListByPostIDs は複数のPostIDに紐づく画像を1回のSQLで取得し、Mapに分類して返す
 func (r *MySQLMediaRepository) ListByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error) {
 	if len(postIDs) == 0 {

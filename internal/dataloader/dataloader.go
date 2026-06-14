@@ -15,6 +15,9 @@ type GetUsersByIDsUseCase interface {
 type ListMediaByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error)
 }
+type ListMediaByMessageIDsUseCase interface {
+	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error)
+}
 type GetRepliesByPostIDsUseCase interface {
 	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 }
@@ -32,16 +35,18 @@ type ctxKey string
 const loadersKey = ctxKey("dataloaders")
 
 type Loaders struct {
-	UserLoader       *dataloadgen.Loader[int64, *model.User]
-	MediaLoader      *dataloadgen.Loader[int64, []*model.Media]
-	ReplyLoader      *dataloadgen.Loader[int64, []*model.Post]
-	AdminReplyLoader *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
-	FavoriteLoader   *dataloadgen.Loader[int64, []*model.Favorite]
+	UserLoader          *dataloadgen.Loader[int64, *model.User]
+	MediaLoader         *dataloadgen.Loader[int64, []*model.Media]
+	MessageMediaLoader  *dataloadgen.Loader[int64, []*model.Media]
+	ReplyLoader         *dataloadgen.Loader[int64, []*model.Post]
+	AdminReplyLoader    *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
+	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
 }
 
 func Middleware(
 	getUsersUseCase GetUsersByIDsUseCase,
 	listMediaUseCase ListMediaByPostIDsUseCase,
+	listMessageMediaUseCase ListMediaByMessageIDsUseCase,
 	getRepliesUseCase GetRepliesByPostIDsUseCase,
 	getAdminRepliesUseCase GetRepliesByPostIDsIncludeDeletedUseCase, // ⭕️ 引数に追加
 	getFavoritesUseCase GetFavoritesByPostIDsUseCase,
@@ -124,6 +129,23 @@ func Middleware(
 				return result, errs
 			}
 
+			fetchMessageMedia := func(ctx context.Context, messageIDs []int64) ([][]*model.Media, []error) {
+				mediaMap, err := listMessageMediaUseCase.Execute(ctx, messageIDs)
+				if err != nil {
+					errs := make([]error, len(messageIDs))
+					for i := range errs {
+						errs[i] = err
+					}
+					return nil, errs
+				}
+				result := make([][]*model.Media, len(messageIDs))
+				errs := make([]error, len(messageIDs))
+				for i, id := range messageIDs {
+					result[i] = mediaMap[id]
+				}
+				return result, errs
+			}
+
 			fetchFavorites := func(ctx context.Context, postIDs []int64) ([][]*model.Favorite, []error) {
 				favMap, err := getFavoritesUseCase.Execute(ctx, postIDs)
 				if err != nil {
@@ -142,11 +164,12 @@ func Middleware(
 			}
 
 			loaders := &Loaders{
-				UserLoader:       dataloadgen.NewLoader(fetchUsers, dataloadgen.WithWait(10*time.Millisecond)),
-				MediaLoader:      dataloadgen.NewLoader(fetchMedia, dataloadgen.WithWait(10*time.Millisecond)),
-				ReplyLoader:      dataloadgen.NewLoader(fetchReplies, dataloadgen.WithWait(10*time.Millisecond)),
-				AdminReplyLoader: dataloadgen.NewLoader(fetchAdminReplies, dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
-				FavoriteLoader:   dataloadgen.NewLoader(fetchFavorites, dataloadgen.WithWait(10*time.Millisecond)),
+				UserLoader:         dataloadgen.NewLoader(fetchUsers, dataloadgen.WithWait(10*time.Millisecond)),
+				MediaLoader:        dataloadgen.NewLoader(fetchMedia, dataloadgen.WithWait(10*time.Millisecond)),
+				MessageMediaLoader: dataloadgen.NewLoader(fetchMessageMedia, dataloadgen.WithWait(10*time.Millisecond)),
+				ReplyLoader:        dataloadgen.NewLoader(fetchReplies, dataloadgen.WithWait(10*time.Millisecond)),
+				AdminReplyLoader:   dataloadgen.NewLoader(fetchAdminReplies, dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
+				FavoriteLoader:     dataloadgen.NewLoader(fetchFavorites, dataloadgen.WithWait(10*time.Millisecond)),
 			}
 
 			ctx = context.WithValue(ctx, loadersKey, loaders)
