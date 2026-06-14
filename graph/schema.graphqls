@@ -167,12 +167,16 @@ input LoginInput {
 }
 
 type Mutation {
+  sendEmailOTP(email: String!): Boolean!
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
+  requestPasswordReset(email: String!): Boolean!
+  verifyPasswordResetOTP(email: String!, otp: String!): String!
+  resetPassword(resetToken: String!, newPassword: String!): Boolean!
 
   createAdministrator(input: CreateAdministratorInput!): Administrator!
   deleteAdministrator(id: ID!): Boolean!
@@ -311,6 +315,7 @@ input CreateUserInput {
   name: String!
   email: String!
   password: String!
+  otp: String!
 }
 
 input UpdateUserInput {

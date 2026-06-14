@@ -14,7 +14,7 @@ import (
 // NewHandler は /events 用の Echo ハンドラを返す。
 // 認証は Authorization ヘッダー（JWTAuth middleware 経由）か ?token= クエリパラメータで行う。
 // ブラウザ標準の EventSource はカスタムヘッダーを送れないため、?token= を主な認証手段とする。
-func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.HandlerFunc {
+func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
@@ -27,7 +27,7 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 				return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
 			}
 			var err error
-			claims, err = auth.ValidateAndVerifyToken(req.Context(), tokenStr, revokedTokenRepo, userRepo)
+			claims, err = auth.ValidateAndVerifyToken(req.Context(), tokenStr, revokedTokenRepo, userRepo, pwResetRepo)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}

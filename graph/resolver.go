@@ -37,15 +37,19 @@ type Resolver struct {
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
 	CreateUserUseCase       user.CreateUserUseCase
+	SendEmailOTPUseCase     user.SendEmailOTPUseCase
 	ListUsersUseCase        user.ListUsersUseCase
 	DeleteUserUseCase       user.DeleteUserUseCase
 	UpdateUserUseCase       user.UpdateUserUseCase
 	SearchUsersUseCase      user.SearchUsersUseCase
-	LoginUserUseCase        user.LoginUserUseCase
-	RefreshUserTokenUseCase user.RefreshUserTokenUseCase
-	LogoutUserUseCase       user.LogoutUserUseCase
-	FreezeUserUseCase       user.FreezeUserUseCase
-	UnfreezeUserUseCase     user.UnfreezeUserUseCase
+	LoginUserUseCase              user.LoginUserUseCase
+	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
+	LogoutUserUseCase             user.LogoutUserUseCase
+	FreezeUserUseCase             user.FreezeUserUseCase
+	UnfreezeUserUseCase           user.UnfreezeUserUseCase
+	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
+	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
+	ResetPasswordUseCase          user.ResetPasswordUseCase
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase

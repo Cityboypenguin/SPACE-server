@@ -105,6 +105,14 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	return result, nil
 }
 
+// SendEmailOtp is the resolver for the sendEmailOTP field.
+func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool, error) {
+	if err := r.SendEmailOTPUseCase.Execute(ctx, email); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
@@ -114,7 +122,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		Password:  input.Password,
 	}
 
-	user, err := r.CreateUserUseCase.Execute(ctx, param)
+	user, err := r.CreateUserUseCase.Execute(ctx, param, input.Otp)
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +218,27 @@ func (r *mutationResolver) RefreshUserToken(ctx context.Context, refreshToken st
 // LogoutUser is the resolver for the logoutUser field.
 func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, error) {
 	if err := r.LogoutUserUseCase.Execute(ctx, token); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// RequestPasswordReset is the resolver for the requestPasswordReset field.
+func (r *mutationResolver) RequestPasswordReset(ctx context.Context, email string) (bool, error) {
+	if err := r.RequestPasswordResetUseCase.Execute(ctx, email); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// VerifyPasswordResetOtp is the resolver for the verifyPasswordResetOTP field.
+func (r *mutationResolver) VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error) {
+	return r.VerifyPasswordResetOTPUseCase.Execute(ctx, email, otp)
+}
+
+// ResetPassword is the resolver for the resetPassword field.
+func (r *mutationResolver) ResetPassword(ctx context.Context, resetToken string, newPassword string) (bool, error) {
+	if err := r.ResetPasswordUseCase.Execute(ctx, resetToken, newPassword); err != nil {
 		return false, err
 	}
 	return true, nil

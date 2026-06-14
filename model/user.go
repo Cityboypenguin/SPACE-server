@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"regexp"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -37,6 +39,24 @@ type UpdateUserParam struct {
 	Name      *string
 	Email     *string
 	Password  *string
+}
+
+// 有効な学科記号（表6より。LG=2020募集停止、LZ=2019募集停止のため除外）
+// 2文字コードを E より先に記述して誤マッチを防ぐ
+var studentEmailRe = regexp.MustCompile(`(?i)^(EE|EL|EW|JL|JP|MA|MD|CM|CA|LB|LA|LT|LR|LK|LM|NE|HP|HS|GN|GC|E)(2[0-9]|[3-9][0-9])\d{4}@senshu-u\.jp$`)
+
+func ValidateUserEmail(email string) error {
+	if !studentEmailRe.MatchString(email) {
+		return fmt.Errorf("メールアドレスは2020年度以降の学籍番号形式のみ登録できます")
+	}
+	return nil
+}
+
+func ValidateUserPassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("パスワードは8文字以上で入力してください")
+	}
+	return nil
 }
 
 func hashPassword(password string) (string, error) {

@@ -15,6 +15,7 @@ func ValidateAndVerifyToken(
 	tokenStr string,
 	revokedRepo repository.RevokedTokenRepository,
 	userRepo repository.UserRepository,
+	pwResetRepo repository.PasswordResetRepository,
 ) (*Claims, error) {
 	claims, err := ValidateAccessToken(tokenStr)
 	if err != nil {
@@ -39,6 +40,17 @@ func ValidateAndVerifyToken(
 		}
 		if u.Status == model.UserStatusFrozen {
 			return nil, fmt.Errorf("account is frozen")
+		}
+
+		// パスワードリセット後に発行されたトークンかチェック
+		if pwResetRepo != nil {
+			changedAt, err := pwResetRepo.GetPasswordChangedAt(ctx, claims.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to verify token")
+			}
+			if changedAt != nil && claims.IssuedAt != nil && claims.IssuedAt.Time.Before(*changedAt) {
+				return nil, fmt.Errorf("token has been revoked")
+			}
 		}
 	}
 

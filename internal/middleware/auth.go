@@ -12,7 +12,7 @@ import (
 // JWTAuth validates Bearer tokens and injects auth claims into request context.
 // Requests without a token pass through; protected resolvers must call auth.ClaimsFromContext.
 // Requests with an invalid, revoked, or frozen-user token are rejected with 401.
-func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository) echo.MiddlewareFunc {
+func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			header := c.Request().Header.Get("Authorization")
@@ -21,7 +21,7 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 			}
 
 			tokenStr := strings.TrimPrefix(header, "Bearer ")
-			claims, err := auth.ValidateAndVerifyToken(c.Request().Context(), tokenStr, revokedTokenRepo, userRepo)
+			claims, err := auth.ValidateAndVerifyToken(c.Request().Context(), tokenStr, revokedTokenRepo, userRepo, pwResetRepo)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
