@@ -199,6 +199,7 @@ type Mutation {
   createCommunity(input: CreateCommunityInput!): Community!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
+  adminCreateUser(input: AdminCreateUserInput!): User!
   updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
   kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
@@ -316,6 +317,13 @@ input CreateUserInput {
   email: String!
   password: String!
   otp: String!
+}
+
+input AdminCreateUserInput {
+  accountID: String!
+  name: String!
+  email: String!
+  password: String!
 }
 
 input UpdateUserInput {

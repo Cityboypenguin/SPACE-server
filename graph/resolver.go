@@ -37,6 +37,7 @@ type Resolver struct {
 	GetUserByIDUseCase      user.GetUserByIDUseCase
 	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
 	CreateUserUseCase       user.CreateUserUseCase
+	AdminCreateUserUseCase  user.AdminCreateUserUseCase
 	SendEmailOTPUseCase     user.SendEmailOTPUseCase
 	ListUsersUseCase        user.ListUsersUseCase
 	DeleteUserUseCase       user.DeleteUserUseCase

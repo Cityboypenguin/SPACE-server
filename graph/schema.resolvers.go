@@ -813,6 +813,27 @@ func (r *mutationResolver) AdminUpdateProfile(ctx context.Context, userID string
 	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
 }
 
+// AdminCreateUser is the resolver for the adminCreateUser field.
+func (r *mutationResolver) AdminCreateUser(ctx context.Context, input gqlmodel.AdminCreateUserInput) (*gqlmodel.User, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	param := model.CreateUserParam{
+		AccountID: input.AccountID,
+		Name:      input.Name,
+		Email:     input.Email,
+		Password:  input.Password,
+	}
+
+	user, err := r.AdminCreateUserUseCase.Execute(ctx, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphUser(user), nil
+}
+
 // UpdateCommunity is the resolver for the updateCommunity field.
 func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input gqlmodel.UpdateCommunityInput) (*gqlmodel.Community, error) {
 	claims, err := requireAuth(ctx)

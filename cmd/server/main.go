@@ -180,6 +180,7 @@ func main() {
 	smtpEmailService := infraemail.NewSMTPEmailService()
 	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
+	adminCreateUserUseCase := userusecase.NewAdminCreateUserUseCase(userRepository, profileRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
@@ -282,6 +283,7 @@ func main() {
 		MaintenanceFlag:       maintenanceFlag,
 
 		CreateUserUseCase:       createUserUseCase,
+		AdminCreateUserUseCase:  adminCreateUserUseCase,
 		SendEmailOTPUseCase:     sendEmailOTPUseCase,
 		ListUsersUseCase:        listUsersUseCase,
 		DeleteUserUseCase:       deleteUserUseCase,
