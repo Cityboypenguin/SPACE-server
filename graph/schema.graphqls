@@ -15,23 +15,43 @@ type Query {
 
   posts(limit: Int = 20, offset: Int = 0): PostPage!
   topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
+  followersTopLevelPosts(
+    userID: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
   newFeedPostsCount(since: String!): Int!
   getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
   getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
   getRepliesByPostID(post_id: ID!): [Post!]!
-  searchPosts(content: String!): [Post!]!
+  getFavoritePostsByUserID(
+    user_id: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
+  searchPosts(keyword: String!): [Post!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
-  messages(roomID: ID!, limit: Int = 50, before: ID, after: ID, afterTime: String): MessagePage!
+  messages(
+    roomID: ID!
+    limit: Int = 50
+    before: ID
+    after: ID
+    afterTime: String
+  ): MessagePage!
   room(id: ID!): Room
   myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
   myCommunities(limit: Int = 20, offset: Int = 0): CommunityPage!
-  searchCommunities(name: String!, limit: Int = 20, offset: Int = 0): CommunityPage!
+  searchCommunities(
+    name: String!
+    limit: Int = 20
+    offset: Int = 0
+  ): CommunityPage!
   communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
@@ -40,8 +60,16 @@ type Query {
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedTermsDocumentUploadUrl: PresignedUploadUrl!
-  searchReports(filter: ReportSearchFilter, limit: Int = 20, offset: Int = 0): ReportPage!
-  searchInquiries(status: InquiryStatus, limit: Int = 20, offset: Int = 0): InquiryPage!
+  searchReports(
+    filter: ReportSearchFilter
+    limit: Int = 20
+    offset: Int = 0
+  ): ReportPage!
+  searchInquiries(
+    status: InquiryStatus
+    limit: Int = 20
+    offset: Int = 0
+  ): InquiryPage!
   getInquiry(id: ID!): Inquiry
 
   announcements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
@@ -54,7 +82,11 @@ type Query {
   myTermsConsentStatus: TermsConsentStatus!
 
   adminListTerms: [TermsOfService!]!
-  adminListConsents(termsID: ID!, limit: Int = 20, offset: Int = 0): TermsConsentPage!
+  adminListConsents(
+    termsID: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): TermsConsentPage!
 
   listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchFavoriteUsers(keyword: String!): [User!]!
@@ -203,7 +235,10 @@ type Mutation {
   kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
   demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
-  updateCommunityMembers(communityID: ID!, updates: [CommunityMemberUpdateInput!]!): Boolean!
+  updateCommunityMembers(
+    communityID: ID!
+    updates: [CommunityMemberUpdateInput!]!
+  ): Boolean!
   adminDeletePost(id: ID!): Boolean!
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!

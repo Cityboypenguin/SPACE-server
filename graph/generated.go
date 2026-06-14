@@ -290,10 +290,12 @@ type ComplexityRoot struct {
 		Communities                     func(childComplexity int, limit *int32, offset *int32) int
 		CurrentTerms                    func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
+		FollowersTopLevelPosts          func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetAdministratorByID            func(childComplexity int, id string) int
 		GetBlockersByUserID             func(childComplexity int, userID string) int
 		GetCommunityMembers             func(childComplexity int, communityID string) int
 		GetFavoriteByID                 func(childComplexity int, id string) int
+		GetFavoritePostsByUserID        func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetFavoriteUsersByUserID        func(childComplexity int, userID string) int
 		GetInquiry                      func(childComplexity int, id string) int
 		GetMyRoleInCommunity            func(childComplexity int, communityID string) int
@@ -329,7 +331,7 @@ type ComplexityRoot struct {
 		SearchCommunities               func(childComplexity int, name string, limit *int32, offset *int32) int
 		SearchFavoriteUsers             func(childComplexity int, keyword string) int
 		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus, limit *int32, offset *int32) int
-		SearchPosts                     func(childComplexity int, content string) int
+		SearchPosts                     func(childComplexity int, keyword string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string, limit *int32, offset *int32) int
 		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
@@ -545,13 +547,15 @@ type QueryResolver interface {
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
 	Posts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
 	TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
+	FollowersTopLevelPosts(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	NewFeedPostsCount(ctx context.Context, since string) (int32, error)
 	GetRootPost(ctx context.Context) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
-	SearchPosts(ctx context.Context, content string) ([]*model.Post, error)
+	GetFavoritePostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
+	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
@@ -2049,6 +2053,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Favorites(childComplexity), true
+	case "Query.followersTopLevelPosts":
+		if e.ComplexityRoot.Query.FollowersTopLevelPosts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_followersTopLevelPosts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.FollowersTopLevelPosts(childComplexity, args["userID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.getAdministratorByID":
 		if e.ComplexityRoot.Query.GetAdministratorByID == nil {
 			break
@@ -2093,6 +2108,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetFavoriteByID(childComplexity, args["id"].(string)), true
+	case "Query.getFavoritePostsByUserID":
+		if e.ComplexityRoot.Query.GetFavoritePostsByUserID == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getFavoritePostsByUserID_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetFavoritePostsByUserID(childComplexity, args["user_id"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.GetFavoriteUsersByUserID":
 		if e.ComplexityRoot.Query.GetFavoriteUsersByUserID == nil {
 			break
@@ -2449,7 +2475,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchPosts(childComplexity, args["content"].(string)), true
+		return e.ComplexityRoot.Query.SearchPosts(childComplexity, args["keyword"].(string)), true
 	case "Query.searchReports":
 		if e.ComplexityRoot.Query.SearchReports == nil {
 			break
@@ -4888,6 +4914,36 @@ func (ec *executionContext) field_Query_communities_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_followersTopLevelPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getAdministratorByID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4927,6 +4983,36 @@ func (ec *executionContext) field_Query_getFavoriteByID_args(ctx context.Context
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getFavoritePostsByUserID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "user_id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["user_id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -5425,14 +5511,14 @@ func (ec *executionContext) field_Query_searchInquiries_args(ctx context.Context
 func (ec *executionContext) field_Query_searchPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "content",
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
 		func(ctx context.Context, v any) (string, error) {
 			return ec.unmarshalNString2string(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["content"] = arg0
+	args["keyword"] = arg0
 	return args, nil
 }
 
@@ -11413,6 +11499,50 @@ func (ec *executionContext) fieldContext_Query_topLevelPosts(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_followersTopLevelPosts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_followersTopLevelPosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().FollowersTopLevelPosts(ctx, fc.Args["userID"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PostPage) graphql.Marshaler {
+			return ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_followersTopLevelPosts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_followersTopLevelPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_newFeedPostsCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11665,6 +11795,50 @@ func (ec *executionContext) fieldContext_Query_getRepliesByPostID(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_getFavoritePostsByUserID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_getFavoritePostsByUserID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetFavoritePostsByUserID(ctx, fc.Args["user_id"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PostPage) graphql.Marshaler {
+			return ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_getFavoritePostsByUserID(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getFavoritePostsByUserID_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_searchPosts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11675,7 +11849,7 @@ func (ec *executionContext) _Query_searchPosts(ctx context.Context, field graphq
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchPosts(ctx, fc.Args["content"].(string))
+			return ec.Resolvers.Query().SearchPosts(ctx, fc.Args["keyword"].(string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*model.Post) graphql.Marshaler {
@@ -19351,6 +19525,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "followersTopLevelPosts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_followersTopLevelPosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "newFeedPostsCount":
 			field := field
 
@@ -19471,6 +19667,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_getRepliesByPostID(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getFavoritePostsByUserID":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getFavoritePostsByUserID(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
