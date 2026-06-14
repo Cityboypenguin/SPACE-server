@@ -2085,6 +2085,29 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset 
 	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
 }
 
+// FollowersTopLevelPosts is the resolver for the followersTopLevelPosts field.
+func (r *queryResolver) FollowersTopLevelPosts(ctx context.Context, userID string, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+	l, o := resolvePagination(limit, offset)
+	posts, total, err := r.GetFollowersTopLevelPostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*gqlmodel.Post, 0, len(posts))
+	for _, post := range posts {
+		items = append(items, toGraphPost(post))
+	}
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
 // NewFeedPostsCount is the resolver for the newFeedPostsCount field.
 func (r *queryResolver) NewFeedPostsCount(ctx context.Context, since string) (int32, error) {
 	claims, err := requireAuth(ctx)
@@ -2195,13 +2218,35 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 	return gqlReplies, nil
 }
 
+// GetFavoritePostsByUserID is the resolver for the getFavoritePostsByUserID field.
+func (r *queryResolver) GetFavoritePostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericUserID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	l, o := resolvePagination(limit, offset)
+	posts, total, err := r.GetFavoritePostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.Post, 0, len(posts))
+	for _, post := range posts {
+		items = append(items, toGraphPost(post))
+	}
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
 // SearchPosts is the resolver for the searchPosts field.
-func (r *queryResolver) SearchPosts(ctx context.Context, content string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) SearchPosts(ctx context.Context, keyword string) ([]*gqlmodel.Post, error) {
 	_, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	posts, err := r.SearchPostsUseCase.Execute(ctx, content)
+	posts, err := r.SearchPostsUseCase.Execute(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}

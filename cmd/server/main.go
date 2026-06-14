@@ -149,6 +149,8 @@ func main() {
 	getFeedPostsUseCase := postusecase.NewGetFeedPostsUseCase(postRepository)
 	countNewFeedPostsUseCase := postusecase.NewCountNewFeedPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
+	getfavoritePostsByUserIDUseCase := postusecase.NewGetFavoritePostsByUserIDUseCase(postRepository)
+	getFollowersTopLevelPostsByUserIDUseCase := postusecase.NewGetFollowersTopLevelPostsByUserIDUseCase(postRepository)
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
@@ -282,15 +284,15 @@ func main() {
 		MaintenanceRepository: maintenanceRepository,
 		MaintenanceFlag:       maintenanceFlag,
 
-		CreateUserUseCase:       createUserUseCase,
-		AdminCreateUserUseCase:  adminCreateUserUseCase,
-		SendEmailOTPUseCase:     sendEmailOTPUseCase,
-		ListUsersUseCase:        listUsersUseCase,
-		DeleteUserUseCase:       deleteUserUseCase,
-		UpdateUserUseCase:       updateUserUseCase,
-		GetUserByIDUseCase:      getUserByIDUseCase,
-		GetUsersByIDsUseCase:    getUsersByIDsUseCase,
-		SearchUsersUseCase:      searchUsersUseCase,
+		CreateUserUseCase:             createUserUseCase,
+		AdminCreateUserUseCase:        adminCreateUserUseCase,
+		SendEmailOTPUseCase:           sendEmailOTPUseCase,
+		ListUsersUseCase:              listUsersUseCase,
+		DeleteUserUseCase:             deleteUserUseCase,
+		UpdateUserUseCase:             updateUserUseCase,
+		GetUserByIDUseCase:            getUserByIDUseCase,
+		GetUsersByIDsUseCase:          getUsersByIDsUseCase,
+		SearchUsersUseCase:            searchUsersUseCase,
 		LoginUserUseCase:              loginUserUseCase,
 		RefreshUserTokenUseCase:       refreshUserTokenUseCase,
 		LogoutUserUseCase:             logoutUserUseCase,
@@ -299,8 +301,8 @@ func main() {
 		RequestPasswordResetUseCase:   requestPasswordResetUseCase,
 		VerifyPasswordResetOTPUseCase: verifyPasswordResetOTPUseCase,
 		ResetPasswordUseCase:          resetPasswordUseCase,
-		SetAvatarUseCase:    setAvatarUseCase,
-		DeleteAvatarUseCase: deleteAvatarUseCase,
+		SetAvatarUseCase:              setAvatarUseCase,
+		DeleteAvatarUseCase:           deleteAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
@@ -330,6 +332,8 @@ func main() {
 		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
 		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
 		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
+		GetFavoritePostsByUserIDUseCase:          getfavoritePostsByUserIDUseCase,
+		GetFollowersTopLevelPostsByUserIDUseCase: getFollowersTopLevelPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
@@ -342,12 +346,12 @@ func main() {
 
 		ListMediaByPostIDUseCase: listMediaByPostIDUseCase,
 
-		GetMessageByIDUseCase:              getMessageByIDUseCase,
-		SendMessageUseCase:                 sendMessageUseCase,
-		ListMessagesUseCase:                listMessagesUseCase,
-		DeleteMessageUseCase:               deleteMessageUseCase,
-		UpdateMessageUseCase:               updateMessageUseCase,
-		GetLastMessagesByRoomIDsUseCase:    getLastMessagesByRoomIDsUseCase,
+		GetMessageByIDUseCase:           getMessageByIDUseCase,
+		SendMessageUseCase:              sendMessageUseCase,
+		ListMessagesUseCase:             listMessagesUseCase,
+		DeleteMessageUseCase:            deleteMessageUseCase,
+		UpdateMessageUseCase:            updateMessageUseCase,
+		GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
 		CreateRoomUseCase:               createRoomUseCase,
 		GetRoomUseCase:                  getRoomUseCase,
 		DeleteRoomUseCase:               deleteRoomUseCase,
