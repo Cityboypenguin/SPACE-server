@@ -294,7 +294,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	countQuery := `
 		SELECT COUNT(*)
 		FROM favorite_users fu
-		JOIN posts p ON fu.user_id = p.user_id
+		JOIN posts p ON fu.favorite_user_id = p.user_id
 		WHERE fu.user_id = ? AND p.parent_id IS NULL AND p.deleted_at IS NULL
 	`
 	var countArgs []interface{}
@@ -306,17 +306,25 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	}
 
 	query := `
-		SELECT p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at
+		SELECT
+		  p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at,
+		  (COUNT(f.id) * 2 + p.reply_count * 3 + 1)
+		  / POW(((UNIX_TIMESTAMP() - p.created_at) / 3600.0) + 2, 1.5) AS score
 		FROM favorite_users fu
 		JOIN posts p ON fu.favorite_user_id = p.user_id
+		LEFT JOIN favorites f ON f.post_id = p.id
 		WHERE fu.user_id = ? AND p.parent_id IS NULL AND p.deleted_at IS NULL
 	`
-
 	var args []interface{}
 	args = append(args, userID)
 	query, args = AppendBlockFilter(ctx, query, args, "p.user_id")
-	query += " ORDER BY p.created_at DESC LIMIT ? OFFSET ?"
+	query += `
+		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at
+		ORDER BY score DESC, p.created_at DESC
+		LIMIT ? OFFSET ?
+	`
 	args = append(args, limit, offset)
+
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
@@ -328,7 +336,8 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
 		var parentID, deletedAtUnix sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount, &deletedAtUnix); err != nil {
+		var score float64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount, &deletedAtUnix, &score); err != nil {
 			return nil, 0, err
 		}
 		if parentID.Valid {
@@ -347,7 +356,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 		posts = append(posts, &p)
 	}
 
-	return posts, total, nil
+	return posts, total, rows.Err()
 }
 
 func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
