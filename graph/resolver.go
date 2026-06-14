@@ -75,6 +75,8 @@ type Resolver struct {
 	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
 	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
 	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
+	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
+	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
 
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase

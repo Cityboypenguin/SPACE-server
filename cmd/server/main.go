@@ -146,6 +146,8 @@ func main() {
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
+	getfavoritePostsByUserIDUseCase := postusecase.NewGetFavoritePostsByUserIDUseCase(postRepository)
+	getFollowersTopLevelPostsByUserIDUseCase := postusecase.NewGetFollowersTopLevelPostsByUserIDUseCase(postRepository)
 
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
@@ -279,8 +281,8 @@ func main() {
 		LogoutUserUseCase:       logoutUserUseCase,
 		FreezeUserUseCase:       freezeUserUseCase,
 		UnfreezeUserUseCase:     unfreezeUserUseCase,
-		SetAvatarUseCase:    setAvatarUseCase,
-		DeleteAvatarUseCase: deleteAvatarUseCase,
+		SetAvatarUseCase:        setAvatarUseCase,
+		DeleteAvatarUseCase:     deleteAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
@@ -308,6 +310,8 @@ func main() {
 		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
 		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
 		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
+		GetFavoritePostsByUserIDUseCase:          getfavoritePostsByUserIDUseCase,
+		GetFollowersTopLevelPostsByUserIDUseCase: getFollowersTopLevelPostsByUserIDUseCase,
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,

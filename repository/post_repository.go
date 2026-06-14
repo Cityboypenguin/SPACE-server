@@ -18,7 +18,9 @@ type PostRepository interface {
 	GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 	GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 	ListTopLevelPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
+	GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 	ListPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
 	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
+	GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 }

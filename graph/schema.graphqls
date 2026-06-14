@@ -15,22 +15,42 @@ type Query {
 
   posts(limit: Int = 20, offset: Int = 0): PostPage!
   topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
+  followersTopLevelPosts(
+    userID: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
   getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
   getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
   getRepliesByPostID(post_id: ID!): [Post!]!
+  getFavoritePostsByUserID(
+    user_id: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
   searchPosts(keyword: String!): [Post!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
-  messages(roomID: ID!, limit: Int = 50, before: ID, after: ID, afterTime: String): MessagePage!
+  messages(
+    roomID: ID!
+    limit: Int = 50
+    before: ID
+    after: ID
+    afterTime: String
+  ): MessagePage!
   room(id: ID!): Room
   myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
   myCommunities(limit: Int = 20, offset: Int = 0): CommunityPage!
-  searchCommunities(name: String!, limit: Int = 20, offset: Int = 0): CommunityPage!
+  searchCommunities(
+    name: String!
+    limit: Int = 20
+    offset: Int = 0
+  ): CommunityPage!
   communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
