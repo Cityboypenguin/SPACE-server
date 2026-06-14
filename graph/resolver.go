@@ -72,6 +72,8 @@ type Resolver struct {
 	UpdatePostUseCase                        post.UpdatePostUseCase
 	SearchPostsUseCase                       post.SearchPostsUseCase
 	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
+	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
+	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
 	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
 	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
 	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
@@ -90,11 +92,12 @@ type Resolver struct {
 	ListMediaByPostIDUseCase    mediausecase.ListMediaByPostIDUseCase
 	ListMediaByMessageIDUseCase mediausecase.ListMediaByMessageIDUseCase
 
-	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase              messageusecase.SendMessageUseCase
-	ListMessagesUseCase             messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	GetMessageByIDUseCase              messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase                 messageusecase.SendMessageUseCase
+	ListMessagesUseCase                messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase               messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase               messageusecase.UpdateMessageUseCase
+	GetLastMessagesByRoomIDsUseCase    messageusecase.GetLastMessagesByRoomIDsUseCase
 	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
@@ -116,6 +119,7 @@ type Resolver struct {
 	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
 	GetCommunityUseCase                communityusecase.GetCommunityUseCase
 	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
+	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
 	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
 	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase

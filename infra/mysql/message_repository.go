@@ -208,6 +208,46 @@ func (r *MySQLMessageRepository) CountUnreadMessagesByRoomIDs(ctx context.Contex
 	return result, rows.Err()
 }
 
+func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error) {
+	result := make(map[int64]*model.Message)
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT m.id, m.room_id, m.user_id, m.content, m.created_at, m.updated_at
+		FROM messages m
+		INNER JOIN (
+			SELECT room_id, MAX(id) AS max_id
+			FROM messages
+			WHERE room_id IN (%s)
+			GROUP BY room_id
+		) latest ON m.room_id = latest.room_id AND m.id = latest.max_id
+	`, placeholders)
+
+	args := make([]interface{}, len(roomIDs))
+	for i, id := range roomIDs {
+		args[i] = id
+	}
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m model.Message
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		m.UpdatedAt = time.Unix(updatedAt, 0)
+		result[m.RoomID] = &m
+	}
+	return result, rows.Err()
+}
+
 func (r *MySQLMessageRepository) CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error) {
 	query := `
 		SELECT ru.user_id, COUNT(m.id) as unread_count

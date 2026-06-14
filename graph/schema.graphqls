@@ -20,6 +20,7 @@ type Query {
     limit: Int = 20
     offset: Int = 0
   ): PostPage!
+  newFeedPostsCount(since: String!): Int!
   getRootPost: Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
@@ -230,6 +231,10 @@ type Mutation {
   kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
   demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+  updateCommunityMembers(
+    communityID: ID!
+    updates: [CommunityMemberUpdateInput!]!
+  ): Boolean!
   adminDeletePost(id: ID!): Boolean!
   freezeUser(id: ID!): Boolean!
   unfreezeUser(id: ID!): Boolean!
@@ -443,6 +448,7 @@ type Community {
   memberCount: Int!
   isMember: Boolean!
   unreadCount: Int!
+  lastMessage: String
   createdAt: String!
   updatedAt: String!
 }
@@ -472,6 +478,17 @@ input UpdateCommunityInput {
   name: String
   description: String
   avatarKey: String
+}
+
+enum CommunityMemberAction {
+  PROMOTE
+  DEMOTE
+  KICK
+}
+
+input CommunityMemberUpdateInput {
+  userID: ID!
+  action: CommunityMemberAction!
 }
 
 type RoomReadStatusUpdate {

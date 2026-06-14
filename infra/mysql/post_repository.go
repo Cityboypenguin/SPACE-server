@@ -474,6 +474,62 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offs
 	return posts, total, nil
 }
 
+// GetFeedPosts はハイブリッドスコアでソートされたトップレベル投稿を返す。
+// score = (いいね数×2 + 返信数×3 + 1) / (経過時間h + 2)^1.5 × フォローブースト(1.5)
+func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error) {
+	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
+	var countArgs []interface{}
+	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	var total int
+	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	baseQuery := `
+		SELECT
+		  p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count,
+		  (COUNT(f.id) * 2 + p.reply_count * 3 + 1)
+		  / POW(((UNIX_TIMESTAMP() - p.created_at) / 3600.0) + 2, 1.5)
+		  * IF(fu.id IS NOT NULL, 1.5, 1.0) AS score
+		FROM posts p
+		LEFT JOIN favorites f ON f.post_id = p.id
+		LEFT JOIN favorite_users fu ON fu.user_id = ? AND fu.favorite_user_id = p.user_id
+		WHERE p.parent_id IS NULL AND p.deleted_at IS NULL
+	`
+	args := []interface{}{viewerID}
+	baseQuery, args = AppendBlockFilter(ctx, baseQuery, args, "p.user_id")
+	baseQuery += `
+		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, fu.id
+		ORDER BY score DESC, p.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+	args = append(args, limit, offset)
+
+	rows, err := r.DB.QueryContext(ctx, baseQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var posts []*model.Post
+	for rows.Next() {
+		var p model.Post
+		var createdAtUnix, updatedAtUnix int64
+		var parentID sql.NullInt64
+		var score float64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount, &score); err != nil {
+			return nil, 0, err
+		}
+		if parentID.Valid {
+			p.ParentID = &parentID.Int64
+		}
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+		posts = append(posts, &p)
+	}
+	return posts, total, rows.Err()
+}
+
 // GetRepliesByPostIDs は複数の親PostIDに紐づく返信を1回のSQLで取得する
 func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
 	if len(parentIDs) == 0 {
@@ -733,4 +789,14 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	}
 
 	return posts, total, nil
+}
+func (r *MySQLPostRepository) CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error) {
+	query := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at > ?`
+	args := []interface{}{since.Unix()}
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	var count int
+	if err := r.DB.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }

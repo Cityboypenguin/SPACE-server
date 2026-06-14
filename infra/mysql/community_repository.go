@@ -9,6 +9,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
+var _ repository.CommunityRepository = &MySQLCommunityRepository{}
+
 type MySQLCommunityRepository struct {
 	DB *sql.DB
 }
@@ -122,7 +124,7 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 	return items, total, nil
 }
 
-func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model.Community) error {
+func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model.Community, avatar *repository.UpdateCommunityAvatarParam) error {
 	c.UpdatedAt = time.Now()
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -131,7 +133,27 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	defer tx.Rollback()
 
 	var avatarMediaID *int64
-	if c.AvatarMedia != nil {
+	if avatar != nil {
+		result, err := tx.ExecContext(ctx,
+			`INSERT INTO media (uploader_user_id, storage_key, content_type, created_at) VALUES (?, ?, ?, ?)`,
+			avatar.UploaderUserID, avatar.StorageKey, avatar.ContentType, c.UpdatedAt.Unix(),
+		)
+		if err != nil {
+			return err
+		}
+		mediaID, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		avatarMediaID = &mediaID
+		c.AvatarMedia = &model.Media{
+			ID:             mediaID,
+			UploaderUserID: avatar.UploaderUserID,
+			StorageKey:     avatar.StorageKey,
+			ContentType:    avatar.ContentType,
+			CreatedAt:      c.UpdatedAt,
+		}
+	} else if c.AvatarMedia != nil {
 		avatarMediaID = &c.AvatarMedia.ID
 	}
 

@@ -145,6 +145,8 @@ func main() {
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
 	listTopLevelPostsUseCase := postusecase.NewListTopLevelPostsUseCase(postRepository)
+	getFeedPostsUseCase := postusecase.NewGetFeedPostsUseCase(postRepository)
+	countNewFeedPostsUseCase := postusecase.NewCountNewFeedPostsUseCase(postRepository)
 	getRepliesByPostIDsUseCase := postusecase.NewGetRepliesByPostIDsUseCase(postRepository)
 	getfavoritePostsByUserIDUseCase := postusecase.NewGetFavoritePostsByUserIDUseCase(postRepository)
 	getFollowersTopLevelPostsByUserIDUseCase := postusecase.NewGetFollowersTopLevelPostsByUserIDUseCase(postRepository)
@@ -187,6 +189,7 @@ func main() {
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
 	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
+	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
 	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
@@ -208,10 +211,11 @@ func main() {
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository, mediaRepository)
+	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
 	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
 	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
 	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
+	updateCommunityMembersUseCase := communityusecase.NewUpdateCommunityMembersUseCase(communityRepository, roomUserRepository, txManager)
 	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
 	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
@@ -307,6 +311,8 @@ func main() {
 		UpdatePostUseCase:                        updatePostUseCase,
 		SearchPostsUseCase:                       searchPostsUseCase,
 		ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
+		GetFeedPostsUseCase:                      getFeedPostsUseCase,
+		CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,
 		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
 		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
 		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
@@ -325,11 +331,12 @@ func main() {
 		ListMediaByPostIDUseCase:    listMediaByPostIDUseCase,
 		ListMediaByMessageIDUseCase: listMediaByMessageIDUseCase,
 
-		GetMessageByIDUseCase:           getMessageByIDUseCase,
-		SendMessageUseCase:              sendMessageUseCase,
-		ListMessagesUseCase:             listMessagesUseCase,
-		DeleteMessageUseCase:            deleteMessageUseCase,
-		UpdateMessageUseCase:            updateMessageUseCase,
+		GetMessageByIDUseCase:              getMessageByIDUseCase,
+		SendMessageUseCase:                 sendMessageUseCase,
+		ListMessagesUseCase:                listMessagesUseCase,
+		DeleteMessageUseCase:               deleteMessageUseCase,
+		UpdateMessageUseCase:               updateMessageUseCase,
+		GetLastMessagesByRoomIDsUseCase:    getLastMessagesByRoomIDsUseCase,
 		CreateRoomUseCase:               createRoomUseCase,
 		GetRoomUseCase:                  getRoomUseCase,
 		DeleteRoomUseCase:               deleteRoomUseCase,
@@ -351,6 +358,7 @@ func main() {
 		CreateCommunityUseCase:             createCommunityUseCase,
 		GetCommunityUseCase:                getCommunityUseCase,
 		UpdateCommunityUseCase:             updateCommunityUseCase,
+		UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
 		SearchCommunityUseCase:             searchCommunityUseCase,
 		ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
 		ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,

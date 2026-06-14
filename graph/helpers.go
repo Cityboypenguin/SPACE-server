@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -12,6 +13,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/google/uuid"
 )
 
 var isReportServiceEnabled = true
@@ -185,4 +187,74 @@ func (r *queryResolver) blockedUsersToGQL(ctx context.Context, blockers []*model
 		}
 	}
 	return result, nil
+}
+
+// presignedImageUploadURL generates a presigned put URL for image uploads.
+// prefix is the storage path prefix without trailing slash (e.g., "avatars/123").
+func (r *queryResolver) presignedImageUploadURL(ctx context.Context, prefix string, maxBytes int64, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	extMap := map[string]string{
+		"image/jpeg":    ".jpg",
+		"image/png":     ".png",
+		"image/webp":    ".webp",
+		"image/gif":     ".gif",
+		"image/svg+xml": ".svg",
+	}
+	ext, ok := extMap[contentType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
+	}
+	objectKey := fmt.Sprintf("%s/%s%s", prefix, uuid.New().String(), ext)
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, maxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate upload url")
+	}
+	return &gqlmodel.PresignedUploadURL{UploadURL: uploadURL, ObjectKey: objectKey}, nil
+}
+
+// messageSubscription handles the common auth/membership guard and PubSub fan-out
+// for room-scoped message subscriptions (added, deleted, updated).
+func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, topic string) (<-chan *gqlmodel.Message, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("topic", topic).Msg("subscription start")
+
+	ch := make(chan *gqlmodel.Message, 1)
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("topic", topic).Str("reason", "context_done").Msg("subscription end")
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("topic", topic).Str("reason", "pubsub_closed").Msg("subscription end")
+					close(ch)
+					return
+				}
+				if msg, ok := data.(*gqlmodel.Message); ok {
+					ch <- msg
+				}
+			}
+		}
+	}()
+
+	return ch, nil
 }

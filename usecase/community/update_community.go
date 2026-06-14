@@ -2,7 +2,6 @@ package community
 
 import (
 	"context"
-	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -17,13 +16,11 @@ var _ UpdateCommunityUseCase = &UpdateCommunityInteractor{}
 
 type UpdateCommunityInteractor struct {
 	communityRepo repository.CommunityRepository
-	mediaRepo     repository.MediaRepository
 }
 
-func NewUpdateCommunityUseCase(communityRepo repository.CommunityRepository, mediaRepo repository.MediaRepository) UpdateCommunityUseCase {
+func NewUpdateCommunityUseCase(communityRepo repository.CommunityRepository) UpdateCommunityUseCase {
 	return &UpdateCommunityInteractor{
 		communityRepo: communityRepo,
-		mediaRepo:     mediaRepo,
 	}
 }
 
@@ -33,18 +30,14 @@ func (uc *UpdateCommunityInteractor) Execute(ctx context.Context, c *model.Commu
 		return err
 	}
 
+	var avatar *repository.UpdateCommunityAvatarParam
 	if avatarKey != nil && *avatarKey != "" {
-		media := &model.Media{
+		avatar = &repository.UpdateCommunityAvatarParam{
 			UploaderUserID: claims.ID,
 			StorageKey:     *avatarKey,
 			ContentType:    contentTypeFromKey(*avatarKey),
-			CreatedAt:      time.Now(),
 		}
-		if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
-			return err
-		}
-		c.AvatarMedia = media
 	}
 
-	return uc.communityRepo.UpdateCommunity(ctx, c)
+	return uc.communityRepo.UpdateCommunity(ctx, c, avatar)
 }

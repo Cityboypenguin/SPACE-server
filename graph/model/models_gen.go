@@ -54,21 +54,27 @@ type Blocker struct {
 }
 
 type Community struct {
-	ID          string `json:"ID"`
-	RoomID      string `json:"roomID"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	AvatarURL   string `json:"avatarURL"`
-	MemberCount int32  `json:"memberCount"`
-	IsMember    bool   `json:"isMember"`
-	UnreadCount int32  `json:"unreadCount"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"ID"`
+	RoomID      string  `json:"roomID"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	AvatarURL   string  `json:"avatarURL"`
+	MemberCount int32   `json:"memberCount"`
+	IsMember    bool    `json:"isMember"`
+	UnreadCount int32   `json:"unreadCount"`
+	LastMessage *string `json:"lastMessage,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 type CommunityMember struct {
 	User *User  `json:"user"`
 	Role string `json:"role"`
+}
+
+type CommunityMemberUpdateInput struct {
+	UserID string                `json:"userID"`
+	Action CommunityMemberAction `json:"action"`
 }
 
 type CommunityPage struct {
@@ -407,6 +413,63 @@ type UserReport struct {
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
 	Content      *string          `json:"content,omitempty"`
+}
+
+type CommunityMemberAction string
+
+const (
+	CommunityMemberActionPromote CommunityMemberAction = "PROMOTE"
+	CommunityMemberActionDemote  CommunityMemberAction = "DEMOTE"
+	CommunityMemberActionKick    CommunityMemberAction = "KICK"
+)
+
+var AllCommunityMemberAction = []CommunityMemberAction{
+	CommunityMemberActionPromote,
+	CommunityMemberActionDemote,
+	CommunityMemberActionKick,
+}
+
+func (e CommunityMemberAction) IsValid() bool {
+	switch e {
+	case CommunityMemberActionPromote, CommunityMemberActionDemote, CommunityMemberActionKick:
+		return true
+	}
+	return false
+}
+
+func (e CommunityMemberAction) String() string {
+	return string(e)
+}
+
+func (e *CommunityMemberAction) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CommunityMemberAction(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CommunityMemberAction", str)
+	}
+	return nil
+}
+
+func (e CommunityMemberAction) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type InquiryStatus string

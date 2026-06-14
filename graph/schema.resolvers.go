@@ -19,6 +19,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
@@ -417,16 +418,13 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	// 1. テキストのバリデーション（CreatePostを踏襲）
 	trimmedContent := strings.TrimSpace(input.Content)
 
-	// 2. 投稿IDのデコード（既存ロジック）
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	// 3. 投稿の存在確認と権限チェック（既存ロジック）
 	existing, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post")
@@ -447,7 +445,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		deletedMediaIDs = append(deletedMediaIDs, numID)
 	}
 
-	// 5. 追加する画像データの詰め替え（CreatePostと完全に一致）
 	var ucMediaInputs []postusecase.MediaInput
 	for _, m := range input.NewMediaInputs {
 		if m != nil {
@@ -458,7 +455,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		}
 	}
 
-	// 6. ユースケースの実行（型が完全に一致した状態）
 	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
 		PostID:  numericID,
 		UserID:  claims.ID,
@@ -696,8 +692,8 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 	}
 
 	if room != nil && room.Type == model.RoomTypeCommunity {
-		if err := r.promoteNewOwnerIfNeeded(ctx, rid, uid); err != nil {
-			return false, fmt.Errorf("failed to transfer ownership: %w", err)
+		if err := r.checkCanLeaveCommunity(ctx, rid, uid); err != nil {
+			return false, err
 		}
 	}
 
@@ -971,6 +967,43 @@ func (r *mutationResolver) DemoteFromCommunityOwner(ctx context.Context, communi
 	return true, nil
 }
 
+// UpdateCommunityMembers is the resolver for the updateCommunityMembers field.
+func (r *mutationResolver) UpdateCommunityMembers(ctx context.Context, communityID string, updates []*gqlmodel.CommunityMemberUpdateInput) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return false, fmt.Errorf("invalid community id")
+	}
+
+	params := make([]communityusecase.MemberUpdate, 0, len(updates))
+	for _, u := range updates {
+		numericUserID, err := decodeGraphID(ctx, "user", u.UserID)
+		if err != nil {
+			return false, fmt.Errorf("invalid user id: %s", u.UserID)
+		}
+		var action communityusecase.MemberAction
+		switch u.Action {
+		case gqlmodel.CommunityMemberActionPromote:
+			action = communityusecase.MemberActionPromote
+		case gqlmodel.CommunityMemberActionDemote:
+			action = communityusecase.MemberActionDemote
+		case gqlmodel.CommunityMemberActionKick:
+			action = communityusecase.MemberActionKick
+		default:
+			return false, fmt.Errorf("unknown action: %s", u.Action)
+		}
+		params = append(params, communityusecase.MemberUpdate{UserID: numericUserID, Action: action})
+	}
+
+	if err := r.UpdateCommunityMembersUseCase.Execute(ctx, numericCommunityID, params); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // AdminDeletePost is the resolver for the adminDeletePost field.
 func (r *mutationResolver) AdminDeletePost(ctx context.Context, id string) (bool, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -1129,7 +1162,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	}
 
 	// DM ルームの場合、相手に通知を送る
-	if room, rerr := r.GetRoomUseCase.Execute(ctx, rid); rerr == nil && room != nil && room.Type == model.RoomTypeDM {
+	if room != nil && room.Type == model.RoomTypeDM {
 		targetType := notificationuc.TargetRoom
 		for _, memberID := range memberIDs {
 			if memberID == claims.ID {
@@ -1687,7 +1720,6 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	// ⭕️ 変更：DataLoader経由で取得
 	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
@@ -1731,7 +1763,6 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 
 // Replies is the resolver for the replies field.
 func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Post, error) {
-	// 1. 権限判定
 	isAdmin := false
 	if _, adminErr := requireAdminAuth(ctx); adminErr == nil {
 		isAdmin = true
@@ -1748,7 +1779,7 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	// 2. ⭕️ 権限に応じて DataLoader を切り替える（N+1回避とクリーンアーキテクチャの両立）
+	// admin/user で DataLoader を切り替えて soft-delete の可視性を制御する
 	var replies []*model.Post
 	var loaderErr error
 
@@ -1776,7 +1807,6 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 		return nil, nil
 	}
 
-	// ⭕️ DataLoader経由で取得
 	mediaList, err := dataloader.For(ctx).MediaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
@@ -1988,11 +2018,12 @@ func (r *queryResolver) Posts(ctx context.Context, limit *int32, offset *int32) 
 
 // TopLevelPosts is the resolver for the topLevelPosts field.
 func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.ListTopLevelPostsUseCase.Execute(ctx, l, o)
+	posts, total, err := r.GetFeedPostsUseCase.Execute(ctx, claims.ID, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -2025,6 +2056,23 @@ func (r *queryResolver) FollowersTopLevelPosts(ctx context.Context, userID strin
 		items = append(items, toGraphPost(post))
 	}
 	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
+// NewFeedPostsCount is the resolver for the newFeedPostsCount field.
+func (r *queryResolver) NewFeedPostsCount(ctx context.Context, since string) (int32, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	sinceTime, err := time.Parse(time.RFC3339, since)
+	if err != nil {
+		return 0, fmt.Errorf("invalid since format: %w", err)
+	}
+	count, err := r.CountNewFeedPostsUseCase.Execute(ctx, claims.ID, sinceTime)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
 }
 
 // GetRootPost is the resolver for the getRootPost field.
@@ -2403,6 +2451,8 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 
 	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
 
+	lastMessageMap, _ := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
@@ -2418,6 +2468,10 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
 		gqlRoom.IsMessagingDisabled = len(users) == 2 && partnerID != 0 && blockedSet[partnerID]
+
+		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
+			gqlRoom.Content = &lastMsg.Content
+		}
 
 		if readStatus := readStatusMap[room.ID]; readStatus != nil {
 			if readStatus.LastReadAt != nil {
@@ -2454,6 +2508,7 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 	}
 
 	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	lastMessageMap, _ := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
 
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
@@ -2463,6 +2518,9 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 		}
 		if readStatus := readStatusMap[c.RoomID]; readStatus != nil {
 			gqlC.UnreadCount = int32(readStatus.UnreadCount)
+		}
+		if lastMsg := lastMessageMap[c.RoomID]; lastMsg != nil {
+			gqlC.LastMessage = &lastMsg.Content
 		}
 		items = append(items, gqlC)
 	}
@@ -2602,31 +2660,7 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 	if err != nil {
 		return nil, err
 	}
-
-	extMap := map[string]string{
-		"image/jpeg":    ".jpg",
-		"image/png":     ".png",
-		"image/webp":    ".webp",
-		"image/gif":     ".gif",
-		"image/svg+xml": ".svg",
-	}
-	ext, ok := extMap[contentType]
-	if !ok {
-		return nil, fmt.Errorf("unsupported content type: %s", contentType)
-	}
-
-	const avatarMaxBytes = 5 * 1024 * 1024 // 5 MB
-
-	objectKey := fmt.Sprintf("avatars/%d/%s%s", claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, avatarMaxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate upload url")
-	}
-
-	return &gqlmodel.PresignedUploadURL{
-		UploadURL: uploadURL,
-		ObjectKey: objectKey,
-	}, nil
+	return r.presignedImageUploadURL(ctx, fmt.Sprintf("avatars/%d", claims.ID), 5*1024*1024, contentType)
 }
 
 // PresignedMediaUploadURL is the resolver for the presignedMediaUploadUrl field.
@@ -2635,31 +2669,7 @@ func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType
 	if err != nil {
 		return nil, err
 	}
-
-	extMap := map[string]string{
-		"image/jpeg":    ".jpg",
-		"image/png":     ".png",
-		"image/webp":    ".webp",
-		"image/gif":     ".gif",
-		"image/svg+xml": ".svg",
-	}
-	ext, ok := extMap[contentType]
-	if !ok {
-		return nil, fmt.Errorf("unsupported content type: %s", contentType)
-	}
-
-	const mediaMaxBytes = 20 * 1024 * 1024
-
-	objectKey := fmt.Sprintf("media/%d/%s%s", claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, mediaMaxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate upload url")
-	}
-
-	return &gqlmodel.PresignedUploadURL{
-		UploadURL: uploadURL,
-		ObjectKey: objectKey,
-	}, nil
+	return r.presignedImageUploadURL(ctx, fmt.Sprintf("media/%d", claims.ID), 20*1024*1024, contentType)
 }
 
 // PresignedCommunityIconUploadURL is the resolver for the presignedCommunityIconUploadUrl field.
@@ -2668,31 +2678,7 @@ func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, con
 	if err != nil {
 		return nil, err
 	}
-
-	extMap := map[string]string{
-		"image/jpeg":    ".jpg",
-		"image/png":     ".png",
-		"image/webp":    ".webp",
-		"image/gif":     ".gif",
-		"image/svg+xml": ".svg",
-	}
-	ext, ok := extMap[contentType]
-	if !ok {
-		return nil, fmt.Errorf("unsupported content type: %s", contentType)
-	}
-
-	const iconMaxBytes = 5 * 1024 * 1024
-
-	objectKey := fmt.Sprintf("community-icons/%d/%s%s", claims.ID, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, iconMaxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate upload url")
-	}
-
-	return &gqlmodel.PresignedUploadURL{
-		UploadURL: uploadURL,
-		ObjectKey: objectKey,
-	}, nil
+	return r.presignedImageUploadURL(ctx, fmt.Sprintf("community-icons/%d", claims.ID), 5*1024*1024, contentType)
 }
 
 // PresignedTermsDocumentUploadURL is the resolver for the presignedTermsDocumentUploadUrl field.
@@ -3133,154 +3119,17 @@ func (r *queryResolver) IsReportServiceEnabled(ctx context.Context) (bool, error
 
 // MessageAdded is the resolver for the messageAdded field.
 func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-
-	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageAdded subscribe start")
-
-	ch := make(chan *gqlmodel.Message, 1)
-	sub := r.PubSub.Subscribe(roomID + ":message:added")
-
-	go func() {
-		defer r.PubSub.Unsubscribe(roomID+":message:added", sub)
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageAdded subscribe end")
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageAdded subscribe end")
-					close(ch)
-					return
-				}
-				if msg, ok := data.(*gqlmodel.Message); ok {
-					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageAdded deliver")
-					ch <- msg
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return r.messageSubscription(ctx, roomID, roomID+":message:added")
 }
 
 // MessageDeleted is the resolver for the messageDeleted field.
 func (r *subscriptionResolver) MessageDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-
-	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageDeleted subscribe start")
-
-	ch := make(chan *gqlmodel.Message, 1)
-	topic := roomID + ":message:deleted"
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageDeleted subscribe end")
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageDeleted subscribe end")
-					close(ch)
-					return
-				}
-				if msg, ok := data.(*gqlmodel.Message); ok {
-					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageDeleted deliver")
-					ch <- msg
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return r.messageSubscription(ctx, roomID, roomID+":message:deleted")
 }
 
 // MessageUpdated is the resolver for the messageUpdated field.
 func (r *subscriptionResolver) MessageUpdated(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-
-	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Msg("MessageUpdated subscribe start")
-
-	ch := make(chan *gqlmodel.Message, 1)
-	topic := roomID + ":message:updated"
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "context_done").Msg("MessageUpdated subscribe end")
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("reason", "pubsub_closed").Msg("MessageUpdated subscribe end")
-					close(ch)
-					return
-				}
-				if msg, ok := data.(*gqlmodel.Message); ok {
-					logger.Log.Debug().Str("room_id", roomID).Int64("user_id", claims.ID).Str("message_id", msg.ID).Msg("MessageUpdated deliver")
-					ch <- msg
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return r.messageSubscription(ctx, roomID, roomID+":message:updated")
 }
 
 // RoomReadStatusUpdated is the resolver for the roomReadStatusUpdated field.
