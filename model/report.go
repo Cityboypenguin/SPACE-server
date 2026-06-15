@@ -15,6 +15,7 @@ type ReportTargetType string
 
 const (
 	TargetPost      ReportTargetType = "POST"      // 投稿
+	TargetUser      ReportTargetType = "USER"      // ユーザー
 	TargetComment   ReportTargetType = "COMMENT"   // コメント
 	TargetPromotion ReportTargetType = "PROMOTION" // 宣伝やそのコメント
 	TargetCommunity ReportTargetType = "COMMUNITY" // コミュニティ
@@ -32,7 +33,7 @@ type Report struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	PostID       *int64  `json:"postId"`
-    PostContent  *string `json:"postContent"`
+	PostContent  *string `json:"postContent"`
 }
 
 type ReportSearchFilter struct {

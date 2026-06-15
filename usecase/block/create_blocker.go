@@ -2,6 +2,7 @@ package block
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -29,6 +30,10 @@ func NewCreateBlockUseCase(blockRepo repository.BlockerRepository, favoriteUserR
 }
 
 func (uc *blockUserInteractor) Execute(ctx context.Context, blockerID, blockedID int64) (int64, error) {
+	if blockerID == blockedID {
+		return 0, errors.New("自分自身をブロックすることはできません")
+	}
+
 	var blockID int64
 	err := uc.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		var err error
