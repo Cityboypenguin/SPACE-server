@@ -1404,6 +1404,15 @@ func (r *mutationResolver) CreateFavoriteUser(ctx context.Context, favoriteUserI
 		return nil, err
 	}
 
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:  numericTargetID,
+		Type:    notificationuc.TypeFollow,
+		ActorID: &claims.ID,
+		Message: "あなたがフォローされました",
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish follow notification")
+	}
+
 	favoriteUserModel := &model.FavoriteUser{
 		ID:             id,
 		UserID:         claims.ID,
