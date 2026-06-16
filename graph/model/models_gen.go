@@ -104,10 +104,11 @@ type CreateFavoriteInput struct {
 }
 
 type CreateInquiryInput struct {
-	Name    string `json:"name"`
-	Email   string `json:"email"`
-	Subject string `json:"subject"`
-	Content string `json:"content"`
+	Name     string          `json:"name"`
+	Email    string          `json:"email"`
+	Category InquiryCategory `json:"category"`
+	Subject  string          `json:"subject"`
+	Content  string          `json:"content"`
 }
 
 type CreatePostInput struct {
@@ -160,14 +161,15 @@ type FavoriteUser struct {
 }
 
 type Inquiry struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	Email     string        `json:"email"`
-	Subject   string        `json:"subject"`
-	Content   string        `json:"content"`
-	Status    InquiryStatus `json:"status"`
-	CreatedAt string        `json:"createdAt"`
-	UpdatedAt string        `json:"updatedAt"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Email     string          `json:"email"`
+	Category  InquiryCategory `json:"category"`
+	Subject   string          `json:"subject"`
+	Content   string          `json:"content"`
+	Status    InquiryStatus   `json:"status"`
+	CreatedAt string          `json:"createdAt"`
+	UpdatedAt string          `json:"updatedAt"`
 }
 
 type InquiryPage struct {
@@ -468,6 +470,69 @@ func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
 }
 
 func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type InquiryCategory string
+
+const (
+	InquiryCategoryDm        InquiryCategory = "DM"
+	InquiryCategoryPost      InquiryCategory = "POST"
+	InquiryCategoryCommunity InquiryCategory = "COMMUNITY"
+	InquiryCategoryPassword  InquiryCategory = "PASSWORD"
+	InquiryCategoryLogin     InquiryCategory = "LOGIN"
+	InquiryCategoryOther     InquiryCategory = "OTHER"
+)
+
+var AllInquiryCategory = []InquiryCategory{
+	InquiryCategoryDm,
+	InquiryCategoryPost,
+	InquiryCategoryCommunity,
+	InquiryCategoryPassword,
+	InquiryCategoryLogin,
+	InquiryCategoryOther,
+}
+
+func (e InquiryCategory) IsValid() bool {
+	switch e {
+	case InquiryCategoryDm, InquiryCategoryPost, InquiryCategoryCommunity, InquiryCategoryPassword, InquiryCategoryLogin, InquiryCategoryOther:
+		return true
+	}
+	return false
+}
+
+func (e InquiryCategory) String() string {
+	return string(e)
+}
+
+func (e *InquiryCategory) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InquiryCategory(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InquiryCategory", str)
+	}
+	return nil
+}
+
+func (e InquiryCategory) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *InquiryCategory) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e InquiryCategory) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

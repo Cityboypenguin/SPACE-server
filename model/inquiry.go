@@ -10,10 +10,22 @@ const (
 	InquiryStatusResolved   InquiryStatus = "RESOLVED"
 )
 
+type InquiryCategory string
+
+const (
+	InquiryCategoryDM        InquiryCategory = "DM"
+	InquiryCategoryPost      InquiryCategory = "POST"
+	InquiryCategoryCommunity InquiryCategory = "COMMUNITY"
+	InquiryCategoryPassword  InquiryCategory = "PASSWORD"
+	InquiryCategoryLogin     InquiryCategory = "LOGIN"
+	InquiryCategoryOther     InquiryCategory = "OTHER"
+)
+
 type Inquiry struct {
 	ID        string
 	Name      string
 	Email     string
+	Category  InquiryCategory
 	Subject   string
 	Content   string
 	Status    InquiryStatus

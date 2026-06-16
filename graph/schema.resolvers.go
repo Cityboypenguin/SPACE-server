@@ -1470,10 +1470,11 @@ func (r *mutationResolver) DeleteBlocker(ctx context.Context, blockedUserID stri
 // CreateInquiry is the resolver for the createInquiry field.
 func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.CreateInquiryInput) (*gqlmodel.Inquiry, error) {
 	inquiry, err := r.CreateInquiryUsecase.Execute(ctx, inquiryusecase.CreateInquiryInput{
-		Name:    input.Name,
-		Email:   input.Email,
-		Subject: input.Subject,
-		Content: input.Content,
+		Name:     input.Name,
+		Email:    input.Email,
+		Category: model.InquiryCategory(input.Category),
+		Subject:  input.Subject,
+		Content:  input.Content,
 	})
 	if err != nil {
 		return nil, err

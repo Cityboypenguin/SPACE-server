@@ -1,0 +1,2 @@
+ALTER TABLE inquiries
+    ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT 'OTHER' AFTER email;
