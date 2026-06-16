@@ -157,6 +157,26 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 	return deleted, nil
 }
 
+// DeleteMyAccount is the resolver for the deleteMyAccount field.
+func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	numericID := claims.ID
+
+	isSole, err := r.IsSoleOwnerWithOtherMembersUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+	if isSole {
+		return false, errors.New("cannot delete account: you are the sole owner of a community with other members; transfer ownership first")
+	}
+
+	return r.DeleteUserUseCase.Execute(ctx, numericID)
+}
+
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)

@@ -202,6 +202,7 @@ type Mutation {
   sendEmailOTP(email: String!): Boolean!
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
+  deleteMyAccount: Boolean!
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!

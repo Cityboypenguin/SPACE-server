@@ -42,7 +42,7 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		if err := model.ValidateUserPassword(param.Password); err != nil {
 			return nil, err
 		}
-		if err := uc.verifyOTP(ctx, param.Email, otp); err != nil {
+		if err := uc.checkOTP(ctx, param.Email, otp); err != nil {
 			return nil, err
 		}
 	}
@@ -72,7 +72,13 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		return uc.profileRepo.SaveProfile(ctx, emptyProfile)
+		if err := uc.profileRepo.SaveProfile(ctx, emptyProfile); err != nil {
+			return err
+		}
+		if uc.validationEnabled {
+			return uc.otpRepo.Delete(ctx, param.Email)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -81,7 +87,7 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	return user, nil
 }
 
-func (uc *CreateUserInteractor) verifyOTP(ctx context.Context, email, code string) error {
+func (uc *CreateUserInteractor) checkOTP(ctx context.Context, email, code string) error {
 	record, err := uc.otpRepo.FindLatestByEmail(ctx, email)
 	if err != nil {
 		return err
@@ -89,5 +95,5 @@ func (uc *CreateUserInteractor) verifyOTP(ctx context.Context, email, code strin
 	if record == nil || record.Code != code {
 		return fmt.Errorf("認証コードが無効または期限切れです")
 	}
-	return uc.otpRepo.Delete(ctx, email)
+	return nil
 }
