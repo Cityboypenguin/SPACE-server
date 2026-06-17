@@ -113,6 +113,14 @@ func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool
 	return true, nil
 }
 
+// VerifyEmailOtp is the resolver for the verifyEmailOTP field.
+func (r *mutationResolver) VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error) {
+	if err := r.VerifyEmailOTPUseCase.Execute(ctx, email, otp); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{

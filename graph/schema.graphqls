@@ -200,6 +200,7 @@ input LoginInput {
 
 type Mutation {
   sendEmailOTP(email: String!): Boolean!
+  verifyEmailOTP(email: String!, otp: String!): Boolean!
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
   deleteMyAccount: Boolean!

@@ -181,6 +181,7 @@ func main() {
 	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
 	smtpEmailService := infraemail.NewSMTPEmailService()
 	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
@@ -285,6 +286,7 @@ func main() {
 
 		CreateUserUseCase:             createUserUseCase,
 		SendEmailOTPUseCase:           sendEmailOTPUseCase,
+		VerifyEmailOTPUseCase:         verifyEmailOTPUseCase,
 		ListUsersUseCase:              listUsersUseCase,
 		DeleteUserUseCase:             deleteUserUseCase,
 		UpdateUserUseCase:             updateUserUseCase,
