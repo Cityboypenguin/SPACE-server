@@ -202,6 +202,7 @@ type Mutation {
   sendEmailOTP(email: String!): Boolean!
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
+  deleteMyAccount: Boolean!
   updateUser(input: UpdateUserInput!): User!
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
@@ -306,10 +307,20 @@ enum InquiryStatus {
   RESOLVED # 解決済み
 }
 
+enum InquiryCategory {
+  DM
+  POST
+  COMMUNITY
+  PASSWORD
+  LOGIN
+  OTHER
+}
+
 type Inquiry {
   id: ID!
   name: String!
   email: String!
+  category: InquiryCategory!
   subject: String!
   content: String!
   status: InquiryStatus!
@@ -325,6 +336,7 @@ type InquiryPage {
 input CreateInquiryInput {
   name: String!
   email: String!
+  category: InquiryCategory!
   subject: String!
   content: String!
 }

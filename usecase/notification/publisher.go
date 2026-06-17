@@ -18,6 +18,7 @@ const (
 	TypeCommunityKick NotificationType = "community_kick"
 	TypeCommunityRole NotificationType = "community_role"
 	TypeAnnouncement  NotificationType = "announcement"
+	TypeFollow        NotificationType = "follow"
 )
 
 type TargetType string

@@ -800,8 +800,8 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	return posts, total, nil
 }
 func (r *MySQLPostRepository) CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error) {
-	query := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at > ?`
-	args := []interface{}{since.Unix()}
+	query := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at > ? AND user_id != ?`
+	args := []interface{}{since.Unix(), viewerID}
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
 	var count int
 	if err := r.DB.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {

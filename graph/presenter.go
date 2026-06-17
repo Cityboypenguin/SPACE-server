@@ -151,6 +151,7 @@ func toGraphInquiry(inq *model.Inquiry) *gqlmodel.Inquiry {
 		ID:        inq.ID,
 		Name:      inq.Name,
 		Email:     inq.Email,
+		Category:  gqlmodel.InquiryCategory(inq.Category),
 		Subject:   inq.Subject,
 		Content:   inq.Content,
 		Status:    gqlmodel.InquiryStatus(inq.Status),

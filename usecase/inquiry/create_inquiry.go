@@ -23,19 +23,21 @@ func NewCreateInquiryUsecase(inquiryRepo repository.InquiryRepository) *CreateIn
 }
 
 type CreateInquiryInput struct {
-	Name    string
-	Email   string
-	Subject string
-	Content string
+	Name     string
+	Email    string
+	Category model.InquiryCategory
+	Subject  string
+	Content  string
 }
 
 func (u *CreateInquiryUsecase) Execute(ctx context.Context, input CreateInquiryInput) (*model.Inquiry, error) {
 	name := strings.TrimSpace(input.Name)
 	email := strings.TrimSpace(input.Email)
+	category := input.Category
 	subject := strings.TrimSpace(input.Subject)
 	content := strings.TrimSpace(input.Content)
 
-	if name == "" || email == "" || subject == "" || content == "" {
+	if name == "" || email == "" || string(category) == "" || subject == "" || content == "" {
 		return nil, errors.New("all fields are required")
 	}
 	if !emailRegex.MatchString(email) {
@@ -59,6 +61,7 @@ func (u *CreateInquiryUsecase) Execute(ctx context.Context, input CreateInquiryI
 		ID:        uuid.New().String(),
 		Name:      name,
 		Email:     email,
+		Category:  category,
 		Subject:   subject,
 		Content:   content,
 		Status:    model.InquiryStatusPending,

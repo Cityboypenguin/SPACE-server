@@ -121,6 +121,7 @@ type ComplexityRoot struct {
 	}
 
 	Inquiry struct {
+		Category  func(childComplexity int) int
 		Content   func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		Email     func(childComplexity int) int
@@ -187,6 +188,7 @@ type ComplexityRoot struct {
 		DeleteFavorite             func(childComplexity int, input model.DeleteFavoriteInput) int
 		DeleteFavoriteUser         func(childComplexity int, favoriteUserID string) int
 		DeleteMessage              func(childComplexity int, roomID string, id string) int
+		DeleteMyAccount            func(childComplexity int) int
 		DeleteNotifications        func(childComplexity int, ids []string) int
 		DeletePost                 func(childComplexity int, id string) int
 		DeleteReadNotifications    func(childComplexity int) int
@@ -463,6 +465,7 @@ type MutationResolver interface {
 	SendEmailOtp(ctx context.Context, email string) (bool, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
+	DeleteMyAccount(ctx context.Context) (bool, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
 	LoginUser(ctx context.Context, input model.LoginInput) (*model.UserAuthPayload, error)
 	RefreshUserToken(ctx context.Context, refreshToken string) (*model.UserAuthPayload, error)
@@ -900,6 +903,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.FavoriteUser.UserID(childComplexity), true
 
+	case "Inquiry.category":
+		if e.ComplexityRoot.Inquiry.Category == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inquiry.Category(childComplexity), true
 	case "Inquiry.content":
 		if e.ComplexityRoot.Inquiry.Content == nil {
 			break
@@ -1331,6 +1340,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteMessage(childComplexity, args["roomID"].(string), args["id"].(string)), true
+	case "Mutation.deleteMyAccount":
+		if e.ComplexityRoot.Mutation.DeleteMyAccount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteMyAccount(childComplexity), true
 	case "Mutation.deleteNotifications":
 		if e.ComplexityRoot.Mutation.DeleteNotifications == nil {
 			break
@@ -3246,6 +3261,8 @@ func (ec *executionContext) childFields_Inquiry(ctx context.Context, field graph
 		return ec.fieldContext_Inquiry_name(ctx, field)
 	case "email":
 		return ec.fieldContext_Inquiry_email(ctx, field)
+	case "category":
+		return ec.fieldContext_Inquiry_category(ctx, field)
 	case "subject":
 		return ec.fieldContext_Inquiry_subject(ctx, field)
 	case "content":
@@ -6914,6 +6931,29 @@ func (ec *executionContext) fieldContext_Inquiry_email(_ context.Context, field 
 	return graphql.NewScalarFieldContext("Inquiry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Inquiry_category(ctx context.Context, field graphql.CollectedField, obj *model.Inquiry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inquiry_category(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Category, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.InquiryCategory) graphql.Marshaler {
+			return ec.marshalNInquiryCategory2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryCategory(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Inquiry_category(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Inquiry", field, false, false, errors.New("field of type InquiryCategory does not have child fields"))
+}
+
 func (ec *executionContext) _Inquiry_subject(ctx context.Context, field graphql.CollectedField, obj *model.Inquiry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7618,6 +7658,29 @@ func (ec *executionContext) fieldContext_Mutation_deleteUser(ctx context.Context
 		return fc, err
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteMyAccount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteMyAccount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Mutation().DeleteMyAccount(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteMyAccount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Mutation_updateUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -16513,7 +16576,7 @@ func (ec *executionContext) unmarshalInputCreateInquiryInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "subject", "content"}
+	fieldsInOrder := [...]string{"name", "email", "category", "subject", "content"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -16534,6 +16597,13 @@ func (ec *executionContext) unmarshalInputCreateInquiryInput(ctx context.Context
 				return it, err
 			}
 			it.Email = data
+		case "category":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("category"))
+			data, err := ec.unmarshalNInquiryCategory2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryCategory(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Category = data
 		case "subject":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("subject"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -17949,6 +18019,11 @@ func (ec *executionContext) _Inquiry(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "category":
+			out.Values[i] = ec._Inquiry_category(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "subject":
 			out.Values[i] = ec._Inquiry_subject(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -18352,6 +18427,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteMyAccount":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteMyAccount(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -22303,6 +22385,16 @@ func (ec *executionContext) marshalNInquiry2ᚖgithubᚗcomᚋCityboypenguinᚋS
 		return graphql.Null
 	}
 	return ec._Inquiry(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNInquiryCategory2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryCategory(ctx context.Context, v any) (model.InquiryCategory, error) {
+	var res model.InquiryCategory
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInquiryCategory2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryCategory(ctx context.Context, sel ast.SelectionSet, v model.InquiryCategory) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNInquiryPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐInquiryPage(ctx context.Context, sel ast.SelectionSet, v model.InquiryPage) graphql.Marshaler {

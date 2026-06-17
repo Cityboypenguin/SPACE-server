@@ -22,13 +22,14 @@ func NewMySQLInquiryRepository(db *sql.DB) *MySQLInquiryRepository {
 
 func (r *MySQLInquiryRepository) Save(ctx context.Context, inquiry *model.Inquiry) error {
 	query := `
-		INSERT INTO inquiries (id, name, email, subject, content, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO inquiries (id, name, email, category, subject, content, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := r.DB.ExecContext(ctx, query,
 		inquiry.ID,
 		inquiry.Name,
 		inquiry.Email,
+		string(inquiry.Category),
 		inquiry.Subject,
 		inquiry.Content,
 		string(inquiry.Status),
@@ -54,7 +55,7 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 	}
 
 	query := `
-		SELECT id, name, email, subject, content, status, created_at, updated_at
+		SELECT id, name, email, category, subject, content, status, created_at, updated_at
 		FROM inquiries
 		WHERE 1=1
 	`
@@ -85,7 +86,7 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 
 func (r *MySQLInquiryRepository) FindByID(ctx context.Context, id string) (*model.Inquiry, error) {
 	query := `
-		SELECT id, name, email, subject, content, status, created_at, updated_at
+		SELECT id, name, email, category, subject, content, status, created_at, updated_at
 		FROM inquiries
 		WHERE id = ?
 		LIMIT 1
@@ -125,13 +126,14 @@ type inquiryScanner interface {
 
 func scanInquiry(s inquiryScanner) (*model.Inquiry, error) {
 	var inq model.Inquiry
-	var statusStr string
+	var categoryStr, statusStr string
 	var createdAtUnix, updatedAtUnix int64
 
 	if err := s.Scan(
 		&inq.ID,
 		&inq.Name,
 		&inq.Email,
+		&categoryStr,
 		&inq.Subject,
 		&inq.Content,
 		&statusStr,
@@ -141,6 +143,7 @@ func scanInquiry(s inquiryScanner) (*model.Inquiry, error) {
 		return nil, fmt.Errorf("failed to scan inquiry: %w", err)
 	}
 
+	inq.Category = model.InquiryCategory(categoryStr)
 	inq.Status = model.InquiryStatus(statusStr)
 	inq.CreatedAt = time.Unix(createdAtUnix, 0)
 	inq.UpdatedAt = time.Unix(updatedAtUnix, 0)
@@ -149,13 +152,14 @@ func scanInquiry(s inquiryScanner) (*model.Inquiry, error) {
 
 func scanInquiryRow(row *sql.Row) (*model.Inquiry, error) {
 	var inq model.Inquiry
-	var statusStr string
+	var categoryStr, statusStr string
 	var createdAtUnix, updatedAtUnix int64
 
 	if err := row.Scan(
 		&inq.ID,
 		&inq.Name,
 		&inq.Email,
+		&categoryStr,
 		&inq.Subject,
 		&inq.Content,
 		&statusStr,
@@ -165,6 +169,7 @@ func scanInquiryRow(row *sql.Row) (*model.Inquiry, error) {
 		return nil, err
 	}
 
+	inq.Category = model.InquiryCategory(categoryStr)
 	inq.Status = model.InquiryStatus(statusStr)
 	inq.CreatedAt = time.Unix(createdAtUnix, 0)
 	inq.UpdatedAt = time.Unix(updatedAtUnix, 0)

@@ -157,6 +157,26 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 	return deleted, nil
 }
 
+// DeleteMyAccount is the resolver for the deleteMyAccount field.
+func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	numericID := claims.ID
+
+	isSole, err := r.IsSoleOwnerWithOtherMembersUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return false, err
+	}
+	if isSole {
+		return false, errors.New("cannot delete account: you are the sole owner of a community with other members; transfer ownership first")
+	}
+
+	return r.DeleteUserUseCase.Execute(ctx, numericID)
+}
+
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)
@@ -1405,6 +1425,15 @@ func (r *mutationResolver) CreateFavoriteUser(ctx context.Context, favoriteUserI
 		return nil, err
 	}
 
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:  numericTargetID,
+		Type:    notificationuc.TypeFollow,
+		ActorID: &claims.ID,
+		Message: "あなたがフォローされました",
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish follow notification")
+	}
+
 	favoriteUserModel := &model.FavoriteUser{
 		ID:             id,
 		UserID:         claims.ID,
@@ -1471,10 +1500,11 @@ func (r *mutationResolver) DeleteBlocker(ctx context.Context, blockedUserID stri
 // CreateInquiry is the resolver for the createInquiry field.
 func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.CreateInquiryInput) (*gqlmodel.Inquiry, error) {
 	inquiry, err := r.CreateInquiryUsecase.Execute(ctx, inquiryusecase.CreateInquiryInput{
-		Name:    input.Name,
-		Email:   input.Email,
-		Subject: input.Subject,
-		Content: input.Content,
+		Name:     input.Name,
+		Email:    input.Email,
+		Category: model.InquiryCategory(input.Category),
+		Subject:  input.Subject,
+		Content:  input.Content,
 	})
 	if err != nil {
 		return nil, err
