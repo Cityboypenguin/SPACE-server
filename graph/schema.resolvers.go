@@ -27,6 +27,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // User is the resolver for the user field on Favorite.
@@ -113,6 +114,14 @@ func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool
 	return true, nil
 }
 
+// VerifyEmailOtp is the resolver for the verifyEmailOTP field.
+func (r *mutationResolver) VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error) {
+	if err := r.VerifyEmailOTPUseCase.Execute(ctx, email, otp); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
@@ -187,9 +196,18 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	// ユーザーは自分の情報のみ更新可能
 	numericID := claims.ID
 
-	_, err = r.GetUserByIDUseCase.Execute(ctx, numericID)
+	currentUser, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %d", numericID)
+	}
+
+	if input.Password != nil {
+		if input.CurrentPassword == nil || *input.CurrentPassword == "" {
+			return nil, fmt.Errorf("現在のパスワードを入力してください")
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(currentUser.HashedPassword), []byte(*input.CurrentPassword)); err != nil {
+			return nil, fmt.Errorf("現在のパスワードが正しくありません")
+		}
 	}
 
 	param := model.UpdateUserParam{

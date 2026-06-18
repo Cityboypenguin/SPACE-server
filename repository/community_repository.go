@@ -24,6 +24,7 @@ type CommunityRepository interface {
 	// 作成も同一トランザクション内で行い、孤立レコードが生じないことを保証する。
 	UpdateCommunity(ctx context.Context, c *model.Community, avatar *UpdateCommunityAvatarParam) error
 	DeleteCommunity(ctx context.Context, id int64) (bool, error)
+	DeleteCommunitiesWhereOnlyMember(ctx context.Context, userID int64) (int64, error)
 	ListCommunitiesByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Community, int, error)
 	ListAllCommunities(ctx context.Context, limit, offset int) ([]*model.Community, int, error)
 	// IsSoleOwnerWithOtherMembers は指定ユーザーが他メンバーのいるコミュニティの唯一オーナーかどうかを返す。

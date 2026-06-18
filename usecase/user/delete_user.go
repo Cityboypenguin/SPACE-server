@@ -13,19 +13,24 @@ type DeleteUserUseCase interface {
 var _ DeleteUserUseCase = &DeleteUserInteractor{}
 
 type DeleteUserInteractor struct {
-	userRepo repository.UserRepository
-	postRepo repository.PostRepository
+	userRepo      repository.UserRepository
+	postRepo      repository.PostRepository
+	communityRepo repository.CommunityRepository
 }
 
-func NewDeleteUserUseCase(userRepo repository.UserRepository, postRepo repository.PostRepository) DeleteUserUseCase {
+func NewDeleteUserUseCase(userRepo repository.UserRepository, postRepo repository.PostRepository, communityRepo repository.CommunityRepository) DeleteUserUseCase {
 	return &DeleteUserInteractor{
-		userRepo: userRepo,
-		postRepo: postRepo,
+		userRepo:      userRepo,
+		postRepo:      postRepo,
+		communityRepo: communityRepo,
 	}
 }
 
 func (uc *DeleteUserInteractor) Execute(ctx context.Context, id int64) (bool, error) {
 	if err := uc.postRepo.DeletePostsByUserID(ctx, id); err != nil {
+		return false, err
+	}
+	if _, err := uc.communityRepo.DeleteCommunitiesWhereOnlyMember(ctx, id); err != nil {
 		return false, err
 	}
 	return uc.userRepo.DeleteUser(ctx, id)

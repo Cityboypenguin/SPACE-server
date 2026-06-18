@@ -97,6 +97,7 @@ func main() {
 	mediaRepository := mysql.NewMySQLMediaRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
+	communityRepository := mysql.NewMySQLCommunityRepository(database)
 
 	var storageRepository repository.StorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
@@ -112,7 +113,7 @@ func main() {
 	}
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, communityRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -181,6 +182,7 @@ func main() {
 	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
 	smtpEmailService := infraemail.NewSMTPEmailService()
 	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
@@ -218,7 +220,6 @@ func main() {
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
-	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
 	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
@@ -285,6 +286,7 @@ func main() {
 
 		CreateUserUseCase:             createUserUseCase,
 		SendEmailOTPUseCase:           sendEmailOTPUseCase,
+		VerifyEmailOTPUseCase:         verifyEmailOTPUseCase,
 		ListUsersUseCase:              listUsersUseCase,
 		DeleteUserUseCase:             deleteUserUseCase,
 		UpdateUserUseCase:             updateUserUseCase,

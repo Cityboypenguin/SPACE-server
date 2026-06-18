@@ -34,14 +34,15 @@ type Resolver struct {
 	MaintenanceRepository repository.MaintenanceRepository
 	MaintenanceFlag       *atomic.Bool
 
-	GetUserByIDUseCase      user.GetUserByIDUseCase
-	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
-	CreateUserUseCase       user.CreateUserUseCase
-	SendEmailOTPUseCase     user.SendEmailOTPUseCase
-	ListUsersUseCase        user.ListUsersUseCase
-	DeleteUserUseCase       user.DeleteUserUseCase
-	UpdateUserUseCase       user.UpdateUserUseCase
-	SearchUsersUseCase      user.SearchUsersUseCase
+	GetUserByIDUseCase            user.GetUserByIDUseCase
+	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
+	CreateUserUseCase             user.CreateUserUseCase
+	SendEmailOTPUseCase           user.SendEmailOTPUseCase
+	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
+	ListUsersUseCase              user.ListUsersUseCase
+	DeleteUserUseCase             user.DeleteUserUseCase
+	UpdateUserUseCase             user.UpdateUserUseCase
+	SearchUsersUseCase            user.SearchUsersUseCase
 	LoginUserUseCase              user.LoginUserUseCase
 	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
 	LogoutUserUseCase             user.LogoutUserUseCase
@@ -95,12 +96,12 @@ type Resolver struct {
 
 	ListMediaByPostIDUseCase mediausecase.ListMediaByPostIDUseCase
 
-	GetMessageByIDUseCase              messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase                 messageusecase.SendMessageUseCase
-	ListMessagesUseCase                messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase               messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase               messageusecase.UpdateMessageUseCase
-	GetLastMessagesByRoomIDsUseCase    messageusecase.GetLastMessagesByRoomIDsUseCase
+	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase              messageusecase.SendMessageUseCase
+	ListMessagesUseCase             messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
 	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase

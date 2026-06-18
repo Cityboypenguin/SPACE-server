@@ -374,10 +374,11 @@ type UpdateRoomInput struct {
 }
 
 type UpdateUserInput struct {
-	AccountID *string `json:"accountID,omitempty"`
-	Name      *string `json:"name,omitempty"`
-	Email     *string `json:"email,omitempty"`
-	Password  *string `json:"password,omitempty"`
+	AccountID       *string `json:"accountID,omitempty"`
+	Name            *string `json:"name,omitempty"`
+	Email           *string `json:"email,omitempty"`
+	Password        *string `json:"password,omitempty"`
+	CurrentPassword *string `json:"currentPassword,omitempty"`
 }
 
 type User struct {
