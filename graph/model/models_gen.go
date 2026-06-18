@@ -221,9 +221,29 @@ type Notification struct {
 	Actor      *User   `json:"actor,omitempty"`
 	TargetType *string `json:"targetType,omitempty"`
 	TargetID   *string `json:"targetID,omitempty"`
+	TargetPost *Post   `json:"targetPost,omitempty"`
 	Message    string  `json:"message"`
 	IsRead     bool    `json:"isRead"`
 	CreatedAt  string  `json:"createdAt"`
+}
+
+type NotificationGroup struct {
+	Key         string  `json:"key"`
+	Type        string  `json:"type"`
+	Actor       *User   `json:"actor,omitempty"`
+	TargetType  *string `json:"targetType,omitempty"`
+	TargetID    *string `json:"targetID,omitempty"`
+	TargetPost  *Post   `json:"targetPost,omitempty"`
+	Message     string  `json:"message"`
+	CreatedAt   string  `json:"createdAt"`
+	Count       int32   `json:"count"`
+	UnreadCount int32   `json:"unreadCount"`
+	LatestID    string  `json:"latestID"`
+}
+
+type NotificationGroupPage struct {
+	Items []*NotificationGroup `json:"items"`
+	Total int32                `json:"total"`
 }
 
 type NotificationPage struct {

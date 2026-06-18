@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
@@ -1231,6 +1232,19 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	// DM ルームの場合、相手に通知を送る
 	if room != nil && room.Type == model.RoomTypeDM {
 		targetType := notificationuc.TargetRoom
+		notifMessage := msg.Content
+		if notifMessage == "" {
+			if len(ucMediaInputs) > 0 {
+				notifMessage = "[画像/ファイルを送信しました]"
+			} else {
+				notifMessage = "新しいメッセージが届きました"
+			}
+		} else {
+			const maxNotifMessageRunes = 50
+			if runes := []rune(notifMessage); utf8.RuneCountInString(notifMessage) > maxNotifMessageRunes {
+				notifMessage = string(runes[:maxNotifMessageRunes]) + "…"
+			}
+		}
 		for _, memberID := range memberIDs {
 			if memberID == claims.ID {
 				continue
@@ -1241,7 +1255,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 				ActorID:    &claims.ID,
 				TargetType: &targetType,
 				TargetID:   &rid,
-				Message:    "新しいメッセージが届きました",
+				Message:    notifMessage,
 			}); err != nil {
 				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
 			}
@@ -1554,6 +1568,25 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	return true, nil
 }
 
+// MarkAllNotificationsAsReadByActor is the resolver for the markAllNotificationsAsReadByActor field.
+func (r *mutationResolver) MarkAllNotificationsAsReadByActor(ctx context.Context, typeArg string, actorID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericActorID, err := decodeGraphID(ctx, "user", actorID)
+	if err != nil {
+		return false, fmt.Errorf("invalid actor id")
+	}
+	if err := r.MarkAllAsReadByActorUseCase.Execute(ctx, claims.ID, typeArg, numericActorID); err != nil {
+		return false, err
+	}
+	if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
+		r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
+	}
+	return true, nil
+}
+
 // DeleteNotifications is the resolver for the deleteNotifications field.
 func (r *mutationResolver) DeleteNotifications(ctx context.Context, ids []string) (bool, error) {
 	claims, err := requireAuth(ctx)
@@ -1581,6 +1614,22 @@ func (r *mutationResolver) DeleteReadNotifications(ctx context.Context) (bool, e
 		return false, err
 	}
 	if err := r.DeleteReadNotificationsUseCase.Execute(ctx, claims.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// DeleteReadNotificationsByActor is the resolver for the deleteReadNotificationsByActor field.
+func (r *mutationResolver) DeleteReadNotificationsByActor(ctx context.Context, typeArg string, actorID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	numericActorID, err := decodeGraphID(ctx, "user", actorID)
+	if err != nil {
+		return false, fmt.Errorf("invalid actor id")
+	}
+	if err := r.DeleteReadNotificationsByActorUseCase.Execute(ctx, claims.ID, typeArg, numericActorID); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -1658,6 +1707,22 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 	if err := r.MarkRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
 		return false, err
 	}
+
+	// DM ルームを既読にした際は、相手からの DM 通知も既読にする
+	if room, rerr := r.GetRoomUseCase.Execute(ctx, rid); rerr == nil && room != nil && room.Type == model.RoomTypeDM {
+		for _, memberID := range memberIDs {
+			if memberID == claims.ID {
+				continue
+			}
+			if err := r.MarkAllAsReadByActorUseCase.Execute(ctx, claims.ID, string(notificationuc.TypeDM), memberID); err != nil {
+				logger.Log.Error().Err(err).Msg("failed to mark dm notifications as read")
+			}
+		}
+		if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
+			r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
+		}
+	}
+
 	nowStr := time.Now().Format(timeFormat)
 	r.PubSub.Publish(roomID+":read_status", &gqlmodel.RoomReadStatusUpdate{
 		UserID:     encodeGraphID("user", claims.ID),
@@ -1966,14 +2031,61 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string, limit *
 	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
+func (r *Resolver) buildPostMapFromNotifications(ctx context.Context, notifications []*model.Notification) map[int64]*model.Post {
+	postMap := map[int64]*model.Post{}
+	for _, n := range notifications {
+		if n.TargetType == nil || *n.TargetType != notificationTargetTypePost || n.TargetID == nil {
+			continue
+		}
+		if _, ok := postMap[*n.TargetID]; ok {
+			continue
+		}
+		if p, err := r.GetPostByIDUseCase.Execute(ctx, *n.TargetID); err == nil && p != nil {
+			postMap[*n.TargetID] = p
+		}
+	}
+	return postMap
+}
+
+func (r *Resolver) buildPostMapFromNotificationGroups(ctx context.Context, groups []*model.NotificationGroup) map[int64]*model.Post {
+	postMap := map[int64]*model.Post{}
+	for _, g := range groups {
+		if g.TargetType == nil || *g.TargetType != notificationTargetTypePost || g.TargetID == nil {
+			continue
+		}
+		if _, ok := postMap[*g.TargetID]; ok {
+			continue
+		}
+		if p, err := r.GetPostByIDUseCase.Execute(ctx, *g.TargetID); err == nil && p != nil {
+			postMap[*g.TargetID] = p
+		}
+	}
+	return postMap
+}
+
 // MyNotifications is the resolver for the myNotifications field.
-func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.NotificationPage, error) {
+func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offset *int32, typeArg *string, actorID *string) (*gqlmodel.NotificationPage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 	l, o := resolvePagination(limit, offset)
-	notifications, total, err := r.ListNotificationsUseCase.Execute(ctx, claims.ID, l, o)
+
+	var notifications []*model.Notification
+	var total int
+	if actorID != nil {
+		numericActorID, decErr := decodeGraphID(ctx, "user", *actorID)
+		if decErr != nil {
+			return nil, fmt.Errorf("invalid actor id")
+		}
+		notifType := ""
+		if typeArg != nil {
+			notifType = *typeArg
+		}
+		notifications, total, err = r.ListNotificationsByActorUseCase.Execute(ctx, claims.ID, notifType, numericActorID, l, o)
+	} else {
+		notifications, total, err = r.ListNotificationsUseCase.Execute(ctx, claims.ID, l, o)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1999,11 +2111,82 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offse
 		}
 	}
 
+	postMap := r.buildPostMapFromNotifications(ctx, notifications)
+
 	items := make([]*gqlmodel.Notification, 0, len(notifications))
 	for _, n := range notifications {
-		items = append(items, toGraphNotification(n, actorMap))
+		items = append(items, toGraphNotification(n, actorMap, postMap))
 	}
 	return &gqlmodel.NotificationPage{Items: items, Total: int32(total)}, nil
+}
+
+// MyNotificationGroups is the resolver for the myNotificationGroups field.
+func (r *queryResolver) MyNotificationGroups(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.NotificationGroupPage, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	l, o := resolvePagination(limit, offset)
+	groups, total, err := r.ListNotificationGroupsUseCase.Execute(ctx, claims.ID, l, o)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[int64]struct{}{}
+	var actorIDs []int64
+	for _, g := range groups {
+		if g.ActorID != nil {
+			if _, ok := seen[*g.ActorID]; !ok {
+				seen[*g.ActorID] = struct{}{}
+				actorIDs = append(actorIDs, *g.ActorID)
+			}
+		}
+	}
+	actorMap := map[int64]*model.User{}
+	if len(actorIDs) > 0 {
+		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
+		if aerr == nil {
+			for _, u := range actors {
+				actorMap[u.ID] = u
+			}
+		}
+	}
+
+	postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
+
+	items := make([]*gqlmodel.NotificationGroup, 0, len(groups))
+	for _, g := range groups {
+		items = append(items, toGraphNotificationGroup(g, actorMap, postMap))
+	}
+	return &gqlmodel.NotificationGroupPage{Items: items, Total: int32(total)}, nil
+}
+
+// Notification is the resolver for the notification field.
+func (r *queryResolver) Notification(ctx context.Context, id string) (*gqlmodel.Notification, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "notification", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid notification id")
+	}
+	n, err := r.GetNotificationUseCase.Execute(ctx, numericID, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	if n == nil {
+		return nil, nil
+	}
+	actorMap := map[int64]*model.User{}
+	if n.ActorID != nil {
+		actor, aerr := r.GetUserByIDUseCase.Execute(ctx, *n.ActorID)
+		if aerr == nil {
+			actorMap[actor.ID] = actor
+		}
+	}
+	postMap := r.buildPostMapFromNotifications(ctx, []*model.Notification{n})
+	return toGraphNotification(n, actorMap, postMap), nil
 }
 
 // MyUnreadNotificationCount is the resolver for the myUnreadNotificationCount field.

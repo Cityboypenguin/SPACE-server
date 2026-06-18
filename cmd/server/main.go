@@ -279,11 +279,16 @@ func main() {
 	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
 	updateAnnouncementUseCase := announcementusecase.NewUpdateAnnouncementUseCase(announcementRepository)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
+	listNotificationGroupsUseCase := notificationuc.NewListNotificationGroupsUseCase(notificationRepository)
+	listNotificationsByActorUseCase := notificationuc.NewListNotificationsByActorUseCase(notificationRepository)
+	getNotificationUseCase := notificationuc.NewGetNotificationUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
+	markAllAsReadByActorUseCase := notificationuc.NewMarkAllAsReadByActorUseCase(notificationRepository)
 	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
+	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -424,14 +429,19 @@ func main() {
 		ListTermsUseCase:       listTermsUseCase,
 		ListConsentsUseCase:    listConsentsUseCase,
 
-		NotificationPublisher:          notificationPublisher,
-		ListNotificationsUseCase:       listNotificationsUseCase,
-		MarkAsReadUseCase:              markAsReadUseCase,
-		MarkAllAsReadUseCase:           markAllAsReadUseCase,
-		CountUnreadUseCase:             countUnreadUseCase,
-		DeleteNotificationsUseCase:     deleteNotificationsUseCase,
-		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
-		SSEBroker:                      sseBroker,
+		NotificationPublisher:                 notificationPublisher,
+		ListNotificationsUseCase:              listNotificationsUseCase,
+		ListNotificationGroupsUseCase:         listNotificationGroupsUseCase,
+		ListNotificationsByActorUseCase:       listNotificationsByActorUseCase,
+		GetNotificationUseCase:                getNotificationUseCase,
+		MarkAsReadUseCase:                     markAsReadUseCase,
+		MarkAllAsReadUseCase:                  markAllAsReadUseCase,
+		MarkAllAsReadByActorUseCase:           markAllAsReadByActorUseCase,
+		CountUnreadUseCase:                    countUnreadUseCase,
+		DeleteNotificationsUseCase:            deleteNotificationsUseCase,
+		DeleteReadNotificationsUseCase:        deleteReadNotificationsUseCase,
+		DeleteReadNotificationsByActorUseCase: deleteReadNotificationsByActorUseCase,
+		SSEBroker:                             sseBroker,
 
 		PubSub: ps,
 	}
