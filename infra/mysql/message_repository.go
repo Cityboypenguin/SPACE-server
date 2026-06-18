@@ -5,29 +5,39 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/messagecrypto"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLMessageRepository struct {
-	DB *sql.DB
+	DB     *sql.DB
+	cipher *messagecrypto.Cipher
 }
 
-func NewMySQLMessageRepository(db *sql.DB) repository.MessageRepository {
-	return &MySQLMessageRepository{DB: db}
+func NewMySQLMessageRepository(db *sql.DB) (*MySQLMessageRepository, error) {
+	cipher, err := messagecrypto.New(os.Getenv("MESSAGE_ENCRYPTION_KEY"))
+	if err != nil {
+		return nil, err
+	}
+	return &MySQLMessageRepository{DB: db, cipher: cipher}, nil
 }
 
 func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Message) error {
 	db := extractDB(ctx, r.DB)
+	content, err := r.encryptContent(m.Content)
+	if err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO messages (room_id, user_id, content, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
 	result, err := db.ExecContext(ctx, query,
-		m.RoomID, m.UserID, m.Content,
+		m.RoomID, m.UserID, content,
 		m.CreatedAt.Unix(), m.UpdatedAt.Unix(),
 	)
 	if err != nil {
@@ -55,6 +65,9 @@ func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (
 	}
 	m.CreatedAt = time.Unix(createdAt, 0)
 	m.UpdatedAt = time.Unix(updatedAt, 0)
+	if err := r.decryptMessage(&m); err != nil {
+		return nil, err
+	}
 	return &m, nil
 }
 
@@ -69,6 +82,69 @@ func (r *MySQLMessageRepository) DeleteMessage(ctx context.Context, id int64) (b
 		return false, err
 	}
 	return rowsAffected > 0, nil
+}
+
+func (r *MySQLMessageRepository) EncryptPlaintextMessages(ctx context.Context, batchSize int) (int, error) {
+	if batchSize <= 0 {
+		batchSize = 500
+	}
+
+	total := 0
+	for {
+		rows, err := r.DB.QueryContext(ctx, `
+			SELECT id, content
+			FROM messages
+			WHERE content NOT LIKE ?
+			ORDER BY id ASC
+			LIMIT ?
+		`, messagecrypto.Prefix+"%", batchSize)
+		if err != nil {
+			return total, err
+		}
+
+		type messageContent struct {
+			id      int64
+			content string
+		}
+		var batch []messageContent
+		for rows.Next() {
+			var item messageContent
+			if err := rows.Scan(&item.id, &item.content); err != nil {
+				rows.Close()
+				return total, err
+			}
+			batch = append(batch, item)
+		}
+		if err := rows.Close(); err != nil {
+			return total, err
+		}
+		if err := rows.Err(); err != nil {
+			return total, err
+		}
+		if len(batch) == 0 {
+			return total, nil
+		}
+
+		for _, item := range batch {
+			encrypted, err := r.encryptContent(item.content)
+			if err != nil {
+				return total, err
+			}
+			result, err := r.DB.ExecContext(ctx, `
+				UPDATE messages
+				SET content = ?
+				WHERE id = ? AND content = ?
+			`, encrypted, item.id, item.content)
+			if err != nil {
+				return total, err
+			}
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return total, err
+			}
+			total += int(rowsAffected)
+		}
+	}
 }
 
 func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomID int64, limit int, beforeID *int64, afterID *int64, afterTime *time.Time) ([]*model.Message, bool, bool, error) {
@@ -118,6 +194,9 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
 		m.UpdatedAt = time.Unix(updatedAt, 0)
+		if err := r.decryptMessage(&m); err != nil {
+			return nil, false, false, err
+		}
 		messages = append(messages, &m)
 	}
 	if err := rows.Err(); err != nil {
@@ -153,8 +232,12 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 }
 
 func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Message) error {
+	content, err := r.encryptContent(m.Content)
+	if err != nil {
+		return err
+	}
 	query := "UPDATE messages SET content = ?, updated_at = ? WHERE id = ?"
-	_, err := r.DB.ExecContext(ctx, query, m.Content, m.UpdatedAt.Unix(), m.ID)
+	_, err = r.DB.ExecContext(ctx, query, content, m.UpdatedAt.Unix(), m.ID)
 	return err
 }
 
@@ -243,9 +326,29 @@ func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, r
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
 		m.UpdatedAt = time.Unix(updatedAt, 0)
+		if err := r.decryptMessage(&m); err != nil {
+			return nil, err
+		}
 		result[m.RoomID] = &m
 	}
 	return result, rows.Err()
+}
+
+func (r *MySQLMessageRepository) encryptContent(content string) (string, error) {
+	encrypted, err := r.cipher.Encrypt(content)
+	if err != nil {
+		return "", fmt.Errorf("encrypt message content: %w", err)
+	}
+	return encrypted, nil
+}
+
+func (r *MySQLMessageRepository) decryptMessage(m *model.Message) error {
+	content, err := r.cipher.Decrypt(m.Content)
+	if err != nil {
+		return fmt.Errorf("decrypt message content: %w", err)
+	}
+	m.Content = content
+	return nil
 }
 
 func (r *MySQLMessageRepository) CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error) {

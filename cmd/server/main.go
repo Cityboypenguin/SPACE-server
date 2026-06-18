@@ -93,7 +93,15 @@ func main() {
 		logger.Log.Warn().Msg("INIT_ADMIN_PASSWORD is set in production; unset it after the initial admin has been created")
 	}
 
-	messageRepository := mysql.NewMySQLMessageRepository(database)
+	messageRepository, err := mysql.NewMySQLMessageRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize message encryption")
+	}
+	if encryptedCount, err := messageRepository.EncryptPlaintextMessages(context.Background(), 500); err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to encrypt existing message history")
+	} else if encryptedCount > 0 {
+		logger.Log.Info().Int("count", encryptedCount).Msg("encrypted existing message history")
+	}
 	mediaRepository := mysql.NewMySQLMediaRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
@@ -493,12 +501,12 @@ func main() {
 			authHeader := authHeaderFromInitPayload(initPayload)
 			tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
 			if tokenStr == "" {
-				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
+				return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
 			}
 
 			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
 			if err != nil {
-				return nil, nil, err
+				return ctx, nil, err
 			}
 
 			ctx = auth.WithClaims(ctx, claims)
