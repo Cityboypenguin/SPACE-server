@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"fmt"
+
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
@@ -118,7 +120,9 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		ReplyCount: int32(post.ReplyCount),
 	}
 }
-func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User) *gqlmodel.Notification {
+const notificationTargetTypePost = "post"
+
+func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
 	if n == nil {
 		return nil
 	}
@@ -135,12 +139,58 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User) 
 	if n.TargetID != nil {
 		id := encodeGraphID(*n.TargetType, *n.TargetID)
 		gql.TargetID = &id
+		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost {
+			if p, ok := postMap[*n.TargetID]; ok {
+				gql.TargetPost = toGraphPost(p)
+			}
+		}
 	}
 	if n.ActorID != nil {
 		if u, ok := actorMap[*n.ActorID]; ok {
 			gql.Actor = toGraphUser(u)
 		} else {
 			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+		}
+	}
+	return gql
+}
+
+func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.NotificationGroup {
+	if g == nil {
+		return nil
+	}
+	var key string
+	if g.ActorID != nil {
+		key = fmt.Sprintf("%s-%d", g.Type, *g.ActorID)
+	} else {
+		key = fmt.Sprintf("single-%d", g.LatestID)
+	}
+	gql := &gqlmodel.NotificationGroup{
+		Key:         key,
+		Type:        g.Type,
+		Message:     g.Message,
+		CreatedAt:   g.CreatedAt.Format(timeFormat),
+		Count:       int32(g.Count),
+		UnreadCount: int32(g.UnreadCount),
+		LatestID:    encodeGraphID("notification", g.LatestID),
+	}
+	if g.TargetType != nil {
+		gql.TargetType = g.TargetType
+	}
+	if g.TargetID != nil {
+		id := encodeGraphID(*g.TargetType, *g.TargetID)
+		gql.TargetID = &id
+		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost {
+			if p, ok := postMap[*g.TargetID]; ok {
+				gql.TargetPost = toGraphPost(p)
+			}
+		}
+	}
+	if g.ActorID != nil {
+		if u, ok := actorMap[*g.ActorID]; ok {
+			gql.Actor = toGraphUser(u)
+		} else {
+			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *g.ActorID)}
 		}
 	}
 	return gql

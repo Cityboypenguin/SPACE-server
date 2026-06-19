@@ -6,7 +6,9 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
-  myNotifications(limit: Int = 20, offset: Int = 0): NotificationPage!
+  myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
+  myNotificationGroups(limit: Int = 20, offset: Int = 0): NotificationGroupPage!
+  notification(id: ID!): Notification
   myUnreadNotificationCount: Int!
 
   administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
@@ -268,8 +270,10 @@ type Mutation {
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   markNotificationAsRead(id: ID!): Boolean!
   markAllNotificationsAsRead: Boolean!
+  markAllNotificationsAsReadByActor(type: String!, actorID: ID!): Boolean!
   deleteNotifications(ids: [ID!]!): Boolean!
   deleteReadNotifications: Boolean!
+  deleteReadNotificationsByActor(type: String!, actorID: ID!): Boolean!
 
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
   updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
@@ -371,6 +375,7 @@ input UpdateUserInput {
   name: String
   email: String
   password: String
+  currentPassword: String
 }
 
 input CreatePostInput {
@@ -565,9 +570,30 @@ type Notification {
   actor: User
   targetType: String
   targetID: ID
+  targetPost: Post
   message: String!
   isRead: Boolean!
   createdAt: String!
+}
+
+# 送信者・対象単位でまとめた通知の集計行（DMなど）
+type NotificationGroup {
+  key: String!
+  type: String!
+  actor: User
+  targetType: String
+  targetID: ID
+  targetPost: Post
+  message: String!
+  createdAt: String!
+  count: Int!
+  unreadCount: Int!
+  latestID: ID!
+}
+
+type NotificationGroupPage {
+  items: [NotificationGroup!]!
+  total: Int!
 }
 
 input CreateReportInput {

@@ -41,3 +41,21 @@ func NewMarkAllAsReadUseCase(repo repository.NotificationRepository) MarkAllAsRe
 func (uc *markAllAsReadInteractor) Execute(ctx context.Context, userID int64) error {
 	return uc.repo.MarkAllAsRead(ctx, userID)
 }
+
+type MarkAllAsReadByActorUseCase interface {
+	Execute(ctx context.Context, userID int64, notifType string, actorID int64) error
+}
+
+var _ MarkAllAsReadByActorUseCase = &markAllAsReadByActorInteractor{}
+
+type markAllAsReadByActorInteractor struct {
+	repo repository.NotificationRepository
+}
+
+func NewMarkAllAsReadByActorUseCase(repo repository.NotificationRepository) MarkAllAsReadByActorUseCase {
+	return &markAllAsReadByActorInteractor{repo: repo}
+}
+
+func (uc *markAllAsReadByActorInteractor) Execute(ctx context.Context, userID int64, notifType string, actorID int64) error {
+	return uc.repo.MarkAllAsReadByActor(ctx, userID, notifType, actorID)
+}

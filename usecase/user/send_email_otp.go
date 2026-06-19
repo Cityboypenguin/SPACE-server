@@ -68,19 +68,19 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 		Code:      code,
 		ExpiresAt: time.Now().Add(10 * time.Minute),
 	}
-	if err := uc.otpRepo.Save(ctx, otp); err != nil {
-		return err
-	}
-	if err := uc.otpRepo.MarkRateLimited(ctx, emailAddr); err != nil {
-		return err
-	}
-
 	subject := "【Senshu-Universe】メールアドレス確認コード"
 	body := fmt.Sprintf(
 		"Senshu-Universeへの新規登録の確認コードは以下の通りです。\n\n確認コード: %s\n\nこのコードは10分間有効です。\n※このメールに心当たりがない場合は、そのまま削除してください。",
 		code,
 	)
-	return uc.emailService.Send(emailAddr, subject, body)
+	if err := uc.emailService.Send(emailAddr, subject, body); err != nil {
+		return err
+	}
+
+	if err := uc.otpRepo.Save(ctx, otp); err != nil {
+		return err
+	}
+	return uc.otpRepo.MarkRateLimited(ctx, emailAddr)
 }
 
 func generateOTPCode() (string, error) {

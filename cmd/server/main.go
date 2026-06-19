@@ -93,10 +93,19 @@ func main() {
 		logger.Log.Warn().Msg("INIT_ADMIN_PASSWORD is set in production; unset it after the initial admin has been created")
 	}
 
-	messageRepository := mysql.NewMySQLMessageRepository(database)
+	messageRepository, err := mysql.NewMySQLMessageRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize message encryption")
+	}
+	if encryptedCount, err := messageRepository.EncryptPlaintextMessages(context.Background(), 500); err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to encrypt existing message history")
+	} else if encryptedCount > 0 {
+		logger.Log.Info().Int("count", encryptedCount).Msg("encrypted existing message history")
+	}
 	mediaRepository := mysql.NewMySQLMediaRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
+	communityRepository := mysql.NewMySQLCommunityRepository(database)
 
 	var storageRepository repository.StorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
@@ -112,7 +121,7 @@ func main() {
 	}
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, communityRepository)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -219,7 +228,6 @@ func main() {
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 
-	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
 	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
@@ -271,11 +279,16 @@ func main() {
 	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
 	updateAnnouncementUseCase := announcementusecase.NewUpdateAnnouncementUseCase(announcementRepository)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
+	listNotificationGroupsUseCase := notificationuc.NewListNotificationGroupsUseCase(notificationRepository)
+	listNotificationsByActorUseCase := notificationuc.NewListNotificationsByActorUseCase(notificationRepository)
+	getNotificationUseCase := notificationuc.NewGetNotificationUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
+	markAllAsReadByActorUseCase := notificationuc.NewMarkAllAsReadByActorUseCase(notificationRepository)
 	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
+	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -416,14 +429,19 @@ func main() {
 		ListTermsUseCase:       listTermsUseCase,
 		ListConsentsUseCase:    listConsentsUseCase,
 
-		NotificationPublisher:          notificationPublisher,
-		ListNotificationsUseCase:       listNotificationsUseCase,
-		MarkAsReadUseCase:              markAsReadUseCase,
-		MarkAllAsReadUseCase:           markAllAsReadUseCase,
-		CountUnreadUseCase:             countUnreadUseCase,
-		DeleteNotificationsUseCase:     deleteNotificationsUseCase,
-		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
-		SSEBroker:                      sseBroker,
+		NotificationPublisher:                 notificationPublisher,
+		ListNotificationsUseCase:              listNotificationsUseCase,
+		ListNotificationGroupsUseCase:         listNotificationGroupsUseCase,
+		ListNotificationsByActorUseCase:       listNotificationsByActorUseCase,
+		GetNotificationUseCase:                getNotificationUseCase,
+		MarkAsReadUseCase:                     markAsReadUseCase,
+		MarkAllAsReadUseCase:                  markAllAsReadUseCase,
+		MarkAllAsReadByActorUseCase:           markAllAsReadByActorUseCase,
+		CountUnreadUseCase:                    countUnreadUseCase,
+		DeleteNotificationsUseCase:            deleteNotificationsUseCase,
+		DeleteReadNotificationsUseCase:        deleteReadNotificationsUseCase,
+		DeleteReadNotificationsByActorUseCase: deleteReadNotificationsByActorUseCase,
+		SSEBroker:                             sseBroker,
 
 		PubSub: ps,
 	}
@@ -493,12 +511,12 @@ func main() {
 			authHeader := authHeaderFromInitPayload(initPayload)
 			tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
 			if tokenStr == "" {
-				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
+				return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
 			}
 
 			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
 			if err != nil {
-				return nil, nil, err
+				return ctx, nil, err
 			}
 
 			ctx = auth.WithClaims(ctx, claims)
