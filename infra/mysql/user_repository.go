@@ -173,17 +173,17 @@ func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword 
 
 	var total int
 	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
 		searchParam, searchParam,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx, `
-		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT DISTINCT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE name LIKE ? OR account_id LIKE ?
-		ORDER BY name ASC
+		ORDER BY name ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, searchParam, searchParam, limit, offset)
 	if err != nil {
