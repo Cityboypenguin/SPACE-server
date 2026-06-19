@@ -26,6 +26,9 @@ func (uc *VerifyEmailOTPInteractor) Execute(ctx context.Context, email, otp stri
 	if err := model.ValidateUserEmail(email); err != nil {
 		return err
 	}
+	if len(otp) != 6 {
+		return fmt.Errorf("認証コードは6桁で入力してください")
+	}
 	if otp == "" {
 		return fmt.Errorf("認証コードが無効または期限切れです")
 	}

@@ -2123,11 +2123,11 @@ func (r *queryResolver) MyNotificationGroups(ctx context.Context, limit *int32, 
 		}
 	}
 
-	postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
+	//postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
 
 	items := make([]*gqlmodel.NotificationGroup, 0, len(groups))
 	for _, g := range groups {
-		items = append(items, toGraphNotificationGroup(g, actorMap, postMap))
+		items = append(items, toGraphNotificationGroup(g, actorMap, nil))
 	}
 	return &gqlmodel.NotificationGroupPage{Items: items, Total: int32(total)}, nil
 }
