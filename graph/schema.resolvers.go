@@ -3506,27 +3506,3 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
-/*
-	func (r *Resolver) buildPostMapFromNotifications(ctx context.Context, notifications []*model.Notification) map[int64]*model.Post {
-	postMap := map[int64]*model.Post{}
-	for _, n := range notifications {
-		if n.TargetType == nil || *n.TargetType != notificationTargetTypePost || n.TargetID == nil {
-			continue
-		}
-		if _, ok := postMap[*n.TargetID]; ok {
-			continue
-		}
-		if p, err := r.GetPostByIDUseCase.Execute(ctx, *n.TargetID); err == nil && p != nil {
-			postMap[*n.TargetID] = p
-		}
-	}
-	return postMap
-}
-*/
