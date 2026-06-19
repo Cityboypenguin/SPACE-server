@@ -364,9 +364,12 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count, deleted_at
 		FROM posts
 		WHERE content LIKE ?  AND deleted_at IS NULL
-		ORDER BY created_at DESC
 	`
-	rows, err := r.DB.QueryContext(ctx, searchQuery, "%"+query+"%")
+	args := []interface{}{"%" + query + "%"}
+	searchQuery, args = AppendBlockFilter(ctx, searchQuery, args, "user_id")
+	searchQuery += " ORDER BY created_at DESC"
+
+	rows, err := r.DB.QueryContext(ctx, searchQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -648,6 +651,23 @@ func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Cont
 // infra/mysql/post_repository.go
 
 func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*model.Post, error) {
+	// 1. リプライかどうかの確認と、現在の投稿者IDの取得
+	var parentID sql.NullInt64
+	var currentUserID int64
+	err := r.DB.QueryRowContext(ctx, "SELECT parent_id, user_id FROM posts WHERE id = ?", postID).Scan(&parentID, &currentUserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// 親がない（自身がトップレベル）場合はrootPostは存在しないのでnil
+	if !parentID.Valid {
+		return nil, nil
+	}
+
+	// 2. 祖先を遡って大元の投稿（rootPost）を取得するクエリ
 	query := `
 		WITH RECURSIVE ancestors AS (
 			SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
@@ -663,23 +683,44 @@ func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*m
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM ancestors
 		WHERE parent_id IS NULL AND id != ?
-		LIMIT 1
 	`
 
-	row := r.DB.QueryRowContext(ctx, query, postID, postID)
+	// ⭕️ AppendBlockFilter を適用するための引数セットアップ
+	args := []interface{}{postID, postID}
+
+	// ancestors（CTE結果）の user_id に対してブロックフィルターをかける
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+
+	// フィルター適用後に LIMIT を追加する
+	query += " LIMIT 1"
+
+	// 変更した query と args を使用して実行
+	row := r.DB.QueryRowContext(ctx, query, args...)
 
 	var p model.Post
 	var createdAtUnix, updatedAtUnix int64
-	var parentID, deletedAtUnix sql.NullInt64
-	if err := row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
+	var rootParentID, deletedAtUnix sql.NullInt64
+
+	err = row.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &rootParentID, &deletedAtUnix, &p.ReplyCount)
+	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil
+			// ⭕️ ブロックフィルターに弾かれた、または物理削除された場合はダミーを生成
+			now := time.Now()
+			return &model.Post{
+				ID:         0,
+				Content:    "",
+				CreatedAt:  now,
+				UpdatedAt:  now,
+				UserID:     currentUserID, // GraphQLエラー回避用
+				DeletedAt:  &now,          // フロントエンドで「見つかりません」表示のトリガーとなる
+				ReplyCount: 0,
+			}, nil
 		}
 		return nil, err
 	}
 
-	if parentID.Valid {
-		p.ParentID = &parentID.Int64
+	if rootParentID.Valid {
+		p.ParentID = &rootParentID.Int64
 	}
 	if deletedAtUnix.Valid {
 		deletedAt := time.Unix(deletedAtUnix.Int64, 0)
