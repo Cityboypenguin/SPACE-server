@@ -2047,22 +2047,6 @@ func (r *Resolver) buildPostMapFromNotifications(ctx context.Context, notificati
 	return postMap
 }
 
-func (r *Resolver) buildPostMapFromNotificationGroups(ctx context.Context, groups []*model.NotificationGroup) map[int64]*model.Post {
-	postMap := map[int64]*model.Post{}
-	for _, g := range groups {
-		if g.TargetType == nil || *g.TargetType != notificationTargetTypePost || g.TargetID == nil {
-			continue
-		}
-		if _, ok := postMap[*g.TargetID]; ok {
-			continue
-		}
-		if p, err := r.GetPostByIDUseCase.Execute(ctx, *g.TargetID); err == nil && p != nil {
-			postMap[*g.TargetID] = p
-		}
-	}
-	return postMap
-}
-
 // MyNotifications is the resolver for the myNotifications field.
 func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offset *int32, typeArg *string, actorID *string) (*gqlmodel.NotificationPage, error) {
 	claims, err := requireAuth(ctx)
@@ -2152,11 +2136,11 @@ func (r *queryResolver) MyNotificationGroups(ctx context.Context, limit *int32, 
 		}
 	}
 
-	postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
+	//postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
 
 	items := make([]*gqlmodel.NotificationGroup, 0, len(groups))
 	for _, g := range groups {
-		items = append(items, toGraphNotificationGroup(g, actorMap, postMap))
+		items = append(items, toGraphNotificationGroup(g, actorMap, nil))
 	}
 	return &gqlmodel.NotificationGroupPage{Items: items, Total: int32(total)}, nil
 }
@@ -3520,3 +3504,27 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *Resolver) buildPostMapFromNotifications(ctx context.Context, notifications []*model.Notification) map[int64]*model.Post {
+	postMap := map[int64]*model.Post{}
+	for _, n := range notifications {
+		if n.TargetType == nil || *n.TargetType != notificationTargetTypePost || n.TargetID == nil {
+			continue
+		}
+		if _, ok := postMap[*n.TargetID]; ok {
+			continue
+		}
+		if p, err := r.GetPostByIDUseCase.Execute(ctx, *n.TargetID); err == nil && p != nil {
+			postMap[*n.TargetID] = p
+		}
+	}
+	return postMap
+}
+*/
