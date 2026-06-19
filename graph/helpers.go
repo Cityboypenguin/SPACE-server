@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -16,7 +17,11 @@ import (
 	"github.com/google/uuid"
 )
 
-var isReportServiceEnabled = true
+var isReportServiceEnabled atomic.Bool
+
+func init() {
+	isReportServiceEnabled.Store(true)
+}
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarMedia == nil {

@@ -34,23 +34,8 @@ type Resolver struct {
 	MaintenanceRepository repository.MaintenanceRepository
 	MaintenanceFlag       *atomic.Bool
 
-	GetUserByIDUseCase            user.GetUserByIDUseCase
-	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
-	CreateUserUseCase             user.CreateUserUseCase
-	SendEmailOTPUseCase           user.SendEmailOTPUseCase
-	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
-	ListUsersUseCase              user.ListUsersUseCase
-	DeleteUserUseCase             user.DeleteUserUseCase
-	UpdateUserUseCase             user.UpdateUserUseCase
-	SearchUsersUseCase            user.SearchUsersUseCase
-	LoginUserUseCase              user.LoginUserUseCase
-	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
-	LogoutUserUseCase             user.LogoutUserUseCase
-	FreezeUserUseCase             user.FreezeUserUseCase
-	UnfreezeUserUseCase           user.UnfreezeUserUseCase
-	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
-	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
-	ResetPasswordUseCase          user.ResetPasswordUseCase
+	UserUseCases
+	PostUseCases
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
@@ -67,23 +52,6 @@ type Resolver struct {
 	LoginAdministratorUseCase        administrator.LoginAdministratorUseCase
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
-
-	GetPostByIDUseCase                       post.GetPostByIDUseCase
-	GetRootPostUseCase                       post.GetRootPostUseCase
-	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
-	CreatePostUseCase                        post.CreatePostUseCase
-	ListPostsUseCase                         post.ListPostsUseCase
-	DeletePostUseCase                        post.DeletePostUseCase
-	UpdatePostUseCase                        post.UpdatePostUseCase
-	SearchPostsUseCase                       post.SearchPostsUseCase
-	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
-	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
-	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
-	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
-	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
-	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
-	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
-	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
 
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase
@@ -184,4 +152,43 @@ type Resolver struct {
 	ListConsentsUseCase    *termsusecase.ListConsentsUseCase
 
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
+}
+
+type UserUseCases struct {
+	GetUserByIDUseCase            user.GetUserByIDUseCase
+	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
+	CreateUserUseCase             user.CreateUserUseCase
+	SendEmailOTPUseCase           user.SendEmailOTPUseCase
+	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
+	ListUsersUseCase              user.ListUsersUseCase
+	DeleteUserUseCase             user.DeleteUserUseCase
+	UpdateUserUseCase             user.UpdateUserUseCase
+	SearchUsersUseCase            user.SearchUsersUseCase
+	LoginUserUseCase              user.LoginUserUseCase
+	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
+	LogoutUserUseCase             user.LogoutUserUseCase
+	FreezeUserUseCase             user.FreezeUserUseCase
+	UnfreezeUserUseCase           user.UnfreezeUserUseCase
+	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
+	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
+	ResetPasswordUseCase          user.ResetPasswordUseCase
+}
+
+type PostUseCases struct {
+	GetPostByIDUseCase                       post.GetPostByIDUseCase
+	GetRootPostUseCase                       post.GetRootPostUseCase
+	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
+	CreatePostUseCase                        post.CreatePostUseCase
+	ListPostsUseCase                         post.ListPostsUseCase
+	DeletePostUseCase                        post.DeletePostUseCase
+	UpdatePostUseCase                        post.UpdatePostUseCase
+	SearchPostsUseCase                       post.SearchPostsUseCase
+	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
+	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
+	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
+	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
+	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
+	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
+	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
+	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
 }

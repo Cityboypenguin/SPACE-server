@@ -189,7 +189,7 @@ func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64
 }
 
 func (r *MySQLCommunityRepository) DeleteCommunitiesWhereOnlyMember(ctx context.Context, userID int64) (int64, error) {
-	result, err := r.DB.ExecContext(ctx, `
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		DELETE rm
 		FROM rooms rm
 		JOIN communities c ON c.room_id = rm.id
@@ -271,7 +271,7 @@ func (r *MySQLCommunityRepository) IsSoleOwnerWithOtherMembers(ctx context.Conte
 		AND (SELECT COUNT(*) FROM room_users ru3 WHERE ru3.room_id = ru.room_id) > 1
 	`
 	var count int
-	err := r.DB.QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
 	if err != nil {
 		return false, err
 	}

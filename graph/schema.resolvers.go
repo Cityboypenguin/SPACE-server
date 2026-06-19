@@ -28,7 +28,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // User is the resolver for the user field on Favorite.
@@ -151,14 +150,6 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 		return false, fmt.Errorf("invalid user id")
 	}
 
-	isSole, err := r.IsSoleOwnerWithOtherMembersUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return false, err
-	}
-	if isSole {
-		return false, errors.New("cannot delete user: they are the sole owner of a community with other members; transfer ownership first")
-	}
-
 	deleted, err := r.DeleteUserUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return false, err
@@ -176,14 +167,6 @@ func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
 
 	numericID := claims.ID
 
-	isSole, err := r.IsSoleOwnerWithOtherMembersUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return false, err
-	}
-	if isSole {
-		return false, errors.New("cannot delete account: you are the sole owner of a community with other members; transfer ownership first")
-	}
-
 	return r.DeleteUserUseCase.Execute(ctx, numericID)
 }
 
@@ -197,20 +180,6 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 	// ユーザーは自分の情報のみ更新可能
 	numericID := claims.ID
 
-	currentUser, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id: %d", numericID)
-	}
-
-	if input.Password != nil {
-		if input.CurrentPassword == nil || *input.CurrentPassword == "" {
-			return nil, fmt.Errorf("現在のパスワードを入力してください")
-		}
-		if err := bcrypt.CompareHashAndPassword([]byte(currentUser.HashedPassword), []byte(*input.CurrentPassword)); err != nil {
-			return nil, fmt.Errorf("現在のパスワードが正しくありません")
-		}
-	}
-
 	param := model.UpdateUserParam{
 		AccountID: input.AccountID,
 		Name:      input.Name,
@@ -218,7 +187,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 		Password:  input.Password,
 	}
 
-	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param)
+	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param, input.CurrentPassword, true)
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +404,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 
 	if numericParentID != nil {
 		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
-		if perr == nil && parent.UserID != claims.ID {
+		if perr == nil && parent != nil && parent.UserID != claims.ID {
 			targetType := notificationuc.TargetPost
 			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 				UserID:     parent.UserID,
@@ -556,7 +525,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 	}
 
 	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
-	if err == nil && post.UserID != claims.ID {
+	if err == nil && post != nil && post.UserID != claims.ID {
 		targetType := notificationuc.TargetPost
 		if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 			UserID:     post.UserID,
@@ -820,7 +789,7 @@ func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input
 		Password:  input.Password,
 	}
 
-	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param)
+	user, err := r.UpdateUserUseCase.Execute(ctx, numericID, param, input.CurrentPassword, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1333,7 +1302,7 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	if err != nil {
 		return nil, err
 	}
-	if !isReportServiceEnabled {
+	if !isReportServiceEnabled.Load() {
 		return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
 	}
 	kind := reportTargetKind(input.TargetType)
@@ -1795,9 +1764,9 @@ func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled b
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return false, err
 	}
-	isReportServiceEnabled = enabled
+	isReportServiceEnabled.Store(enabled)
 
-	return isReportServiceEnabled, nil
+	return isReportServiceEnabled.Load(), nil
 }
 
 // Actor is the resolver for the actor field on Notification.
@@ -2308,7 +2277,7 @@ func (r *queryResolver) NewFeedPostsCount(ctx context.Context, since string) (in
 
 // GetRootPost is the resolver for the getRootPost field.
 func (r *queryResolver) GetRootPost(ctx context.Context) (*gqlmodel.Post, error) {
-	panic(fmt.Errorf("not implemented: GetRootPost - getRootPost"))
+	return nil, fmt.Errorf("getRootPost requires a post id; use Post.rootPost or getPostByID(id).rootPost")
 }
 
 // GetPostByID is the resolver for the getPostByID field.
@@ -2850,7 +2819,7 @@ func (r *queryResolver) GetMyRoleInCommunity(ctx context.Context, communityID st
 
 	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
 	if err != nil {
-		return model.RoomUserRoleMember, nil
+		return "", err
 	}
 	return role, nil
 }
@@ -3367,7 +3336,7 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 
 // IsReportServiceEnabled is the resolver for the isReportServiceEnabled field.
 func (r *queryResolver) IsReportServiceEnabled(ctx context.Context) (bool, error) {
-	return isReportServiceEnabled, nil
+	return isReportServiceEnabled.Load(), nil
 }
 
 // MessageAdded is the resolver for the messageAdded field.

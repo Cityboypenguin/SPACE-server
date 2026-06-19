@@ -88,12 +88,29 @@ func (r *MySQLPostRepository) GetPostByIDIncludeDeleted(ctx context.Context, id 
 }
 
 func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (int64, error) {
+	if tx, ok := txFromContext(ctx); ok {
+		return createPost(ctx, tx, p)
+	}
+
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
 
+	id, err := createPost(ctx, tx, p)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+func createPost(ctx context.Context, execer dbtx, p *model.Post) (int64, error) {
 	insertQuery := `
 		INSERT INTO posts (content, created_at, updated_at, user_id, parent_id)
 		VALUES (?, ?, ?, ?, ?)
@@ -106,7 +123,7 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 		validParentID = sql.NullInt64{Valid: false}
 	}
 
-	result, err := tx.ExecContext(ctx, insertQuery,
+	result, err := execer.ExecContext(ctx, insertQuery,
 		p.Content,
 		p.CreatedAt.Unix(),
 		p.UpdatedAt.Unix(),
@@ -130,13 +147,13 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 			SET reply_count = reply_count + 1 
 			WHERE id = ?
 		`
-		if _, err := tx.ExecContext(ctx, updateQuery, currentParentID.Int64); err != nil {
+		if _, err := execer.ExecContext(ctx, updateQuery, currentParentID.Int64); err != nil {
 			return 0, err
 		}
 
 		var nextParentID sql.NullInt64
 		getParentQuery := `SELECT parent_id FROM posts WHERE id = ?`
-		err := tx.QueryRowContext(ctx, getParentQuery, currentParentID.Int64).Scan(&nextParentID)
+		err := execer.QueryRowContext(ctx, getParentQuery, currentParentID.Int64).Scan(&nextParentID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				break
@@ -144,10 +161,6 @@ func (r *MySQLPostRepository) CreatePost(ctx context.Context, p *model.Post) (in
 			return 0, err
 		}
 		currentParentID = nextParentID
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, err
 	}
 
 	return id, nil
@@ -172,22 +185,38 @@ func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) err
 }
 
 func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, error) {
+	if tx, ok := txFromContext(ctx); ok {
+		return deletePost(ctx, tx, id)
+	}
+
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
 	defer tx.Rollback()
 
+	deleted, err := deletePost(ctx, tx, id)
+	if err != nil {
+		return false, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return deleted, nil
+}
+
+func deletePost(ctx context.Context, execer dbtx, id int64) (bool, error) {
 	var parentID sql.NullInt64
 	getParentQuery := `SELECT parent_id FROM posts WHERE id = ? AND deleted_at IS NULL`
-	err = tx.QueryRowContext(ctx, getParentQuery, id).Scan(&parentID)
+	err := execer.QueryRowContext(ctx, getParentQuery, id).Scan(&parentID)
 	if err != nil && err != sql.ErrNoRows {
 		return false, err
 	}
 
 	var currentReplyCount int64
 	getReplyCountQuery := `SELECT reply_count FROM posts WHERE id = ? AND deleted_at IS NULL`
-	err = tx.QueryRowContext(ctx, getReplyCountQuery, id).Scan(&currentReplyCount)
+	err = execer.QueryRowContext(ctx, getReplyCountQuery, id).Scan(&currentReplyCount)
 	if err != nil && err != sql.ErrNoRows {
 		return false, err
 	}
@@ -199,7 +228,7 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 	`
 
 	now := time.Now().Unix()
-	result, err := tx.ExecContext(ctx, deleteQuery, now, now, id)
+	result, err := execer.ExecContext(ctx, deleteQuery, now, now, id)
 	if err != nil {
 		return false, err
 	}
@@ -214,13 +243,13 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 			SET reply_count = GREATEST(0, reply_count - ?) 
 			WHERE id = ?
 		`
-		if _, err := tx.ExecContext(ctx, updateQuery, currentReplyCount+1, currentParentID.Int64); err != nil {
+		if _, err := execer.ExecContext(ctx, updateQuery, currentReplyCount+1, currentParentID.Int64); err != nil {
 			return false, err
 		}
 
 		var nextParentID sql.NullInt64
 		getParentQuery := `SELECT parent_id FROM posts WHERE id = ?`
-		err := tx.QueryRowContext(ctx, getParentQuery, currentParentID.Int64).Scan(&nextParentID)
+		err := execer.QueryRowContext(ctx, getParentQuery, currentParentID.Int64).Scan(&nextParentID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				break
@@ -230,9 +259,6 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 		currentParentID = nextParentID
 	}
 
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
 	return affected > 0, nil
 }
 
@@ -243,12 +269,52 @@ func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID in
 		WHERE user_id = ? AND deleted_at IS NULL
 	`
 	now := time.Now().Unix()
-	_, err := r.DB.ExecContext(ctx, query, now, now, userID)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, now, now, userID)
 	return err
 }
 
 func (r *MySQLPostRepository) RecalculateReplyCounts(ctx context.Context) error {
-	return recalculatePostReplyCounts(ctx, r.DB)
+	return recalculatePostReplyCounts(ctx, extractDB(ctx, r.DB))
+}
+
+func (r *MySQLPostRepository) RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, `
+		WITH RECURSIVE affected_ancestors AS (
+			SELECT parent_id AS ancestor_id
+			FROM posts
+			WHERE user_id = ? AND parent_id IS NOT NULL
+
+			UNION
+
+			SELECT p.parent_id
+			FROM posts p
+			JOIN affected_ancestors aa ON p.id = aa.ancestor_id
+			WHERE p.parent_id IS NOT NULL
+		),
+		visible_descendants AS (
+			SELECT parent_id AS ancestor_id, id AS descendant_id
+			FROM posts
+			WHERE parent_id IS NOT NULL AND deleted_at IS NULL
+
+			UNION ALL
+
+			SELECT vd.ancestor_id, p.id
+			FROM visible_descendants vd
+			JOIN posts p ON p.parent_id = vd.descendant_id
+			WHERE p.deleted_at IS NULL
+		),
+		reply_counts AS (
+			SELECT ancestor_id, COUNT(*) AS reply_count
+			FROM visible_descendants
+			WHERE ancestor_id IN (SELECT ancestor_id FROM affected_ancestors WHERE ancestor_id IS NOT NULL)
+			GROUP BY ancestor_id
+		)
+		UPDATE posts p
+		LEFT JOIN reply_counts rc ON rc.ancestor_id = p.id
+		SET p.reply_count = COALESCE(rc.reply_count, 0)
+		WHERE p.id IN (SELECT ancestor_id FROM affected_ancestors WHERE ancestor_id IS NOT NULL)
+	`, userID)
+	return err
 }
 
 type replyCountExecer interface {

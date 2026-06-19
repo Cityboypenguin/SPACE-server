@@ -47,7 +47,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 		WHERE id = ?
 	`
 
-	row := r.DB.QueryRowContext(ctx, query, id)
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx, query, id)
 
 	var u model.User
 	var createdAtUnix, updatedAtUnix int64
@@ -112,7 +112,7 @@ func (r *MySQLUserRepository) GetUsersByIDs(ctx context.Context, ids []int64) ([
 
 func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, error) {
 	query := `DELETE FROM users WHERE id = ?`
-	result, err := r.DB.ExecContext(ctx, query, id)
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
 	}
@@ -295,7 +295,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 		WHERE id = ?
 	`
 
-	_, err := r.DB.ExecContext(ctx, query,
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query,
 		u.AccountID,
 		u.Name,
 		u.Email,
