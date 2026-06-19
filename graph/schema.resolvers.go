@@ -747,6 +747,48 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 	return true, nil
 }
 
+// DeleteRoom is the resolver for the deleteRoom field.
+func (r *mutationResolver) DeleteRoom(ctx context.Context, roomID string) (bool, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return false, fmt.Errorf("invalid room id")
+	}
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get room")
+	}
+	if room == nil {
+		return false, errors.New("room not found")
+	}
+	if room.Type != model.RoomTypeDM {
+		return false, errors.New("forbidden: only DM rooms can be deleted")
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return false, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return false, errors.New("forbidden: not a member of this room")
+	}
+	// 相手アカウントが削除され room_users が連動して消えた(残りが自分だけの)場合のみ削除を許可する。
+	if len(memberIDs) != 1 {
+		return false, errors.New("forbidden: cannot delete a room with an active partner")
+	}
+
+	if _, err := r.DeleteRoomUseCase.Execute(ctx, rid); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // CreateCommunity is the resolver for the createCommunity field.
 func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.CreateCommunityInput) (*gqlmodel.Community, error) {
 	claims, err := requireAuth(ctx)

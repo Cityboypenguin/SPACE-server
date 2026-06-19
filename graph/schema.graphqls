@@ -233,6 +233,7 @@ type Mutation {
   getOrCreateDMRoom(targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!
   removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
+  deleteRoom(roomID: ID!): Boolean!
   createCommunity(input: CreateCommunityInput!): Community!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
