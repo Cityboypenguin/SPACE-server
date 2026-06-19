@@ -2686,16 +2686,20 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		users := usersByRoomID[room.ID]
 		members := make([]*gqlmodel.User, 0, len(users))
 		var partnerID int64
+		hasOnlyCurrentUser := len(users) == 1 && users[0].ID == claims.ID
 		for _, u := range users {
 			members = append(members, toGraphUser(u))
 			if u.ID != claims.ID {
 				partnerID = u.ID
 			}
 		}
+		if hasOnlyCurrentUser {
+			members = []*gqlmodel.User{toGraphDeletedUser(), members[0]}
+		}
 
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
-		gqlRoom.IsMessagingDisabled = len(users) == 2 && partnerID != 0 && blockedSet[partnerID]
+		gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser || (len(users) == 2 && partnerID != 0 && blockedSet[partnerID])
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
 			gqlRoom.Content = &lastMsg.Content

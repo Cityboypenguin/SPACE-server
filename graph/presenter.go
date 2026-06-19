@@ -2,12 +2,15 @@ package graph
 
 import (
 	"fmt"
+	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
 const timeFormat = "2006-01-02T15:04:05Z07:00"
+
+const deletedAccountDisplayName = "削除されたアカウント"
 
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
@@ -22,6 +25,20 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 		Status:    user.Status,
 		CreatedAt: user.CreatedAt.Format(timeFormat),
 		UpdatedAt: user.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphDeletedUser() *gqlmodel.User {
+	deletedAt := time.Unix(0, 0).Format(timeFormat)
+	return &gqlmodel.User{
+		ID:        encodeGraphID("user", 0),
+		AccountID: "deleted-account",
+		Name:      deletedAccountDisplayName,
+		Email:     "",
+		Role:      "",
+		Status:    "",
+		CreatedAt: deletedAt,
+		UpdatedAt: deletedAt,
 	}
 }
 
@@ -120,6 +137,7 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		ReplyCount: int32(post.ReplyCount),
 	}
 }
+
 const notificationTargetTypePost = "post"
 
 func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
