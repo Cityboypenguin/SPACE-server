@@ -167,6 +167,28 @@ func (r *queryResolver) favoriteUsersToGQL(ctx context.Context, favs []*model.Fa
 	return result, nil
 }
 
+func (r *queryResolver) followersToGQL(ctx context.Context, followers []*model.FavoriteUser) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(followers))
+	for _, f := range followers {
+		ids = append(ids, f.UserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(followers))
+	for _, f := range followers {
+		if u, ok := userMap[f.UserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
+}
+
 func (r *queryResolver) blockedUsersToGQL(ctx context.Context, blockers []*model.Blocker) ([]*gqlmodel.User, error) {
 	ids := make([]int64, 0, len(blockers))
 	for _, b := range blockers {

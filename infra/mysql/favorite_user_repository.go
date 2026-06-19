@@ -87,6 +87,40 @@ func (r *MySQLFavoriteUserRepository) ListFavoriteUsers(ctx context.Context, use
 	return favoriteUsers, total, nil
 }
 
+func (r *MySQLFavoriteUserRepository) ListFollowers(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error) {
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM favorite_users WHERE favorite_user_id = ?`, userID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE favorite_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		userID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var followers []*model.FavoriteUser
+	for rows.Next() {
+		var fu model.FavoriteUser
+		var createdAtUnix int64
+		if err := rows.Scan(&fu.ID, &fu.UserID, &fu.FavoriteUserID, &createdAtUnix); err != nil {
+			return nil, 0, err
+		}
+		fu.CreatedAt = time.Unix(createdAtUnix, 0)
+		followers = append(followers, &fu)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return followers, total, nil
+}
+
 func (r *MySQLFavoriteUserRepository) SearchFavoriteUsers(ctx context.Context, userID int64, keyword string) ([]*model.FavoriteUser, error) {
 	query := `
 		SELECT fu.id, fu.user_id, fu.favorite_user_id, fu.created_at

@@ -255,6 +255,7 @@ func main() {
 	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
 	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
 	listFavoriteUsersUseCase := fuusecase.NewListFavoriteUsersUseCase(favoriteuserRepository)
+	listFollowersUseCase := fuusecase.NewListFollowersUseCase(favoriteuserRepository)
 	searchFavoriteUsersUseCase := fuusecase.NewSearchFavoriteUsersUseCase(favoriteuserRepository)
 	getFavoriteUsersByUserIDUseCase := fuusecase.NewGetFavoriteUsersByUserIDUseCase(favoriteuserRepository)
 	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
@@ -402,6 +403,7 @@ func main() {
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
 		ListFavoriteUsersUseCase:       listFavoriteUsersUseCase,
+		ListFollowersUseCase:           listFollowersUseCase,
 		SearchFavoriteUsersUseCase:     searchFavoriteUsersUseCase,
 		GetFavoriteUserByUserIDUseCase: getFavoriteUsersByUserIDUseCase,
 
