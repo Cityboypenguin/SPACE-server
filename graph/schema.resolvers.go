@@ -1836,7 +1836,7 @@ func (r *postResolver) User(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.
 		return nil, err
 	}
 	if user == nil {
-		return nil, nil
+		return toGraphDeletedUserWithID(numericUserID), nil
 	}
 	return toGraphUser(user), nil
 }
