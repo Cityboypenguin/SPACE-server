@@ -51,6 +51,49 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	return &p, nil
 }
 
+func (r *MySQLPostRepository) GetPostsByIDs(ctx context.Context, ids []int64) ([]*model.Post, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+		FROM posts
+		WHERE id IN (%s) AND deleted_at IS NULL
+	`, strings.Join(placeholders, ","))
+
+	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	posts := make([]*model.Post, 0, len(ids))
+	for rows.Next() {
+		var p model.Post
+		var createdAtUnix, updatedAtUnix int64
+		var parentID sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &p.ReplyCount); err != nil {
+			return nil, err
+		}
+		if parentID.Valid {
+			p.ParentID = &parentID.Int64
+		}
+		p.CreatedAt = time.Unix(createdAtUnix, 0)
+		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
+		posts = append(posts, &p)
+	}
+	return posts, rows.Err()
+}
+
 func (r *MySQLPostRepository) GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count

@@ -330,7 +330,7 @@ type ComplexityRoot struct {
 		GetPostsByUserID                func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
-		GetRootPost                     func(childComplexity int) int
+		GetRootPost                     func(childComplexity int, id string) int
 		GetUserByID                     func(childComplexity int, id string) int
 		IsReportServiceEnabled          func(childComplexity int) int
 		ListBlockedUsers                func(childComplexity int, limit *int32, offset *int32) int
@@ -585,7 +585,7 @@ type QueryResolver interface {
 	TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
 	FollowersTopLevelPosts(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	NewFeedPostsCount(ctx context.Context, since string) (int32, error)
-	GetRootPost(ctx context.Context) (*model.Post, error)
+	GetRootPost(ctx context.Context, id string) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
@@ -2391,7 +2391,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.GetRootPost(childComplexity), true
+		args, err := ec.field_Query_getRootPost_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetRootPost(childComplexity, args["id"].(string)), true
 	case "Query.getUserByID":
 		if e.ComplexityRoot.Query.GetUserByID == nil {
 			break
@@ -5461,6 +5466,20 @@ func (ec *executionContext) field_Query_getRepliesByPostID_args(ctx context.Cont
 		return nil, err
 	}
 	args["post_id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getRootPost_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -12672,7 +12691,8 @@ func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphq
 			return ec.fieldContext_Query_getRootPost(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().GetRootPost(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetRootPost(ctx, fc.Args["id"].(string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
@@ -12682,7 +12702,7 @@ func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphq
 		false,
 	)
 }
-func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_getRootPost(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -12691,6 +12711,17 @@ func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, fi
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Post(ctx, field)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getRootPost_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }

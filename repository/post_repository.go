@@ -15,6 +15,7 @@ type PostRepository interface {
 	RecalculateReplyCounts(ctx context.Context) error
 	RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error
 	GetPostByID(ctx context.Context, id int64) (*model.Post, error)
+	GetPostsByIDs(ctx context.Context, ids []int64) ([]*model.Post, error)
 	GetRootPost(ctx context.Context, id int64) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, user_id int64, limit, offset int) ([]*model.Post, int, error)

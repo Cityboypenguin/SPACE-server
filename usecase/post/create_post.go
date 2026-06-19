@@ -40,6 +40,9 @@ func NewCreatePostUseCase(
 }
 
 func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []MediaInput) (*model.Post, error) {
+	if strings.TrimSpace(param.Content) == "" && len(mediaInputs) == 0 {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
 	if err := validatePostContent(param.Content); err != nil {
 		return nil, err
 	}

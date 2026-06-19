@@ -23,7 +23,7 @@ type Query {
     offset: Int = 0
   ): PostPage!
   newFeedPostsCount(since: String!): Int!
-  getRootPost: Post
+  getRootPost(id: ID!): Post
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
   getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!

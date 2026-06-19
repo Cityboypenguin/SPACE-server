@@ -370,9 +370,6 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 	}
 
 	trimmedContent := strings.TrimSpace(input.Content)
-	if trimmedContent == "" && len(input.MediaInputs) == 0 {
-		return nil, fmt.Errorf("content cannot be empty")
-	}
 
 	var numericParentID *int64
 	if input.ParentID != nil && *input.ParentID != "" {
@@ -434,18 +431,7 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 		return false, fmt.Errorf("invalid post id")
 	}
 
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return false, fmt.Errorf("failed to get post")
-	}
-	if post == nil {
-		return false, fmt.Errorf("post not found")
-	}
-	if post.UserID != claims.ID {
-		return false, errors.New("forbidden: can only delete your own posts")
-	}
-
-	return r.DeletePostUseCase.Execute(ctx, numericID)
+	return r.DeletePostUseCase.Execute(ctx, numericID, claims.ID, false)
 }
 
 // UpdatePost is the resolver for the updatePost field.
@@ -460,17 +446,6 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 	numericID, err := decodeGraphID(ctx, "post", input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
-	}
-
-	existing, err := r.GetPostByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get post")
-	}
-	if existing == nil {
-		return nil, fmt.Errorf("post not found")
-	}
-	if existing.UserID != claims.ID {
-		return nil, errors.New("forbidden: can only update your own posts")
 	}
 
 	var deletedMediaIDs []int64
@@ -1094,7 +1069,7 @@ func (r *mutationResolver) AdminDeletePost(ctx context.Context, id string) (bool
 		return false, fmt.Errorf("invalid post id")
 	}
 
-	return r.DeletePostUseCase.Execute(ctx, numericID)
+	return r.DeletePostUseCase.Execute(ctx, numericID, 0, true)
 }
 
 // FreezeUser is the resolver for the freezeUser field.
@@ -2086,14 +2061,18 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offse
 	actorMap := map[int64]*model.User{}
 	if len(actorIDs) > 0 {
 		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
-		if aerr == nil {
-			for _, u := range actors {
-				actorMap[u.ID] = u
-			}
+		if aerr != nil {
+			return nil, aerr
+		}
+		for _, u := range actors {
+			actorMap[u.ID] = u
 		}
 	}
 
-	postMap := r.buildPostMapFromNotifications(ctx, notifications)
+	postMap, err := r.buildPostMapFromNotifications(ctx, notifications)
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]*gqlmodel.Notification, 0, len(notifications))
 	for _, n := range notifications {
@@ -2127,18 +2106,22 @@ func (r *queryResolver) MyNotificationGroups(ctx context.Context, limit *int32, 
 	actorMap := map[int64]*model.User{}
 	if len(actorIDs) > 0 {
 		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
-		if aerr == nil {
-			for _, u := range actors {
-				actorMap[u.ID] = u
-			}
+		if aerr != nil {
+			return nil, aerr
+		}
+		for _, u := range actors {
+			actorMap[u.ID] = u
 		}
 	}
 
-	//postMap := r.buildPostMapFromNotificationGroups(ctx, groups)
+	postMap, err := r.buildPostMapFromNotificationGroups(ctx, groups)
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]*gqlmodel.NotificationGroup, 0, len(groups))
 	for _, g := range groups {
-		items = append(items, toGraphNotificationGroup(g, actorMap, nil))
+		items = append(items, toGraphNotificationGroup(g, actorMap, postMap))
 	}
 	return &gqlmodel.NotificationGroupPage{Items: items, Total: int32(total)}, nil
 }
@@ -2163,11 +2146,17 @@ func (r *queryResolver) Notification(ctx context.Context, id string) (*gqlmodel.
 	actorMap := map[int64]*model.User{}
 	if n.ActorID != nil {
 		actor, aerr := r.GetUserByIDUseCase.Execute(ctx, *n.ActorID)
-		if aerr == nil && actor != nil {
+		if aerr != nil {
+			return nil, aerr
+		}
+		if actor != nil {
 			actorMap[actor.ID] = actor
 		}
 	}
-	postMap := r.buildPostMapFromNotifications(ctx, []*model.Notification{n})
+	postMap, err := r.buildPostMapFromNotifications(ctx, []*model.Notification{n})
+	if err != nil {
+		return nil, err
+	}
 	return toGraphNotification(n, actorMap, postMap), nil
 }
 
@@ -2318,8 +2307,22 @@ func (r *queryResolver) NewFeedPostsCount(ctx context.Context, since string) (in
 }
 
 // GetRootPost is the resolver for the getRootPost field.
-func (r *queryResolver) GetRootPost(ctx context.Context) (*gqlmodel.Post, error) {
-	return nil, fmt.Errorf("getRootPost requires a post id; use Post.rootPost or getPostByID(id).rootPost")
+func (r *queryResolver) GetRootPost(ctx context.Context, id string) (*gqlmodel.Post, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "post", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+	post, err := r.GetRootPostUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, nil
+	}
+	return toGraphPost(post), nil
 }
 
 // GetPostByID is the resolver for the getPostByID field.

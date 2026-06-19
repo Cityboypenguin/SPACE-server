@@ -64,57 +64,13 @@ type Resolver struct {
 
 	ListMediaByPostIDUseCase mediausecase.ListMediaByPostIDUseCase
 
-	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase              messageusecase.SendMessageUseCase
-	ListMessagesUseCase             messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
-	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
-	CreateRoomUseCase               roomusecase.CreateRoomUseCase
-	GetRoomUseCase                  roomusecase.GetRoomUseCase
-	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
-	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
-	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
-	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
-	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
-	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
-	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
-	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
-	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
-	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
-	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
-	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
-	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
-
-	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
-	GetCommunityUseCase                communityusecase.GetCommunityUseCase
-	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
-	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
-	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
-	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
-	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
-	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
-	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
-	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
-	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+	MessageRoomUseCases
+	CommunityUseCases
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
 
-	NotificationPublisher                 notificationuc.NotificationPublisher
-	ListNotificationsUseCase              notificationuc.ListNotificationsUseCase
-	ListNotificationGroupsUseCase         notificationuc.ListNotificationGroupsUseCase
-	ListNotificationsByActorUseCase       notificationuc.ListNotificationsByActorUseCase
-	GetNotificationUseCase                notificationuc.GetNotificationUseCase
-	MarkAsReadUseCase                     notificationuc.MarkAsReadUseCase
-	MarkAllAsReadUseCase                  notificationuc.MarkAllAsReadUseCase
-	MarkAllAsReadByActorUseCase           notificationuc.MarkAllAsReadByActorUseCase
-	CountUnreadUseCase                    notificationuc.CountUnreadUseCase
-	DeleteNotificationsUseCase            notificationuc.DeleteNotificationsUseCase
-	DeleteReadNotificationsUseCase        notificationuc.DeleteReadNotificationsUseCase
-	DeleteReadNotificationsByActorUseCase notificationuc.DeleteReadNotificationsByActorUseCase
+	NotificationUseCases
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
@@ -176,6 +132,7 @@ type UserUseCases struct {
 
 type PostUseCases struct {
 	GetPostByIDUseCase                       post.GetPostByIDUseCase
+	GetPostsByIDsUseCase                     post.GetPostsByIDsUseCase
 	GetRootPostUseCase                       post.GetRootPostUseCase
 	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
 	CreatePostUseCase                        post.CreatePostUseCase
@@ -191,4 +148,59 @@ type PostUseCases struct {
 	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
 	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
 	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
+}
+
+type MessageRoomUseCases struct {
+	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase              messageusecase.SendMessageUseCase
+	ListMessagesUseCase             messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
+	CreateRoomUseCase               roomusecase.CreateRoomUseCase
+	GetRoomUseCase                  roomusecase.GetRoomUseCase
+	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
+	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
+	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
+	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
+	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
+	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
+	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
+	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
+	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
+	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
+	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
+	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
+	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
+	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
+	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
+}
+
+type CommunityUseCases struct {
+	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase                communityusecase.GetCommunityUseCase
+	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
+	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
+	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
+	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
+	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
+	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
+	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
+	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+}
+
+type NotificationUseCases struct {
+	NotificationPublisher                 notificationuc.NotificationPublisher
+	ListNotificationsUseCase              notificationuc.ListNotificationsUseCase
+	ListNotificationGroupsUseCase         notificationuc.ListNotificationGroupsUseCase
+	ListNotificationsByActorUseCase       notificationuc.ListNotificationsByActorUseCase
+	GetNotificationUseCase                notificationuc.GetNotificationUseCase
+	MarkAsReadUseCase                     notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase                  notificationuc.MarkAllAsReadUseCase
+	MarkAllAsReadByActorUseCase           notificationuc.MarkAllAsReadByActorUseCase
+	CountUnreadUseCase                    notificationuc.CountUnreadUseCase
+	DeleteNotificationsUseCase            notificationuc.DeleteNotificationsUseCase
+	DeleteReadNotificationsUseCase        notificationuc.DeleteReadNotificationsUseCase
+	DeleteReadNotificationsByActorUseCase notificationuc.DeleteReadNotificationsByActorUseCase
 }
