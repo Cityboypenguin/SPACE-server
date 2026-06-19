@@ -3470,6 +3470,9 @@ func (r *subscriptionResolver) MyUnreadUpdated(ctx context.Context) (<-chan *gql
 
 // AvatarURL is the resolver for the avatarUrl field.
 func (r *userResolver) AvatarURL(ctx context.Context, obj *gqlmodel.User) (*string, error) {
+	if obj.AccountID == "deleted-account" {
+		return nil, nil
+	}
 	numericID, err := decodeGraphID(ctx, "user", obj.ID)
 	if err != nil {
 		return nil, nil

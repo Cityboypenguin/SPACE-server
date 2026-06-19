@@ -31,10 +31,12 @@ func (uc *DeleteUserInteractor) Execute(ctx context.Context, id int64) (bool, er
 		return false, err
 	}
 	if _, err := uc.communityRepo.DeleteCommunitiesWhereOnlyMember(ctx, id); err != nil {
+		_ = uc.postRepo.RecalculateReplyCounts(ctx)
 		return false, err
 	}
 	deleted, err := uc.userRepo.DeleteUser(ctx, id)
 	if err != nil || !deleted {
+		_ = uc.postRepo.RecalculateReplyCounts(ctx)
 		return deleted, err
 	}
 	if err := uc.postRepo.RecalculateReplyCounts(ctx); err != nil {

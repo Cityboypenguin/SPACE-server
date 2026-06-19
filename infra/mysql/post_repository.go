@@ -237,26 +237,14 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 }
 
 func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID int64) error {
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
 	query := `
 		UPDATE posts
 		SET deleted_at = ?, updated_at = ?
 		WHERE user_id = ? AND deleted_at IS NULL
 	`
 	now := time.Now().Unix()
-	if _, err := tx.ExecContext(ctx, query, now, now, userID); err != nil {
-		return err
-	}
-	if err := recalculatePostReplyCounts(ctx, tx); err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	_, err := r.DB.ExecContext(ctx, query, now, now, userID)
+	return err
 }
 
 func (r *MySQLPostRepository) RecalculateReplyCounts(ctx context.Context) error {
