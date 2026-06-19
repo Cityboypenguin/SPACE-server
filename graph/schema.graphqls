@@ -91,6 +91,7 @@ type Query {
   ): TermsConsentPage!
 
   listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
+  myFollowers(limit: Int = 20, offset: Int = 0): UserPage!
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
   adminGetFavoriteUsers(userID: ID!): [User!]!

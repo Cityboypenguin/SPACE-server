@@ -173,6 +173,7 @@ type Resolver struct {
 	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase
 	GetFavoriteUserByUserIDUseCase favoriteuser.GetFavoriteUsersByUserIDUseCase
 	ListFavoriteUsersUseCase       favoriteuser.ListFavoriteUsersUseCase
+	ListFollowersUseCase           favoriteuser.ListFollowersUseCase
 	SearchFavoriteUsersUseCase     favoriteuser.SearchFavoriteUsersUseCase
 
 	CreateTermsUseCase     *termsusecase.CreateTermsUseCase

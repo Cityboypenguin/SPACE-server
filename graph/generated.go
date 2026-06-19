@@ -339,6 +339,7 @@ type ComplexityRoot struct {
 		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string) int
 		MyCommunities                   func(childComplexity int, limit *int32, offset *int32) int
 		MyDMRooms                       func(childComplexity int, limit *int32, offset *int32) int
+		MyFollowers                     func(childComplexity int, limit *int32, offset *int32) int
 		MyNotificationGroups            func(childComplexity int, limit *int32, offset *int32) int
 		MyNotifications                 func(childComplexity int, limit *int32, offset *int32, typeArg *string, actorID *string) int
 		MyProfile                       func(childComplexity int) int
@@ -618,6 +619,7 @@ type QueryResolver interface {
 	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
 	AdminListConsents(ctx context.Context, termsID string, limit *int32, offset *int32) (*model.TermsConsentPage, error)
 	ListFavoriteUsers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
+	MyFollowers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 	AdminGetFavoriteUsers(ctx context.Context, userID string) ([]*model.User, error)
@@ -2462,6 +2464,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyDMRooms(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.myFollowers":
+		if e.ComplexityRoot.Query.MyFollowers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myFollowers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyFollowers(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.myNotificationGroups":
 		if e.ComplexityRoot.Query.MyNotificationGroups == nil {
 			break
@@ -5551,6 +5564,28 @@ func (ec *executionContext) field_Query_myCommunities_args(ctx context.Context, 
 }
 
 func (ec *executionContext) field_Query_myDMRooms_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_myFollowers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
@@ -14036,6 +14071,50 @@ func (ec *executionContext) fieldContext_Query_listFavoriteUsers(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_myFollowers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myFollowers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyFollowers(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.UserPage) graphql.Marshaler {
+			return ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myFollowers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myFollowers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_searchFavoriteUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -21548,6 +21627,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_listFavoriteUsers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myFollowers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myFollowers(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

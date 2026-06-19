@@ -59,6 +59,15 @@ func ValidateUserPassword(password string) error {
 	return nil
 }
 
+var accountIDRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func ValidateAccountID(accountID string) error {
+	if !accountIDRe.MatchString(accountID) {
+		return fmt.Errorf("ユーザーIDは半角英数字・_・-のみ使用できます")
+	}
+	return nil
+}
+
 func hashPassword(password string) (string, error) {
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -68,6 +77,10 @@ func hashPassword(password string) (string, error) {
 }
 
 func (u *User) CreateUser(param CreateUserParam) error {
+	if err := ValidateAccountID(param.AccountID); err != nil {
+		return err
+	}
+
 	hashedPassword, err := hashPassword(param.Password)
 	if err != nil {
 		return err
@@ -85,6 +98,9 @@ func (u *User) CreateUser(param CreateUserParam) error {
 
 func (u *User) UpdateUser(param UpdateUserParam) error {
 	if param.AccountID != nil {
+		if err := ValidateAccountID(*param.AccountID); err != nil {
+			return err
+		}
 		u.AccountID = *param.AccountID
 	}
 	if param.Name != nil {

@@ -2031,38 +2031,6 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string, limit *
 	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
 }
 
-func (r *Resolver) buildPostMapFromNotifications(ctx context.Context, notifications []*model.Notification) map[int64]*model.Post {
-	postMap := map[int64]*model.Post{}
-	for _, n := range notifications {
-		if n.TargetType == nil || *n.TargetType != notificationTargetTypePost || n.TargetID == nil {
-			continue
-		}
-		if _, ok := postMap[*n.TargetID]; ok {
-			continue
-		}
-		if p, err := r.GetPostByIDUseCase.Execute(ctx, *n.TargetID); err == nil && p != nil {
-			postMap[*n.TargetID] = p
-		}
-	}
-	return postMap
-}
-
-func (r *Resolver) buildPostMapFromNotificationGroups(ctx context.Context, groups []*model.NotificationGroup) map[int64]*model.Post {
-	postMap := map[int64]*model.Post{}
-	for _, g := range groups {
-		if g.TargetType == nil || *g.TargetType != notificationTargetTypePost || g.TargetID == nil {
-			continue
-		}
-		if _, ok := postMap[*g.TargetID]; ok {
-			continue
-		}
-		if p, err := r.GetPostByIDUseCase.Execute(ctx, *g.TargetID); err == nil && p != nil {
-			postMap[*g.TargetID] = p
-		}
-	}
-	return postMap
-}
-
 // MyNotifications is the resolver for the myNotifications field.
 func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offset *int32, typeArg *string, actorID *string) (*gqlmodel.NotificationPage, error) {
 	claims, err := requireAuth(ctx)
@@ -3251,6 +3219,24 @@ func (r *queryResolver) ListFavoriteUsers(ctx context.Context, limit *int32, off
 		return nil, err
 	}
 	items, err := r.favoriteUsersToGQL(ctx, favoriteUsers)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
+}
+
+// MyFollowers is the resolver for the myFollowers field.
+func (r *queryResolver) MyFollowers(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	l, o := resolvePagination(limit, offset)
+	followers, total, err := r.ListFollowersUseCase.Execute(ctx, claims.ID, l, o)
+	if err != nil {
+		return nil, err
+	}
+	items, err := r.followersToGQL(ctx, followers)
 	if err != nil {
 		return nil, err
 	}
