@@ -237,13 +237,59 @@ func (r *MySQLPostRepository) DeletePost(ctx context.Context, id int64) (bool, e
 }
 
 func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID int64) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	query := `
 		UPDATE posts
 		SET deleted_at = ?, updated_at = ?
 		WHERE user_id = ? AND deleted_at IS NULL
 	`
 	now := time.Now().Unix()
-	_, err := r.DB.ExecContext(ctx, query, now, now, userID)
+	if _, err := tx.ExecContext(ctx, query, now, now, userID); err != nil {
+		return err
+	}
+	if err := recalculatePostReplyCounts(ctx, tx); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (r *MySQLPostRepository) RecalculateReplyCounts(ctx context.Context) error {
+	return recalculatePostReplyCounts(ctx, r.DB)
+}
+
+type replyCountExecer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+func recalculatePostReplyCounts(ctx context.Context, execer replyCountExecer) error {
+	_, err := execer.ExecContext(ctx, `
+		WITH RECURSIVE visible_descendants AS (
+			SELECT parent_id AS ancestor_id, id AS descendant_id
+			FROM posts
+			WHERE parent_id IS NOT NULL AND deleted_at IS NULL
+
+			UNION ALL
+
+			SELECT vd.ancestor_id, p.id
+			FROM visible_descendants vd
+			JOIN posts p ON p.parent_id = vd.descendant_id
+			WHERE p.deleted_at IS NULL
+		),
+		reply_counts AS (
+			SELECT ancestor_id, COUNT(*) AS reply_count
+			FROM visible_descendants
+			GROUP BY ancestor_id
+		)
+		UPDATE posts p
+		LEFT JOIN reply_counts rc ON rc.ancestor_id = p.id
+		SET p.reply_count = COALESCE(rc.reply_count, 0)
+	`)
 	return err
 }
 

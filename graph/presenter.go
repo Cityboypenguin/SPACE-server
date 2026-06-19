@@ -29,9 +29,13 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 }
 
 func toGraphDeletedUser() *gqlmodel.User {
+	return toGraphDeletedUserWithID(0)
+}
+
+func toGraphDeletedUserWithID(id int64) *gqlmodel.User {
 	deletedAt := time.Unix(0, 0).Format(timeFormat)
 	return &gqlmodel.User{
-		ID:        encodeGraphID("user", 0),
+		ID:        encodeGraphID("user", id),
 		AccountID: "deleted-account",
 		Name:      deletedAccountDisplayName,
 		Email:     "",
@@ -167,7 +171,7 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, 
 		if u, ok := actorMap[*n.ActorID]; ok {
 			gql.Actor = toGraphUser(u)
 		} else {
-			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+			gql.Actor = toGraphDeletedUserWithID(*n.ActorID)
 		}
 	}
 	return gql
@@ -208,7 +212,7 @@ func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*mo
 		if u, ok := actorMap[*g.ActorID]; ok {
 			gql.Actor = toGraphUser(u)
 		} else {
-			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *g.ActorID)}
+			gql.Actor = toGraphDeletedUserWithID(*g.ActorID)
 		}
 	}
 	return gql

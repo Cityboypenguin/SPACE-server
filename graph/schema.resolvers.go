@@ -1817,6 +1817,9 @@ func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notifica
 	if err != nil {
 		return nil, err
 	}
+	if user == nil {
+		return toGraphDeletedUserWithID(numericID), nil
+	}
 	return toGraphUser(user), nil
 }
 
@@ -2149,7 +2152,7 @@ func (r *queryResolver) Notification(ctx context.Context, id string) (*gqlmodel.
 	actorMap := map[int64]*model.User{}
 	if n.ActorID != nil {
 		actor, aerr := r.GetUserByIDUseCase.Execute(ctx, *n.ActorID)
-		if aerr == nil {
+		if aerr == nil && actor != nil {
 			actorMap[actor.ID] = actor
 		}
 	}

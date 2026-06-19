@@ -12,6 +12,7 @@ type PostRepository interface {
 	UpdatePost(ctx context.Context, post *model.Post) error
 	DeletePost(ctx context.Context, id int64) (bool, error)
 	DeletePostsByUserID(ctx context.Context, userID int64) error
+	RecalculateReplyCounts(ctx context.Context) error
 	GetPostByID(ctx context.Context, id int64) (*model.Post, error)
 	GetRootPost(ctx context.Context, id int64) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error)
