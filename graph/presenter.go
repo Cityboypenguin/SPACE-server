@@ -315,3 +315,82 @@ func toGraphFavorite(f *model.Favorite) *gqlmodel.Favorite {
 		CreatedAt: f.CreatedAt.Format(timeFormat),
 	}
 }
+
+func toGraphAnalyticsSummary(s *model.AnalyticsSummary) *gqlmodel.AnalyticsSummary {
+	if s == nil {
+		return nil
+	}
+	pageViewStats := make([]*gqlmodel.PageViewStat, 0, len(s.PageViewStats))
+	for _, pv := range s.PageViewStats {
+		pageViewStats = append(pageViewStats, &gqlmodel.PageViewStat{
+			PagePath:           pv.PagePath,
+			AvgDurationSeconds: pv.AvgDurationSeconds,
+			AvgMaxScrollDepth:  pv.AvgMaxScrollDepth,
+			TotalViews:         int32(pv.TotalViews),
+		})
+	}
+	return &gqlmodel.AnalyticsSummary{
+		TotalUsers:                  int32(s.TotalUsers),
+		NewUsersToday:               int32(s.NewUsersToday),
+		NewUsersThisWeek:            int32(s.NewUsersThisWeek),
+		NewUsersThisMonth:           int32(s.NewUsersThisMonth),
+		FrozenUsersCount:            int32(s.FrozenUsersCount),
+		TotalPosts:                  int32(s.TotalPosts),
+		TotalComments:               int32(s.TotalComments),
+		TotalDeletedPosts:           int32(s.TotalDeletedPosts),
+		TotalLikes:                  int32(s.TotalLikes),
+		TotalCommunities:            int32(s.TotalCommunities),
+		TotalMessages:               int32(s.TotalMessages),
+		TotalReports:                int32(s.TotalReports),
+		TotalBlocks:                 int32(s.TotalBlocks),
+		TotalInquiries:              int32(s.TotalInquiries),
+		Dau:                         int32(s.DAU),
+		Wau:                         int32(s.WAU),
+		Mau:                         int32(s.MAU),
+		DauMauRatio:                 s.DAUMAURatio,
+		PostsToday:                  int32(s.PostsToday),
+		CommentsToday:               int32(s.CommentsToday),
+		MessagesToday:               int32(s.MessagesToday),
+		AvgLikesPerPost:             s.AvgLikesPerPost,
+		AvgCommentsPerPost:          s.AvgCommentsPerPost,
+		PostsTextOnly:               int32(s.PostsTextOnly),
+		PostsWithImage:              int32(s.PostsWithImage),
+		PostsWithVideo:              int32(s.PostsWithVideo),
+		UniqueDMSenders:             int32(s.UniqueDMSenders),
+		ActiveCommunitiesLast30Days: int32(s.ActiveCommunitiesLast30Days),
+		AvgCommunityMembers:         s.AvgCommunityMembers,
+		AvgCommunitiesPerUser:       s.AvgCommunitiesPerUser,
+		TotalFollows:                int32(s.TotalFollows),
+		AvgFollowersPerUser:         s.AvgFollowersPerUser,
+		AvgFollowingPerUser:         s.AvgFollowingPerUser,
+		UsersWithProfile:            int32(s.UsersWithProfile),
+		UsersWithAvatar:             int32(s.UsersWithAvatar),
+		UsersWithPost:               int32(s.UsersWithPost),
+		OnboardingCompleteRate:      s.OnboardingCompleteRate,
+		AvgTimeToFirstPostMinutes:   s.AvgTimeToFirstPostMinutes,
+		TotalNotifications:          int32(s.TotalNotifications),
+		ReadNotifications:           int32(s.ReadNotifications),
+		NotificationReadRate:        s.NotificationReadRate,
+		PendingReports:              int32(s.PendingReports),
+		ResolvedReports:             int32(s.ResolvedReports),
+		WebSocketConnections:        int32(s.WebSocketConnections),
+		SseConnections:              int32(s.SSEConnections),
+		ErrorRate5xx:                s.ErrorRate5xx,
+		P50ResponseTimeMs:           s.P50ResponseTimeMs,
+		P95ResponseTimeMs:           s.P95ResponseTimeMs,
+		P99ResponseTimeMs:           s.P99ResponseTimeMs,
+		AvgSessionDurationSeconds:   s.AvgSessionDurationSeconds,
+		AvgSessionsPerDay:           s.AvgSessionsPerDay,
+		AvgScrollDepth:              s.AvgScrollDepth,
+		PageViewStats:               pageViewStats,
+	}
+}
+
+func toGraphCommunityStatItem(c *model.CommunityStatItem) *gqlmodel.CommunityStatItem {
+	return &gqlmodel.CommunityStatItem{
+		CommunityID:  encodeGraphID("community", c.CommunityID),
+		Name:         c.Name,
+		MemberCount:  int32(c.MemberCount),
+		MessageCount: int32(c.MessageCount),
+	}
+}

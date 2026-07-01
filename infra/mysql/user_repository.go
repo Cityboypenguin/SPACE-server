@@ -345,3 +345,11 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 	}
 	return result.LastInsertId()
 }
+
+func (r *MySQLUserRepository) UpdateLastActiveAt(ctx context.Context, userID int64, now int64) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`UPDATE users SET last_active_at = ? WHERE id = ? AND (last_active_at IS NULL OR last_active_at < ?)`,
+		now, userID, now-300, // 5分以内の重複更新をスキップ
+	)
+	return err
+}

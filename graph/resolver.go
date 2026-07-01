@@ -6,6 +6,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
@@ -108,6 +110,11 @@ type Resolver struct {
 	ListConsentsUseCase    *termsusecase.ListConsentsUseCase
 
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
+
+	GetAnalyticsUseCase          analyticsusecase.GetAnalyticsUseCase
+	GetCommunityAnalyticsUseCase analyticsusecase.GetCommunityAnalyticsUseCase
+	GetTimeSeriesUseCase         analyticsusecase.GetTimeSeriesUseCase
+	RecordSessionUseCase         sessionusecase.RecordSessionUseCase
 }
 
 type UserUseCases struct {

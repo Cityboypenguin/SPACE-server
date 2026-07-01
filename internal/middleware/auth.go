@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -28,6 +30,12 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 
 			ctx := auth.WithClaims(c.Request().Context(), claims)
 			c.SetRequest(c.Request().WithContext(ctx))
+
+			userID := claims.ID
+			go func() {
+				_ = userRepo.UpdateLastActiveAt(context.Background(), userID, time.Now().Unix())
+			}()
+
 			return next(c)
 		}
 	}

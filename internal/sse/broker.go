@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
+	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 )
 
 const historySize = 100
@@ -73,6 +74,7 @@ func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event) {
 	}
 	b.clients[userID] = append(b.clients[userID], c)
 	b.mu.Unlock()
+	metrics.Global.IncSSEConnections()
 	return c, missed
 }
 
@@ -90,6 +92,7 @@ func (b *Broker) Unsubscribe(userID int64, c *Client) {
 	if len(b.clients[userID]) == 0 {
 		delete(b.clients, userID)
 	}
+	metrics.Global.DecSSEConnections()
 }
 
 // PublishSyncToUser は現在の未読数をオンライン中のクライアントにのみ送信する。

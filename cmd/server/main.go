@@ -26,6 +26,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
+	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
@@ -45,6 +46,8 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -245,6 +248,14 @@ func main() {
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
+	analyticsRepository := mysql.NewMySQLAnalyticsRepository(database)
+	getAnalyticsUseCase := analyticsusecase.NewGetAnalyticsUseCase(analyticsRepository)
+	getCommunityAnalyticsUseCase := analyticsusecase.NewGetCommunityAnalyticsUseCase(analyticsRepository)
+	getTimeSeriesUseCase := analyticsusecase.NewGetTimeSeriesUseCase(analyticsRepository)
+
+	sessionRepository := mysql.NewMySQLSessionRepository(database)
+	recordSessionUseCase := sessionusecase.NewRecordSessionUseCase(sessionRepository)
+
 	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository, txManager)
 	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
 	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
@@ -409,6 +420,10 @@ func main() {
 		CreateReportUsecase:        *createReportUseCase,
 		ManageReportUsecase:        *manageReportUseCase,
 		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
+		GetAnalyticsUseCase:          getAnalyticsUseCase,
+		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
+		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
+		RecordSessionUseCase:         recordSessionUseCase,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
@@ -481,6 +496,7 @@ func main() {
 	}))
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
@@ -519,6 +535,7 @@ func main() {
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
 			if _, ok := auth.ClaimsFromContext(ctx); ok {
+				metrics.Global.IncWSConnections()
 				return ctx, nil, nil
 			}
 
@@ -534,7 +551,11 @@ func main() {
 			}
 
 			ctx = auth.WithClaims(ctx, claims)
+			metrics.Global.IncWSConnections()
 			return ctx, nil, nil
+		},
+		CloseFunc: func(_ context.Context, _ int) {
+			metrics.Global.DecWSConnections()
 		},
 	})
 	gqlServer.AddTransport(transport.Options{})

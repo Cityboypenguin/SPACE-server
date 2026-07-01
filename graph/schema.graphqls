@@ -102,6 +102,10 @@ type Query {
   adminGetBlockers(userID: ID!): [User!]!
 
   isReportServiceEnabled: Boolean!
+
+  adminGetAnalytics: AnalyticsSummary!
+  adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
+  adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
 }
 
 type User {
@@ -287,6 +291,8 @@ type Mutation {
 
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
   setReportServiceStatus(enabled: Boolean!): Boolean!
+
+  recordSessionData(input: RecordSessionDataInput!): Boolean!
 }
 
 type Announcement {
@@ -653,4 +659,133 @@ input CreateTermsOfServiceInput {
   version: String!
   objectKey: String!
   effectiveDate: String!
+}
+
+type AnalyticsSummary {
+  # 基本集計
+  totalUsers: Int!
+  newUsersToday: Int!
+  newUsersThisWeek: Int!
+  newUsersThisMonth: Int!
+  frozenUsersCount: Int!
+  totalPosts: Int!
+  totalComments: Int!
+  totalDeletedPosts: Int!
+  totalLikes: Int!
+  totalCommunities: Int!
+  totalMessages: Int!
+  totalReports: Int!
+  totalBlocks: Int!
+  totalInquiries: Int!
+
+  # アクティビティ
+  dau: Int!
+  wau: Int!
+  mau: Int!
+  dauMauRatio: Float!
+
+  # コンテンツ（日次）
+  postsToday: Int!
+  commentsToday: Int!
+  messagesToday: Int!
+
+  # エンゲージメント
+  avgLikesPerPost: Float!
+  avgCommentsPerPost: Float!
+
+  # 投稿種別
+  postsTextOnly: Int!
+  postsWithImage: Int!
+  postsWithVideo: Int!
+
+  # DM
+  uniqueDMSenders: Int!
+
+  # コミュニティ
+  activeCommunitiesLast30Days: Int!
+  avgCommunityMembers: Float!
+  avgCommunitiesPerUser: Float!
+
+  # ソーシャル
+  totalFollows: Int!
+  avgFollowersPerUser: Float!
+  avgFollowingPerUser: Float!
+
+  # オンボーディング
+  usersWithProfile: Int!
+  usersWithAvatar: Int!
+  usersWithPost: Int!
+  onboardingCompleteRate: Float!
+  avgTimeToFirstPostMinutes: Float!
+
+  # 通知
+  totalNotifications: Int!
+  readNotifications: Int!
+  notificationReadRate: Float!
+
+  # 通報ステータス
+  pendingReports: Int!
+  resolvedReports: Int!
+
+  # インフラ（in-memory）
+  webSocketConnections: Int!
+  sseConnections: Int!
+  errorRate5xx: Float!
+  p50ResponseTimeMs: Float!
+  p95ResponseTimeMs: Float!
+  p99ResponseTimeMs: Float!
+
+  # セッション（クライアント送信）
+  avgSessionDurationSeconds: Float!
+  avgSessionsPerDay: Float!
+  avgScrollDepth: Float!
+  pageViewStats: [PageViewStat!]!
+}
+
+type PageViewStat {
+  pagePath: String!
+  avgDurationSeconds: Float!
+  avgMaxScrollDepth: Float!
+  totalViews: Int!
+}
+
+type CommunityStatItem {
+  communityID: ID!
+  name: String!
+  memberCount: Int!
+  messageCount: Int!
+}
+
+type CommunityStatsPage {
+  items: [CommunityStatItem!]!
+  total: Int!
+}
+
+input RecordSessionDataInput {
+  sessionDurationSeconds: Int!
+  pageViews: [PageViewInput!]!
+}
+
+input PageViewInput {
+  path: String!
+  durationSeconds: Int!
+  maxScrollDepth: Int!
+}
+
+enum TimeSeriesGranularity {
+  day
+  hour
+}
+
+type TimeSeriesPoint {
+  label: String!
+  posts: Int!
+  comments: Int!
+  messages: Int!
+  newUsers: Int!
+  likes: Int!
+}
+
+type TimeSeriesData {
+  points: [TimeSeriesPoint!]!
 }
