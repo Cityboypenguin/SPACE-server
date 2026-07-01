@@ -6,9 +6,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
-	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
@@ -22,6 +21,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -121,6 +121,7 @@ type UserUseCases struct {
 	GetUserByIDUseCase            user.GetUserByIDUseCase
 	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
 	CreateUserUseCase             user.CreateUserUseCase
+	AdminCreateUserUseCase        user.AdminCreateUserUseCase
 	SendEmailOTPUseCase           user.SendEmailOTPUseCase
 	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
 	ListUsersUseCase              user.ListUsersUseCase

@@ -14,6 +14,13 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type AdminCreateUserInput struct {
+	AccountID string `json:"accountID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
