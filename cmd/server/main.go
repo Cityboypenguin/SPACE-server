@@ -250,11 +250,12 @@ func main() {
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
-	analyticsRepository := infracache.NewCachedAnalyticsRepository(
+	cachedAnalyticsRepo := infracache.NewCachedAnalyticsRepository(
 		mysql.NewMySQLAnalyticsRepository(database),
 		5*time.Minute,
 		2*time.Minute,
 	)
+	analyticsRepository := cachedAnalyticsRepo
 	getAnalyticsUseCase := analyticsusecase.NewGetAnalyticsUseCase(analyticsRepository)
 	getCommunityAnalyticsUseCase := analyticsusecase.NewGetCommunityAnalyticsUseCase(analyticsRepository)
 	getTimeSeriesUseCase := analyticsusecase.NewGetTimeSeriesUseCase(analyticsRepository)
@@ -430,6 +431,7 @@ func main() {
 		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
 		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
 		RecordSessionUseCase:         recordSessionUseCase,
+		InvalidateAnalyticsSummary:   cachedAnalyticsRepo.InvalidateSummary,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,

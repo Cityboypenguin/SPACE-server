@@ -45,10 +45,18 @@ type commEntry struct {
 	expires time.Time
 }
 
+// InvalidateSummary はサマリーキャッシュを即座に破棄する。
+// 通報ステータス変更など管理操作の直後に呼ぶことで、次回取得時にDBから最新値を読ませる。
+func (c *CachedAnalyticsRepository) InvalidateSummary() {
+	c.summaryMu.Lock()
+	c.summaryVal = nil
+	c.summaryMu.Unlock()
+}
+
 func NewCachedAnalyticsRepository(
 	inner repository.AnalyticsRepository,
 	summaryTTL, keyedTTL time.Duration,
-) repository.AnalyticsRepository {
+) *CachedAnalyticsRepository {
 	return &CachedAnalyticsRepository{
 		inner:       inner,
 		summaryTTL:  summaryTTL,

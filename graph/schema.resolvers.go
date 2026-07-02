@@ -1370,6 +1370,9 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	if err != nil {
 		return nil, err
 	}
+	if r.InvalidateAnalyticsSummary != nil {
+		r.InvalidateAnalyticsSummary()
+	}
 
 	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
 	if err != nil || reporter == nil {
