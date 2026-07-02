@@ -62,6 +62,62 @@ type ComplexityRoot struct {
 		Total func(childComplexity int) int
 	}
 
+	AnalyticsSummary struct {
+		ActiveCommunitiesLast30Days func(childComplexity int) int
+		AvgCommentsPerPost          func(childComplexity int) int
+		AvgCommunitiesPerUser       func(childComplexity int) int
+		AvgCommunityMembers         func(childComplexity int) int
+		AvgFollowersPerUser         func(childComplexity int) int
+		AvgFollowingPerUser         func(childComplexity int) int
+		AvgLikesPerPost             func(childComplexity int) int
+		AvgScrollDepth              func(childComplexity int) int
+		AvgSessionDurationSeconds   func(childComplexity int) int
+		AvgSessionsPerDay           func(childComplexity int) int
+		AvgTimeToFirstPostMinutes   func(childComplexity int) int
+		CommentsToday               func(childComplexity int) int
+		Dau                         func(childComplexity int) int
+		DauMauRatio                 func(childComplexity int) int
+		ErrorRate5xx                func(childComplexity int) int
+		FrozenUsersCount            func(childComplexity int) int
+		Mau                         func(childComplexity int) int
+		MessagesToday               func(childComplexity int) int
+		NewUsersThisMonth           func(childComplexity int) int
+		NewUsersThisWeek            func(childComplexity int) int
+		NewUsersToday               func(childComplexity int) int
+		NotificationReadRate        func(childComplexity int) int
+		OnboardingCompleteRate      func(childComplexity int) int
+		P50ResponseTimeMs           func(childComplexity int) int
+		P95ResponseTimeMs           func(childComplexity int) int
+		P99ResponseTimeMs           func(childComplexity int) int
+		PageViewStats               func(childComplexity int) int
+		PendingReports              func(childComplexity int) int
+		PostsTextOnly               func(childComplexity int) int
+		PostsToday                  func(childComplexity int) int
+		PostsWithImage              func(childComplexity int) int
+		PostsWithVideo              func(childComplexity int) int
+		ReadNotifications           func(childComplexity int) int
+		ResolvedReports             func(childComplexity int) int
+		SseConnections              func(childComplexity int) int
+		TotalBlocks                 func(childComplexity int) int
+		TotalComments               func(childComplexity int) int
+		TotalCommunities            func(childComplexity int) int
+		TotalDeletedPosts           func(childComplexity int) int
+		TotalFollows                func(childComplexity int) int
+		TotalInquiries              func(childComplexity int) int
+		TotalLikes                  func(childComplexity int) int
+		TotalMessages               func(childComplexity int) int
+		TotalNotifications          func(childComplexity int) int
+		TotalPosts                  func(childComplexity int) int
+		TotalReports                func(childComplexity int) int
+		TotalUsers                  func(childComplexity int) int
+		UniqueDMSenders             func(childComplexity int) int
+		UsersWithAvatar             func(childComplexity int) int
+		UsersWithPost               func(childComplexity int) int
+		UsersWithProfile            func(childComplexity int) int
+		Wau                         func(childComplexity int) int
+		WebSocketConnections        func(childComplexity int) int
+	}
+
 	Announcement struct {
 		Body      func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
@@ -102,6 +158,18 @@ type ComplexityRoot struct {
 	}
 
 	CommunityPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
+	CommunityStatItem struct {
+		CommunityID  func(childComplexity int) int
+		MemberCount  func(childComplexity int) int
+		MessageCount func(childComplexity int) int
+		Name         func(childComplexity int) int
+	}
+
+	CommunityStatsPage struct {
 		Items func(childComplexity int) int
 		Total func(childComplexity int) int
 	}
@@ -163,72 +231,76 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddUserToRoom              func(childComplexity int, input model.AddUserToRoomInput) int
-		AdminCreateUser            func(childComplexity int, input model.AdminCreateUserInput) int
-		AdminDeletePost            func(childComplexity int, id string) int
-		AdminUpdateProfile         func(childComplexity int, userID string, input model.UpdateProfileInput) int
-		AdminUpdateUser            func(childComplexity int, id string, input model.UpdateUserInput) int
-		ConsentToTerms             func(childComplexity int, termsID string) int
-		CreateAdministrator        func(childComplexity int, input model.CreateAdministratorInput) int
-		CreateAnnouncement         func(childComplexity int, input model.CreateAnnouncementInput) int
-		CreateBlocker              func(childComplexity int, blockedUserID string) int
-		CreateCommunity            func(childComplexity int, input model.CreateCommunityInput) int
-		CreateFavorite             func(childComplexity int, input model.CreateFavoriteInput) int
-		CreateFavoriteUser         func(childComplexity int, favoriteUserID string) int
-		CreateInquiry              func(childComplexity int, input model.CreateInquiryInput) int
-		CreatePost                 func(childComplexity int, input model.CreatePostInput) int
-		CreateReport               func(childComplexity int, input model.CreateReportInput) int
-		CreateRoom                 func(childComplexity int, input model.CreateRoomInput) int
-		CreateTermsOfService       func(childComplexity int, input model.CreateTermsOfServiceInput) int
-		CreateUser                 func(childComplexity int, input model.CreateUserInput) int
-		DeleteAdministrator        func(childComplexity int, id string) int
-		DeleteAnnouncement         func(childComplexity int, id string) int
-		DeleteAvatar               func(childComplexity int) int
-		DeleteBlocker              func(childComplexity int, blockedUserID string) int
-		DeleteFavorite             func(childComplexity int, input model.DeleteFavoriteInput) int
-		DeleteFavoriteUser         func(childComplexity int, favoriteUserID string) int
-		DeleteMessage              func(childComplexity int, roomID string, id string) int
-		DeleteMyAccount            func(childComplexity int) int
-		DeleteNotifications        func(childComplexity int, ids []string) int
-		DeletePost                 func(childComplexity int, id string) int
-		DeleteReadNotifications    func(childComplexity int) int
-		DeleteUser                 func(childComplexity int, id string) int
-		DemoteFromCommunityOwner   func(childComplexity int, communityID string, userID string) int
-		FreezeUser                 func(childComplexity int, id string) int
-		GetOrCreateDMRoom          func(childComplexity int, targetUserID string) int
-		JoinRoom                   func(childComplexity int, roomID string) int
-		KickUserFromCommunity      func(childComplexity int, communityID string, userID string) int
-		LoginAdministrator         func(childComplexity int, input model.LoginInput) int
-		LoginUser                  func(childComplexity int, input model.LoginInput) int
-		LogoutAdministrator        func(childComplexity int, token string) int
-		LogoutUser                 func(childComplexity int, token string) int
-		MarkAllNotificationsAsRead func(childComplexity int) int
-		MarkNotificationAsRead     func(childComplexity int, id string) int
-		MarkRoomAsRead             func(childComplexity int, roomID string) int
-		PromoteToCommunityOwner    func(childComplexity int, communityID string, userID string) int
-		RefreshAdministratorToken  func(childComplexity int, refreshToken string) int
-		RefreshUserToken           func(childComplexity int, refreshToken string) int
-		RemoveUserFromRoom         func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		RequestPasswordReset       func(childComplexity int, email string) int
-		ResetPassword              func(childComplexity int, resetToken string, newPassword string) int
-		SendEmailOtp               func(childComplexity int, email string) int
-		SendMessage                func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
-		SetAvatar                  func(childComplexity int, objectKey string) int
-		SetReportServiceStatus     func(childComplexity int, enabled bool) int
-		ToggleMaintenanceMode      func(childComplexity int, enabled bool) int
-		ToggleReportSystem         func(childComplexity int, enabled bool) int
-		UnfreezeUser               func(childComplexity int, id string) int
-		UpdateAdministrator        func(childComplexity int, id string, input model.UpdateAdministratorInput) int
-		UpdateAnnouncement         func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
-		UpdateCommunity            func(childComplexity int, id string, input model.UpdateCommunityInput) int
-		UpdateCommunityMembers     func(childComplexity int, communityID string, updates []*model.CommunityMemberUpdateInput) int
-		UpdateInquiryStatus        func(childComplexity int, id string, status model.InquiryStatus) int
-		UpdateMessage              func(childComplexity int, roomID string, id string, content string) int
-		UpdatePost                 func(childComplexity int, input model.UpdatePostInput) int
-		UpdateProfile              func(childComplexity int, input model.UpdateProfileInput) int
-		UpdateReportStatus         func(childComplexity int, id string, status model.ReportStatus) int
-		UpdateUser                 func(childComplexity int, input model.UpdateUserInput) int
-		VerifyPasswordResetOtp     func(childComplexity int, email string, otp string) int
+		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
+		AdminDeletePost                   func(childComplexity int, id string) int
+		AdminUpdateProfile                func(childComplexity int, userID string, input model.UpdateProfileInput) int
+		AdminUpdateUser                   func(childComplexity int, id string, input model.UpdateUserInput) int
+		ConsentToTerms                    func(childComplexity int, termsID string) int
+		CreateAdministrator               func(childComplexity int, input model.CreateAdministratorInput) int
+		CreateAnnouncement                func(childComplexity int, input model.CreateAnnouncementInput) int
+		CreateBlocker                     func(childComplexity int, blockedUserID string) int
+		CreateCommunity                   func(childComplexity int, input model.CreateCommunityInput) int
+		CreateFavorite                    func(childComplexity int, input model.CreateFavoriteInput) int
+		CreateFavoriteUser                func(childComplexity int, favoriteUserID string) int
+		CreateInquiry                     func(childComplexity int, input model.CreateInquiryInput) int
+		CreatePost                        func(childComplexity int, input model.CreatePostInput) int
+		CreateReport                      func(childComplexity int, input model.CreateReportInput) int
+		CreateRoom                        func(childComplexity int, input model.CreateRoomInput) int
+		CreateTermsOfService              func(childComplexity int, input model.CreateTermsOfServiceInput) int
+		CreateUser                        func(childComplexity int, input model.CreateUserInput) int
+		DeleteAdministrator               func(childComplexity int, id string) int
+		DeleteAnnouncement                func(childComplexity int, id string) int
+		DeleteAvatar                      func(childComplexity int) int
+		DeleteBlocker                     func(childComplexity int, blockedUserID string) int
+		DeleteFavorite                    func(childComplexity int, input model.DeleteFavoriteInput) int
+		DeleteFavoriteUser                func(childComplexity int, favoriteUserID string) int
+		DeleteMessage                     func(childComplexity int, roomID string, id string) int
+		DeleteMyAccount                   func(childComplexity int) int
+		DeleteNotifications               func(childComplexity int, ids []string) int
+		DeletePost                        func(childComplexity int, id string) int
+		DeleteReadNotifications           func(childComplexity int) int
+		DeleteReadNotificationsByActor    func(childComplexity int, typeArg string, actorID string) int
+		DeleteRoom                        func(childComplexity int, roomID string) int
+		DeleteUser                        func(childComplexity int, id string) int
+		DemoteFromCommunityOwner          func(childComplexity int, communityID string, userID string) int
+		FreezeUser                        func(childComplexity int, id string) int
+		GetOrCreateDMRoom                 func(childComplexity int, targetUserID string) int
+		JoinRoom                          func(childComplexity int, roomID string) int
+		KickUserFromCommunity             func(childComplexity int, communityID string, userID string) int
+		LoginAdministrator                func(childComplexity int, input model.LoginInput) int
+		LoginUser                         func(childComplexity int, input model.LoginInput) int
+		LogoutAdministrator               func(childComplexity int, token string) int
+		LogoutUser                        func(childComplexity int, token string) int
+		MarkAllNotificationsAsRead        func(childComplexity int) int
+		MarkAllNotificationsAsReadByActor func(childComplexity int, typeArg string, actorID string) int
+		MarkNotificationAsRead            func(childComplexity int, id string) int
+		MarkRoomAsRead                    func(childComplexity int, roomID string) int
+		PromoteToCommunityOwner           func(childComplexity int, communityID string, userID string) int
+		RecordSessionData                 func(childComplexity int, input model.RecordSessionDataInput) int
+		RefreshAdministratorToken         func(childComplexity int, refreshToken string) int
+		RefreshUserToken                  func(childComplexity int, refreshToken string) int
+		RemoveUserFromRoom                func(childComplexity int, input model.RemoveUserFromRoomInput) int
+		RequestPasswordReset              func(childComplexity int, email string) int
+		ResetPassword                     func(childComplexity int, resetToken string, newPassword string) int
+		SendEmailOtp                      func(childComplexity int, email string) int
+		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
+		SetAvatar                         func(childComplexity int, objectKey string) int
+		SetReportServiceStatus            func(childComplexity int, enabled bool) int
+		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
+		ToggleReportSystem                func(childComplexity int, enabled bool) int
+		UnfreezeUser                      func(childComplexity int, id string) int
+		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
+		UpdateAnnouncement                func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
+		UpdateCommunity                   func(childComplexity int, id string, input model.UpdateCommunityInput) int
+		UpdateCommunityMembers            func(childComplexity int, communityID string, updates []*model.CommunityMemberUpdateInput) int
+		UpdateInquiryStatus               func(childComplexity int, id string, status model.InquiryStatus) int
+		UpdateMessage                     func(childComplexity int, roomID string, id string, content string) int
+		UpdatePost                        func(childComplexity int, input model.UpdatePostInput) int
+		UpdateProfile                     func(childComplexity int, input model.UpdateProfileInput) int
+		UpdateReportStatus                func(childComplexity int, id string, status model.ReportStatus) int
+		UpdateUser                        func(childComplexity int, input model.UpdateUserInput) int
+		VerifyEmailOtp                    func(childComplexity int, email string, otp string) int
+		VerifyPasswordResetOtp            func(childComplexity int, email string, otp string) int
 	}
 
 	Notification struct {
@@ -238,13 +310,40 @@ type ComplexityRoot struct {
 		IsRead     func(childComplexity int) int
 		Message    func(childComplexity int) int
 		TargetID   func(childComplexity int) int
+		TargetPost func(childComplexity int) int
 		TargetType func(childComplexity int) int
 		Type       func(childComplexity int) int
+	}
+
+	NotificationGroup struct {
+		Actor       func(childComplexity int) int
+		Count       func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		Key         func(childComplexity int) int
+		LatestID    func(childComplexity int) int
+		Message     func(childComplexity int) int
+		TargetID    func(childComplexity int) int
+		TargetPost  func(childComplexity int) int
+		TargetType  func(childComplexity int) int
+		Type        func(childComplexity int) int
+		UnreadCount func(childComplexity int) int
+	}
+
+	NotificationGroupPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
 	}
 
 	NotificationPage struct {
 		Items func(childComplexity int) int
 		Total func(childComplexity int) int
+	}
+
+	PageViewStat struct {
+		AvgDurationSeconds func(childComplexity int) int
+		AvgMaxScrollDepth  func(childComplexity int) int
+		PagePath           func(childComplexity int) int
+		TotalViews         func(childComplexity int) int
 	}
 
 	Post struct {
@@ -282,8 +381,11 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AdminGetAnalytics               func(childComplexity int) int
 		AdminGetBlockers                func(childComplexity int, userID string) int
+		AdminGetCommunityAnalytics      func(childComplexity int, limit *int32, offset *int32) int
 		AdminGetFavoriteUsers           func(childComplexity int, userID string) int
+		AdminGetTimeSeries              func(childComplexity int, granularity model.TimeSeriesGranularity, from string, to string) int
 		AdminListAnnouncements          func(childComplexity int, limit *int32, offset *int32) int
 		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int) int
@@ -307,7 +409,7 @@ type ComplexityRoot struct {
 		GetPostsByUserID                func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetProfileByUserID              func(childComplexity int, userID string) int
 		GetRepliesByPostID              func(childComplexity int, postID string) int
-		GetRootPost                     func(childComplexity int) int
+		GetRootPost                     func(childComplexity int, id string) int
 		GetUserByID                     func(childComplexity int, id string) int
 		IsReportServiceEnabled          func(childComplexity int) int
 		ListBlockedUsers                func(childComplexity int, limit *int32, offset *int32) int
@@ -317,11 +419,16 @@ type ComplexityRoot struct {
 		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string) int
 		MyCommunities                   func(childComplexity int, limit *int32, offset *int32) int
 		MyDMRooms                       func(childComplexity int, limit *int32, offset *int32) int
-		MyNotifications                 func(childComplexity int, limit *int32, offset *int32) int
+		MyFollowers                     func(childComplexity int, limit *int32, offset *int32) int
+		MyNotificationGroups            func(childComplexity int, limit *int32, offset *int32) int
+		MyNotifications                 func(childComplexity int, limit *int32, offset *int32, typeArg *string, actorID *string) int
 		MyProfile                       func(childComplexity int) int
 		MyTermsConsentStatus            func(childComplexity int) int
+		MyUnreadCommunityCount          func(childComplexity int) int
+		MyUnreadDMCount                 func(childComplexity int) int
 		MyUnreadNotificationCount       func(childComplexity int) int
 		NewFeedPostsCount               func(childComplexity int, since string) int
+		Notification                    func(childComplexity int, id string) int
 		Posts                           func(childComplexity int, limit *int32, offset *int32) int
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
@@ -402,6 +509,19 @@ type ComplexityRoot struct {
 		Version       func(childComplexity int) int
 	}
 
+	TimeSeriesData struct {
+		Points func(childComplexity int) int
+	}
+
+	TimeSeriesPoint struct {
+		Comments func(childComplexity int) int
+		Label    func(childComplexity int) int
+		Likes    func(childComplexity int) int
+		Messages func(childComplexity int) int
+		NewUsers func(childComplexity int) int
+		Posts    func(childComplexity int) int
+	}
+
 	UnreadUpdate struct {
 		RoomID      func(childComplexity int) int
 		UnreadCount func(childComplexity int) int
@@ -463,6 +583,7 @@ type MessageResolver interface {
 }
 type MutationResolver interface {
 	SendEmailOtp(ctx context.Context, email string) (bool, error)
+	VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
 	DeleteMyAccount(ctx context.Context) (bool, error)
@@ -489,6 +610,7 @@ type MutationResolver interface {
 	GetOrCreateDMRoom(ctx context.Context, targetUserID string) (*model.Room, error)
 	AddUserToRoom(ctx context.Context, input model.AddUserToRoomInput) (bool, error)
 	RemoveUserFromRoom(ctx context.Context, input model.RemoveUserFromRoomInput) (bool, error)
+	DeleteRoom(ctx context.Context, roomID string) (bool, error)
 	CreateCommunity(ctx context.Context, input model.CreateCommunityInput) (*model.Community, error)
 	AdminUpdateUser(ctx context.Context, id string, input model.UpdateUserInput) (*model.User, error)
 	AdminUpdateProfile(ctx context.Context, userID string, input model.UpdateProfileInput) (*model.Profile, error)
@@ -518,8 +640,10 @@ type MutationResolver interface {
 	UpdateInquiryStatus(ctx context.Context, id string, status model.InquiryStatus) (*model.Inquiry, error)
 	MarkNotificationAsRead(ctx context.Context, id string) (bool, error)
 	MarkAllNotificationsAsRead(ctx context.Context) (bool, error)
+	MarkAllNotificationsAsReadByActor(ctx context.Context, typeArg string, actorID string) (bool, error)
 	DeleteNotifications(ctx context.Context, ids []string) (bool, error)
 	DeleteReadNotifications(ctx context.Context) (bool, error)
+	DeleteReadNotificationsByActor(ctx context.Context, typeArg string, actorID string) (bool, error)
 	CreateAnnouncement(ctx context.Context, input model.CreateAnnouncementInput) (*model.Announcement, error)
 	UpdateAnnouncement(ctx context.Context, id string, input model.UpdateAnnouncementInput) (*model.Announcement, error)
 	DeleteAnnouncement(ctx context.Context, id string) (bool, error)
@@ -528,6 +652,7 @@ type MutationResolver interface {
 	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
 	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
 	SetReportServiceStatus(ctx context.Context, enabled bool) (bool, error)
+	RecordSessionData(ctx context.Context, input model.RecordSessionDataInput) (bool, error)
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
@@ -545,8 +670,12 @@ type QueryResolver interface {
 	Me(ctx context.Context) (*model.User, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
 	SearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*model.UserPage, error)
-	MyNotifications(ctx context.Context, limit *int32, offset *int32) (*model.NotificationPage, error)
+	MyNotifications(ctx context.Context, limit *int32, offset *int32, typeArg *string, actorID *string) (*model.NotificationPage, error)
+	MyNotificationGroups(ctx context.Context, limit *int32, offset *int32) (*model.NotificationGroupPage, error)
+	Notification(ctx context.Context, id string) (*model.Notification, error)
 	MyUnreadNotificationCount(ctx context.Context) (int32, error)
+	MyUnreadDMCount(ctx context.Context) (int32, error)
+	MyUnreadCommunityCount(ctx context.Context) (int32, error)
 	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
@@ -554,7 +683,7 @@ type QueryResolver interface {
 	TopLevelPosts(ctx context.Context, limit *int32, offset *int32) (*model.PostPage, error)
 	FollowersTopLevelPosts(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	NewFeedPostsCount(ctx context.Context, since string) (int32, error)
-	GetRootPost(ctx context.Context) (*model.Post, error)
+	GetRootPost(ctx context.Context, id string) (*model.Post, error)
 	GetPostByID(ctx context.Context, id string) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id string) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
@@ -590,6 +719,7 @@ type QueryResolver interface {
 	AdminListTerms(ctx context.Context) ([]*model.TermsOfService, error)
 	AdminListConsents(ctx context.Context, termsID string, limit *int32, offset *int32) (*model.TermsConsentPage, error)
 	ListFavoriteUsers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
+	MyFollowers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	SearchFavoriteUsers(ctx context.Context, keyword string) ([]*model.User, error)
 	GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 	AdminGetFavoriteUsers(ctx context.Context, userID string) ([]*model.User, error)
@@ -598,6 +728,9 @@ type QueryResolver interface {
 	GetBlockersByUserID(ctx context.Context, userID string) ([]*model.User, error)
 	AdminGetBlockers(ctx context.Context, userID string) ([]*model.User, error)
 	IsReportServiceEnabled(ctx context.Context) (bool, error)
+	AdminGetAnalytics(ctx context.Context) (*model.AnalyticsSummary, error)
+	AdminGetCommunityAnalytics(ctx context.Context, limit *int32, offset *int32) (*model.CommunityStatsPage, error)
+	AdminGetTimeSeries(ctx context.Context, granularity model.TimeSeriesGranularity, from string, to string) (*model.TimeSeriesData, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -690,6 +823,325 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdministratorPage.Total(childComplexity), true
+
+	case "AnalyticsSummary.activeCommunitiesLast30Days":
+		if e.ComplexityRoot.AnalyticsSummary.ActiveCommunitiesLast30Days == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.ActiveCommunitiesLast30Days(childComplexity), true
+	case "AnalyticsSummary.avgCommentsPerPost":
+		if e.ComplexityRoot.AnalyticsSummary.AvgCommentsPerPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgCommentsPerPost(childComplexity), true
+	case "AnalyticsSummary.avgCommunitiesPerUser":
+		if e.ComplexityRoot.AnalyticsSummary.AvgCommunitiesPerUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgCommunitiesPerUser(childComplexity), true
+	case "AnalyticsSummary.avgCommunityMembers":
+		if e.ComplexityRoot.AnalyticsSummary.AvgCommunityMembers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgCommunityMembers(childComplexity), true
+	case "AnalyticsSummary.avgFollowersPerUser":
+		if e.ComplexityRoot.AnalyticsSummary.AvgFollowersPerUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgFollowersPerUser(childComplexity), true
+	case "AnalyticsSummary.avgFollowingPerUser":
+		if e.ComplexityRoot.AnalyticsSummary.AvgFollowingPerUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgFollowingPerUser(childComplexity), true
+	case "AnalyticsSummary.avgLikesPerPost":
+		if e.ComplexityRoot.AnalyticsSummary.AvgLikesPerPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgLikesPerPost(childComplexity), true
+	case "AnalyticsSummary.avgScrollDepth":
+		if e.ComplexityRoot.AnalyticsSummary.AvgScrollDepth == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgScrollDepth(childComplexity), true
+	case "AnalyticsSummary.avgSessionDurationSeconds":
+		if e.ComplexityRoot.AnalyticsSummary.AvgSessionDurationSeconds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgSessionDurationSeconds(childComplexity), true
+	case "AnalyticsSummary.avgSessionsPerDay":
+		if e.ComplexityRoot.AnalyticsSummary.AvgSessionsPerDay == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgSessionsPerDay(childComplexity), true
+	case "AnalyticsSummary.avgTimeToFirstPostMinutes":
+		if e.ComplexityRoot.AnalyticsSummary.AvgTimeToFirstPostMinutes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.AvgTimeToFirstPostMinutes(childComplexity), true
+	case "AnalyticsSummary.commentsToday":
+		if e.ComplexityRoot.AnalyticsSummary.CommentsToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CommentsToday(childComplexity), true
+	case "AnalyticsSummary.dau":
+		if e.ComplexityRoot.AnalyticsSummary.Dau == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.Dau(childComplexity), true
+	case "AnalyticsSummary.dauMauRatio":
+		if e.ComplexityRoot.AnalyticsSummary.DauMauRatio == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.DauMauRatio(childComplexity), true
+	case "AnalyticsSummary.errorRate5xx":
+		if e.ComplexityRoot.AnalyticsSummary.ErrorRate5xx == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.ErrorRate5xx(childComplexity), true
+	case "AnalyticsSummary.frozenUsersCount":
+		if e.ComplexityRoot.AnalyticsSummary.FrozenUsersCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.FrozenUsersCount(childComplexity), true
+	case "AnalyticsSummary.mau":
+		if e.ComplexityRoot.AnalyticsSummary.Mau == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.Mau(childComplexity), true
+	case "AnalyticsSummary.messagesToday":
+		if e.ComplexityRoot.AnalyticsSummary.MessagesToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.MessagesToday(childComplexity), true
+	case "AnalyticsSummary.newUsersThisMonth":
+		if e.ComplexityRoot.AnalyticsSummary.NewUsersThisMonth == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.NewUsersThisMonth(childComplexity), true
+	case "AnalyticsSummary.newUsersThisWeek":
+		if e.ComplexityRoot.AnalyticsSummary.NewUsersThisWeek == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.NewUsersThisWeek(childComplexity), true
+	case "AnalyticsSummary.newUsersToday":
+		if e.ComplexityRoot.AnalyticsSummary.NewUsersToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.NewUsersToday(childComplexity), true
+	case "AnalyticsSummary.notificationReadRate":
+		if e.ComplexityRoot.AnalyticsSummary.NotificationReadRate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.NotificationReadRate(childComplexity), true
+	case "AnalyticsSummary.onboardingCompleteRate":
+		if e.ComplexityRoot.AnalyticsSummary.OnboardingCompleteRate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.OnboardingCompleteRate(childComplexity), true
+	case "AnalyticsSummary.p50ResponseTimeMs":
+		if e.ComplexityRoot.AnalyticsSummary.P50ResponseTimeMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.P50ResponseTimeMs(childComplexity), true
+	case "AnalyticsSummary.p95ResponseTimeMs":
+		if e.ComplexityRoot.AnalyticsSummary.P95ResponseTimeMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.P95ResponseTimeMs(childComplexity), true
+	case "AnalyticsSummary.p99ResponseTimeMs":
+		if e.ComplexityRoot.AnalyticsSummary.P99ResponseTimeMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.P99ResponseTimeMs(childComplexity), true
+	case "AnalyticsSummary.pageViewStats":
+		if e.ComplexityRoot.AnalyticsSummary.PageViewStats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PageViewStats(childComplexity), true
+	case "AnalyticsSummary.pendingReports":
+		if e.ComplexityRoot.AnalyticsSummary.PendingReports == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PendingReports(childComplexity), true
+	case "AnalyticsSummary.postsTextOnly":
+		if e.ComplexityRoot.AnalyticsSummary.PostsTextOnly == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PostsTextOnly(childComplexity), true
+	case "AnalyticsSummary.postsToday":
+		if e.ComplexityRoot.AnalyticsSummary.PostsToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PostsToday(childComplexity), true
+	case "AnalyticsSummary.postsWithImage":
+		if e.ComplexityRoot.AnalyticsSummary.PostsWithImage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PostsWithImage(childComplexity), true
+	case "AnalyticsSummary.postsWithVideo":
+		if e.ComplexityRoot.AnalyticsSummary.PostsWithVideo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.PostsWithVideo(childComplexity), true
+	case "AnalyticsSummary.readNotifications":
+		if e.ComplexityRoot.AnalyticsSummary.ReadNotifications == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.ReadNotifications(childComplexity), true
+	case "AnalyticsSummary.resolvedReports":
+		if e.ComplexityRoot.AnalyticsSummary.ResolvedReports == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.ResolvedReports(childComplexity), true
+	case "AnalyticsSummary.sseConnections":
+		if e.ComplexityRoot.AnalyticsSummary.SseConnections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.SseConnections(childComplexity), true
+	case "AnalyticsSummary.totalBlocks":
+		if e.ComplexityRoot.AnalyticsSummary.TotalBlocks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalBlocks(childComplexity), true
+	case "AnalyticsSummary.totalComments":
+		if e.ComplexityRoot.AnalyticsSummary.TotalComments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalComments(childComplexity), true
+	case "AnalyticsSummary.totalCommunities":
+		if e.ComplexityRoot.AnalyticsSummary.TotalCommunities == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalCommunities(childComplexity), true
+	case "AnalyticsSummary.totalDeletedPosts":
+		if e.ComplexityRoot.AnalyticsSummary.TotalDeletedPosts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalDeletedPosts(childComplexity), true
+	case "AnalyticsSummary.totalFollows":
+		if e.ComplexityRoot.AnalyticsSummary.TotalFollows == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalFollows(childComplexity), true
+	case "AnalyticsSummary.totalInquiries":
+		if e.ComplexityRoot.AnalyticsSummary.TotalInquiries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalInquiries(childComplexity), true
+	case "AnalyticsSummary.totalLikes":
+		if e.ComplexityRoot.AnalyticsSummary.TotalLikes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalLikes(childComplexity), true
+	case "AnalyticsSummary.totalMessages":
+		if e.ComplexityRoot.AnalyticsSummary.TotalMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalMessages(childComplexity), true
+	case "AnalyticsSummary.totalNotifications":
+		if e.ComplexityRoot.AnalyticsSummary.TotalNotifications == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalNotifications(childComplexity), true
+	case "AnalyticsSummary.totalPosts":
+		if e.ComplexityRoot.AnalyticsSummary.TotalPosts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalPosts(childComplexity), true
+	case "AnalyticsSummary.totalReports":
+		if e.ComplexityRoot.AnalyticsSummary.TotalReports == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalReports(childComplexity), true
+	case "AnalyticsSummary.totalUsers":
+		if e.ComplexityRoot.AnalyticsSummary.TotalUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.TotalUsers(childComplexity), true
+	case "AnalyticsSummary.uniqueDMSenders":
+		if e.ComplexityRoot.AnalyticsSummary.UniqueDMSenders == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.UniqueDMSenders(childComplexity), true
+	case "AnalyticsSummary.usersWithAvatar":
+		if e.ComplexityRoot.AnalyticsSummary.UsersWithAvatar == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.UsersWithAvatar(childComplexity), true
+	case "AnalyticsSummary.usersWithPost":
+		if e.ComplexityRoot.AnalyticsSummary.UsersWithPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.UsersWithPost(childComplexity), true
+	case "AnalyticsSummary.usersWithProfile":
+		if e.ComplexityRoot.AnalyticsSummary.UsersWithProfile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.UsersWithProfile(childComplexity), true
+	case "AnalyticsSummary.wau":
+		if e.ComplexityRoot.AnalyticsSummary.Wau == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.Wau(childComplexity), true
+	case "AnalyticsSummary.webSocketConnections":
+		if e.ComplexityRoot.AnalyticsSummary.WebSocketConnections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.WebSocketConnections(childComplexity), true
 
 	case "Announcement.body":
 		if e.ComplexityRoot.Announcement.Body == nil {
@@ -852,6 +1304,44 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CommunityPage.Total(childComplexity), true
+
+	case "CommunityStatItem.communityID":
+		if e.ComplexityRoot.CommunityStatItem.CommunityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatItem.CommunityID(childComplexity), true
+	case "CommunityStatItem.memberCount":
+		if e.ComplexityRoot.CommunityStatItem.MemberCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatItem.MemberCount(childComplexity), true
+	case "CommunityStatItem.messageCount":
+		if e.ComplexityRoot.CommunityStatItem.MessageCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatItem.MessageCount(childComplexity), true
+	case "CommunityStatItem.name":
+		if e.ComplexityRoot.CommunityStatItem.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatItem.Name(childComplexity), true
+
+	case "CommunityStatsPage.items":
+		if e.ComplexityRoot.CommunityStatsPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatsPage.Items(childComplexity), true
+	case "CommunityStatsPage.total":
+		if e.ComplexityRoot.CommunityStatsPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityStatsPage.Total(childComplexity), true
 
 	case "Favorite.createdAt":
 		if e.ComplexityRoot.Favorite.CreatedAt == nil {
@@ -1374,6 +1864,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteReadNotifications(childComplexity), true
+	case "Mutation.deleteReadNotificationsByActor":
+		if e.ComplexityRoot.Mutation.DeleteReadNotificationsByActor == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteReadNotificationsByActor_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteReadNotificationsByActor(childComplexity, args["type"].(string), args["actorID"].(string)), true
+	case "Mutation.deleteRoom":
+		if e.ComplexityRoot.Mutation.DeleteRoom == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteRoom_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteRoom(childComplexity, args["roomID"].(string)), true
 	case "Mutation.deleteUser":
 		if e.ComplexityRoot.Mutation.DeleteUser == nil {
 			break
@@ -1490,6 +2002,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.MarkAllNotificationsAsRead(childComplexity), true
+	case "Mutation.markAllNotificationsAsReadByActor":
+		if e.ComplexityRoot.Mutation.MarkAllNotificationsAsReadByActor == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_markAllNotificationsAsReadByActor_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MarkAllNotificationsAsReadByActor(childComplexity, args["type"].(string), args["actorID"].(string)), true
 	case "Mutation.markNotificationAsRead":
 		if e.ComplexityRoot.Mutation.MarkNotificationAsRead == nil {
 			break
@@ -1523,6 +2046,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PromoteToCommunityOwner(childComplexity, args["communityID"].(string), args["userID"].(string)), true
+	case "Mutation.recordSessionData":
+		if e.ComplexityRoot.Mutation.RecordSessionData == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_recordSessionData_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RecordSessionData(childComplexity, args["input"].(model.RecordSessionDataInput)), true
 	case "Mutation.refreshAdministratorToken":
 		if e.ComplexityRoot.Mutation.RefreshAdministratorToken == nil {
 			break
@@ -1765,6 +2299,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateUser(childComplexity, args["input"].(model.UpdateUserInput)), true
+	case "Mutation.verifyEmailOTP":
+		if e.ComplexityRoot.Mutation.VerifyEmailOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_verifyEmailOTP_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.VerifyEmailOtp(childComplexity, args["email"].(string), args["otp"].(string)), true
 	case "Mutation.verifyPasswordResetOTP":
 		if e.ComplexityRoot.Mutation.VerifyPasswordResetOtp == nil {
 			break
@@ -1813,6 +2358,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Notification.TargetID(childComplexity), true
+	case "Notification.targetPost":
+		if e.ComplexityRoot.Notification.TargetPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.TargetPost(childComplexity), true
 	case "Notification.targetType":
 		if e.ComplexityRoot.Notification.TargetType == nil {
 			break
@@ -1826,6 +2377,86 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Notification.Type(childComplexity), true
 
+	case "NotificationGroup.actor":
+		if e.ComplexityRoot.NotificationGroup.Actor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.Actor(childComplexity), true
+	case "NotificationGroup.count":
+		if e.ComplexityRoot.NotificationGroup.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.Count(childComplexity), true
+	case "NotificationGroup.createdAt":
+		if e.ComplexityRoot.NotificationGroup.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.CreatedAt(childComplexity), true
+	case "NotificationGroup.key":
+		if e.ComplexityRoot.NotificationGroup.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.Key(childComplexity), true
+	case "NotificationGroup.latestID":
+		if e.ComplexityRoot.NotificationGroup.LatestID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.LatestID(childComplexity), true
+	case "NotificationGroup.message":
+		if e.ComplexityRoot.NotificationGroup.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.Message(childComplexity), true
+	case "NotificationGroup.targetID":
+		if e.ComplexityRoot.NotificationGroup.TargetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.TargetID(childComplexity), true
+	case "NotificationGroup.targetPost":
+		if e.ComplexityRoot.NotificationGroup.TargetPost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.TargetPost(childComplexity), true
+	case "NotificationGroup.targetType":
+		if e.ComplexityRoot.NotificationGroup.TargetType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.TargetType(childComplexity), true
+	case "NotificationGroup.type":
+		if e.ComplexityRoot.NotificationGroup.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.Type(childComplexity), true
+	case "NotificationGroup.unreadCount":
+		if e.ComplexityRoot.NotificationGroup.UnreadCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.UnreadCount(childComplexity), true
+
+	case "NotificationGroupPage.items":
+		if e.ComplexityRoot.NotificationGroupPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroupPage.Items(childComplexity), true
+	case "NotificationGroupPage.total":
+		if e.ComplexityRoot.NotificationGroupPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroupPage.Total(childComplexity), true
+
 	case "NotificationPage.items":
 		if e.ComplexityRoot.NotificationPage.Items == nil {
 			break
@@ -1838,6 +2469,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NotificationPage.Total(childComplexity), true
+
+	case "PageViewStat.avgDurationSeconds":
+		if e.ComplexityRoot.PageViewStat.AvgDurationSeconds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PageViewStat.AvgDurationSeconds(childComplexity), true
+	case "PageViewStat.avgMaxScrollDepth":
+		if e.ComplexityRoot.PageViewStat.AvgMaxScrollDepth == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PageViewStat.AvgMaxScrollDepth(childComplexity), true
+	case "PageViewStat.pagePath":
+		if e.ComplexityRoot.PageViewStat.PagePath == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PageViewStat.PagePath(childComplexity), true
+	case "PageViewStat.totalViews":
+		if e.ComplexityRoot.PageViewStat.TotalViews == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PageViewStat.TotalViews(childComplexity), true
 
 	case "Post.content":
 		if e.ComplexityRoot.Post.Content == nil {
@@ -1975,6 +2631,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Profile.Username(childComplexity), true
 
+	case "Query.adminGetAnalytics":
+		if e.ComplexityRoot.Query.AdminGetAnalytics == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminGetAnalytics(childComplexity), true
 	case "Query.adminGetBlockers":
 		if e.ComplexityRoot.Query.AdminGetBlockers == nil {
 			break
@@ -1986,6 +2648,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminGetBlockers(childComplexity, args["userID"].(string)), true
+	case "Query.adminGetCommunityAnalytics":
+		if e.ComplexityRoot.Query.AdminGetCommunityAnalytics == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminGetCommunityAnalytics_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminGetCommunityAnalytics(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminGetFavoriteUsers":
 		if e.ComplexityRoot.Query.AdminGetFavoriteUsers == nil {
 			break
@@ -1997,6 +2670,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminGetFavoriteUsers(childComplexity, args["userID"].(string)), true
+	case "Query.adminGetTimeSeries":
+		if e.ComplexityRoot.Query.AdminGetTimeSeries == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminGetTimeSeries_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminGetTimeSeries(childComplexity, args["granularity"].(model.TimeSeriesGranularity), args["from"].(string), args["to"].(string)), true
 	case "Query.adminListAnnouncements":
 		if e.ComplexityRoot.Query.AdminListAnnouncements == nil {
 			break
@@ -2240,7 +2924,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Query.GetRootPost(childComplexity), true
+		args, err := ec.field_Query_getRootPost_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.GetRootPost(childComplexity, args["id"].(string)), true
 	case "Query.getUserByID":
 		if e.ComplexityRoot.Query.GetUserByID == nil {
 			break
@@ -2326,6 +3015,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyDMRooms(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.myFollowers":
+		if e.ComplexityRoot.Query.MyFollowers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myFollowers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyFollowers(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.myNotificationGroups":
+		if e.ComplexityRoot.Query.MyNotificationGroups == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myNotificationGroups_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyNotificationGroups(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.myNotifications":
 		if e.ComplexityRoot.Query.MyNotifications == nil {
 			break
@@ -2336,7 +3047,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["limit"].(*int32), args["offset"].(*int32), args["type"].(*string), args["actorID"].(*string)), true
 	case "Query.myProfile":
 		if e.ComplexityRoot.Query.MyProfile == nil {
 			break
@@ -2349,6 +3060,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyTermsConsentStatus(childComplexity), true
+	case "Query.myUnreadCommunityCount":
+		if e.ComplexityRoot.Query.MyUnreadCommunityCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyUnreadCommunityCount(childComplexity), true
+	case "Query.myUnreadDMCount":
+		if e.ComplexityRoot.Query.MyUnreadDMCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyUnreadDMCount(childComplexity), true
 	case "Query.myUnreadNotificationCount":
 		if e.ComplexityRoot.Query.MyUnreadNotificationCount == nil {
 			break
@@ -2366,6 +3089,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.NewFeedPostsCount(childComplexity, args["since"].(string)), true
+	case "Query.notification":
+		if e.ComplexityRoot.Query.Notification == nil {
+			break
+		}
+
+		args, err := ec.field_Query_notification_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Notification(childComplexity, args["id"].(string)), true
 	case "Query.posts":
 		if e.ComplexityRoot.Query.Posts == nil {
 			break
@@ -2782,6 +3516,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TermsOfService.Version(childComplexity), true
 
+	case "TimeSeriesData.points":
+		if e.ComplexityRoot.TimeSeriesData.Points == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesData.Points(childComplexity), true
+
+	case "TimeSeriesPoint.comments":
+		if e.ComplexityRoot.TimeSeriesPoint.Comments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.Comments(childComplexity), true
+	case "TimeSeriesPoint.label":
+		if e.ComplexityRoot.TimeSeriesPoint.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.Label(childComplexity), true
+	case "TimeSeriesPoint.likes":
+		if e.ComplexityRoot.TimeSeriesPoint.Likes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.Likes(childComplexity), true
+	case "TimeSeriesPoint.messages":
+		if e.ComplexityRoot.TimeSeriesPoint.Messages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.Messages(childComplexity), true
+	case "TimeSeriesPoint.newUsers":
+		if e.ComplexityRoot.TimeSeriesPoint.NewUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.NewUsers(childComplexity), true
+	case "TimeSeriesPoint.posts":
+		if e.ComplexityRoot.TimeSeriesPoint.Posts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.Posts(childComplexity), true
+
 	case "UnreadUpdate.roomID":
 		if e.ComplexityRoot.UnreadUpdate.RoomID == nil {
 			break
@@ -2979,6 +3757,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputDeleteFavoriteInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMediaUploadInput,
+		ec.unmarshalInputPageViewInput,
+		ec.unmarshalInputRecordSessionDataInput,
 		ec.unmarshalInputRemoveUserFromRoomInput,
 		ec.unmarshalInputReportSearchFilter,
 		ec.unmarshalInputUpdateAdministratorInput,
@@ -3137,6 +3917,118 @@ func (ec *executionContext) childFields_AdministratorPage(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type AdministratorPage", field.Name)
 }
 
+func (ec *executionContext) childFields_AnalyticsSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "totalUsers":
+		return ec.fieldContext_AnalyticsSummary_totalUsers(ctx, field)
+	case "newUsersToday":
+		return ec.fieldContext_AnalyticsSummary_newUsersToday(ctx, field)
+	case "newUsersThisWeek":
+		return ec.fieldContext_AnalyticsSummary_newUsersThisWeek(ctx, field)
+	case "newUsersThisMonth":
+		return ec.fieldContext_AnalyticsSummary_newUsersThisMonth(ctx, field)
+	case "frozenUsersCount":
+		return ec.fieldContext_AnalyticsSummary_frozenUsersCount(ctx, field)
+	case "totalPosts":
+		return ec.fieldContext_AnalyticsSummary_totalPosts(ctx, field)
+	case "totalComments":
+		return ec.fieldContext_AnalyticsSummary_totalComments(ctx, field)
+	case "totalDeletedPosts":
+		return ec.fieldContext_AnalyticsSummary_totalDeletedPosts(ctx, field)
+	case "totalLikes":
+		return ec.fieldContext_AnalyticsSummary_totalLikes(ctx, field)
+	case "totalCommunities":
+		return ec.fieldContext_AnalyticsSummary_totalCommunities(ctx, field)
+	case "totalMessages":
+		return ec.fieldContext_AnalyticsSummary_totalMessages(ctx, field)
+	case "totalReports":
+		return ec.fieldContext_AnalyticsSummary_totalReports(ctx, field)
+	case "totalBlocks":
+		return ec.fieldContext_AnalyticsSummary_totalBlocks(ctx, field)
+	case "totalInquiries":
+		return ec.fieldContext_AnalyticsSummary_totalInquiries(ctx, field)
+	case "dau":
+		return ec.fieldContext_AnalyticsSummary_dau(ctx, field)
+	case "wau":
+		return ec.fieldContext_AnalyticsSummary_wau(ctx, field)
+	case "mau":
+		return ec.fieldContext_AnalyticsSummary_mau(ctx, field)
+	case "dauMauRatio":
+		return ec.fieldContext_AnalyticsSummary_dauMauRatio(ctx, field)
+	case "postsToday":
+		return ec.fieldContext_AnalyticsSummary_postsToday(ctx, field)
+	case "commentsToday":
+		return ec.fieldContext_AnalyticsSummary_commentsToday(ctx, field)
+	case "messagesToday":
+		return ec.fieldContext_AnalyticsSummary_messagesToday(ctx, field)
+	case "avgLikesPerPost":
+		return ec.fieldContext_AnalyticsSummary_avgLikesPerPost(ctx, field)
+	case "avgCommentsPerPost":
+		return ec.fieldContext_AnalyticsSummary_avgCommentsPerPost(ctx, field)
+	case "postsTextOnly":
+		return ec.fieldContext_AnalyticsSummary_postsTextOnly(ctx, field)
+	case "postsWithImage":
+		return ec.fieldContext_AnalyticsSummary_postsWithImage(ctx, field)
+	case "postsWithVideo":
+		return ec.fieldContext_AnalyticsSummary_postsWithVideo(ctx, field)
+	case "uniqueDMSenders":
+		return ec.fieldContext_AnalyticsSummary_uniqueDMSenders(ctx, field)
+	case "activeCommunitiesLast30Days":
+		return ec.fieldContext_AnalyticsSummary_activeCommunitiesLast30Days(ctx, field)
+	case "avgCommunityMembers":
+		return ec.fieldContext_AnalyticsSummary_avgCommunityMembers(ctx, field)
+	case "avgCommunitiesPerUser":
+		return ec.fieldContext_AnalyticsSummary_avgCommunitiesPerUser(ctx, field)
+	case "totalFollows":
+		return ec.fieldContext_AnalyticsSummary_totalFollows(ctx, field)
+	case "avgFollowersPerUser":
+		return ec.fieldContext_AnalyticsSummary_avgFollowersPerUser(ctx, field)
+	case "avgFollowingPerUser":
+		return ec.fieldContext_AnalyticsSummary_avgFollowingPerUser(ctx, field)
+	case "usersWithProfile":
+		return ec.fieldContext_AnalyticsSummary_usersWithProfile(ctx, field)
+	case "usersWithAvatar":
+		return ec.fieldContext_AnalyticsSummary_usersWithAvatar(ctx, field)
+	case "usersWithPost":
+		return ec.fieldContext_AnalyticsSummary_usersWithPost(ctx, field)
+	case "onboardingCompleteRate":
+		return ec.fieldContext_AnalyticsSummary_onboardingCompleteRate(ctx, field)
+	case "avgTimeToFirstPostMinutes":
+		return ec.fieldContext_AnalyticsSummary_avgTimeToFirstPostMinutes(ctx, field)
+	case "totalNotifications":
+		return ec.fieldContext_AnalyticsSummary_totalNotifications(ctx, field)
+	case "readNotifications":
+		return ec.fieldContext_AnalyticsSummary_readNotifications(ctx, field)
+	case "notificationReadRate":
+		return ec.fieldContext_AnalyticsSummary_notificationReadRate(ctx, field)
+	case "pendingReports":
+		return ec.fieldContext_AnalyticsSummary_pendingReports(ctx, field)
+	case "resolvedReports":
+		return ec.fieldContext_AnalyticsSummary_resolvedReports(ctx, field)
+	case "webSocketConnections":
+		return ec.fieldContext_AnalyticsSummary_webSocketConnections(ctx, field)
+	case "sseConnections":
+		return ec.fieldContext_AnalyticsSummary_sseConnections(ctx, field)
+	case "errorRate5xx":
+		return ec.fieldContext_AnalyticsSummary_errorRate5xx(ctx, field)
+	case "p50ResponseTimeMs":
+		return ec.fieldContext_AnalyticsSummary_p50ResponseTimeMs(ctx, field)
+	case "p95ResponseTimeMs":
+		return ec.fieldContext_AnalyticsSummary_p95ResponseTimeMs(ctx, field)
+	case "p99ResponseTimeMs":
+		return ec.fieldContext_AnalyticsSummary_p99ResponseTimeMs(ctx, field)
+	case "avgSessionDurationSeconds":
+		return ec.fieldContext_AnalyticsSummary_avgSessionDurationSeconds(ctx, field)
+	case "avgSessionsPerDay":
+		return ec.fieldContext_AnalyticsSummary_avgSessionsPerDay(ctx, field)
+	case "avgScrollDepth":
+		return ec.fieldContext_AnalyticsSummary_avgScrollDepth(ctx, field)
+	case "pageViewStats":
+		return ec.fieldContext_AnalyticsSummary_pageViewStats(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AnalyticsSummary", field.Name)
+}
+
 func (ec *executionContext) childFields_Announcement(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -3223,6 +4115,30 @@ func (ec *executionContext) childFields_CommunityPage(ctx context.Context, field
 		return ec.fieldContext_CommunityPage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CommunityPage", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityStatItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "communityID":
+		return ec.fieldContext_CommunityStatItem_communityID(ctx, field)
+	case "name":
+		return ec.fieldContext_CommunityStatItem_name(ctx, field)
+	case "memberCount":
+		return ec.fieldContext_CommunityStatItem_memberCount(ctx, field)
+	case "messageCount":
+		return ec.fieldContext_CommunityStatItem_messageCount(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityStatItem", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityStatsPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_CommunityStatsPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_CommunityStatsPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityStatsPage", field.Name)
 }
 
 func (ec *executionContext) childFields_Favorite(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3349,6 +4265,8 @@ func (ec *executionContext) childFields_Notification(ctx context.Context, field 
 		return ec.fieldContext_Notification_targetType(ctx, field)
 	case "targetID":
 		return ec.fieldContext_Notification_targetID(ctx, field)
+	case "targetPost":
+		return ec.fieldContext_Notification_targetPost(ctx, field)
 	case "message":
 		return ec.fieldContext_Notification_message(ctx, field)
 	case "isRead":
@@ -3359,6 +4277,44 @@ func (ec *executionContext) childFields_Notification(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
 }
 
+func (ec *executionContext) childFields_NotificationGroup(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "key":
+		return ec.fieldContext_NotificationGroup_key(ctx, field)
+	case "type":
+		return ec.fieldContext_NotificationGroup_type(ctx, field)
+	case "actor":
+		return ec.fieldContext_NotificationGroup_actor(ctx, field)
+	case "targetType":
+		return ec.fieldContext_NotificationGroup_targetType(ctx, field)
+	case "targetID":
+		return ec.fieldContext_NotificationGroup_targetID(ctx, field)
+	case "targetPost":
+		return ec.fieldContext_NotificationGroup_targetPost(ctx, field)
+	case "message":
+		return ec.fieldContext_NotificationGroup_message(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_NotificationGroup_createdAt(ctx, field)
+	case "count":
+		return ec.fieldContext_NotificationGroup_count(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_NotificationGroup_unreadCount(ctx, field)
+	case "latestID":
+		return ec.fieldContext_NotificationGroup_latestID(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotificationGroup", field.Name)
+}
+
+func (ec *executionContext) childFields_NotificationGroupPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_NotificationGroupPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_NotificationGroupPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotificationGroupPage", field.Name)
+}
+
 func (ec *executionContext) childFields_NotificationPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "items":
@@ -3367,6 +4323,20 @@ func (ec *executionContext) childFields_NotificationPage(ctx context.Context, fi
 		return ec.fieldContext_NotificationPage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type NotificationPage", field.Name)
+}
+
+func (ec *executionContext) childFields_PageViewStat(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "pagePath":
+		return ec.fieldContext_PageViewStat_pagePath(ctx, field)
+	case "avgDurationSeconds":
+		return ec.fieldContext_PageViewStat_avgDurationSeconds(ctx, field)
+	case "avgMaxScrollDepth":
+		return ec.fieldContext_PageViewStat_avgMaxScrollDepth(ctx, field)
+	case "totalViews":
+		return ec.fieldContext_PageViewStat_totalViews(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PageViewStat", field.Name)
 }
 
 func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3541,6 +4511,32 @@ func (ec *executionContext) childFields_TermsOfService(ctx context.Context, fiel
 		return ec.fieldContext_TermsOfService_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TermsOfService", field.Name)
+}
+
+func (ec *executionContext) childFields_TimeSeriesData(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "points":
+		return ec.fieldContext_TimeSeriesData_points(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TimeSeriesData", field.Name)
+}
+
+func (ec *executionContext) childFields_TimeSeriesPoint(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "label":
+		return ec.fieldContext_TimeSeriesPoint_label(ctx, field)
+	case "posts":
+		return ec.fieldContext_TimeSeriesPoint_posts(ctx, field)
+	case "comments":
+		return ec.fieldContext_TimeSeriesPoint_comments(ctx, field)
+	case "messages":
+		return ec.fieldContext_TimeSeriesPoint_messages(ctx, field)
+	case "newUsers":
+		return ec.fieldContext_TimeSeriesPoint_newUsers(ctx, field)
+	case "likes":
+		return ec.fieldContext_TimeSeriesPoint_likes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TimeSeriesPoint", field.Name)
 }
 
 func (ec *executionContext) childFields_UnreadUpdate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4133,6 +5129,42 @@ func (ec *executionContext) field_Mutation_deletePost_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteReadNotificationsByActor_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "type",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "actorID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["actorID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteRoom_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4289,6 +5321,28 @@ func (ec *executionContext) field_Mutation_logoutUser_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_markAllNotificationsAsReadByActor_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "type",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "actorID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["actorID"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_markNotificationAsRead_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4336,6 +5390,20 @@ func (ec *executionContext) field_Mutation_promoteToCommunityOwner_args(ctx cont
 		return nil, err
 	}
 	args["userID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_recordSessionData_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.RecordSessionDataInput, error) {
+			return ec.unmarshalNRecordSessionDataInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRecordSessionDataInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -4735,6 +5803,28 @@ func (ec *executionContext) field_Mutation_updateUser_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_verifyEmailOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "otp",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["otp"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_verifyPasswordResetOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4813,6 +5903,28 @@ func (ec *executionContext) field_Query_adminGetBlockers_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminGetCommunityAnalytics_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_adminGetFavoriteUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4824,6 +5936,36 @@ func (ec *executionContext) field_Query_adminGetFavoriteUsers_args(ctx context.C
 		return nil, err
 	}
 	args["userID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_adminGetTimeSeries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "granularity",
+		func(ctx context.Context, v any) (model.TimeSeriesGranularity, error) {
+			return ec.unmarshalNTimeSeriesGranularity2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesGranularity(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["granularity"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "from",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["from"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "to",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["to"] = arg2
 	return args, nil
 }
 
@@ -5175,6 +6317,20 @@ func (ec *executionContext) field_Query_getRepliesByPostID_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getRootPost_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getUserByID_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5323,7 +6479,7 @@ func (ec *executionContext) field_Query_myDMRooms_args(ctx context.Context, rawA
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_myFollowers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
@@ -5345,6 +6501,66 @@ func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_myNotificationGroups_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "type",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "actorID",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["actorID"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_newFeedPostsCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5356,6 +6572,20 @@ func (ec *executionContext) field_Query_newFeedPostsCount_args(ctx context.Conte
 		return nil, err
 	}
 	args["since"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_notification_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -6035,6 +7265,1234 @@ func (ec *executionContext) fieldContext_AdministratorPage_total(_ context.Conte
 	return graphql.NewScalarFieldContext("AdministratorPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _AnalyticsSummary_totalUsers(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalUsers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_newUsersToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_newUsersToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewUsersToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_newUsersToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_newUsersThisWeek(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_newUsersThisWeek(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewUsersThisWeek, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_newUsersThisWeek(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_newUsersThisMonth(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_newUsersThisMonth(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewUsersThisMonth, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_newUsersThisMonth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_frozenUsersCount(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_frozenUsersCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FrozenUsersCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_frozenUsersCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalPosts(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalPosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalPosts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalPosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalComments(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalComments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalComments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalComments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalDeletedPosts(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalDeletedPosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalDeletedPosts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalDeletedPosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalLikes(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalLikes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalLikes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalLikes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalCommunities(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalCommunities(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCommunities, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalCommunities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalMessages(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalReports(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalReports(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalReports, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalReports(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalBlocks(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalBlocks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalBlocks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalBlocks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalInquiries(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalInquiries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalInquiries, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalInquiries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_dau(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_dau(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Dau, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_dau(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_wau(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_wau(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Wau, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_wau(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_mau(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_mau(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mau, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_mau(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_dauMauRatio(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_dauMauRatio(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DauMauRatio, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_dauMauRatio(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_postsToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_postsToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostsToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_postsToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_commentsToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_commentsToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommentsToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_commentsToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_messagesToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_messagesToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MessagesToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_messagesToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgLikesPerPost(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgLikesPerPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgLikesPerPost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgLikesPerPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgCommentsPerPost(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgCommentsPerPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgCommentsPerPost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgCommentsPerPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_postsTextOnly(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_postsTextOnly(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostsTextOnly, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_postsTextOnly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_postsWithImage(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_postsWithImage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostsWithImage, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_postsWithImage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_postsWithVideo(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_postsWithVideo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostsWithVideo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_postsWithVideo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_uniqueDMSenders(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_uniqueDMSenders(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UniqueDMSenders, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_uniqueDMSenders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_activeCommunitiesLast30Days(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_activeCommunitiesLast30Days(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveCommunitiesLast30Days, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_activeCommunitiesLast30Days(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgCommunityMembers(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgCommunityMembers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgCommunityMembers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgCommunityMembers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgCommunitiesPerUser(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgCommunitiesPerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgCommunitiesPerUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgCommunitiesPerUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalFollows(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalFollows(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalFollows, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalFollows(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgFollowersPerUser(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgFollowersPerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgFollowersPerUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgFollowersPerUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgFollowingPerUser(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgFollowingPerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgFollowingPerUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgFollowingPerUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_usersWithProfile(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_usersWithProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UsersWithProfile, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_usersWithProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_usersWithAvatar(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_usersWithAvatar(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UsersWithAvatar, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_usersWithAvatar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_usersWithPost(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_usersWithPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UsersWithPost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_usersWithPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_onboardingCompleteRate(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_onboardingCompleteRate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OnboardingCompleteRate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_onboardingCompleteRate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgTimeToFirstPostMinutes(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgTimeToFirstPostMinutes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgTimeToFirstPostMinutes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgTimeToFirstPostMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_totalNotifications(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_totalNotifications(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalNotifications, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_totalNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_readNotifications(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_readNotifications(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReadNotifications, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_readNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_notificationReadRate(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_notificationReadRate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationReadRate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_notificationReadRate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_pendingReports(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_pendingReports(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PendingReports, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_pendingReports(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_resolvedReports(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_resolvedReports(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResolvedReports, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_resolvedReports(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_webSocketConnections(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_webSocketConnections(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WebSocketConnections, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_webSocketConnections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_sseConnections(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_sseConnections(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SseConnections, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_sseConnections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_errorRate5xx(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_errorRate5xx(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ErrorRate5xx, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_errorRate5xx(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_p50ResponseTimeMs(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_p50ResponseTimeMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.P50ResponseTimeMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_p50ResponseTimeMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_p95ResponseTimeMs(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_p95ResponseTimeMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.P95ResponseTimeMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_p95ResponseTimeMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_p99ResponseTimeMs(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_p99ResponseTimeMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.P99ResponseTimeMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_p99ResponseTimeMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgSessionDurationSeconds(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgSessionDurationSeconds(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgSessionDurationSeconds, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgSessionDurationSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgSessionsPerDay(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgSessionsPerDay(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgSessionsPerDay, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgSessionsPerDay(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_avgScrollDepth(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_avgScrollDepth(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgScrollDepth, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_avgScrollDepth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_pageViewStats(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_pageViewStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageViewStats, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.PageViewStat) graphql.Marshaler {
+			return ec.marshalNPageViewStat2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewStatᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_pageViewStats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AnalyticsSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageViewStat(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Announcement_ID(ctx context.Context, field graphql.CollectedField, obj *model.Announcement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -6658,6 +9116,153 @@ func (ec *executionContext) _CommunityPage_total(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_CommunityPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CommunityPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityStatItem_communityID(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatItem_communityID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatItem_communityID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityStatItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityStatItem_name(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatItem_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityStatItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityStatItem_memberCount(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatItem_memberCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MemberCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatItem_memberCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityStatItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityStatItem_messageCount(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatItem_messageCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MessageCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatItem_messageCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityStatItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityStatsPage_items(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatsPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatsPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityStatItem) graphql.Marshaler {
+			return ec.marshalNCommunityStatItem2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatsPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityStatsPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityStatItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityStatsPage_total(ctx context.Context, field graphql.CollectedField, obj *model.CommunityStatsPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityStatsPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityStatsPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityStatsPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Favorite_ID(ctx context.Context, field graphql.CollectedField, obj *model.Favorite) (ret graphql.Marshaler) {
@@ -7566,6 +10171,50 @@ func (ec *executionContext) fieldContext_Mutation_sendEmailOTP(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_sendEmailOTP_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_verifyEmailOTP(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_verifyEmailOTP(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().VerifyEmailOtp(ctx, fc.Args["email"].(string), fc.Args["otp"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_verifyEmailOTP(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_verifyEmailOTP_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -8689,6 +11338,50 @@ func (ec *executionContext) fieldContext_Mutation_removeUserFromRoom(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_removeUserFromRoom_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteRoom(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteRoom(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteRoom(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteRoom(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteRoom_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9938,6 +12631,50 @@ func (ec *executionContext) fieldContext_Mutation_markAllNotificationsAsRead(_ c
 	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Mutation_markAllNotificationsAsReadByActor(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_markAllNotificationsAsReadByActor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MarkAllNotificationsAsReadByActor(ctx, fc.Args["type"].(string), fc.Args["actorID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_markAllNotificationsAsReadByActor(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_markAllNotificationsAsReadByActor_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_deleteNotifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10003,6 +12740,50 @@ func (ec *executionContext) _Mutation_deleteReadNotifications(ctx context.Contex
 }
 func (ec *executionContext) fieldContext_Mutation_deleteReadNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Mutation_deleteReadNotificationsByActor(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteReadNotificationsByActor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteReadNotificationsByActor(ctx, fc.Args["type"].(string), fc.Args["actorID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteReadNotificationsByActor(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteReadNotificationsByActor_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Mutation_createAnnouncement(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -10357,6 +13138,50 @@ func (ec *executionContext) fieldContext_Mutation_setReportServiceStatus(ctx con
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_recordSessionData(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_recordSessionData(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RecordSessionData(ctx, fc.Args["input"].(model.RecordSessionDataInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_recordSessionData(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_recordSessionData_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Notification_ID(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10481,6 +13306,38 @@ func (ec *executionContext) fieldContext_Notification_targetID(_ context.Context
 	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _Notification_targetPost(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_targetPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetPost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_targetPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Notification_message(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10550,6 +13407,332 @@ func (ec *executionContext) fieldContext_Notification_createdAt(_ context.Contex
 	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _NotificationGroup_key(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_key(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_type(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_type(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_actor(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_actor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Actor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
+			return ec.marshalOUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_actor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationGroup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationGroup_targetType(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_targetType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_targetType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_targetID(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_targetID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_targetID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_targetPost(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_targetPost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetPost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
+			return ec.marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_targetPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationGroup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationGroup_message(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_count(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_unreadCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnreadCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_unreadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroup_latestID(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_latestID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LatestID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_latestID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroup", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationGroupPage_items(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroupPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroupPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.NotificationGroup) graphql.Marshaler {
+			return ec.marshalNNotificationGroup2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroupᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroupPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationGroupPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotificationGroup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationGroupPage_total(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroupPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroupPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroupPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationGroupPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _NotificationPage_items(ctx context.Context, field graphql.CollectedField, obj *model.NotificationPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10603,6 +13786,98 @@ func (ec *executionContext) _NotificationPage_total(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_NotificationPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("NotificationPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _PageViewStat_pagePath(ctx context.Context, field graphql.CollectedField, obj *model.PageViewStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PageViewStat_pagePath(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PagePath, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PageViewStat_pagePath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PageViewStat", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PageViewStat_avgDurationSeconds(ctx context.Context, field graphql.CollectedField, obj *model.PageViewStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PageViewStat_avgDurationSeconds(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgDurationSeconds, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PageViewStat_avgDurationSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PageViewStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _PageViewStat_avgMaxScrollDepth(ctx context.Context, field graphql.CollectedField, obj *model.PageViewStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PageViewStat_avgMaxScrollDepth(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AvgMaxScrollDepth, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PageViewStat_avgMaxScrollDepth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PageViewStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _PageViewStat_totalViews(ctx context.Context, field graphql.CollectedField, obj *model.PageViewStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PageViewStat_totalViews(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalViews, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PageViewStat_totalViews(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PageViewStat", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Post_ID(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
@@ -11357,7 +14632,7 @@ func (ec *executionContext) _Query_myNotifications(ctx context.Context, field gr
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32), fc.Args["type"].(*string), fc.Args["actorID"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.NotificationPage) graphql.Marshaler {
@@ -11391,6 +14666,94 @@ func (ec *executionContext) fieldContext_Query_myNotifications(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_myNotificationGroups(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myNotificationGroups(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyNotificationGroups(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.NotificationGroupPage) graphql.Marshaler {
+			return ec.marshalNNotificationGroupPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroupPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myNotificationGroups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotificationGroupPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myNotificationGroups_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notification(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_notification(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Notification(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Notification) graphql.Marshaler {
+			return ec.marshalONotification2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotification(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_notification(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Notification(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_notification_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_myUnreadNotificationCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11411,6 +14774,52 @@ func (ec *executionContext) _Query_myUnreadNotificationCount(ctx context.Context
 	)
 }
 func (ec *executionContext) fieldContext_Query_myUnreadNotificationCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_myUnreadDMCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myUnreadDMCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyUnreadDMCount(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myUnreadDMCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_myUnreadCommunityCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myUnreadCommunityCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyUnreadCommunityCount(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myUnreadCommunityCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
@@ -11731,7 +15140,8 @@ func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphq
 			return ec.fieldContext_Query_getRootPost(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().GetRootPost(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().GetRootPost(ctx, fc.Args["id"].(string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Post) graphql.Marshaler {
@@ -11741,7 +15151,7 @@ func (ec *executionContext) _Query_getRootPost(ctx context.Context, field graphq
 		false,
 	)
 }
-func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_getRootPost(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -11750,6 +15160,17 @@ func (ec *executionContext) fieldContext_Query_getRootPost(_ context.Context, fi
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Post(ctx, field)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getRootPost_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -13201,6 +16622,50 @@ func (ec *executionContext) fieldContext_Query_listFavoriteUsers(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_myFollowers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myFollowers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyFollowers(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.UserPage) graphql.Marshaler {
+			return ec.marshalNUserPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myFollowers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myFollowers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_searchFavoriteUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -13530,6 +16995,126 @@ func (ec *executionContext) _Query_isReportServiceEnabled(ctx context.Context, f
 }
 func (ec *executionContext) fieldContext_Query_isReportServiceEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Query_adminGetAnalytics(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminGetAnalytics(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminGetAnalytics(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AnalyticsSummary) graphql.Marshaler {
+			return ec.marshalNAnalyticsSummary2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnalyticsSummary(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminGetAnalytics(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AnalyticsSummary(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminGetCommunityAnalytics(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminGetCommunityAnalytics(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminGetCommunityAnalytics(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityStatsPage) graphql.Marshaler {
+			return ec.marshalNCommunityStatsPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatsPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminGetCommunityAnalytics(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityStatsPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminGetCommunityAnalytics_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminGetTimeSeries(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminGetTimeSeries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminGetTimeSeries(ctx, fc.Args["granularity"].(model.TimeSeriesGranularity), fc.Args["from"].(string), fc.Args["to"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.TimeSeriesData) graphql.Marshaler {
+			return ec.marshalNTimeSeriesData2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesData(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminGetTimeSeries(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TimeSeriesData(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminGetTimeSeries_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -14535,6 +18120,176 @@ func (ec *executionContext) _TermsOfService_createdAt(ctx context.Context, field
 }
 func (ec *executionContext) fieldContext_TermsOfService_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TermsOfService", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesData_points(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesData) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesData_points(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Points, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TimeSeriesPoint) graphql.Marshaler {
+			return ec.marshalNTimeSeriesPoint2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesPointᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesData_points(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TimeSeriesData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TimeSeriesPoint(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TimeSeriesPoint_label(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_posts(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_posts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Posts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_posts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_comments(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_comments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Comments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_comments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_messages(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_messages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Messages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_messages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_newUsers(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_newUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewUsers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_newUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_likes(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_likes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Likes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_likes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _UnreadUpdate_roomID(ctx context.Context, field graphql.CollectedField, obj *model.UnreadUpdate) (ret graphql.Marshaler) {
@@ -16954,6 +20709,87 @@ func (ec *executionContext) unmarshalInputMediaUploadInput(ctx context.Context, 
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputPageViewInput(ctx context.Context, obj any) (model.PageViewInput, error) {
+	var it model.PageViewInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"path", "durationSeconds", "maxScrollDepth"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "path":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("path"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Path = data
+		case "durationSeconds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("durationSeconds"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DurationSeconds = data
+		case "maxScrollDepth":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxScrollDepth"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MaxScrollDepth = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputRecordSessionDataInput(ctx context.Context, obj any) (model.RecordSessionDataInput, error) {
+	var it model.RecordSessionDataInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"sessionDurationSeconds", "pageViews"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "sessionDurationSeconds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sessionDurationSeconds"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SessionDurationSeconds = data
+		case "pageViews":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("pageViews"))
+			data, err := ec.unmarshalNPageViewInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PageViews = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRemoveUserFromRoomInput(ctx context.Context, obj any) (model.RemoveUserFromRoomInput, error) {
 	var it model.RemoveUserFromRoomInput
 	if obj == nil {
@@ -17289,7 +21125,7 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"accountID", "name", "email", "password"}
+	fieldsInOrder := [...]string{"accountID", "name", "email", "password", "currentPassword"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -17324,6 +21160,13 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 				return it, err
 			}
 			it.Password = data
+		case "currentPassword":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("currentPassword"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CurrentPassword = data
 		}
 	}
 	return it, nil
@@ -17463,6 +21306,305 @@ func (ec *executionContext) _AdministratorPage(ctx context.Context, sel ast.Sele
 			}
 		case "total":
 			out.Values[i] = ec._AdministratorPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var analyticsSummaryImplementors = []string{"AnalyticsSummary"}
+
+func (ec *executionContext) _AnalyticsSummary(ctx context.Context, sel ast.SelectionSet, obj *model.AnalyticsSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, analyticsSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AnalyticsSummary")
+		case "totalUsers":
+			out.Values[i] = ec._AnalyticsSummary_totalUsers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newUsersToday":
+			out.Values[i] = ec._AnalyticsSummary_newUsersToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newUsersThisWeek":
+			out.Values[i] = ec._AnalyticsSummary_newUsersThisWeek(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newUsersThisMonth":
+			out.Values[i] = ec._AnalyticsSummary_newUsersThisMonth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "frozenUsersCount":
+			out.Values[i] = ec._AnalyticsSummary_frozenUsersCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalPosts":
+			out.Values[i] = ec._AnalyticsSummary_totalPosts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalComments":
+			out.Values[i] = ec._AnalyticsSummary_totalComments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalDeletedPosts":
+			out.Values[i] = ec._AnalyticsSummary_totalDeletedPosts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalLikes":
+			out.Values[i] = ec._AnalyticsSummary_totalLikes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCommunities":
+			out.Values[i] = ec._AnalyticsSummary_totalCommunities(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalMessages":
+			out.Values[i] = ec._AnalyticsSummary_totalMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalReports":
+			out.Values[i] = ec._AnalyticsSummary_totalReports(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalBlocks":
+			out.Values[i] = ec._AnalyticsSummary_totalBlocks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalInquiries":
+			out.Values[i] = ec._AnalyticsSummary_totalInquiries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dau":
+			out.Values[i] = ec._AnalyticsSummary_dau(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "wau":
+			out.Values[i] = ec._AnalyticsSummary_wau(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mau":
+			out.Values[i] = ec._AnalyticsSummary_mau(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dauMauRatio":
+			out.Values[i] = ec._AnalyticsSummary_dauMauRatio(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postsToday":
+			out.Values[i] = ec._AnalyticsSummary_postsToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commentsToday":
+			out.Values[i] = ec._AnalyticsSummary_commentsToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "messagesToday":
+			out.Values[i] = ec._AnalyticsSummary_messagesToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgLikesPerPost":
+			out.Values[i] = ec._AnalyticsSummary_avgLikesPerPost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgCommentsPerPost":
+			out.Values[i] = ec._AnalyticsSummary_avgCommentsPerPost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postsTextOnly":
+			out.Values[i] = ec._AnalyticsSummary_postsTextOnly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postsWithImage":
+			out.Values[i] = ec._AnalyticsSummary_postsWithImage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postsWithVideo":
+			out.Values[i] = ec._AnalyticsSummary_postsWithVideo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uniqueDMSenders":
+			out.Values[i] = ec._AnalyticsSummary_uniqueDMSenders(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "activeCommunitiesLast30Days":
+			out.Values[i] = ec._AnalyticsSummary_activeCommunitiesLast30Days(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgCommunityMembers":
+			out.Values[i] = ec._AnalyticsSummary_avgCommunityMembers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgCommunitiesPerUser":
+			out.Values[i] = ec._AnalyticsSummary_avgCommunitiesPerUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalFollows":
+			out.Values[i] = ec._AnalyticsSummary_totalFollows(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgFollowersPerUser":
+			out.Values[i] = ec._AnalyticsSummary_avgFollowersPerUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgFollowingPerUser":
+			out.Values[i] = ec._AnalyticsSummary_avgFollowingPerUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "usersWithProfile":
+			out.Values[i] = ec._AnalyticsSummary_usersWithProfile(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "usersWithAvatar":
+			out.Values[i] = ec._AnalyticsSummary_usersWithAvatar(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "usersWithPost":
+			out.Values[i] = ec._AnalyticsSummary_usersWithPost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "onboardingCompleteRate":
+			out.Values[i] = ec._AnalyticsSummary_onboardingCompleteRate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgTimeToFirstPostMinutes":
+			out.Values[i] = ec._AnalyticsSummary_avgTimeToFirstPostMinutes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalNotifications":
+			out.Values[i] = ec._AnalyticsSummary_totalNotifications(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "readNotifications":
+			out.Values[i] = ec._AnalyticsSummary_readNotifications(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "notificationReadRate":
+			out.Values[i] = ec._AnalyticsSummary_notificationReadRate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pendingReports":
+			out.Values[i] = ec._AnalyticsSummary_pendingReports(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolvedReports":
+			out.Values[i] = ec._AnalyticsSummary_resolvedReports(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "webSocketConnections":
+			out.Values[i] = ec._AnalyticsSummary_webSocketConnections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sseConnections":
+			out.Values[i] = ec._AnalyticsSummary_sseConnections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "errorRate5xx":
+			out.Values[i] = ec._AnalyticsSummary_errorRate5xx(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "p50ResponseTimeMs":
+			out.Values[i] = ec._AnalyticsSummary_p50ResponseTimeMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "p95ResponseTimeMs":
+			out.Values[i] = ec._AnalyticsSummary_p95ResponseTimeMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "p99ResponseTimeMs":
+			out.Values[i] = ec._AnalyticsSummary_p99ResponseTimeMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgSessionDurationSeconds":
+			out.Values[i] = ec._AnalyticsSummary_avgSessionDurationSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgSessionsPerDay":
+			out.Values[i] = ec._AnalyticsSummary_avgSessionsPerDay(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgScrollDepth":
+			out.Values[i] = ec._AnalyticsSummary_avgScrollDepth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageViewStats":
+			out.Values[i] = ec._AnalyticsSummary_pageViewStats(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -17797,6 +21939,104 @@ func (ec *executionContext) _CommunityPage(ctx context.Context, sel ast.Selectio
 			}
 		case "total":
 			out.Values[i] = ec._CommunityPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var communityStatItemImplementors = []string{"CommunityStatItem"}
+
+func (ec *executionContext) _CommunityStatItem(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityStatItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityStatItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityStatItem")
+		case "communityID":
+			out.Values[i] = ec._CommunityStatItem_communityID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CommunityStatItem_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "memberCount":
+			out.Values[i] = ec._CommunityStatItem_memberCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "messageCount":
+			out.Values[i] = ec._CommunityStatItem_messageCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var communityStatsPageImplementors = []string{"CommunityStatsPage"}
+
+func (ec *executionContext) _CommunityStatsPage(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityStatsPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityStatsPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityStatsPage")
+		case "items":
+			out.Values[i] = ec._CommunityStatsPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._CommunityStatsPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -18417,6 +22657,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "verifyEmailOTP":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_verifyEmailOTP(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createUser(ctx, field)
@@ -18595,6 +22842,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "removeUserFromRoom":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeUserFromRoom(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteRoom":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteRoom(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -18802,6 +23056,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "markAllNotificationsAsReadByActor":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_markAllNotificationsAsReadByActor(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "deleteNotifications":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteNotifications(ctx, field)
@@ -18812,6 +23073,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteReadNotifications":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteReadNotifications(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteReadNotificationsByActor":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteReadNotificationsByActor(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -18868,6 +23136,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setReportServiceStatus":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setReportServiceStatus(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recordSessionData":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_recordSessionData(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -18962,6 +23237,11 @@ func (ec *executionContext) _Notification(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "targetPost":
+			out.Values[i] = ec._Notification_targetPost(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "message":
 			out.Values[i] = ec._Notification_message(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -18976,6 +23256,139 @@ func (ec *executionContext) _Notification(ctx context.Context, sel ast.Selection
 			out.Values[i] = ec._Notification_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var notificationGroupImplementors = []string{"NotificationGroup"}
+
+func (ec *executionContext) _NotificationGroup(ctx context.Context, sel ast.SelectionSet, obj *model.NotificationGroup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationGroupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationGroup")
+		case "key":
+			out.Values[i] = ec._NotificationGroup_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._NotificationGroup_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "actor":
+			out.Values[i] = ec._NotificationGroup_actor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "targetType":
+			out.Values[i] = ec._NotificationGroup_targetType(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "targetID":
+			out.Values[i] = ec._NotificationGroup_targetID(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "targetPost":
+			out.Values[i] = ec._NotificationGroup_targetPost(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._NotificationGroup_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._NotificationGroup_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._NotificationGroup_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unreadCount":
+			out.Values[i] = ec._NotificationGroup_unreadCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "latestID":
+			out.Values[i] = ec._NotificationGroup_latestID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var notificationGroupPageImplementors = []string{"NotificationGroupPage"}
+
+func (ec *executionContext) _NotificationGroupPage(ctx context.Context, sel ast.SelectionSet, obj *model.NotificationGroupPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationGroupPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationGroupPage")
+		case "items":
+			out.Values[i] = ec._NotificationGroupPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._NotificationGroupPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -19018,6 +23431,60 @@ func (ec *executionContext) _NotificationPage(ctx context.Context, sel ast.Selec
 			}
 		case "total":
 			out.Values[i] = ec._NotificationPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var pageViewStatImplementors = []string{"PageViewStat"}
+
+func (ec *executionContext) _PageViewStat(ctx context.Context, sel ast.SelectionSet, obj *model.PageViewStat) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, pageViewStatImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PageViewStat")
+		case "pagePath":
+			out.Values[i] = ec._PageViewStat_pagePath(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgDurationSeconds":
+			out.Values[i] = ec._PageViewStat_avgDurationSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgMaxScrollDepth":
+			out.Values[i] = ec._PageViewStat_avgMaxScrollDepth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalViews":
+			out.Values[i] = ec._PageViewStat_totalViews(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -19605,6 +24072,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myNotificationGroups":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myNotificationGroups(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notification":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notification(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "myUnreadNotificationCount":
 			field := field
 
@@ -19615,6 +24126,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_myUnreadNotificationCount(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myUnreadDMCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myUnreadDMCount(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myUnreadCommunityCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myUnreadCommunityCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -20573,6 +25128,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myFollowers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myFollowers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "searchFavoriteUsers":
 			field := field
 
@@ -20737,6 +25314,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_isReportServiceEnabled(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminGetAnalytics":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminGetAnalytics(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminGetCommunityAnalytics":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminGetCommunityAnalytics(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminGetTimeSeries":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminGetTimeSeries(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -21205,6 +25848,109 @@ func (ec *executionContext) _TermsOfService(ctx context.Context, sel ast.Selecti
 			}
 		case "createdAt":
 			out.Values[i] = ec._TermsOfService_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var timeSeriesDataImplementors = []string{"TimeSeriesData"}
+
+func (ec *executionContext) _TimeSeriesData(ctx context.Context, sel ast.SelectionSet, obj *model.TimeSeriesData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, timeSeriesDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TimeSeriesData")
+		case "points":
+			out.Values[i] = ec._TimeSeriesData_points(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var timeSeriesPointImplementors = []string{"TimeSeriesPoint"}
+
+func (ec *executionContext) _TimeSeriesPoint(ctx context.Context, sel ast.SelectionSet, obj *model.TimeSeriesPoint) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, timeSeriesPointImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TimeSeriesPoint")
+		case "label":
+			out.Values[i] = ec._TimeSeriesPoint_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "posts":
+			out.Values[i] = ec._TimeSeriesPoint_posts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "comments":
+			out.Values[i] = ec._TimeSeriesPoint_comments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "messages":
+			out.Values[i] = ec._TimeSeriesPoint_messages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newUsers":
+			out.Values[i] = ec._TimeSeriesPoint_newUsers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "likes":
+			out.Values[i] = ec._TimeSeriesPoint_likes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -22038,6 +26784,20 @@ func (ec *executionContext) marshalNAdministratorPage2ᚖgithubᚗcomᚋCityboyp
 	return ec._AdministratorPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAnalyticsSummary2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnalyticsSummary(ctx context.Context, sel ast.SelectionSet, v model.AnalyticsSummary) graphql.Marshaler {
+	return ec._AnalyticsSummary(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAnalyticsSummary2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnalyticsSummary(ctx context.Context, sel ast.SelectionSet, v *model.AnalyticsSummary) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AnalyticsSummary(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNAnnouncement2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnnouncement(ctx context.Context, sel ast.SelectionSet, v model.Announcement) graphql.Marshaler {
 	return ec._Announcement(ctx, sel, &v)
 }
@@ -22212,6 +26972,46 @@ func (ec *executionContext) marshalNCommunityPage2ᚖgithubᚗcomᚋCityboypengu
 	return ec._CommunityPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNCommunityStatItem2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CommunityStatItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommunityStatItem2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommunityStatItem2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatItem(ctx context.Context, sel ast.SelectionSet, v *model.CommunityStatItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityStatItem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityStatsPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatsPage(ctx context.Context, sel ast.SelectionSet, v model.CommunityStatsPage) graphql.Marshaler {
+	return ec._CommunityStatsPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCommunityStatsPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityStatsPage(ctx context.Context, sel ast.SelectionSet, v *model.CommunityStatsPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityStatsPage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCreateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateAdministratorInput(ctx context.Context, v any) (model.CreateAdministratorInput, error) {
 	res, err := ec.unmarshalInputCreateAdministratorInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -22309,6 +27109,22 @@ func (ec *executionContext) marshalNFavoriteUser2ᚖgithubᚗcomᚋCityboypengui
 		return graphql.Null
 	}
 	return ec._FavoriteUser(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
+	res, err := graphql.UnmarshalFloatContext(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalFloatContext(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return graphql.WrapContextMarshaler(ctx, res)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
@@ -22543,6 +27359,46 @@ func (ec *executionContext) marshalNNotification2ᚖgithubᚗcomᚋCityboypengui
 	return ec._Notification(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNNotificationGroup2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroupᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.NotificationGroup) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNotificationGroup2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroup(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotificationGroup2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroup(ctx context.Context, sel ast.SelectionSet, v *model.NotificationGroup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotificationGroup(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNotificationGroupPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroupPage(ctx context.Context, sel ast.SelectionSet, v model.NotificationGroupPage) graphql.Marshaler {
+	return ec._NotificationGroupPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNNotificationGroupPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationGroupPage(ctx context.Context, sel ast.SelectionSet, v *model.NotificationGroupPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotificationGroupPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNNotificationPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationPage(ctx context.Context, sel ast.SelectionSet, v model.NotificationPage) graphql.Marshaler {
 	return ec._NotificationPage(ctx, sel, &v)
 }
@@ -22555,6 +27411,52 @@ func (ec *executionContext) marshalNNotificationPage2ᚖgithubᚗcomᚋCityboype
 		return graphql.Null
 	}
 	return ec._NotificationPage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPageViewInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewInputᚄ(ctx context.Context, v any) ([]*model.PageViewInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.PageViewInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNPageViewInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNPageViewInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewInput(ctx context.Context, v any) (*model.PageViewInput, error) {
+	res, err := ec.unmarshalInputPageViewInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPageViewStat2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewStatᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PageViewStat) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNPageViewStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewStat(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPageViewStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPageViewStat(ctx context.Context, sel ast.SelectionSet, v *model.PageViewStat) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PageViewStat(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPost2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx context.Context, sel ast.SelectionSet, v model.Post) graphql.Marshaler {
@@ -22627,6 +27529,11 @@ func (ec *executionContext) marshalNProfile2ᚖgithubᚗcomᚋCityboypenguinᚋS
 		return graphql.Null
 	}
 	return ec._Profile(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRecordSessionDataInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRecordSessionDataInput(ctx context.Context, v any) (model.RecordSessionDataInput, error) {
+	res, err := ec.unmarshalInputRecordSessionDataInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNRemoveUserFromRoomInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRemoveUserFromRoomInput(ctx context.Context, v any) (model.RemoveUserFromRoomInput, error) {
@@ -22824,6 +27731,56 @@ func (ec *executionContext) marshalNTermsOfService2ᚖgithubᚗcomᚋCityboypeng
 		return graphql.Null
 	}
 	return ec._TermsOfService(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTimeSeriesData2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesData(ctx context.Context, sel ast.SelectionSet, v model.TimeSeriesData) graphql.Marshaler {
+	return ec._TimeSeriesData(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTimeSeriesData2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesData(ctx context.Context, sel ast.SelectionSet, v *model.TimeSeriesData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TimeSeriesData(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNTimeSeriesGranularity2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesGranularity(ctx context.Context, v any) (model.TimeSeriesGranularity, error) {
+	var res model.TimeSeriesGranularity
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTimeSeriesGranularity2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesGranularity(ctx context.Context, sel ast.SelectionSet, v model.TimeSeriesGranularity) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNTimeSeriesPoint2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesPointᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TimeSeriesPoint) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTimeSeriesPoint2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesPoint(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTimeSeriesPoint2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesPoint(ctx context.Context, sel ast.SelectionSet, v *model.TimeSeriesPoint) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TimeSeriesPoint(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUnreadUpdate2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v model.UnreadUpdate) graphql.Marshaler {
@@ -23254,6 +28211,13 @@ func (ec *executionContext) unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCity
 		}
 	}
 	return res, nil
+}
+
+func (ec *executionContext) marshalONotification2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotification(ctx context.Context, sel ast.SelectionSet, v *model.Notification) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Notification(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOPost2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPost(ctx context.Context, sel ast.SelectionSet, v *model.Post) graphql.Marshaler {

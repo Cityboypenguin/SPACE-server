@@ -47,7 +47,7 @@ func (r *MySQLUserRepository) GetUserByID(ctx context.Context, id int64) (*model
 		WHERE id = ?
 	`
 
-	row := r.DB.QueryRowContext(ctx, query, id)
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx, query, id)
 
 	var u model.User
 	var createdAtUnix, updatedAtUnix int64
@@ -112,7 +112,7 @@ func (r *MySQLUserRepository) GetUsersByIDs(ctx context.Context, ids []int64) ([
 
 func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, error) {
 	query := `DELETE FROM users WHERE id = ?`
-	result, err := r.DB.ExecContext(ctx, query, id)
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
 	}
@@ -173,17 +173,17 @@ func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword 
 
 	var total int
 	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
 		searchParam, searchParam,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx, `
-		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		SELECT DISTINCT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
 		FROM users
 		WHERE name LIKE ? OR account_id LIKE ?
-		ORDER BY name ASC
+		ORDER BY name ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, searchParam, searchParam, limit, offset)
 	if err != nil {
@@ -295,7 +295,7 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 		WHERE id = ?
 	`
 
-	_, err := r.DB.ExecContext(ctx, query,
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query,
 		u.AccountID,
 		u.Name,
 		u.Email,
@@ -344,4 +344,12 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 		return 0, err
 	}
 	return result.LastInsertId()
+}
+
+func (r *MySQLUserRepository) UpdateLastActiveAt(ctx context.Context, userID int64, now int64) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`UPDATE users SET last_active_at = ? WHERE id = ? AND (last_active_at IS NULL OR last_active_at < ?)`,
+		now, userID, now-300, // 5分以内の重複更新をスキップ
+	)
+	return err
 }

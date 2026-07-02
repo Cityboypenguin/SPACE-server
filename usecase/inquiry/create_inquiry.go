@@ -37,7 +37,7 @@ func (u *CreateInquiryUsecase) Execute(ctx context.Context, input CreateInquiryI
 	subject := strings.TrimSpace(input.Subject)
 	content := strings.TrimSpace(input.Content)
 
-	if name == "" || email == "" || string(category) == "" || subject == "" || content == "" {
+	if name == "" || email == "" || string(category) == "" || content == "" {
 		return nil, errors.New("all fields are required")
 	}
 	if !emailRegex.MatchString(email) {

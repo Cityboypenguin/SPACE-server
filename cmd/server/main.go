@@ -18,20 +18,24 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/db"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
+	infracache "github.com/Cityboypenguin/SPACE-server/infra/cache"
 	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
+	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
@@ -45,6 +49,7 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -93,10 +98,19 @@ func main() {
 		logger.Log.Warn().Msg("INIT_ADMIN_PASSWORD is set in production; unset it after the initial admin has been created")
 	}
 
-	messageRepository := mysql.NewMySQLMessageRepository(database)
+	messageRepository, err := mysql.NewMySQLMessageRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize message encryption")
+	}
+	if encryptedCount, err := messageRepository.EncryptPlaintextMessages(context.Background(), 500); err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to encrypt existing message history")
+	} else if encryptedCount > 0 {
+		logger.Log.Info().Int("count", encryptedCount).Msg("encrypted existing message history")
+	}
 	mediaRepository := mysql.NewMySQLMediaRepository(database)
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
+	communityRepository := mysql.NewMySQLCommunityRepository(database)
 
 	var storageRepository repository.StorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
@@ -112,7 +126,7 @@ func main() {
 	}
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, communityRepository, txManager)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -138,6 +152,7 @@ func main() {
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
+	getPostsByIDsUseCase := postusecase.NewGetPostsByIDsUseCase(postRepository)
 	getRootPostUseCase := postusecase.NewGetRootPostUseCase(postRepository)
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
@@ -181,6 +196,7 @@ func main() {
 	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
 	smtpEmailService := infraemail.NewSMTPEmailService()
 	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	adminCreateUserUseCase := userusecase.NewAdminCreateUserUseCase(userRepository, profileRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
@@ -218,8 +234,8 @@ func main() {
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
+	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
-	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
 	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
@@ -236,6 +252,19 @@ func main() {
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
+	cachedAnalyticsRepo := infracache.NewCachedAnalyticsRepository(
+		mysql.NewMySQLAnalyticsRepository(database),
+		5*time.Minute,
+		2*time.Minute,
+	)
+	analyticsRepository := cachedAnalyticsRepo
+	getAnalyticsUseCase := analyticsusecase.NewGetAnalyticsUseCase(analyticsRepository)
+	getCommunityAnalyticsUseCase := analyticsusecase.NewGetCommunityAnalyticsUseCase(analyticsRepository)
+	getTimeSeriesUseCase := analyticsusecase.NewGetTimeSeriesUseCase(analyticsRepository)
+
+	sessionRepository := mysql.NewMySQLSessionRepository(database)
+	recordSessionUseCase := sessionusecase.NewRecordSessionUseCase(sessionRepository)
+
 	createBlockUseCase := blusecase.NewCreateBlockUseCase(blockRepository, favoriteuserRepository, txManager)
 	deleteBlockUseCase := blusecase.NewDeleteBlockerUseCase(blockRepository)
 	listBlockersUseCase := blusecase.NewListBlockersUseCase(blockRepository)
@@ -247,6 +276,7 @@ func main() {
 	createFavoriteUserUseCase := fuusecase.NewCreateFavoriteUserUseCase(favoriteuserRepository, blockRepository)
 	deleteFavoriteUserUseCase := fuusecase.NewDeleteFavoriteUserUseCase(favoriteuserRepository)
 	listFavoriteUsersUseCase := fuusecase.NewListFavoriteUsersUseCase(favoriteuserRepository)
+	listFollowersUseCase := fuusecase.NewListFollowersUseCase(favoriteuserRepository)
 	searchFavoriteUsersUseCase := fuusecase.NewSearchFavoriteUsersUseCase(favoriteuserRepository)
 	getFavoriteUsersByUserIDUseCase := fuusecase.NewGetFavoriteUsersByUserIDUseCase(favoriteuserRepository)
 	createInquiryUseCase := inquiryusecase.NewCreateInquiryUsecase(inquiryRepository)
@@ -271,11 +301,16 @@ func main() {
 	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
 	updateAnnouncementUseCase := announcementusecase.NewUpdateAnnouncementUseCase(announcementRepository)
 	listNotificationsUseCase := notificationuc.NewListNotificationsUseCase(notificationRepository)
+	listNotificationGroupsUseCase := notificationuc.NewListNotificationGroupsUseCase(notificationRepository)
+	listNotificationsByActorUseCase := notificationuc.NewListNotificationsByActorUseCase(notificationRepository)
+	getNotificationUseCase := notificationuc.NewGetNotificationUseCase(notificationRepository)
 	markAsReadUseCase := notificationuc.NewMarkAsReadUseCase(notificationRepository)
 	markAllAsReadUseCase := notificationuc.NewMarkAllAsReadUseCase(notificationRepository)
+	markAllAsReadByActorUseCase := notificationuc.NewMarkAllAsReadByActorUseCase(notificationRepository)
 	countUnreadUseCase := notificationuc.NewCountUnreadUseCase(notificationRepository)
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
+	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
 
 	ps := pubsub.New()
 
@@ -284,25 +319,27 @@ func main() {
 		MaintenanceRepository: maintenanceRepository,
 		MaintenanceFlag:       maintenanceFlag,
 
-		CreateUserUseCase:             createUserUseCase,
-		AdminCreateUserUseCase:        adminCreateUserUseCase,
-		SendEmailOTPUseCase:           sendEmailOTPUseCase,
-		ListUsersUseCase:              listUsersUseCase,
-		DeleteUserUseCase:             deleteUserUseCase,
-		UpdateUserUseCase:             updateUserUseCase,
-		GetUserByIDUseCase:            getUserByIDUseCase,
-		GetUsersByIDsUseCase:          getUsersByIDsUseCase,
-		SearchUsersUseCase:            searchUsersUseCase,
-		LoginUserUseCase:              loginUserUseCase,
-		RefreshUserTokenUseCase:       refreshUserTokenUseCase,
-		LogoutUserUseCase:             logoutUserUseCase,
-		FreezeUserUseCase:             freezeUserUseCase,
-		UnfreezeUserUseCase:           unfreezeUserUseCase,
-		RequestPasswordResetUseCase:   requestPasswordResetUseCase,
-		VerifyPasswordResetOTPUseCase: verifyPasswordResetOTPUseCase,
-		ResetPasswordUseCase:          resetPasswordUseCase,
-		SetAvatarUseCase:              setAvatarUseCase,
-		DeleteAvatarUseCase:           deleteAvatarUseCase,
+		UserUseCases: graph.UserUseCases{
+			CreateUserUseCase:             createUserUseCase,
+			SendEmailOTPUseCase:           sendEmailOTPUseCase,
+			VerifyEmailOTPUseCase:         verifyEmailOTPUseCase,
+			ListUsersUseCase:              listUsersUseCase,
+			DeleteUserUseCase:             deleteUserUseCase,
+			UpdateUserUseCase:             updateUserUseCase,
+			GetUserByIDUseCase:            getUserByIDUseCase,
+			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
+			SearchUsersUseCase:            searchUsersUseCase,
+			LoginUserUseCase:              loginUserUseCase,
+			RefreshUserTokenUseCase:       refreshUserTokenUseCase,
+			LogoutUserUseCase:             logoutUserUseCase,
+			FreezeUserUseCase:             freezeUserUseCase,
+			UnfreezeUserUseCase:           unfreezeUserUseCase,
+			RequestPasswordResetUseCase:   requestPasswordResetUseCase,
+			VerifyPasswordResetOTPUseCase: verifyPasswordResetOTPUseCase,
+			ResetPasswordUseCase:          resetPasswordUseCase,
+		},
+		SetAvatarUseCase:    setAvatarUseCase,
+		DeleteAvatarUseCase: deleteAvatarUseCase,
 
 		GetProfileUseCase:    getProfileUseCase,
 		UpdateProfileUseCase: updateProfileUseCase,
@@ -318,22 +355,25 @@ func main() {
 		RefreshAdministratorTokenUseCase: refreshAdministratorTokenUseCase,
 		LogoutAdministratorUseCase:       logoutAdministratorUseCase,
 
-		GetPostByIDUseCase:                       getPostByIDUseCase,
-		GetRootPostUseCase:                       getRootPostUseCase,
-		GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
-		CreatePostUseCase:                        createPostUseCase,
-		ListPostsUseCase:                         listPostsUseCase,
-		DeletePostUseCase:                        deletePostUseCase,
-		UpdatePostUseCase:                        updatePostUseCase,
-		SearchPostsUseCase:                       searchPostsUseCase,
-		ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
-		GetFeedPostsUseCase:                      getFeedPostsUseCase,
-		CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,
-		GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
-		GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
-		GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
-		GetFavoritePostsByUserIDUseCase:          getfavoritePostsByUserIDUseCase,
-		GetFollowersTopLevelPostsByUserIDUseCase: getFollowersTopLevelPostsByUserIDUseCase,
+		PostUseCases: graph.PostUseCases{
+			GetPostByIDUseCase:                       getPostByIDUseCase,
+			GetPostsByIDsUseCase:                     getPostsByIDsUseCase,
+			GetRootPostUseCase:                       getRootPostUseCase,
+			GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
+			CreatePostUseCase:                        createPostUseCase,
+			ListPostsUseCase:                         listPostsUseCase,
+			DeletePostUseCase:                        deletePostUseCase,
+			UpdatePostUseCase:                        updatePostUseCase,
+			SearchPostsUseCase:                       searchPostsUseCase,
+			ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
+			GetFeedPostsUseCase:                      getFeedPostsUseCase,
+			CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,
+			GetRepliesByIDUseCase:                    getRepliesByIDUseCase,
+			GetRepliesByPostIDsIncludeDeletedUseCase: getRepliesByPostIDsIncludeDeletedUseCase,
+			GetPostsByUserIDUseCase:                  getPostsByUserIDUseCase,
+			GetFavoritePostsByUserIDUseCase:          getfavoritePostsByUserIDUseCase,
+			GetFollowersTopLevelPostsByUserIDUseCase: getFollowersTopLevelPostsByUserIDUseCase,
+		},
 
 		GetFavoriteByIDUseCase:                 getFavoriteByIDUseCase,
 		CreateFavoriteUseCase:                  createFavoriteUseCase,
@@ -346,49 +386,60 @@ func main() {
 
 		ListMediaByPostIDUseCase: listMediaByPostIDUseCase,
 
-		GetMessageByIDUseCase:           getMessageByIDUseCase,
-		SendMessageUseCase:              sendMessageUseCase,
-		ListMessagesUseCase:             listMessagesUseCase,
-		DeleteMessageUseCase:            deleteMessageUseCase,
-		UpdateMessageUseCase:            updateMessageUseCase,
-		GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
-		CreateRoomUseCase:               createRoomUseCase,
-		GetRoomUseCase:                  getRoomUseCase,
-		DeleteRoomUseCase:               deleteRoomUseCase,
-		GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
-		ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
-		ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
-		GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
-		AddUserToRoomUseCase:            addUserToRoomUseCase,
-		RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
-		JoinRoomUseCase:                 joinRoomUseCase,
-		GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
-		SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
-		ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
-		MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
-		GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
-		GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
-		GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
+		MessageRoomUseCases: graph.MessageRoomUseCases{
+			GetMessageByIDUseCase:           getMessageByIDUseCase,
+			SendMessageUseCase:              sendMessageUseCase,
+			ListMessagesUseCase:             listMessagesUseCase,
+			DeleteMessageUseCase:            deleteMessageUseCase,
+			UpdateMessageUseCase:            updateMessageUseCase,
+			GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
+			CreateRoomUseCase:               createRoomUseCase,
+			GetRoomUseCase:                  getRoomUseCase,
+			DeleteRoomUseCase:               deleteRoomUseCase,
+			GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
+			ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
+			ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
+			GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
+			AddUserToRoomUseCase:            addUserToRoomUseCase,
+			RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
+			JoinRoomUseCase:                 joinRoomUseCase,
+			GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
+			SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
+			ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
+			MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
+			GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
+			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
+			GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
+			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
+		},
 
-		CreateCommunityUseCase:             createCommunityUseCase,
-		GetCommunityUseCase:                getCommunityUseCase,
-		UpdateCommunityUseCase:             updateCommunityUseCase,
-		UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
-		SearchCommunityUseCase:             searchCommunityUseCase,
-		ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
-		ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,
-		PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
-		DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
-		IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
-		GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
+		CommunityUseCases: graph.CommunityUseCases{
+			CreateCommunityUseCase:             createCommunityUseCase,
+			GetCommunityUseCase:                getCommunityUseCase,
+			UpdateCommunityUseCase:             updateCommunityUseCase,
+			UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
+			SearchCommunityUseCase:             searchCommunityUseCase,
+			ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
+			ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,
+			PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
+			DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
+			IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
+			GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
+		},
 
 		CreateReportUsecase:        *createReportUseCase,
 		ManageReportUsecase:        *manageReportUseCase,
 		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
+		GetAnalyticsUseCase:          getAnalyticsUseCase,
+		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
+		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
+		RecordSessionUseCase:         recordSessionUseCase,
+		InvalidateAnalyticsSummary:   cachedAnalyticsRepo.InvalidateSummary,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
 		ListFavoriteUsersUseCase:       listFavoriteUsersUseCase,
+		ListFollowersUseCase:           listFollowersUseCase,
 		SearchFavoriteUsersUseCase:     searchFavoriteUsersUseCase,
 		GetFavoriteUserByUserIDUseCase: getFavoriteUsersByUserIDUseCase,
 
@@ -416,14 +467,21 @@ func main() {
 		ListTermsUseCase:       listTermsUseCase,
 		ListConsentsUseCase:    listConsentsUseCase,
 
-		NotificationPublisher:          notificationPublisher,
-		ListNotificationsUseCase:       listNotificationsUseCase,
-		MarkAsReadUseCase:              markAsReadUseCase,
-		MarkAllAsReadUseCase:           markAllAsReadUseCase,
-		CountUnreadUseCase:             countUnreadUseCase,
-		DeleteNotificationsUseCase:     deleteNotificationsUseCase,
-		DeleteReadNotificationsUseCase: deleteReadNotificationsUseCase,
-		SSEBroker:                      sseBroker,
+		NotificationUseCases: graph.NotificationUseCases{
+			NotificationPublisher:                 notificationPublisher,
+			ListNotificationsUseCase:              listNotificationsUseCase,
+			ListNotificationGroupsUseCase:         listNotificationGroupsUseCase,
+			ListNotificationsByActorUseCase:       listNotificationsByActorUseCase,
+			GetNotificationUseCase:                getNotificationUseCase,
+			MarkAsReadUseCase:                     markAsReadUseCase,
+			MarkAllAsReadUseCase:                  markAllAsReadUseCase,
+			MarkAllAsReadByActorUseCase:           markAllAsReadByActorUseCase,
+			CountUnreadUseCase:                    countUnreadUseCase,
+			DeleteNotificationsUseCase:            deleteNotificationsUseCase,
+			DeleteReadNotificationsUseCase:        deleteReadNotificationsUseCase,
+			DeleteReadNotificationsByActorUseCase: deleteReadNotificationsByActorUseCase,
+		},
+		SSEBroker: sseBroker,
 
 		PubSub: ps,
 	}
@@ -431,6 +489,7 @@ func main() {
 	// middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
+	e.Use(authmiddleware.RequestTimeout(30 * time.Second))
 
 	// ALLOWED_ORIGINS が設定されていれば本番用ホワイトリスト、未設定なら開発用ワイルドカード
 	allowedOrigins := allowedOriginsFromEnv(isProd)
@@ -449,6 +508,7 @@ func main() {
 	}))
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
@@ -476,6 +536,12 @@ func main() {
 			},
 		),
 	)
+	// コンテキストキー：InitFunc成功・ユーザーIDをCloseFunc側で参照するために使う
+	type wsConnectedKey struct{}
+	type wsUserIDKey struct{}
+
+	wsLimiter := connlimit.NewWSLimiter()
+
 	gqlServer.AddTransport(transport.Websocket{
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -486,23 +552,38 @@ func main() {
 		},
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
-			if _, ok := auth.ClaimsFromContext(ctx); ok {
-				return ctx, nil, nil
+			var userID int64
+			if claims, ok := auth.ClaimsFromContext(ctx); ok {
+				userID = claims.ID
+			} else {
+				authHeader := authHeaderFromInitPayload(initPayload)
+				tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
+				if tokenStr == "" {
+					return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
+				}
+				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
+				if err != nil {
+					return ctx, nil, err
+				}
+				ctx = auth.WithClaims(ctx, claims)
+				userID = claims.ID
 			}
 
-			authHeader := authHeaderFromInitPayload(initPayload)
-			tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
-			if tokenStr == "" {
-				return nil, nil, fmt.Errorf("missing authorization in websocket init payload")
+			if err := wsLimiter.Acquire(userID); err != nil {
+				return ctx, nil, fmt.Errorf("too many WebSocket connections")
 			}
-
-			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			ctx = auth.WithClaims(ctx, claims)
+			metrics.Global.IncWSConnections()
+			ctx = context.WithValue(ctx, wsConnectedKey{}, true)
+			ctx = context.WithValue(ctx, wsUserIDKey{}, userID)
 			return ctx, nil, nil
+		},
+		CloseFunc: func(ctx context.Context, _ int) {
+			if ctx.Value(wsConnectedKey{}) == true {
+				metrics.Global.DecWSConnections()
+				if userID, ok := ctx.Value(wsUserIDKey{}).(int64); ok {
+					wsLimiter.Release(userID)
+				}
+			}
 		},
 	})
 	gqlServer.AddTransport(transport.Options{})

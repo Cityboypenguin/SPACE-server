@@ -7,6 +7,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
@@ -20,6 +21,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
@@ -34,23 +36,8 @@ type Resolver struct {
 	MaintenanceRepository repository.MaintenanceRepository
 	MaintenanceFlag       *atomic.Bool
 
-	GetUserByIDUseCase      user.GetUserByIDUseCase
-	GetUsersByIDsUseCase    user.GetUsersByIDsUseCase
-	CreateUserUseCase       user.CreateUserUseCase
-	AdminCreateUserUseCase  user.AdminCreateUserUseCase
-	SendEmailOTPUseCase     user.SendEmailOTPUseCase
-	ListUsersUseCase        user.ListUsersUseCase
-	DeleteUserUseCase       user.DeleteUserUseCase
-	UpdateUserUseCase       user.UpdateUserUseCase
-	SearchUsersUseCase      user.SearchUsersUseCase
-	LoginUserUseCase              user.LoginUserUseCase
-	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
-	LogoutUserUseCase             user.LogoutUserUseCase
-	FreezeUserUseCase             user.FreezeUserUseCase
-	UnfreezeUserUseCase           user.UnfreezeUserUseCase
-	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
-	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
-	ResetPasswordUseCase          user.ResetPasswordUseCase
+	UserUseCases
+	PostUseCases
 
 	UpdateProfileUseCase profile.UpdateProfileUseCase
 	GetProfileUseCase    profile.GetProfileUseCase
@@ -68,23 +55,6 @@ type Resolver struct {
 	RefreshAdministratorTokenUseCase administrator.RefreshAdministratorTokenUseCase
 	LogoutAdministratorUseCase       administrator.LogoutAdministratorUseCase
 
-	GetPostByIDUseCase                       post.GetPostByIDUseCase
-	GetRootPostUseCase                       post.GetRootPostUseCase
-	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
-	CreatePostUseCase                        post.CreatePostUseCase
-	ListPostsUseCase                         post.ListPostsUseCase
-	DeletePostUseCase                        post.DeletePostUseCase
-	UpdatePostUseCase                        post.UpdatePostUseCase
-	SearchPostsUseCase                       post.SearchPostsUseCase
-	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
-	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
-	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
-	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
-	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
-	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
-	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
-	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
-
 	GetFavoriteByIDUseCase                 favorite.GetFavoriteByIDUseCase
 	CreateFavoriteUseCase                  favorite.CreateFavoriteUseCase
 	DeleteFavoriteUseCase                  favorite.DeleteFavoriteUseCase
@@ -96,52 +66,13 @@ type Resolver struct {
 
 	ListMediaByPostIDUseCase mediausecase.ListMediaByPostIDUseCase
 
-	GetMessageByIDUseCase              messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase                 messageusecase.SendMessageUseCase
-	ListMessagesUseCase                messageusecase.ListMessagesUseCase
-	DeleteMessageUseCase               messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase               messageusecase.UpdateMessageUseCase
-	GetLastMessagesByRoomIDsUseCase    messageusecase.GetLastMessagesByRoomIDsUseCase
-	CreateRoomUseCase               roomusecase.CreateRoomUseCase
-	GetRoomUseCase                  roomusecase.GetRoomUseCase
-	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
-	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
-	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
-	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
-	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
-	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
-	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
-	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
-	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
-	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
-	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
-	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
-	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
-
-	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
-	GetCommunityUseCase                communityusecase.GetCommunityUseCase
-	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
-	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
-	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
-	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
-	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
-	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
-	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
-	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
-	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+	MessageRoomUseCases
+	CommunityUseCases
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
 
-	NotificationPublisher          notificationuc.NotificationPublisher
-	ListNotificationsUseCase       notificationuc.ListNotificationsUseCase
-	MarkAsReadUseCase              notificationuc.MarkAsReadUseCase
-	MarkAllAsReadUseCase           notificationuc.MarkAllAsReadUseCase
-	CountUnreadUseCase             notificationuc.CountUnreadUseCase
-	DeleteNotificationsUseCase     notificationuc.DeleteNotificationsUseCase
-	DeleteReadNotificationsUseCase notificationuc.DeleteReadNotificationsUseCase
+	NotificationUseCases
 
 	CreateInquiryUsecase inquiryusecase.CreateInquiryUsecase
 	ManageInquiryUsecase inquiryusecase.ManageInquiryUsecase
@@ -168,6 +99,7 @@ type Resolver struct {
 	DeleteFavoriteUserUseCase      favoriteuser.DeleteFavoriteUserUseCase
 	GetFavoriteUserByUserIDUseCase favoriteuser.GetFavoriteUsersByUserIDUseCase
 	ListFavoriteUsersUseCase       favoriteuser.ListFavoriteUsersUseCase
+	ListFollowersUseCase           favoriteuser.ListFollowersUseCase
 	SearchFavoriteUsersUseCase     favoriteuser.SearchFavoriteUsersUseCase
 
 	CreateTermsUseCase     *termsusecase.CreateTermsUseCase
@@ -178,4 +110,109 @@ type Resolver struct {
 	ListConsentsUseCase    *termsusecase.ListConsentsUseCase
 
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
+
+	GetAnalyticsUseCase          analyticsusecase.GetAnalyticsUseCase
+	GetCommunityAnalyticsUseCase analyticsusecase.GetCommunityAnalyticsUseCase
+	GetTimeSeriesUseCase         analyticsusecase.GetTimeSeriesUseCase
+	RecordSessionUseCase         sessionusecase.RecordSessionUseCase
+
+	// アナリティクスサマリーキャッシュの即時無効化コールバック。
+	// 通報ステータス変更など管理操作が DB を更新した直後に呼ぶ。
+	InvalidateAnalyticsSummary func()
+}
+
+type UserUseCases struct {
+	GetUserByIDUseCase            user.GetUserByIDUseCase
+	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
+	CreateUserUseCase             user.CreateUserUseCase
+	SendEmailOTPUseCase           user.SendEmailOTPUseCase
+	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
+	ListUsersUseCase              user.ListUsersUseCase
+	DeleteUserUseCase             user.DeleteUserUseCase
+	UpdateUserUseCase             user.UpdateUserUseCase
+	SearchUsersUseCase            user.SearchUsersUseCase
+	LoginUserUseCase              user.LoginUserUseCase
+	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
+	LogoutUserUseCase             user.LogoutUserUseCase
+	FreezeUserUseCase             user.FreezeUserUseCase
+	UnfreezeUserUseCase           user.UnfreezeUserUseCase
+	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
+	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
+	ResetPasswordUseCase          user.ResetPasswordUseCase
+}
+
+type PostUseCases struct {
+	GetPostByIDUseCase                       post.GetPostByIDUseCase
+	GetPostsByIDsUseCase                     post.GetPostsByIDsUseCase
+	GetRootPostUseCase                       post.GetRootPostUseCase
+	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
+	CreatePostUseCase                        post.CreatePostUseCase
+	ListPostsUseCase                         post.ListPostsUseCase
+	DeletePostUseCase                        post.DeletePostUseCase
+	UpdatePostUseCase                        post.UpdatePostUseCase
+	SearchPostsUseCase                       post.SearchPostsUseCase
+	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
+	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
+	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase
+	GetRepliesByIDUseCase                    post.GetRepliesByIDUseCase
+	GetRepliesByPostIDsIncludeDeletedUseCase post.GetRepliesByPostIDsIncludeDeletedUseCase
+	GetPostsByUserIDUseCase                  post.GetPostsByUserIDUseCase
+	GetFavoritePostsByUserIDUseCase          post.GetFavoritePostsByUserIDUseCase
+	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
+}
+
+type MessageRoomUseCases struct {
+	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
+	SendMessageUseCase              messageusecase.SendMessageUseCase
+	ListMessagesUseCase             messageusecase.ListMessagesUseCase
+	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
+	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
+	CreateRoomUseCase               roomusecase.CreateRoomUseCase
+	GetRoomUseCase                  roomusecase.GetRoomUseCase
+	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
+	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
+	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
+	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
+	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
+	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
+	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
+	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
+	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
+	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
+	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
+	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
+	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
+	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
+	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
+	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
+}
+
+type CommunityUseCases struct {
+	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase                communityusecase.GetCommunityUseCase
+	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
+	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
+	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
+	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
+	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
+	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
+	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
+	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+}
+
+type NotificationUseCases struct {
+	NotificationPublisher                 notificationuc.NotificationPublisher
+	ListNotificationsUseCase              notificationuc.ListNotificationsUseCase
+	ListNotificationGroupsUseCase         notificationuc.ListNotificationGroupsUseCase
+	ListNotificationsByActorUseCase       notificationuc.ListNotificationsByActorUseCase
+	GetNotificationUseCase                notificationuc.GetNotificationUseCase
+	MarkAsReadUseCase                     notificationuc.MarkAsReadUseCase
+	MarkAllAsReadUseCase                  notificationuc.MarkAllAsReadUseCase
+	MarkAllAsReadByActorUseCase           notificationuc.MarkAllAsReadByActorUseCase
+	CountUnreadUseCase                    notificationuc.CountUnreadUseCase
+	DeleteNotificationsUseCase            notificationuc.DeleteNotificationsUseCase
+	DeleteReadNotificationsUseCase        notificationuc.DeleteReadNotificationsUseCase
+	DeleteReadNotificationsByActorUseCase notificationuc.DeleteReadNotificationsByActorUseCase
 }

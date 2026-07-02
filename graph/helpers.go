@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -16,7 +17,11 @@ import (
 	"github.com/google/uuid"
 )
 
-var isReportServiceEnabled = true
+var isReportServiceEnabled atomic.Bool
+
+func init() {
+	isReportServiceEnabled.Store(true)
+}
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarMedia == nil {
@@ -161,6 +166,28 @@ func (r *queryResolver) favoriteUsersToGQL(ctx context.Context, favs []*model.Fa
 	result := make([]*gqlmodel.User, 0, len(favs))
 	for _, f := range favs {
 		if u, ok := userMap[f.FavoriteUserID]; ok {
+			result = append(result, toGraphUser(u))
+		}
+	}
+	return result, nil
+}
+
+func (r *queryResolver) followersToGQL(ctx context.Context, followers []*model.FavoriteUser) ([]*gqlmodel.User, error) {
+	ids := make([]int64, 0, len(followers))
+	for _, f := range followers {
+		ids = append(ids, f.UserID)
+	}
+	users, err := r.GetUsersByIDsUseCase.Execute(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]*model.User, len(users))
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+	result := make([]*gqlmodel.User, 0, len(followers))
+	for _, f := range followers {
+		if u, ok := userMap[f.UserID]; ok {
 			result = append(result, toGraphUser(u))
 		}
 	}

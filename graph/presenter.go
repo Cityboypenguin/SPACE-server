@@ -1,11 +1,16 @@
 package graph
 
 import (
+	"fmt"
+	"time"
+
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
 const timeFormat = "2006-01-02T15:04:05Z07:00"
+
+const deletedAccountDisplayName = "削除されたアカウント"
 
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
@@ -20,6 +25,24 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 		Status:    user.Status,
 		CreatedAt: user.CreatedAt.Format(timeFormat),
 		UpdatedAt: user.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphDeletedUser() *gqlmodel.User {
+	return toGraphDeletedUserWithID(0)
+}
+
+func toGraphDeletedUserWithID(id int64) *gqlmodel.User {
+	deletedAt := time.Unix(0, 0).Format(timeFormat)
+	return &gqlmodel.User{
+		ID:        encodeGraphID("user", id),
+		AccountID: "deleted-account",
+		Name:      deletedAccountDisplayName,
+		Email:     "",
+		Role:      "",
+		Status:    "",
+		CreatedAt: deletedAt,
+		UpdatedAt: deletedAt,
 	}
 }
 
@@ -118,7 +141,10 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 		ReplyCount: int32(post.ReplyCount),
 	}
 }
-func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User) *gqlmodel.Notification {
+
+const notificationTargetTypePost = "post"
+
+func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
 	if n == nil {
 		return nil
 	}
@@ -135,12 +161,58 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User) 
 	if n.TargetID != nil {
 		id := encodeGraphID(*n.TargetType, *n.TargetID)
 		gql.TargetID = &id
+		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost {
+			if p, ok := postMap[*n.TargetID]; ok {
+				gql.TargetPost = toGraphPost(p)
+			}
+		}
 	}
 	if n.ActorID != nil {
 		if u, ok := actorMap[*n.ActorID]; ok {
 			gql.Actor = toGraphUser(u)
 		} else {
-			gql.Actor = &gqlmodel.User{ID: encodeGraphID("user", *n.ActorID)}
+			gql.Actor = toGraphDeletedUserWithID(*n.ActorID)
+		}
+	}
+	return gql
+}
+
+func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.NotificationGroup {
+	if g == nil {
+		return nil
+	}
+	var key string
+	if g.ActorID != nil {
+		key = fmt.Sprintf("%s-%d", g.Type, *g.ActorID)
+	} else {
+		key = fmt.Sprintf("single-%d", g.LatestID)
+	}
+	gql := &gqlmodel.NotificationGroup{
+		Key:         key,
+		Type:        g.Type,
+		Message:     g.Message,
+		CreatedAt:   g.CreatedAt.Format(timeFormat),
+		Count:       int32(g.Count),
+		UnreadCount: int32(g.UnreadCount),
+		LatestID:    encodeGraphID("notification", g.LatestID),
+	}
+	if g.TargetType != nil {
+		gql.TargetType = g.TargetType
+	}
+	if g.TargetID != nil {
+		id := encodeGraphID(*g.TargetType, *g.TargetID)
+		gql.TargetID = &id
+		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost {
+			if p, ok := postMap[*g.TargetID]; ok {
+				gql.TargetPost = toGraphPost(p)
+			}
+		}
+	}
+	if g.ActorID != nil {
+		if u, ok := actorMap[*g.ActorID]; ok {
+			gql.Actor = toGraphUser(u)
+		} else {
+			gql.Actor = toGraphDeletedUserWithID(*g.ActorID)
 		}
 	}
 	return gql
@@ -241,5 +313,84 @@ func toGraphFavorite(f *model.Favorite) *gqlmodel.Favorite {
 		User:      toGraphUser(&model.User{ID: f.UserID}),
 		Post:      toGraphPost(&model.Post{ID: f.PostID}),
 		CreatedAt: f.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphAnalyticsSummary(s *model.AnalyticsSummary) *gqlmodel.AnalyticsSummary {
+	if s == nil {
+		return nil
+	}
+	pageViewStats := make([]*gqlmodel.PageViewStat, 0, len(s.PageViewStats))
+	for _, pv := range s.PageViewStats {
+		pageViewStats = append(pageViewStats, &gqlmodel.PageViewStat{
+			PagePath:           pv.PagePath,
+			AvgDurationSeconds: pv.AvgDurationSeconds,
+			AvgMaxScrollDepth:  pv.AvgMaxScrollDepth,
+			TotalViews:         int32(pv.TotalViews),
+		})
+	}
+	return &gqlmodel.AnalyticsSummary{
+		TotalUsers:                  int32(s.TotalUsers),
+		NewUsersToday:               int32(s.NewUsersToday),
+		NewUsersThisWeek:            int32(s.NewUsersThisWeek),
+		NewUsersThisMonth:           int32(s.NewUsersThisMonth),
+		FrozenUsersCount:            int32(s.FrozenUsersCount),
+		TotalPosts:                  int32(s.TotalPosts),
+		TotalComments:               int32(s.TotalComments),
+		TotalDeletedPosts:           int32(s.TotalDeletedPosts),
+		TotalLikes:                  int32(s.TotalLikes),
+		TotalCommunities:            int32(s.TotalCommunities),
+		TotalMessages:               int32(s.TotalMessages),
+		TotalReports:                int32(s.TotalReports),
+		TotalBlocks:                 int32(s.TotalBlocks),
+		TotalInquiries:              int32(s.TotalInquiries),
+		Dau:                         int32(s.DAU),
+		Wau:                         int32(s.WAU),
+		Mau:                         int32(s.MAU),
+		DauMauRatio:                 s.DAUMAURatio,
+		PostsToday:                  int32(s.PostsToday),
+		CommentsToday:               int32(s.CommentsToday),
+		MessagesToday:               int32(s.MessagesToday),
+		AvgLikesPerPost:             s.AvgLikesPerPost,
+		AvgCommentsPerPost:          s.AvgCommentsPerPost,
+		PostsTextOnly:               int32(s.PostsTextOnly),
+		PostsWithImage:              int32(s.PostsWithImage),
+		PostsWithVideo:              int32(s.PostsWithVideo),
+		UniqueDMSenders:             int32(s.UniqueDMSenders),
+		ActiveCommunitiesLast30Days: int32(s.ActiveCommunitiesLast30Days),
+		AvgCommunityMembers:         s.AvgCommunityMembers,
+		AvgCommunitiesPerUser:       s.AvgCommunitiesPerUser,
+		TotalFollows:                int32(s.TotalFollows),
+		AvgFollowersPerUser:         s.AvgFollowersPerUser,
+		AvgFollowingPerUser:         s.AvgFollowingPerUser,
+		UsersWithProfile:            int32(s.UsersWithProfile),
+		UsersWithAvatar:             int32(s.UsersWithAvatar),
+		UsersWithPost:               int32(s.UsersWithPost),
+		OnboardingCompleteRate:      s.OnboardingCompleteRate,
+		AvgTimeToFirstPostMinutes:   s.AvgTimeToFirstPostMinutes,
+		TotalNotifications:          int32(s.TotalNotifications),
+		ReadNotifications:           int32(s.ReadNotifications),
+		NotificationReadRate:        s.NotificationReadRate,
+		PendingReports:              int32(s.PendingReports),
+		ResolvedReports:             int32(s.ResolvedReports),
+		WebSocketConnections:        int32(s.WebSocketConnections),
+		SseConnections:              int32(s.SSEConnections),
+		ErrorRate5xx:                s.ErrorRate5xx,
+		P50ResponseTimeMs:           s.P50ResponseTimeMs,
+		P95ResponseTimeMs:           s.P95ResponseTimeMs,
+		P99ResponseTimeMs:           s.P99ResponseTimeMs,
+		AvgSessionDurationSeconds:   s.AvgSessionDurationSeconds,
+		AvgSessionsPerDay:           s.AvgSessionsPerDay,
+		AvgScrollDepth:              s.AvgScrollDepth,
+		PageViewStats:               pageViewStats,
+	}
+}
+
+func toGraphCommunityStatItem(c *model.CommunityStatItem) *gqlmodel.CommunityStatItem {
+	return &gqlmodel.CommunityStatItem{
+		CommunityID:  encodeGraphID("community", c.CommunityID),
+		Name:         c.Name,
+		MemberCount:  int32(c.MemberCount),
+		MessageCount: int32(c.MessageCount),
 	}
 }

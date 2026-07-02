@@ -188,6 +188,22 @@ func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64
 	return n > 0, nil
 }
 
+func (r *MySQLCommunityRepository) DeleteCommunitiesWhereOnlyMember(ctx context.Context, userID int64) (int64, error) {
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, `
+		DELETE rm
+		FROM rooms rm
+		JOIN communities c ON c.room_id = rm.id
+		JOIN room_users ru ON ru.room_id = rm.id
+		WHERE rm.type = ?
+		  AND ru.user_id = ?
+		  AND (SELECT COUNT(*) FROM room_users ru2 WHERE ru2.room_id = rm.id) = 1
+	`, model.RoomTypeCommunity, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Community, int, error) {
 	var total int
 	if err := r.DB.QueryRowContext(ctx,
@@ -255,7 +271,7 @@ func (r *MySQLCommunityRepository) IsSoleOwnerWithOtherMembers(ctx context.Conte
 		AND (SELECT COUNT(*) FROM room_users ru3 WHERE ru3.room_id = ru.room_id) > 1
 	`
 	var count int
-	err := r.DB.QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
 	if err != nil {
 		return false, err
 	}

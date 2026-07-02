@@ -33,6 +33,9 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 	if err != nil {
 		return nil, err
 	}
+	if post == nil {
+		return nil, fmt.Errorf("投稿が見つかりません")
+	}
 	if post.UserID == param.UserID {
 		return nil, fmt.Errorf("ユーザーは自分の投稿をお気に入りにできません")
 	}

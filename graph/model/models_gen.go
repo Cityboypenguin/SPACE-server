@@ -40,6 +40,62 @@ type AdministratorPage struct {
 	Total int32            `json:"total"`
 }
 
+type AnalyticsSummary struct {
+	TotalUsers                  int32           `json:"totalUsers"`
+	NewUsersToday               int32           `json:"newUsersToday"`
+	NewUsersThisWeek            int32           `json:"newUsersThisWeek"`
+	NewUsersThisMonth           int32           `json:"newUsersThisMonth"`
+	FrozenUsersCount            int32           `json:"frozenUsersCount"`
+	TotalPosts                  int32           `json:"totalPosts"`
+	TotalComments               int32           `json:"totalComments"`
+	TotalDeletedPosts           int32           `json:"totalDeletedPosts"`
+	TotalLikes                  int32           `json:"totalLikes"`
+	TotalCommunities            int32           `json:"totalCommunities"`
+	TotalMessages               int32           `json:"totalMessages"`
+	TotalReports                int32           `json:"totalReports"`
+	TotalBlocks                 int32           `json:"totalBlocks"`
+	TotalInquiries              int32           `json:"totalInquiries"`
+	Dau                         int32           `json:"dau"`
+	Wau                         int32           `json:"wau"`
+	Mau                         int32           `json:"mau"`
+	DauMauRatio                 float64         `json:"dauMauRatio"`
+	PostsToday                  int32           `json:"postsToday"`
+	CommentsToday               int32           `json:"commentsToday"`
+	MessagesToday               int32           `json:"messagesToday"`
+	AvgLikesPerPost             float64         `json:"avgLikesPerPost"`
+	AvgCommentsPerPost          float64         `json:"avgCommentsPerPost"`
+	PostsTextOnly               int32           `json:"postsTextOnly"`
+	PostsWithImage              int32           `json:"postsWithImage"`
+	PostsWithVideo              int32           `json:"postsWithVideo"`
+	UniqueDMSenders             int32           `json:"uniqueDMSenders"`
+	ActiveCommunitiesLast30Days int32           `json:"activeCommunitiesLast30Days"`
+	AvgCommunityMembers         float64         `json:"avgCommunityMembers"`
+	AvgCommunitiesPerUser       float64         `json:"avgCommunitiesPerUser"`
+	TotalFollows                int32           `json:"totalFollows"`
+	AvgFollowersPerUser         float64         `json:"avgFollowersPerUser"`
+	AvgFollowingPerUser         float64         `json:"avgFollowingPerUser"`
+	UsersWithProfile            int32           `json:"usersWithProfile"`
+	UsersWithAvatar             int32           `json:"usersWithAvatar"`
+	UsersWithPost               int32           `json:"usersWithPost"`
+	OnboardingCompleteRate      float64         `json:"onboardingCompleteRate"`
+	AvgTimeToFirstPostMinutes   float64         `json:"avgTimeToFirstPostMinutes"`
+	TotalNotifications          int32           `json:"totalNotifications"`
+	ReadNotifications           int32           `json:"readNotifications"`
+	NotificationReadRate        float64         `json:"notificationReadRate"`
+	PendingReports              int32           `json:"pendingReports"`
+	ResolvedReports             int32           `json:"resolvedReports"`
+	WebSocketConnections        int32           `json:"webSocketConnections"`
+	SseConnections              int32           `json:"sseConnections"`
+	ErrorRate5xx                float64         `json:"errorRate5xx"`
+	P50ResponseTimeMs           float64         `json:"p50ResponseTimeMs"`
+	P95ResponseTimeMs           float64         `json:"p95ResponseTimeMs"`
+	P99ResponseTimeMs           float64         `json:"p99ResponseTimeMs"`
+	AvgSessionDurationSeconds   float64         `json:"avgSessionDurationSeconds"`
+	AvgSessionsPerDay           float64         `json:"avgSessionsPerDay"`
+	AvgScrollDepth              float64         `json:"avgScrollDepth"`
+	PageViewStats               []*PageViewStat `json:"pageViewStats"`
+}
+
 type Announcement struct {
 	ID        string `json:"ID"`
 	Title     string `json:"title"`
@@ -87,6 +143,18 @@ type CommunityMemberUpdateInput struct {
 type CommunityPage struct {
 	Items []*Community `json:"items"`
 	Total int32        `json:"total"`
+}
+
+type CommunityStatItem struct {
+	CommunityID  string `json:"communityID"`
+	Name         string `json:"name"`
+	MemberCount  int32  `json:"memberCount"`
+	MessageCount int32  `json:"messageCount"`
+}
+
+type CommunityStatsPage struct {
+	Items []*CommunityStatItem `json:"items"`
+	Total int32                `json:"total"`
 }
 
 type CreateAdministratorInput struct {
@@ -228,14 +296,47 @@ type Notification struct {
 	Actor      *User   `json:"actor,omitempty"`
 	TargetType *string `json:"targetType,omitempty"`
 	TargetID   *string `json:"targetID,omitempty"`
+	TargetPost *Post   `json:"targetPost,omitempty"`
 	Message    string  `json:"message"`
 	IsRead     bool    `json:"isRead"`
 	CreatedAt  string  `json:"createdAt"`
 }
 
+type NotificationGroup struct {
+	Key         string  `json:"key"`
+	Type        string  `json:"type"`
+	Actor       *User   `json:"actor,omitempty"`
+	TargetType  *string `json:"targetType,omitempty"`
+	TargetID    *string `json:"targetID,omitempty"`
+	TargetPost  *Post   `json:"targetPost,omitempty"`
+	Message     string  `json:"message"`
+	CreatedAt   string  `json:"createdAt"`
+	Count       int32   `json:"count"`
+	UnreadCount int32   `json:"unreadCount"`
+	LatestID    string  `json:"latestID"`
+}
+
+type NotificationGroupPage struct {
+	Items []*NotificationGroup `json:"items"`
+	Total int32                `json:"total"`
+}
+
 type NotificationPage struct {
 	Items []*Notification `json:"items"`
 	Total int32           `json:"total"`
+}
+
+type PageViewInput struct {
+	Path            string `json:"path"`
+	DurationSeconds int32  `json:"durationSeconds"`
+	MaxScrollDepth  int32  `json:"maxScrollDepth"`
+}
+
+type PageViewStat struct {
+	PagePath           string  `json:"pagePath"`
+	AvgDurationSeconds float64 `json:"avgDurationSeconds"`
+	AvgMaxScrollDepth  float64 `json:"avgMaxScrollDepth"`
+	TotalViews         int32   `json:"totalViews"`
 }
 
 type Post struct {
@@ -273,6 +374,11 @@ type Profile struct {
 }
 
 type Query struct {
+}
+
+type RecordSessionDataInput struct {
+	SessionDurationSeconds int32            `json:"sessionDurationSeconds"`
+	PageViews              []*PageViewInput `json:"pageViews"`
 }
 
 type RemoveUserFromRoomInput struct {
@@ -342,6 +448,19 @@ type TermsOfService struct {
 	CreatedAt     string `json:"createdAt"`
 }
 
+type TimeSeriesData struct {
+	Points []*TimeSeriesPoint `json:"points"`
+}
+
+type TimeSeriesPoint struct {
+	Label    string `json:"label"`
+	Posts    int32  `json:"posts"`
+	Comments int32  `json:"comments"`
+	Messages int32  `json:"messages"`
+	NewUsers int32  `json:"newUsers"`
+	Likes    int32  `json:"likes"`
+}
+
 type UnreadUpdate struct {
 	RoomID      string `json:"roomID"`
 	UnreadCount int32  `json:"unreadCount"`
@@ -381,10 +500,11 @@ type UpdateRoomInput struct {
 }
 
 type UpdateUserInput struct {
-	AccountID *string `json:"accountID,omitempty"`
-	Name      *string `json:"name,omitempty"`
-	Email     *string `json:"email,omitempty"`
-	Password  *string `json:"password,omitempty"`
+	AccountID       *string `json:"accountID,omitempty"`
+	Name            *string `json:"name,omitempty"`
+	Email           *string `json:"email,omitempty"`
+	Password        *string `json:"password,omitempty"`
+	CurrentPassword *string `json:"currentPassword,omitempty"`
 }
 
 type User struct {
@@ -713,6 +833,61 @@ func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
 }
 
 func (e ReportTargetType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TimeSeriesGranularity string
+
+const (
+	TimeSeriesGranularityDay  TimeSeriesGranularity = "day"
+	TimeSeriesGranularityHour TimeSeriesGranularity = "hour"
+)
+
+var AllTimeSeriesGranularity = []TimeSeriesGranularity{
+	TimeSeriesGranularityDay,
+	TimeSeriesGranularityHour,
+}
+
+func (e TimeSeriesGranularity) IsValid() bool {
+	switch e {
+	case TimeSeriesGranularityDay, TimeSeriesGranularityHour:
+		return true
+	}
+	return false
+}
+
+func (e TimeSeriesGranularity) String() string {
+	return string(e)
+}
+
+func (e *TimeSeriesGranularity) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TimeSeriesGranularity(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TimeSeriesGranularity", str)
+	}
+	return nil
+}
+
+func (e TimeSeriesGranularity) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TimeSeriesGranularity) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
