@@ -35,6 +35,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
@@ -48,7 +49,6 @@ import (
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
-	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
@@ -198,6 +198,7 @@ func main() {
 	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
 	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
+	adminCreateUserUseCase := userusecase.NewAdminCreateUserUseCase(userRepository, profileRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
