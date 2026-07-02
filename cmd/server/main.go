@@ -18,12 +18,14 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/db"
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
+	infracache "github.com/Cityboypenguin/SPACE-server/infra/cache"
 	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
@@ -249,7 +251,11 @@ func main() {
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 
-	analyticsRepository := mysql.NewMySQLAnalyticsRepository(database)
+	analyticsRepository := infracache.NewCachedAnalyticsRepository(
+		mysql.NewMySQLAnalyticsRepository(database),
+		5*time.Minute,
+		2*time.Minute,
+	)
 	getAnalyticsUseCase := analyticsusecase.NewGetAnalyticsUseCase(analyticsRepository)
 	getCommunityAnalyticsUseCase := analyticsusecase.NewGetCommunityAnalyticsUseCase(analyticsRepository)
 	getTimeSeriesUseCase := analyticsusecase.NewGetTimeSeriesUseCase(analyticsRepository)
@@ -480,6 +486,7 @@ func main() {
 	// middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
+	e.Use(authmiddleware.RequestTimeout(30 * time.Second))
 
 	// ALLOWED_ORIGINS が設定されていれば本番用ホワイトリスト、未設定なら開発用ワイルドカード
 	allowedOrigins := allowedOriginsFromEnv(isProd)
@@ -526,6 +533,12 @@ func main() {
 			},
 		),
 	)
+	// コンテキストキー：InitFunc成功・ユーザーIDをCloseFunc側で参照するために使う
+	type wsConnectedKey struct{}
+	type wsUserIDKey struct{}
+
+	wsLimiter := connlimit.NewWSLimiter()
+
 	gqlServer.AddTransport(transport.Websocket{
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -536,28 +549,38 @@ func main() {
 		},
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
-			if _, ok := auth.ClaimsFromContext(ctx); ok {
-				metrics.Global.IncWSConnections()
-				return ctx, nil, nil
+			var userID int64
+			if claims, ok := auth.ClaimsFromContext(ctx); ok {
+				userID = claims.ID
+			} else {
+				authHeader := authHeaderFromInitPayload(initPayload)
+				tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
+				if tokenStr == "" {
+					return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
+				}
+				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
+				if err != nil {
+					return ctx, nil, err
+				}
+				ctx = auth.WithClaims(ctx, claims)
+				userID = claims.ID
 			}
 
-			authHeader := authHeaderFromInitPayload(initPayload)
-			tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
-			if tokenStr == "" {
-				return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
+			if err := wsLimiter.Acquire(userID); err != nil {
+				return ctx, nil, fmt.Errorf("too many WebSocket connections")
 			}
-
-			claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
-			if err != nil {
-				return ctx, nil, err
-			}
-
-			ctx = auth.WithClaims(ctx, claims)
 			metrics.Global.IncWSConnections()
+			ctx = context.WithValue(ctx, wsConnectedKey{}, true)
+			ctx = context.WithValue(ctx, wsUserIDKey{}, userID)
 			return ctx, nil, nil
 		},
-		CloseFunc: func(_ context.Context, _ int) {
-			metrics.Global.DecWSConnections()
+		CloseFunc: func(ctx context.Context, _ int) {
+			if ctx.Value(wsConnectedKey{}) == true {
+				metrics.Global.DecWSConnections()
+				if userID, ok := ctx.Value(wsUserIDKey{}).(int64); ok {
+					wsLimiter.Release(userID)
+				}
+			}
 		},
 	})
 	gqlServer.AddTransport(transport.Options{})

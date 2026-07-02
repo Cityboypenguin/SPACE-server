@@ -53,7 +53,10 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 			}
 		}
 
-		cl, missed := hub.Subscribe(userID, lastEventID)
+		cl, missed, err := hub.Subscribe(userID, lastEventID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusTooManyRequests, "too many SSE connections")
+		}
 		defer hub.Unsubscribe(userID, cl)
 
 		now := time.Now().Format(time.RFC3339Nano)

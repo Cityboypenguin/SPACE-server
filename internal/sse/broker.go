@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -8,6 +9,10 @@ import (
 )
 
 const historySize = 100
+
+// maxSSEConnectionsPerUser は1ユーザーが同時に保持できるSSE接続数の上限。
+// 複数タブを考慮して5としている。IPではなくユーザーID単位のため大学NATでも問題ない。
+const maxSSEConnectionsPerUser = 5
 
 type Event struct {
 	ID   int            `json:"id"`
@@ -41,9 +46,13 @@ func NewBroker() *Broker {
 //
 // 注意: lastEventID が履歴の最古 ID より小さい場合（100件超の切断）は、
 // 履歴に残っている範囲のみリプレイされる。それ以前のイベントは DB の通知一覧で確認できる。
-func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event) {
-	c := &Client{ch: make(chan Event, 32)}
+func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event, error) {
 	b.mu.Lock()
+	if len(b.clients[userID]) >= maxSSEConnectionsPerUser {
+		b.mu.Unlock()
+		return nil, nil, fmt.Errorf("too many SSE connections for user %d (limit: %d)", userID, maxSSEConnectionsPerUser)
+	}
+	c := &Client{ch: make(chan Event, 32)}
 	var missed []Event
 	if lastEventID >= 0 {
 		// サーバー再起動後は nextID が 1 から始まるため、クライアントの lastEventID が
@@ -75,7 +84,7 @@ func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event) {
 	b.clients[userID] = append(b.clients[userID], c)
 	b.mu.Unlock()
 	metrics.Global.IncSSEConnections()
-	return c, missed
+	return c, missed, nil
 }
 
 func (b *Broker) Unsubscribe(userID int64, c *Client) {
