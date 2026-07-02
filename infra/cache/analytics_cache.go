@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -61,9 +62,16 @@ func NewCachedAnalyticsRepository(
 func (c *CachedAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*model.AnalyticsSummary, error) {
 	c.summaryMu.RLock()
 	if c.summaryVal != nil && time.Now().Before(c.summaryExpires) {
-		v := c.summaryVal
+		// DB由来フィールドはキャッシュのまま、in-memoryメトリクスだけ毎回最新値で上書き
+		copy := *c.summaryVal
+		copy.WebSocketConnections = metrics.Global.WSConnections()
+		copy.SSEConnections = metrics.Global.SSEConnections()
+		copy.ErrorRate5xx = metrics.Global.ErrorRate()
+		copy.P50ResponseTimeMs = metrics.Global.Percentile(50)
+		copy.P95ResponseTimeMs = metrics.Global.Percentile(95)
+		copy.P99ResponseTimeMs = metrics.Global.Percentile(99)
 		c.summaryMu.RUnlock()
-		return v, nil
+		return &copy, nil
 	}
 	c.summaryMu.RUnlock()
 
