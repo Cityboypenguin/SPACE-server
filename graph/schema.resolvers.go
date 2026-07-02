@@ -1316,49 +1316,60 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 
 // CreateReport is the resolver for the createReport field.
 func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.CreateReportInput) (*gqlmodel.UserReport, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !isReportServiceEnabled.Load() {
-		return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
-	}
-	kind := reportTargetKind(input.TargetType)
-	if kind == "" {
-		return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
-	}
-	numericTargetID, err := decodeGraphID(ctx, kind, input.TargetID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid target id")
-	}
+    claims, err := requireAuth(ctx)
+    if err != nil {
+        return nil, err
+    }
+    if !isReportServiceEnabled.Load() {
+        return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
+    }
+    kind := reportTargetKind(input.TargetType)
+    if kind == "" {
+        return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
+    }
+    numericTargetID, err := decodeGraphID(ctx, kind, input.TargetID)
+    if err != nil {
+        return nil, fmt.Errorf("invalid target id")
+    }
 
-	res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
-		ReporterID:   claims.ID,
-		TargetType:   model.ReportTargetType(input.TargetType),
-		TargetID:     fmt.Sprintf("%d", numericTargetID),
-		Reason:       input.Reason,
-		CustomReason: input.CustomReason,
-	})
-	if err != nil {
-		return nil, err
-	}
+    // 💡 1. snapshotContent の変数宣言
+    var snapshotContent *string
 
-	reporter, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	if err != nil || reporter == nil {
-		return nil, fmt.Errorf("failed to fetch reporter")
-	}
+    if input.TargetType == "POST" {
+        post, err := r.GetPostByIDUseCase.Execute(ctx, numericTargetID) 
+        if err == nil && post != nil {
+            snapshotContent = &post.Content
+        }
+    }
 
-	return &gqlmodel.UserReport{
-		ID:           res.ID,
-		TargetType:   input.TargetType,
-		TargetID:     encodeGraphID(kind, numericTargetID),
-		Reason:       res.Reason,
-		CustomReason: res.CustomReason,
-		Status:       gqlmodel.ReportStatusPending,
-		Reporter:     toGraphUser(reporter),
-		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
-	}, nil
+    res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
+        ReporterID:   claims.ID,
+        TargetType:   model.ReportTargetType(input.TargetType),
+        TargetID:     fmt.Sprintf("%d", numericTargetID),
+        Reason:       input.Reason,
+        CustomReason: input.CustomReason,
+        Content:      snapshotContent,
+    })
+    if err != nil {
+        return nil, err
+    }
+
+    reporter, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+    if err != nil || reporter == nil {
+        return nil, fmt.Errorf("failed to fetch reporter")
+    }
+
+    return &gqlmodel.UserReport{
+        ID:           res.ID,
+        TargetType:   input.TargetType,
+        TargetID:     encodeGraphID(kind, numericTargetID),
+        Reason:       res.Reason,
+        CustomReason: res.CustomReason,
+        Status:       gqlmodel.ReportStatusPending,
+        Reporter:     toGraphUser(reporter),
+        CreatedAt:    res.CreatedAt.Format(time.RFC3339),
+        UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+    }, nil
 }
 
 // UpdateReportStatus is the resolver for the updateReportStatus field.
