@@ -280,13 +280,19 @@ func (r *MySQLAnalyticsRepository) GetCommunityAnalytics(ctx context.Context, li
 
 func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularity, from, to string) ([]*model.TimeSeriesPoint, error) {
 	const dateFmt = "2006-01-02"
-	now := time.Now()
 
-	fromT, err := time.ParseInLocation(dateFmt, from, now.Location())
+	// サーバーが UTC コンテナで動いていても JST で統一する
+	jst, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		jst = time.FixedZone("JST", 9*60*60)
+	}
+	now := time.Now().In(jst)
+
+	fromT, err := time.ParseInLocation(dateFmt, from, jst)
 	if err != nil {
 		fromT = now.AddDate(0, 0, -30)
 	}
-	toT, err := time.ParseInLocation(dateFmt, to, now.Location())
+	toT, err := time.ParseInLocation(dateFmt, to, jst)
 	if err != nil {
 		toT = now
 	}
@@ -302,6 +308,11 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	} else {
 		labelFmt = "%Y-%m-%d"
 	}
+
+	// MySQLのFROM_UNIXTIME()はMySQLサーバーのタイムゾーン（通常UTC）で変換するため
+	// +32400秒（JST=UTC+9）を加算してラベルをJSTに揃える
+	const jstOffsetSec = 9 * 60 * 60
+	localTS := fmt.Sprintf("(created_at + %d)", jstOffsetSec)
 
 	sinceExpr := fmt.Sprintf("%d", fromUnix)
 	untilExpr := fmt.Sprintf("%d", toUnix)
@@ -319,11 +330,11 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
 	mqs := []metricQuery{
-		{posts, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(created_at), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, labelFmt, between)},
-		{comments, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(created_at), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, labelFmt, between)},
-		{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(created_at), '%s') as lbl, COUNT(*) FROM messages WHERE %s GROUP BY lbl`, labelFmt, between)},
-		{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(created_at), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, labelFmt, between)},
-		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(created_at), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, labelFmt, between)},
+		{posts, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{comments, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 	}
 
 	for _, mq := range mqs {
@@ -346,21 +357,17 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		}
 	}
 
-	// 全ラベルのセットを作成してギャップを0で埋める
-	labelSet := map[string]struct{}{}
-	for _, m := range []map[string]int{posts, comments, messages, newUsers, likes} {
-		for k := range m {
-			labelSet[k] = struct{}{}
+	// 範囲内の全スロットを生成してギャップを0で埋める
+	var labels []string
+	if granularity == "hour" {
+		for t := fromT; t.Before(toT); t = t.Add(time.Hour) {
+			labels = append(labels, t.Format("2006-01-02 15:00"))
+		}
+	} else {
+		for t := fromT; t.Before(toT); t = t.AddDate(0, 0, 1) {
+			labels = append(labels, t.Format("2006-01-02"))
 		}
 	}
-
-	// ラベルをソートして返す
-	labels := make([]string, 0, len(labelSet))
-	for l := range labelSet {
-		labels = append(labels, l)
-	}
-	// 文字列ソートで時系列順になる（%Y-%m-%d / %Y-%m-%d %H:%M 形式なので辞書順=時刻順）
-	sortStrings(labels)
 
 	points := make([]*model.TimeSeriesPoint, len(labels))
 	for i, l := range labels {
@@ -376,10 +383,3 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	return points, nil
 }
 
-func sortStrings(ss []string) {
-	for i := 1; i < len(ss); i++ {
-		for j := i; j > 0 && ss[j] < ss[j-1]; j-- {
-			ss[j], ss[j-1] = ss[j-1], ss[j]
-		}
-	}
-}
