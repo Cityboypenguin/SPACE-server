@@ -30,6 +30,7 @@ type CreateReportInput struct {
 	TargetID     string
 	Reason       string
 	CustomReason *string
+	Content      *string
 }
 
 func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInput) (*model.Report, error) {

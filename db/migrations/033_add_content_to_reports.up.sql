@@ -1,0 +1,1 @@
+ALTER TABLE user_reports ADD COLUMN `content` TEXT NULL AFTER `custom_reason`;
