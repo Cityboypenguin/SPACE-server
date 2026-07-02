@@ -291,6 +291,20 @@ func (r *MySQLMessageRepository) CountUnreadMessagesByRoomIDs(ctx context.Contex
 	return result, rows.Err()
 }
 
+func (r *MySQLMessageRepository) CountUnreadMessagesByRoomType(ctx context.Context, userID int64, roomType string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM messages m
+		JOIN room_users ru ON ru.room_id = m.room_id AND ru.user_id = ?
+		JOIN rooms r ON r.id = m.room_id AND r.type = ?
+		WHERE m.user_id != ?
+		  AND (ru.last_read_at IS NULL OR m.created_at > ru.last_read_at)
+	`
+	var count int
+	err := r.DB.QueryRowContext(ctx, query, userID, roomType, userID).Scan(&count)
+	return count, err
+}
+
 func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error) {
 	result := make(map[int64]*model.Message)
 	if len(roomIDs) == 0 {

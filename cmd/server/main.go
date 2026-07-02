@@ -233,6 +233,7 @@ func main() {
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
+	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
 	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
 	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
@@ -408,6 +409,7 @@ func main() {
 			GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
 			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
 			GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
+			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
 		},
 
 		CommunityUseCases: graph.CommunityUseCases{

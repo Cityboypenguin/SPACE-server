@@ -185,6 +185,7 @@ type MessageRoomUseCases struct {
 	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
 	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
+	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
 }
 
 type CommunityUseCases struct {
