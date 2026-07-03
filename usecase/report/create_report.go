@@ -64,6 +64,11 @@ func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInp
 		UpdatedAt:    now,
 	}
 
+	// 保存時に通報された投稿のスナップショット（本文）を保存する
+	if input.Content != nil {
+		report.PostContent = input.Content
+	}
+
 	if err := u.reportRepo.Save(ctx, report); err != nil {
 		return nil, err
 	}

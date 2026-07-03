@@ -22,9 +22,9 @@ func NewMySQLReportRepository(db *sql.DB) repository.ReportRepository {
 
 func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) error {
 	query := `
-        INSERT INTO user_reports (id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
+		INSERT INTO user_reports (id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
 
 	_, err := r.DB.ExecContext(ctx, query,
 		report.ID,
@@ -33,6 +33,7 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
 		report.TargetID,
 		report.Reason,
 		report.CustomReason,
+		report.PostContent,
 		string(report.Status),
 		report.CreatedAt.Unix(),
 		report.UpdatedAt.Unix(),
@@ -49,9 +50,10 @@ func scanReport(s interface {
 	var r model.Report
 	var targetTypeStr, statusStr string
 	var createdAtUnix, updatedAtUnix int64
+	var content sql.NullString
 	if err := s.Scan(
 		&r.ID, &r.ReporterID, &targetTypeStr, &r.TargetID,
-		&r.Reason, &r.CustomReason, &statusStr, &createdAtUnix, &updatedAtUnix,
+		&r.Reason, &r.CustomReason, &content, &statusStr, &createdAtUnix, &updatedAtUnix,
 	); err != nil {
 		return nil, err
 	}
@@ -59,12 +61,15 @@ func scanReport(s interface {
 	r.Status = model.ReportStatus(statusStr)
 	r.CreatedAt = time.Unix(createdAtUnix, 0)
 	r.UpdatedAt = time.Unix(updatedAtUnix, 0)
+	if content.Valid {
+		r.PostContent = &content.String
+	}
 	return &r, nil
 }
 
 func (r *MySQLReportRepository) FindByID(ctx context.Context, id string) (*model.Report, error) {
 	query := `
-        SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
+		SELECT id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at
         FROM user_reports
         WHERE id = ?
         LIMIT 1
@@ -120,7 +125,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 	}
 
 	query := `
-        SELECT id, reporter_id, target_type, target_id, reason, custom_reason, status, created_at, updated_at
+		SELECT id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at
         FROM user_reports
         WHERE 1=1
     `

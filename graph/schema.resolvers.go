@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -1332,15 +1333,16 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
         return nil, fmt.Errorf("invalid target id")
     }
 
-    // 💡 1. snapshotContent の変数宣言
     var snapshotContent *string
 
-    if input.TargetType == "POST" {
-        post, err := r.GetPostByIDUseCase.Execute(ctx, numericTargetID) 
-        if err == nil && post != nil {
-            snapshotContent = &post.Content
-        }
+    if strings.ToUpper(string(input.TargetType)) == "POST" || input.TargetType == "post" {
+    post, err := r.GetPostByIDUseCase.Execute(ctx, numericTargetID) 
+    if err == nil && post != nil {
+        snapshotContent = &post.Content
+    } else if err != nil {
+        log.Printf("Failed to fetch post for report: %v", err)
     }
+}
 
     res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
         ReporterID:   claims.ID,
@@ -1366,7 +1368,8 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
         Reason:       res.Reason,
         CustomReason: res.CustomReason,
         Status:       gqlmodel.ReportStatusPending,
-        Reporter:     toGraphUser(reporter),
+		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
         CreatedAt:    res.CreatedAt.Format(time.RFC3339),
         UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
     }, nil
@@ -1406,6 +1409,7 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		CustomReason: res.CustomReason,
 		Status:       status,
 		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
