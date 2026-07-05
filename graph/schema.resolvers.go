@@ -401,22 +401,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	if numericParentID != nil {
-		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
-		if perr == nil && parent != nil && parent.UserID != claims.ID {
-			targetType := notificationuc.TargetPost
-			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-				UserID:     parent.UserID,
-				Type:       notificationuc.TypeReply,
-				ActorID:    &claims.ID,
-				TargetType: &targetType,
-				TargetID:   numericParentID,
-				Message:    "あなたの投稿に返信がありました",
-			}); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
-			}
-		}
-	}
+	// 返信先投稿者への通知は CreatePostUseCase 内で発行される。
 
 	return toGraphPost(post), nil
 }
@@ -501,20 +486,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		return nil, err
 	}
 
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
-	if err == nil && post != nil && post.UserID != claims.ID {
-		targetType := notificationuc.TargetPost
-		if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-			UserID:     post.UserID,
-			Type:       notificationuc.TypeFavorite,
-			ActorID:    &claims.ID,
-			TargetType: &targetType,
-			TargetID:   &numericPostID,
-			Message:    "あなたの投稿がいいねされました",
-		}); err != nil {
-			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
-		}
-	}
+	// 投稿者への「いいね」通知は CreateFavoriteUseCase 内で発行される。
 
 	return toGraphFavorite(favorite), nil
 }

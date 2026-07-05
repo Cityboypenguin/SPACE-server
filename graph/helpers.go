@@ -7,8 +7,10 @@ import (
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
@@ -32,26 +34,15 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 }
 
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if !ok {
-		return nil, errors.New("unauthorized")
-	}
-	return claims, nil
+	return authz.RequireAuth(ctx)
 }
 
 func requireAdminAuth(ctx context.Context) (*auth.Claims, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !isAdminRole(claims.Role) {
-		return nil, errors.New("forbidden")
-	}
-	return claims, nil
+	return authz.RequireAdmin(ctx)
 }
 
 func isAdminRole(role string) bool {
-	return role == "admin" || role == "administrator"
+	return authz.IsAdminRole(role)
 }
 
 func requireSelfOrAdmin(ctx context.Context, targetUserID int64, action string) (*auth.Claims, error) {
@@ -66,7 +57,7 @@ func requireSelfOrAdmin(ctx context.Context, targetUserID int64, action string) 
 	}
 
 	audit.LogDenied(ctx, action, "user", targetUserID, "forbidden")
-	return nil, errors.New("forbidden")
+	return nil, apperr.Forbidden("forbidden")
 }
 
 func encodeGraphID(kind string, id int64) string {

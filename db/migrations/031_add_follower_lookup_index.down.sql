@@ -1,0 +1,1 @@
+DROP INDEX idx_favorite_users_follower_created ON favorite_users;
