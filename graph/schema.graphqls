@@ -267,7 +267,6 @@ type Mutation {
 
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
-  toggleReportSystem(enabled: Boolean!): Boolean!
 
   createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
   deleteFavoriteUser(favoriteUserID: ID!): Boolean!

@@ -14,10 +14,8 @@ const (
 type ReportTargetType string
 
 const (
-	TargetPost      ReportTargetType = "POST"      // 投稿
+	TargetPost      ReportTargetType = "POST"      // 投稿（コメントも親を持つ投稿として扱われるため対象はPOSTに統一）
 	TargetUser      ReportTargetType = "USER"      // ユーザー
-	TargetComment   ReportTargetType = "COMMENT"   // コメント
-	TargetPromotion ReportTargetType = "PROMOTION" // 宣伝やそのコメント
 	TargetCommunity ReportTargetType = "COMMUNITY" // コミュニティ
 )
 
