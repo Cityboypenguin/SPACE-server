@@ -115,6 +115,10 @@ type Resolver struct {
 	GetCommunityAnalyticsUseCase analyticsusecase.GetCommunityAnalyticsUseCase
 	GetTimeSeriesUseCase         analyticsusecase.GetTimeSeriesUseCase
 	RecordSessionUseCase         sessionusecase.RecordSessionUseCase
+
+	// アナリティクスサマリーキャッシュの即時無効化コールバック。
+	// 通報ステータス変更など管理操作が DB を更新した直後に呼ぶ。
+	InvalidateAnalyticsSummary func()
 }
 
 type UserUseCases struct {
@@ -182,6 +186,7 @@ type MessageRoomUseCases struct {
 	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
 	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
+	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
 }
 
 type CommunityUseCases struct {

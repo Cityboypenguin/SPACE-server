@@ -10,6 +10,8 @@ type Query {
   myNotificationGroups(limit: Int = 20, offset: Int = 0): NotificationGroupPage!
   notification(id: ID!): Notification
   myUnreadNotificationCount: Int!
+  myUnreadDMCount: Int!
+  myUnreadCommunityCount: Int!
 
   administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
   getAdministratorByID(id: ID!): Administrator
@@ -266,7 +268,6 @@ type Mutation {
 
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
-  toggleReportSystem(enabled: Boolean!): Boolean!
 
   createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
   deleteFavoriteUser(favoriteUserID: ID!): Boolean!

@@ -26,7 +26,3 @@ func (u *ManageReportUsecase) UpdateStatus(ctx context.Context, id string, statu
 	}
 	return u.reportRepo.UpdateStatus(ctx, id, status)
 }
-
-func (u *ManageReportUsecase) ToggleSystem(ctx context.Context, enabled bool) (bool, error) {
-	return enabled, nil
-}

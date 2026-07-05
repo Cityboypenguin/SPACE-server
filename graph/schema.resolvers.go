@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -400,22 +401,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	if numericParentID != nil {
-		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
-		if perr == nil && parent != nil && parent.UserID != claims.ID {
-			targetType := notificationuc.TargetPost
-			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-				UserID:     parent.UserID,
-				Type:       notificationuc.TypeReply,
-				ActorID:    &claims.ID,
-				TargetType: &targetType,
-				TargetID:   numericParentID,
-				Message:    "あなたの投稿に返信がありました",
-			}); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
-			}
-		}
-	}
+	// 返信先投稿者への通知は CreatePostUseCase 内で発行される。
 
 	return toGraphPost(post), nil
 }
@@ -500,20 +486,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		return nil, err
 	}
 
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
-	if err == nil && post != nil && post.UserID != claims.ID {
-		targetType := notificationuc.TargetPost
-		if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-			UserID:     post.UserID,
-			Type:       notificationuc.TypeFavorite,
-			ActorID:    &claims.ID,
-			TargetType: &targetType,
-			TargetID:   &numericPostID,
-			Message:    "あなたの投稿がいいねされました",
-		}); err != nil {
-			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
-		}
-	}
+	// 投稿者への「いいね」通知は CreateFavoriteUseCase 内で発行される。
 
 	return toGraphFavorite(favorite), nil
 }
@@ -1341,9 +1314,6 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	if err != nil {
 		return nil, err
 	}
-	if !isReportServiceEnabled.Load() {
-		return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
-	}
 	kind := reportTargetKind(input.TargetType)
 	if kind == "" {
 		return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
@@ -1353,12 +1323,24 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, fmt.Errorf("invalid target id")
 	}
 
+	var snapshotContent *string
+
+	if strings.ToUpper(string(input.TargetType)) == "POST" || input.TargetType == "post" {
+		post, err := r.GetPostByIDUseCase.Execute(ctx, numericTargetID)
+		if err == nil && post != nil {
+			snapshotContent = &post.Content
+		} else if err != nil {
+			log.Printf("Failed to fetch post for report: %v", err)
+		}
+	}
+
 	res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
 		ReporterID:   claims.ID,
 		TargetType:   model.ReportTargetType(input.TargetType),
 		TargetID:     fmt.Sprintf("%d", numericTargetID),
 		Reason:       input.Reason,
 		CustomReason: input.CustomReason,
+		Content:      snapshotContent,
 	})
 	if err != nil {
 		return nil, err
@@ -1377,6 +1359,7 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		CustomReason: res.CustomReason,
 		Status:       gqlmodel.ReportStatusPending,
 		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -1390,6 +1373,9 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	res, err := r.ManageReportUsecase.UpdateStatus(ctx, id, model.ReportStatus(status))
 	if err != nil {
 		return nil, err
+	}
+	if r.InvalidateAnalyticsSummary != nil {
+		r.InvalidateAnalyticsSummary()
 	}
 
 	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
@@ -1413,18 +1399,10 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		CustomReason: res.CustomReason,
 		Status:       status,
 		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
-}
-
-// ToggleReportSystem is the resolver for the toggleReportSystem field.
-func (r *mutationResolver) ToggleReportSystem(ctx context.Context, enabled bool) (bool, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
-		return false, err
-	}
-
-	return r.ManageReportUsecase.ToggleSystem(ctx, enabled)
 }
 
 // CreateFavoriteUser is the resolver for the createFavoriteUser field.
@@ -1803,9 +1781,11 @@ func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled b
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return false, err
 	}
-	isReportServiceEnabled.Store(enabled)
+	if err := r.ManageSystemSettingUsecase.Execute(ctx, enabled); err != nil {
+		return false, err
+	}
 
-	return isReportServiceEnabled.Load(), nil
+	return enabled, nil
 }
 
 // RecordSessionData is the resolver for the recordSessionData field.
@@ -2205,6 +2185,32 @@ func (r *queryResolver) MyUnreadNotificationCount(ctx context.Context) (int32, e
 		return 0, err
 	}
 	count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
+}
+
+// MyUnreadDMCount is the resolver for the myUnreadDMCount field.
+func (r *queryResolver) MyUnreadDMCount(ctx context.Context) (int32, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count, err := r.CountUnreadByRoomTypeUseCase.Execute(ctx, claims.ID, model.RoomTypeDM)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
+}
+
+// MyUnreadCommunityCount is the resolver for the myUnreadCommunityCount field.
+func (r *queryResolver) MyUnreadCommunityCount(ctx context.Context) (int32, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count, err := r.CountUnreadByRoomTypeUseCase.Execute(ctx, claims.ID, model.RoomTypeCommunity)
 	if err != nil {
 		return 0, err
 	}
@@ -3419,7 +3425,7 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 
 // IsReportServiceEnabled is the resolver for the isReportServiceEnabled field.
 func (r *queryResolver) IsReportServiceEnabled(ctx context.Context) (bool, error) {
-	return isReportServiceEnabled.Load(), nil
+	return r.ManageSystemSettingUsecase.IsReportEnabled(ctx)
 }
 
 // AdminGetAnalytics is the resolver for the adminGetAnalytics field.

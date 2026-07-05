@@ -8,18 +8,22 @@ import (
 )
 
 type ManageSystemSettingUsecase struct {
-    settingRepo repository.SystemSettingRepository
+	settingRepo repository.SystemSettingRepository
 }
 
 func NewManageSystemSettingUsecase(repo repository.SystemSettingRepository) *ManageSystemSettingUsecase {
-    return &ManageSystemSettingUsecase{settingRepo: repo}
+	return &ManageSystemSettingUsecase{settingRepo: repo}
 }
 
 func (u *ManageSystemSettingUsecase) Execute(ctx context.Context, enabled bool) error {
-    value := "false"
-    if enabled {
-        value = "true"
-    }
+	value := "false"
+	if enabled {
+		value = "true"
+	}
 
-    return u.settingRepo.Update(ctx, "is_report_enabled", value, time.Now().Unix())
+	return u.settingRepo.Update(ctx, "is_report_enabled", value, time.Now().Unix())
+}
+
+func (u *ManageSystemSettingUsecase) IsReportEnabled(ctx context.Context) (bool, error) {
+	return u.settingRepo.GetBool(ctx, "is_report_enabled")
 }

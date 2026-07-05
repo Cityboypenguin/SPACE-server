@@ -288,7 +288,6 @@ type ComplexityRoot struct {
 		SetAvatar                         func(childComplexity int, objectKey string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
 		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
-		ToggleReportSystem                func(childComplexity int, enabled bool) int
 		UnfreezeUser                      func(childComplexity int, id string) int
 		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
 		UpdateAnnouncement                func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
@@ -425,6 +424,8 @@ type ComplexityRoot struct {
 		MyNotifications                 func(childComplexity int, limit *int32, offset *int32, typeArg *string, actorID *string) int
 		MyProfile                       func(childComplexity int) int
 		MyTermsConsentStatus            func(childComplexity int) int
+		MyUnreadCommunityCount          func(childComplexity int) int
+		MyUnreadDMCount                 func(childComplexity int) int
 		MyUnreadNotificationCount       func(childComplexity int) int
 		NewFeedPostsCount               func(childComplexity int, since string) int
 		Notification                    func(childComplexity int, id string) int
@@ -630,7 +631,6 @@ type MutationResolver interface {
 	UpdateMessage(ctx context.Context, roomID string, id string, content string) (*model.Message, error)
 	CreateReport(ctx context.Context, input model.CreateReportInput) (*model.UserReport, error)
 	UpdateReportStatus(ctx context.Context, id string, status model.ReportStatus) (*model.UserReport, error)
-	ToggleReportSystem(ctx context.Context, enabled bool) (bool, error)
 	CreateFavoriteUser(ctx context.Context, favoriteUserID string) (*model.FavoriteUser, error)
 	DeleteFavoriteUser(ctx context.Context, favoriteUserID string) (bool, error)
 	CreateBlocker(ctx context.Context, blockedUserID string) (*model.Blocker, error)
@@ -673,6 +673,8 @@ type QueryResolver interface {
 	MyNotificationGroups(ctx context.Context, limit *int32, offset *int32) (*model.NotificationGroupPage, error)
 	Notification(ctx context.Context, id string) (*model.Notification, error)
 	MyUnreadNotificationCount(ctx context.Context) (int32, error)
+	MyUnreadDMCount(ctx context.Context) (int32, error)
+	MyUnreadCommunityCount(ctx context.Context) (int32, error)
 	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
 	SearchAdministrators(ctx context.Context, name string) ([]*model.Administrator, error)
@@ -2164,17 +2166,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ToggleMaintenanceMode(childComplexity, args["enabled"].(bool)), true
-	case "Mutation.toggleReportSystem":
-		if e.ComplexityRoot.Mutation.ToggleReportSystem == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_toggleReportSystem_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.ToggleReportSystem(childComplexity, args["enabled"].(bool)), true
 	case "Mutation.unfreezeUser":
 		if e.ComplexityRoot.Mutation.UnfreezeUser == nil {
 			break
@@ -3057,6 +3048,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyTermsConsentStatus(childComplexity), true
+	case "Query.myUnreadCommunityCount":
+		if e.ComplexityRoot.Query.MyUnreadCommunityCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyUnreadCommunityCount(childComplexity), true
+	case "Query.myUnreadDMCount":
+		if e.ComplexityRoot.Query.MyUnreadDMCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyUnreadDMCount(childComplexity), true
 	case "Query.myUnreadNotificationCount":
 		if e.ComplexityRoot.Query.MyUnreadNotificationCount == nil {
 			break
@@ -5543,20 +5546,6 @@ func (ec *executionContext) field_Mutation_setReportServiceStatus_args(ctx conte
 }
 
 func (ec *executionContext) field_Mutation_toggleMaintenanceMode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
-		func(ctx context.Context, v any) (bool, error) {
-			return ec.unmarshalNBoolean2bool(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["enabled"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_toggleReportSystem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
@@ -12241,50 +12230,6 @@ func (ec *executionContext) fieldContext_Mutation_updateReportStatus(ctx context
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_toggleReportSystem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_toggleReportSystem(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ToggleReportSystem(ctx, fc.Args["enabled"].(bool))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_toggleReportSystem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_toggleReportSystem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Mutation_createFavoriteUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14759,6 +14704,52 @@ func (ec *executionContext) _Query_myUnreadNotificationCount(ctx context.Context
 	)
 }
 func (ec *executionContext) fieldContext_Query_myUnreadNotificationCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_myUnreadDMCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myUnreadDMCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyUnreadDMCount(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myUnreadDMCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_myUnreadCommunityCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myUnreadCommunityCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyUnreadCommunityCount(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myUnreadCommunityCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
@@ -22932,13 +22923,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "toggleReportSystem":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_toggleReportSystem(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "createFavoriteUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createFavoriteUser(ctx, field)
@@ -24065,6 +24049,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_myUnreadNotificationCount(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myUnreadDMCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myUnreadDMCount(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myUnreadCommunityCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myUnreadCommunityCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
