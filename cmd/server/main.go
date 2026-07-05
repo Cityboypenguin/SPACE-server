@@ -503,7 +503,7 @@ func main() {
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
-	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.GraphQLRateLimit(isProd))
 	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))

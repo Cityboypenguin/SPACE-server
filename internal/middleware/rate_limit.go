@@ -8,7 +8,15 @@ import (
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 )
 
-func GraphQLRateLimit() echo.MiddlewareFunc {
+// GraphQLRateLimit はIPベースで/queryへのリクエストを制限する。
+// 開発・テスト環境ではE2Eテストの並列実行が同一IPからバーストするため、本番環境でのみ有効化する。
+func GraphQLRateLimit(isProd bool) echo.MiddlewareFunc {
+	if !isProd {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return next
+		}
+	}
+
 	store := echoMiddleware.NewRateLimiterMemoryStoreWithConfig(echoMiddleware.RateLimiterMemoryStoreConfig{
 		Rate:      20,
 		Burst:     40,
