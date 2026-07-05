@@ -41,7 +41,6 @@ import (
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
-	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -249,17 +248,7 @@ func main() {
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
-	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
-	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
-	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
-	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
-	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
-	updateCommunityMembersUseCase := communityusecase.NewUpdateCommunityMembersUseCase(communityRepository, roomUserRepository, txManager)
-	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
-	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
-	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
-	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
+	// コミュニティ系ユースケースの生成は graph.NewCommunityUseCases に集約。
 
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
@@ -430,19 +419,7 @@ func main() {
 			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
 		},
 
-		CommunityUseCases: graph.CommunityUseCases{
-			CreateCommunityUseCase:             createCommunityUseCase,
-			GetCommunityUseCase:                getCommunityUseCase,
-			UpdateCommunityUseCase:             updateCommunityUseCase,
-			UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
-			SearchCommunityUseCase:             searchCommunityUseCase,
-			ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
-			ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,
-			PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
-			DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
-			IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
-			GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
-		},
+		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
