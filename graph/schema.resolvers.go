@@ -1179,12 +1179,28 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	gqlMsg := toGraphMessage(msg)
 	r.PubSub.Publish(roomID+":message:added", gqlMsg)
 
-	// 各メンバーの未読カウントをリアルタイム通知
+	// 一覧画面のプレビュー・通知文言に使う要約テキスト（画像/ファイルのみの場合は代替文言）
+	previewMessage := msg.Content
+	if previewMessage == "" {
+		if len(ucMediaInputs) > 0 {
+			previewMessage = "[画像/ファイルを送信しました]"
+		} else {
+			previewMessage = "新しいメッセージが届きました"
+		}
+	} else {
+		const maxPreviewRunes = 50
+		if runes := []rune(previewMessage); utf8.RuneCountInString(previewMessage) > maxPreviewRunes {
+			previewMessage = string(runes[:maxPreviewRunes]) + "…"
+		}
+	}
+
+	// 各メンバーの未読カウント・最新メッセージプレビューをリアルタイム通知
 	if unreadCounts, err := r.GetMembersUnreadCountsUseCase.Execute(ctx, rid, claims.ID); err == nil {
 		for memberID, count := range unreadCounts {
-			r.PubSub.Publish(fmt.Sprintf("user:%d:unread", memberID), &gqlmodel.UnreadUpdate{
-				RoomID:      roomID,
-				UnreadCount: int32(count),
+			r.SSEBroker.PublishToUser(memberID, "unread_room", map[string]any{
+				"roomID":      roomID,
+				"unreadCount": count,
+				"lastMessage": previewMessage,
 			})
 		}
 	}
@@ -1192,19 +1208,6 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	// DM ルームの場合、相手に通知を送る
 	if room != nil && room.Type == model.RoomTypeDM {
 		targetType := notificationuc.TargetRoom
-		notifMessage := msg.Content
-		if notifMessage == "" {
-			if len(ucMediaInputs) > 0 {
-				notifMessage = "[画像/ファイルを送信しました]"
-			} else {
-				notifMessage = "新しいメッセージが届きました"
-			}
-		} else {
-			const maxNotifMessageRunes = 50
-			if runes := []rune(notifMessage); utf8.RuneCountInString(notifMessage) > maxNotifMessageRunes {
-				notifMessage = string(runes[:maxNotifMessageRunes]) + "…"
-			}
-		}
 		for _, memberID := range memberIDs {
 			if memberID == claims.ID {
 				continue
@@ -1215,7 +1218,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 				ActorID:    &claims.ID,
 				TargetType: &targetType,
 				TargetID:   &rid,
-				Message:    notifMessage,
+				Message:    previewMessage,
 			}); err != nil {
 				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
 			}
@@ -1693,9 +1696,9 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 		UserID:     encodeGraphID("user", claims.ID),
 		LastReadAt: nowStr,
 	})
-	r.PubSub.Publish(fmt.Sprintf("user:%d:unread", claims.ID), &gqlmodel.UnreadUpdate{
-		RoomID:      roomID,
-		UnreadCount: 0,
+	r.SSEBroker.PublishToUser(claims.ID, "unread_room", map[string]any{
+		"roomID":      roomID,
+		"unreadCount": 0,
 	})
 	return true, nil
 }
@@ -3522,39 +3525,6 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 					if update.UserID != currentUserGraphID {
 						ch <- update
 					}
-				}
-			}
-		}
-	}()
-
-	return ch, nil
-}
-
-// MyUnreadUpdated is the resolver for the myUnreadUpdated field.
-func (r *subscriptionResolver) MyUnreadUpdated(ctx context.Context) (<-chan *gqlmodel.UnreadUpdate, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan *gqlmodel.UnreadUpdate, 1)
-	topic := fmt.Sprintf("user:%d:unread", claims.ID)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if update, ok := data.(*gqlmodel.UnreadUpdate); ok {
-					ch <- update
 				}
 			}
 		}

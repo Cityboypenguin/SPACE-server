@@ -528,17 +528,11 @@ type RoomReadStatusUpdate {
   lastReadAt: String!
 }
 
-type UnreadUpdate {
-  roomID: ID!
-  unreadCount: Int!
-}
-
 type Subscription {
   messageAdded(roomID: ID!): Message!
   messageDeleted(roomID: ID!): Message!
   messageUpdated(roomID: ID!): Message!
   roomReadStatusUpdated(roomID: ID!): RoomReadStatusUpdate!
-  myUnreadUpdated: UnreadUpdate!
 }
 
 enum ReportStatus {

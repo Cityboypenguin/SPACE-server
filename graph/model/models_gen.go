@@ -454,11 +454,6 @@ type TimeSeriesPoint struct {
 	Likes    int32  `json:"likes"`
 }
 
-type UnreadUpdate struct {
-	RoomID      string `json:"roomID"`
-	UnreadCount int32  `json:"unreadCount"`
-}
-
 type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`

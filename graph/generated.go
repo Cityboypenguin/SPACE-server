@@ -480,7 +480,6 @@ type ComplexityRoot struct {
 		MessageAdded          func(childComplexity int, roomID string) int
 		MessageDeleted        func(childComplexity int, roomID string) int
 		MessageUpdated        func(childComplexity int, roomID string) int
-		MyUnreadUpdated       func(childComplexity int) int
 		RoomReadStatusUpdated func(childComplexity int, roomID string) int
 	}
 
@@ -519,11 +518,6 @@ type ComplexityRoot struct {
 		Messages func(childComplexity int) int
 		NewUsers func(childComplexity int) int
 		Posts    func(childComplexity int) int
-	}
-
-	UnreadUpdate struct {
-		RoomID      func(childComplexity int) int
-		UnreadCount func(childComplexity int) int
 	}
 
 	User struct {
@@ -734,7 +728,6 @@ type SubscriptionResolver interface {
 	MessageDeleted(ctx context.Context, roomID string) (<-chan *model.Message, error)
 	MessageUpdated(ctx context.Context, roomID string) (<-chan *model.Message, error)
 	RoomReadStatusUpdated(ctx context.Context, roomID string) (<-chan *model.RoomReadStatusUpdate, error)
-	MyUnreadUpdated(ctx context.Context) (<-chan *model.UnreadUpdate, error)
 }
 type UserResolver interface {
 	AvatarURL(ctx context.Context, obj *model.User) (*string, error)
@@ -3397,12 +3390,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.MessageUpdated(childComplexity, args["roomID"].(string)), true
-	case "Subscription.myUnreadUpdated":
-		if e.ComplexityRoot.Subscription.MyUnreadUpdated == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Subscription.MyUnreadUpdated(childComplexity), true
 	case "Subscription.roomReadStatusUpdated":
 		if e.ComplexityRoot.Subscription.RoomReadStatusUpdated == nil {
 			break
@@ -3534,19 +3521,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TimeSeriesPoint.Posts(childComplexity), true
-
-	case "UnreadUpdate.roomID":
-		if e.ComplexityRoot.UnreadUpdate.RoomID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UnreadUpdate.RoomID(childComplexity), true
-	case "UnreadUpdate.unreadCount":
-		if e.ComplexityRoot.UnreadUpdate.UnreadCount == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UnreadUpdate.UnreadCount(childComplexity), true
 
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
@@ -4511,16 +4485,6 @@ func (ec *executionContext) childFields_TimeSeriesPoint(ctx context.Context, fie
 		return ec.fieldContext_TimeSeriesPoint_likes(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TimeSeriesPoint", field.Name)
-}
-
-func (ec *executionContext) childFields_UnreadUpdate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "roomID":
-		return ec.fieldContext_UnreadUpdate_roomID(ctx, field)
-	case "unreadCount":
-		return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type UnreadUpdate", field.Name)
 }
 
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -17645,38 +17609,6 @@ func (ec *executionContext) fieldContext_Subscription_roomReadStatusUpdated(ctx 
 	return fc, nil
 }
 
-func (ec *executionContext) _Subscription_myUnreadUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
-	return graphql.ResolveFieldStream(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Subscription_myUnreadUpdated(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Subscription().MyUnreadUpdated(ctx)
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.UnreadUpdate) graphql.Marshaler {
-			return ec.marshalNUnreadUpdate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Subscription_myUnreadUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Subscription",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_UnreadUpdate(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _TermsConsentPage_items(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18148,52 +18080,6 @@ func (ec *executionContext) _TimeSeriesPoint_likes(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_TimeSeriesPoint_likes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
-}
-
-func (ec *executionContext) _UnreadUpdate_roomID(ctx context.Context, field graphql.CollectedField, obj *model.UnreadUpdate) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UnreadUpdate_roomID(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.RoomID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UnreadUpdate_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UnreadUpdate", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _UnreadUpdate_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.UnreadUpdate) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.UnreadCount, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
-			return ec.marshalNInt2int32(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UnreadUpdate_unreadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UnreadUpdate", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _User_ID(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
@@ -25464,8 +25350,6 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_messageUpdated(ctx, fields[0])
 	case "roomReadStatusUpdated":
 		return ec._Subscription_roomReadStatusUpdated(ctx, fields[0])
-	case "myUnreadUpdated":
-		return ec._Subscription_myUnreadUpdated(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -25744,50 +25628,6 @@ func (ec *executionContext) _TimeSeriesPoint(ctx context.Context, sel ast.Select
 			}
 		case "likes":
 			out.Values[i] = ec._TimeSeriesPoint_likes(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var unreadUpdateImplementors = []string{"UnreadUpdate"}
-
-func (ec *executionContext) _UnreadUpdate(ctx context.Context, sel ast.SelectionSet, obj *model.UnreadUpdate) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, unreadUpdateImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("UnreadUpdate")
-		case "roomID":
-			out.Values[i] = ec._UnreadUpdate_roomID(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "unreadCount":
-			out.Values[i] = ec._UnreadUpdate_unreadCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -27569,20 +27409,6 @@ func (ec *executionContext) marshalNTimeSeriesPoint2ᚖgithubᚗcomᚋCityboypen
 		return graphql.Null
 	}
 	return ec._TimeSeriesPoint(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNUnreadUpdate2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v model.UnreadUpdate) graphql.Marshaler {
-	return ec._UnreadUpdate(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNUnreadUpdate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v *model.UnreadUpdate) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._UnreadUpdate(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNUpdateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateAdministratorInput(ctx context.Context, v any) (model.UpdateAdministratorInput, error) {
