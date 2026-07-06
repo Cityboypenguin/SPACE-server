@@ -8,7 +8,12 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"golang.org/x/sync/errgroup"
 )
+
+// analyticsQueryConcurrency bounds how many analytics queries run at once against
+// the shared *sql.DB pool, so a single dashboard load can't starve other traffic.
+const analyticsQueryConcurrency = 10
 
 type MySQLAnalyticsRepository struct {
 	DB *sql.DB
@@ -89,16 +94,58 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 			AND m.content_type LIKE 'video/%'`, nil},
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(analyticsQueryConcurrency)
+
 	for _, q := range intQueries {
-		var err error
-		if q.args != nil {
-			err = r.DB.QueryRowContext(ctx, q.query, q.args...).Scan(q.dest)
-		} else {
-			err = r.DB.QueryRowContext(ctx, q.query).Scan(q.dest)
-		}
-		if err != nil {
-			return nil, err
-		}
+		q := q
+		g.Go(func() error {
+			if q.args != nil {
+				return r.DB.QueryRowContext(gctx, q.query, q.args...).Scan(q.dest)
+			}
+			return r.DB.QueryRowContext(gctx, q.query).Scan(q.dest)
+		})
+	}
+
+	// コミュニティ平均メンバー数の元データ
+	var totalCommunityMembers int
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT COUNT(*) FROM room_users ru
+			INNER JOIN communities c ON c.room_id = ru.room_id`).Scan(&totalCommunityMembers)
+	})
+
+	// オンボーディング完了率（プロフィール + アバター + 初投稿）の元データ
+	var onboardingComplete int
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT COUNT(DISTINCT u.id) FROM users u
+			INNER JOIN profiles p ON p.user_id = u.id AND p.avatar_media_id IS NOT NULL
+			WHERE EXISTS (SELECT 1 FROM posts po WHERE po.user_id = u.id AND po.deleted_at IS NULL)`).Scan(&onboardingComplete)
+	})
+
+	// 初投稿までの平均時間（分）
+	var avgSeconds sql.NullFloat64
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT AVG(first_post.created_at - u.created_at) / 60.0
+			FROM users u
+			INNER JOIN (
+				SELECT user_id, MIN(created_at) AS created_at
+				FROM posts WHERE deleted_at IS NULL
+				GROUP BY user_id
+			) first_post ON first_post.user_id = u.id`).Scan(&avgSeconds)
+	})
+
+	// セッションデータ（user_session_summaries テーブルが存在する場合のみ）。
+	// テーブル未作成環境ではベストエフォートで無視するため、他クエリの失敗としては扱わない。
+	g.Go(func() error {
+		_ = r.loadSessionStats(gctx, s)
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// 計算値
@@ -120,12 +167,6 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 	}
 
 	// コミュニティ平均メンバー数
-	var totalCommunityMembers int
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM room_users ru
-		INNER JOIN communities c ON c.room_id = ru.room_id`).Scan(&totalCommunityMembers); err != nil {
-		return nil, err
-	}
 	if s.TotalCommunities > 0 {
 		s.AvgCommunityMembers = float64(totalCommunityMembers) / float64(s.TotalCommunities)
 	}
@@ -142,37 +183,13 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 	}
 
 	// オンボーディング完了率（プロフィール + アバター + 初投稿）
-	var onboardingComplete int
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT u.id) FROM users u
-		INNER JOIN profiles p ON p.user_id = u.id AND p.avatar_media_id IS NOT NULL
-		WHERE EXISTS (SELECT 1 FROM posts po WHERE po.user_id = u.id AND po.deleted_at IS NULL)`).Scan(&onboardingComplete); err != nil {
-		return nil, err
-	}
 	if s.TotalUsers > 0 {
 		s.OnboardingCompleteRate = float64(onboardingComplete) / float64(s.TotalUsers) * 100
 	}
 
 	// 初投稿までの平均時間（分）
-	var avgSeconds sql.NullFloat64
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT AVG(first_post.created_at - u.created_at) / 60.0
-		FROM users u
-		INNER JOIN (
-			SELECT user_id, MIN(created_at) AS created_at
-			FROM posts WHERE deleted_at IS NULL
-			GROUP BY user_id
-		) first_post ON first_post.user_id = u.id`).Scan(&avgSeconds); err != nil {
-		return nil, err
-	}
 	if avgSeconds.Valid {
 		s.AvgTimeToFirstPostMinutes = avgSeconds.Float64
-	}
-
-	// セッションデータ（user_session_summaries テーブルが存在する場合のみ）
-	if err := r.loadSessionStats(ctx, s); err != nil {
-		// テーブルがまだない場合は無視
-		_ = err
 	}
 
 	// インフラ（in-memory）
@@ -337,24 +354,28 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
 	for _, mq := range mqs {
-		rows, err := r.DB.QueryContext(ctx, mq.query)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var lbl string
-			var cnt int
-			if err := rows.Scan(&lbl, &cnt); err != nil {
-				rows.Close()
-				return nil, err
+		mq := mq
+		g.Go(func() error {
+			rows, err := r.DB.QueryContext(gctx, mq.query)
+			if err != nil {
+				return err
 			}
-			mq.dest[lbl] = cnt
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+			defer rows.Close()
+			for rows.Next() {
+				var lbl string
+				var cnt int
+				if err := rows.Scan(&lbl, &cnt); err != nil {
+					return err
+				}
+				mq.dest[lbl] = cnt
+			}
+			return rows.Err()
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// 範囲内の全スロットを生成してギャップを0で埋める
