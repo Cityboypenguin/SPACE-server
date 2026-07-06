@@ -182,8 +182,8 @@ func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*mo
 		return nil
 	}
 	var key string
-	if g.ActorID != nil {
-		key = fmt.Sprintf("%s-%d", g.Type, *g.ActorID)
+	if g.Type == "dm" && g.ActorID != nil {
+		key = fmt.Sprintf("dm-%d", *g.ActorID)
 	} else {
 		key = fmt.Sprintf("single-%d", g.LatestID)
 	}
