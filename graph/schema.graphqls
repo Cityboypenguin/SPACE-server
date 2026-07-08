@@ -674,6 +674,7 @@ type AnalyticsSummary {
   totalInquiries: Int!
 
   # アクティビティ
+  currentActiveUsers: Int!
   dau: Int!
   wau: Int!
   mau: Int!
@@ -779,6 +780,7 @@ type TimeSeriesPoint {
   messages: Int!
   newUsers: Int!
   likes: Int!
+  activeUsers: Int!
 }
 
 type TimeSeriesData {

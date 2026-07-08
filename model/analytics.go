@@ -18,10 +18,11 @@ type AnalyticsSummary struct {
 	TotalDeletedPosts int
 
 	// アクティビティ
-	DAU         int
-	WAU         int
-	MAU         int
-	DAUMAURatio float64
+	CurrentActiveUsers int
+	DAU                int
+	WAU                int
+	MAU                int
+	DAUMAURatio        float64
 
 	// コンテンツ（日次）
 	PostsToday    int
@@ -96,10 +97,11 @@ type CommunityStatItem struct {
 }
 
 type TimeSeriesPoint struct {
-	Label    string
-	Posts    int
-	Comments int
-	Messages int
-	NewUsers int
-	Likes    int
+	Label       string
+	Posts       int
+	Comments    int
+	Messages    int
+	NewUsers    int
+	Likes       int
+	ActiveUsers int
 }

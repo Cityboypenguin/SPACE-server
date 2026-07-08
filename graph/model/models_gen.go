@@ -48,6 +48,7 @@ type AnalyticsSummary struct {
 	TotalReports                int32           `json:"totalReports"`
 	TotalBlocks                 int32           `json:"totalBlocks"`
 	TotalInquiries              int32           `json:"totalInquiries"`
+	CurrentActiveUsers          int32           `json:"currentActiveUsers"`
 	Dau                         int32           `json:"dau"`
 	Wau                         int32           `json:"wau"`
 	Mau                         int32           `json:"mau"`
@@ -446,12 +447,13 @@ type TimeSeriesData struct {
 }
 
 type TimeSeriesPoint struct {
-	Label    string `json:"label"`
-	Posts    int32  `json:"posts"`
-	Comments int32  `json:"comments"`
-	Messages int32  `json:"messages"`
-	NewUsers int32  `json:"newUsers"`
-	Likes    int32  `json:"likes"`
+	Label       string `json:"label"`
+	Posts       int32  `json:"posts"`
+	Comments    int32  `json:"comments"`
+	Messages    int32  `json:"messages"`
+	NewUsers    int32  `json:"newUsers"`
+	Likes       int32  `json:"likes"`
+	ActiveUsers int32  `json:"activeUsers"`
 }
 
 type UpdateAdministratorInput struct {

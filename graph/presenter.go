@@ -344,6 +344,7 @@ func toGraphAnalyticsSummary(s *model.AnalyticsSummary) *gqlmodel.AnalyticsSumma
 		TotalReports:                int32(s.TotalReports),
 		TotalBlocks:                 int32(s.TotalBlocks),
 		TotalInquiries:              int32(s.TotalInquiries),
+		CurrentActiveUsers:          int32(s.CurrentActiveUsers),
 		Dau:                         int32(s.DAU),
 		Wau:                         int32(s.WAU),
 		Mau:                         int32(s.MAU),

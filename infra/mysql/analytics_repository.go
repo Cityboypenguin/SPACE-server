@@ -53,6 +53,7 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 		{&s.TotalReports, `SELECT COUNT(*) FROM user_reports`, nil},
 		{&s.TotalBlocks, `SELECT COUNT(*) FROM blocks`, nil},
 		{&s.TotalInquiries, `SELECT COUNT(*) FROM inquiries`, nil},
+		{&s.CurrentActiveUsers, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{now.AddDate(0, 0, -3).Unix()}},
 		{&s.DAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{todayStart}},
 		{&s.WAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{weekStart}},
 		{&s.MAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{monthStart}},
@@ -344,14 +345,30 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	messages := map[string]int{}
 	newUsers := map[string]int{}
 	likes := map[string]int{}
+	// rawActiveSlots: スロット単位の生カウント（ローリングウィンドウ計算用に拡張範囲で取得）
+	rawActiveSlots := map[string]int{}
+
+	// 日次は3日、時間別は72時間分さかのぼって取得
+	var rollingSlots int
+	var activeExtendedFromUnix int64
+	if granularity == "hour" {
+		rollingSlots = 72
+		activeExtendedFromUnix = fromT.Add(-71 * time.Hour).Unix()
+	} else {
+		rollingSlots = 3
+		activeExtendedFromUnix = fromT.AddDate(0, 0, -2).Unix()
+	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
+	activeUsersBetween := fmt.Sprintf("last_active_at >= %d AND last_active_at < %d", activeExtendedFromUnix, toUnix)
+	localActiveTS := fmt.Sprintf("(last_active_at + %d)", jstOffsetSec)
 	mqs := []metricQuery{
 		{posts, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{comments, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{rawActiveSlots, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(DISTINCT id) FROM users WHERE %s GROUP BY lbl`, localActiveTS, labelFmt, activeUsersBetween)},
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -390,15 +407,39 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		}
 	}
 
+	// 各スロットで過去3日（日次）または72時間（時間別）のローリングウィンドウを集計
+	// last_active_at はユーザーごとに1値のみなので、スロット間の重複なし
+	activeUsers := make(map[string]int, len(labels))
+	for _, l := range labels {
+		var slotT time.Time
+		if granularity == "hour" {
+			slotT, _ = time.ParseInLocation("2006-01-02 15:04", l, jst)
+		} else {
+			slotT, _ = time.ParseInLocation(dateFmt, l, jst)
+		}
+		total := 0
+		for i := 0; i < rollingSlots; i++ {
+			var key string
+			if granularity == "hour" {
+				key = slotT.Add(-time.Duration(i) * time.Hour).Format("2006-01-02 15:00")
+			} else {
+				key = slotT.AddDate(0, 0, -i).Format(dateFmt)
+			}
+			total += rawActiveSlots[key]
+		}
+		activeUsers[l] = total
+	}
+
 	points := make([]*model.TimeSeriesPoint, len(labels))
 	for i, l := range labels {
 		points[i] = &model.TimeSeriesPoint{
-			Label:    l,
-			Posts:    posts[l],
-			Comments: comments[l],
-			Messages: messages[l],
-			NewUsers: newUsers[l],
-			Likes:    likes[l],
+			Label:       l,
+			Posts:       posts[l],
+			Comments:    comments[l],
+			Messages:    messages[l],
+			NewUsers:    newUsers[l],
+			Likes:       likes[l],
+			ActiveUsers: activeUsers[l],
 		}
 	}
 	return points, nil
