@@ -353,3 +353,11 @@ func (r *MySQLUserRepository) UpdateLastActiveAt(ctx context.Context, userID int
 	)
 	return err
 }
+
+func (r *MySQLUserRepository) LogActivityDate(ctx context.Context, userID int64, jstDate string) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`INSERT IGNORE INTO user_activity_dates (user_id, activity_date) VALUES (?, ?)`,
+		userID, jstDate,
+	)
+	return err
+}

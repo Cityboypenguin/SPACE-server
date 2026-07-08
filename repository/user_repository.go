@@ -17,4 +17,5 @@ type UserRepository interface {
 	UpdateUser(ctx context.Context, u *model.User) error
 	SearchUsersByKeyword(ctx context.Context, keyword string, limit, offset int) ([]*model.User, int, error)
 	UpdateLastActiveAt(ctx context.Context, userID int64, now int64) error
+	LogActivityDate(ctx context.Context, userID int64, jstDate string) error
 }

@@ -350,25 +350,30 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 
 	// 日次は3日、時間別は72時間分さかのぼって取得
 	var rollingSlots int
-	var activeExtendedFromUnix int64
+	var activeSlotQuery string
 	if granularity == "hour" {
+		// 時間別は last_active_at ベース（user_activity_dates は日単位のため）
 		rollingSlots = 72
-		activeExtendedFromUnix = fromT.Add(-71 * time.Hour).Unix()
+		activeExtendedFromUnix := fromT.Add(-71 * time.Hour).Unix()
+		localActiveTS := fmt.Sprintf("(last_active_at + %d)", jstOffsetSec)
+		activeUsersBetween := fmt.Sprintf("last_active_at >= %d AND last_active_at < %d", activeExtendedFromUnix, toUnix)
+		activeSlotQuery = fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%%Y-%%m-%%d %%H:00') as lbl, COUNT(DISTINCT id) FROM users WHERE %s GROUP BY lbl`, localActiveTS, activeUsersBetween)
 	} else {
+		// 日次は user_activity_dates を使って正確な活動履歴を集計
 		rollingSlots = 3
-		activeExtendedFromUnix = fromT.AddDate(0, 0, -2).Unix()
+		activeExtendedFrom := fromT.AddDate(0, 0, -2).Format("2006-01-02")
+		activeExtendedTo := toT.AddDate(0, 0, -1).Format("2006-01-02") // toT は翌日 00:00 なので1日戻す
+		activeSlotQuery = fmt.Sprintf(`SELECT activity_date, COUNT(DISTINCT user_id) FROM user_activity_dates WHERE activity_date >= '%s' AND activity_date <= '%s' GROUP BY activity_date`, activeExtendedFrom, activeExtendedTo)
 	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
-	activeUsersBetween := fmt.Sprintf("last_active_at >= %d AND last_active_at < %d", activeExtendedFromUnix, toUnix)
-	localActiveTS := fmt.Sprintf("(last_active_at + %d)", jstOffsetSec)
 	mqs := []metricQuery{
 		{posts, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{comments, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
-		{rawActiveSlots, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(DISTINCT id) FROM users WHERE %s GROUP BY lbl`, localActiveTS, labelFmt, activeUsersBetween)},
+		{rawActiveSlots, activeSlotQuery},
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
