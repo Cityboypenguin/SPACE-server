@@ -59,6 +59,18 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 			return err
 		}
 
+		// 本文が更新された場合はハッシュタグを再同期する。
+		if param.Content != nil {
+			if err := uc.postRepo.DeletePostHashtagsByPostID(ctx, post.ID); err != nil {
+				return err
+			}
+			if tags := ExtractHashtags(post.Content); len(tags) > 0 {
+				if err := uc.postRepo.CreatePostHashtags(ctx, post.ID, tags); err != nil {
+					return err
+				}
+			}
+		}
+
 		for _, mediaID := range deletedMediaIDs {
 			if err := uc.mediaRepo.DeleteMediaByIDAndUserID(ctx, mediaID, param.UserID); err != nil {
 				return err

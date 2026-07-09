@@ -170,6 +170,7 @@ func main() {
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
+	searchPostsByHashtagUseCase := postusecase.NewSearchPostsByHashtagUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
@@ -371,6 +372,7 @@ func main() {
 			DeletePostUseCase:                        deletePostUseCase,
 			UpdatePostUseCase:                        updatePostUseCase,
 			SearchPostsUseCase:                       searchPostsUseCase,
+			SearchPostsByHashtagUseCase:              searchPostsByHashtagUseCase,
 			ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
 			GetFeedPostsUseCase:                      getFeedPostsUseCase,
 			CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,

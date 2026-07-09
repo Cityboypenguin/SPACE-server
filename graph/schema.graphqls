@@ -36,6 +36,7 @@ type Query {
     offset: Int = 0
   ): PostPage!
   searchPosts(keyword: String!): [Post!]!
+  searchPostsByHashtag(tag: String!): [Post!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite

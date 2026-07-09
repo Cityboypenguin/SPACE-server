@@ -72,6 +72,12 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		}
 		post.ID = id
 
+		if tags := ExtractHashtags(post.Content); len(tags) > 0 {
+			if err := uc.postRepo.CreatePostHashtags(ctx, post.ID, tags); err != nil {
+				return err
+			}
+		}
+
 		for i, input := range mediaInputs {
 			media := &model.Media{
 				UploaderUserID: param.UserID,
