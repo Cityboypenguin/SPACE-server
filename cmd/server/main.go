@@ -171,6 +171,8 @@ func main() {
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	searchPostsByHashtagUseCase := postusecase.NewSearchPostsByHashtagUseCase(postRepository)
+	popularHashtagsUseCase := postusecase.NewPopularHashtagsUseCase(postRepository)
+	suggestHashtagsUseCase := postusecase.NewSuggestHashtagsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
@@ -373,6 +375,8 @@ func main() {
 			UpdatePostUseCase:                        updatePostUseCase,
 			SearchPostsUseCase:                       searchPostsUseCase,
 			SearchPostsByHashtagUseCase:              searchPostsByHashtagUseCase,
+			PopularHashtagsUseCase:                   popularHashtagsUseCase,
+			SuggestHashtagsUseCase:                   suggestHashtagsUseCase,
 			ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
 			GetFeedPostsUseCase:                      getFeedPostsUseCase,
 			CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,

@@ -30,6 +30,9 @@ type PostRepository interface {
 	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
 	CreatePostHashtags(ctx context.Context, postID int64, tags []string) error
 	DeletePostHashtagsByPostID(ctx context.Context, postID int64) error
+	ListPopularHashtags(ctx context.Context, limit int) ([]*model.HashtagSuggestion, error)
+	CountDistinctHashtags(ctx context.Context) (int, error)
+	SuggestHashtagsByPrefix(ctx context.Context, prefix string, limit int) ([]*model.HashtagSuggestion, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 }

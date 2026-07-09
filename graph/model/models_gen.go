@@ -229,6 +229,16 @@ type FavoriteUser struct {
 	CreatedAt      string `json:"createdAt"`
 }
 
+type HashtagSuggestion struct {
+	Tag   string `json:"tag"`
+	Count int32  `json:"count"`
+}
+
+type HashtagSuggestionPage struct {
+	Items []*HashtagSuggestion `json:"items"`
+	Total int32                `json:"total"`
+}
+
 type Inquiry struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`

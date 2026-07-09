@@ -2497,6 +2497,37 @@ func (r *queryResolver) SearchPostsByHashtag(ctx context.Context, tag string) ([
 	return gqlPosts, nil
 }
 
+// PopularHashtags is the resolver for the popularHashtags field.
+func (r *queryResolver) PopularHashtags(ctx context.Context) (*gqlmodel.HashtagSuggestionPage, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	items, total, err := r.PopularHashtagsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.HashtagSuggestionPage{
+		Items: toGraphHashtagSuggestions(items),
+		Total: int32(total),
+	}, nil
+}
+
+// SuggestHashtags is the resolver for the suggestHashtags field.
+func (r *queryResolver) SuggestHashtags(ctx context.Context, prefix string, limit *int32) ([]*gqlmodel.HashtagSuggestion, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	l := 0
+	if limit != nil {
+		l = int(*limit)
+	}
+	suggestions, err := r.SuggestHashtagsUseCase.Execute(ctx, prefix, l)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphHashtagSuggestions(suggestions), nil
+}
+
 // Favorites is the resolver for the favorites field.
 func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, error) {
 	//使ってないけど一応認証は必要にしておく

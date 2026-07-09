@@ -625,6 +625,79 @@ func (r *MySQLPostRepository) DeletePostHashtagsByPostID(ctx context.Context, po
 	return err
 }
 
+// escapeLikePrefix は LIKE の前方一致で使うプレフィックス内のワイルドカード(%, _, \)をエスケープする。
+func escapeLikePrefix(prefix string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(prefix)
+}
+
+// ListPopularHashtags は使用回数の多い順にハッシュタグを最大 limit 件返す（削除済み投稿は除外）。
+func (r *MySQLPostRepository) ListPopularHashtags(ctx context.Context, limit int) ([]*model.HashtagSuggestion, error) {
+	query := `
+		SELECT h.tag, COUNT(*) AS cnt
+		FROM post_hashtags h
+		JOIN posts p ON p.id = h.post_id
+		WHERE p.deleted_at IS NULL
+		GROUP BY h.tag
+		ORDER BY cnt DESC, h.tag ASC
+		LIMIT ?
+	`
+	rows, err := r.DB.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanHashtagSuggestions(rows)
+}
+
+// CountDistinctHashtags は削除済み投稿を除いたタグの種類数を返す。
+func (r *MySQLPostRepository) CountDistinctHashtags(ctx context.Context) (int, error) {
+	query := `
+		SELECT COUNT(DISTINCT h.tag)
+		FROM post_hashtags h
+		JOIN posts p ON p.id = h.post_id
+		WHERE p.deleted_at IS NULL
+	`
+	var count int
+	if err := r.DB.QueryRowContext(ctx, query).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// SuggestHashtagsByPrefix は prefix に前方一致するタグを使用回数の多い順に最大 limit 件返す。
+func (r *MySQLPostRepository) SuggestHashtagsByPrefix(ctx context.Context, prefix string, limit int) ([]*model.HashtagSuggestion, error) {
+	query := `
+		SELECT h.tag, COUNT(*) AS cnt
+		FROM post_hashtags h
+		JOIN posts p ON p.id = h.post_id
+		WHERE p.deleted_at IS NULL AND h.tag LIKE ? ESCAPE '\\'
+		GROUP BY h.tag
+		ORDER BY cnt DESC, h.tag ASC
+		LIMIT ?
+	`
+	rows, err := r.DB.QueryContext(ctx, query, escapeLikePrefix(prefix)+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanHashtagSuggestions(rows)
+}
+
+func scanHashtagSuggestions(rows *sql.Rows) ([]*model.HashtagSuggestion, error) {
+	var suggestions []*model.HashtagSuggestion
+	for rows.Next() {
+		var s model.HashtagSuggestion
+		if err := rows.Scan(&s.Tag, &s.Count); err != nil {
+			return nil, err
+		}
+		suggestions = append(suggestions, &s)
+	}
+	return suggestions, nil
+}
+
 func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count

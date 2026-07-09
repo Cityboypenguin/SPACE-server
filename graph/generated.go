@@ -189,6 +189,16 @@ type ComplexityRoot struct {
 		UserID         func(childComplexity int) int
 	}
 
+	HashtagSuggestion struct {
+		Count func(childComplexity int) int
+		Tag   func(childComplexity int) int
+	}
+
+	HashtagSuggestionPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Inquiry struct {
 		Category  func(childComplexity int) int
 		Content   func(childComplexity int) int
@@ -429,6 +439,7 @@ type ComplexityRoot struct {
 		MyUnreadNotificationCount       func(childComplexity int) int
 		NewFeedPostsCount               func(childComplexity int, since string) int
 		Notification                    func(childComplexity int, id string) int
+		PopularHashtags                 func(childComplexity int) int
 		Posts                           func(childComplexity int, limit *int32, offset *int32) int
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
@@ -445,6 +456,7 @@ type ComplexityRoot struct {
 		SearchPostsByHashtag            func(childComplexity int, tag string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string, limit *int32, offset *int32) int
+		SuggestHashtags                 func(childComplexity int, prefix string, limit *int32) int
 		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
 		Users                           func(childComplexity int, limit *int32, offset *int32) int
 	}
@@ -685,6 +697,8 @@ type QueryResolver interface {
 	GetFavoritePostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
 	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
+	PopularHashtags(ctx context.Context) (*model.HashtagSuggestionPage, error)
+	SuggestHashtags(ctx context.Context, prefix string, limit *int32) ([]*model.HashtagSuggestion, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
@@ -1392,6 +1406,32 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FavoriteUser.UserID(childComplexity), true
+
+	case "HashtagSuggestion.count":
+		if e.ComplexityRoot.HashtagSuggestion.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestion.Count(childComplexity), true
+	case "HashtagSuggestion.tag":
+		if e.ComplexityRoot.HashtagSuggestion.Tag == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestion.Tag(childComplexity), true
+
+	case "HashtagSuggestionPage.items":
+		if e.ComplexityRoot.HashtagSuggestionPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestionPage.Items(childComplexity), true
+	case "HashtagSuggestionPage.total":
+		if e.ComplexityRoot.HashtagSuggestionPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestionPage.Total(childComplexity), true
 
 	case "Inquiry.category":
 		if e.ComplexityRoot.Inquiry.Category == nil {
@@ -3078,6 +3118,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Notification(childComplexity, args["id"].(string)), true
+	case "Query.popularHashtags":
+		if e.ComplexityRoot.Query.PopularHashtags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PopularHashtags(childComplexity), true
 	case "Query.posts":
 		if e.ComplexityRoot.Query.Posts == nil {
 			break
@@ -3249,6 +3295,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchUsers(childComplexity, args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.suggestHashtags":
+		if e.ComplexityRoot.Query.SuggestHashtags == nil {
+			break
+		}
+
+		args, err := ec.field_Query_suggestHashtags_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SuggestHashtags(childComplexity, args["prefix"].(string), args["limit"].(*int32)), true
 	case "Query.topLevelPosts":
 		if e.ComplexityRoot.Query.TopLevelPosts == nil {
 			break
@@ -4144,6 +4201,26 @@ func (ec *executionContext) childFields_FavoriteUser(ctx context.Context, field 
 		return ec.fieldContext_FavoriteUser_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type FavoriteUser", field.Name)
+}
+
+func (ec *executionContext) childFields_HashtagSuggestion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "tag":
+		return ec.fieldContext_HashtagSuggestion_tag(ctx, field)
+	case "count":
+		return ec.fieldContext_HashtagSuggestion_count(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type HashtagSuggestion", field.Name)
+}
+
+func (ec *executionContext) childFields_HashtagSuggestionPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_HashtagSuggestionPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_HashtagSuggestionPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type HashtagSuggestionPage", field.Name)
 }
 
 func (ec *executionContext) childFields_Inquiry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -6812,6 +6889,28 @@ func (ec *executionContext) field_Query_searchUsers_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_suggestHashtags_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "prefix",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["prefix"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_topLevelPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9443,6 +9542,107 @@ func (ec *executionContext) _FavoriteUser_createdAt(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_FavoriteUser_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestion_tag(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestion_tag(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tag, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestion_tag(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestion_count(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestion_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestion_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestion", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestionPage_items(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestionPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestionPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestionPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HashtagSuggestionPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HashtagSuggestionPage_total(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestionPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestionPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestionPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestionPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Inquiry_id(ctx context.Context, field graphql.CollectedField, obj *model.Inquiry) (ret graphql.Marshaler) {
@@ -15367,6 +15567,82 @@ func (ec *executionContext) fieldContext_Query_searchPostsByHashtag(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_searchPostsByHashtag_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_popularHashtags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_popularHashtags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PopularHashtags(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.HashtagSuggestionPage) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestionPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_popularHashtags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestionPage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_suggestHashtags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_suggestHashtags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SuggestHashtags(ctx, fc.Args["prefix"].(string), fc.Args["limit"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_suggestHashtags(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestion(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_suggestHashtags_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -22066,6 +22342,94 @@ func (ec *executionContext) _FavoriteUser(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var hashtagSuggestionImplementors = []string{"HashtagSuggestion"}
+
+func (ec *executionContext) _HashtagSuggestion(ctx context.Context, sel ast.SelectionSet, obj *model.HashtagSuggestion) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, hashtagSuggestionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HashtagSuggestion")
+		case "tag":
+			out.Values[i] = ec._HashtagSuggestion_tag(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._HashtagSuggestion_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var hashtagSuggestionPageImplementors = []string{"HashtagSuggestionPage"}
+
+func (ec *executionContext) _HashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, obj *model.HashtagSuggestionPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, hashtagSuggestionPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HashtagSuggestionPage")
+		case "items":
+			out.Values[i] = ec._HashtagSuggestionPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._HashtagSuggestionPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var inquiryImplementors = []string{"Inquiry"}
 
 func (ec *executionContext) _Inquiry(ctx context.Context, sel ast.SelectionSet, obj *model.Inquiry) graphql.Marshaler {
@@ -24319,6 +24683,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_searchPostsByHashtag(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "popularHashtags":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_popularHashtags(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "suggestHashtags":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_suggestHashtags(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -26920,6 +27328,46 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 		}
 	}
 	return graphql.WrapContextMarshaler(ctx, res)
+}
+
+func (ec *executionContext) marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNHashtagSuggestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestion(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNHashtagSuggestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestion(ctx context.Context, sel ast.SelectionSet, v *model.HashtagSuggestion) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HashtagSuggestion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNHashtagSuggestionPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, v model.HashtagSuggestionPage) graphql.Marshaler {
+	return ec._HashtagSuggestionPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNHashtagSuggestionPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, v *model.HashtagSuggestionPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HashtagSuggestionPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {

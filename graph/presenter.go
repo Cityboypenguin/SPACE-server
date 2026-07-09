@@ -12,6 +12,17 @@ const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 const deletedAccountDisplayName = "削除されたアカウント"
 
+func toGraphHashtagSuggestions(suggestions []*model.HashtagSuggestion) []*gqlmodel.HashtagSuggestion {
+	result := make([]*gqlmodel.HashtagSuggestion, 0, len(suggestions))
+	for _, s := range suggestions {
+		result = append(result, &gqlmodel.HashtagSuggestion{
+			Tag:   s.Tag,
+			Count: int32(s.Count),
+		})
+	}
+	return result
+}
+
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
 		return nil

@@ -37,6 +37,8 @@ type Query {
   ): PostPage!
   searchPosts(keyword: String!): [Post!]!
   searchPostsByHashtag(tag: String!): [Post!]!
+  popularHashtags: HashtagSuggestionPage!
+  suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
@@ -628,6 +630,18 @@ type TermsConsentRecord {
 
 type PostPage {
   items: [Post!]!
+  total: Int!
+}
+
+type HashtagSuggestion {
+  tag: String!
+  count: Int!
+}
+
+# items は人気上位のタグ（最大 500 件）。total はタグの種類数。
+# total <= items の件数なら全タグを先読みできている（complete）と判断できる。
+type HashtagSuggestionPage {
+  items: [HashtagSuggestion!]!
   total: Int!
 }
 
