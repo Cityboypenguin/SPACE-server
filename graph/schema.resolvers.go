@@ -108,22 +108,6 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	return result, nil
 }
 
-// SendEmailOtp is the resolver for the sendEmailOTP field.
-func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool, error) {
-	if err := r.SendEmailOTPUseCase.Execute(ctx, email); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// VerifyEmailOtp is the resolver for the verifyEmailOTP field.
-func (r *mutationResolver) VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error) {
-	if err := r.VerifyEmailOTPUseCase.Execute(ctx, email, otp); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
 	param := model.CreateUserParam{
@@ -133,7 +117,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		Password:  input.Password,
 	}
 
-	user, err := r.CreateUserUseCase.Execute(ctx, param, input.Otp)
+	user, err := r.CreateUserUseCase.Execute(ctx, param)
 	if err != nil {
 		return nil, err
 	}
@@ -239,11 +223,6 @@ func (r *mutationResolver) RequestPasswordReset(ctx context.Context, email strin
 		return false, err
 	}
 	return true, nil
-}
-
-// VerifyPasswordResetOtp is the resolver for the verifyPasswordResetOTP field.
-func (r *mutationResolver) VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error) {
-	return r.VerifyPasswordResetOTPUseCase.Execute(ctx, email, otp)
 }
 
 // ResetPassword is the resolver for the resetPassword field.
@@ -3631,3 +3610,27 @@ type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool, error) {
+	if err := r.SendEmailOTPUseCase.Execute(ctx, email); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func (r *mutationResolver) VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error) {
+	if err := r.VerifyEmailOTPUseCase.Execute(ctx, email, otp); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func (r *mutationResolver) VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error) {
+	return r.VerifyPasswordResetOTPUseCase.Execute(ctx, email, otp)
+}
+*/

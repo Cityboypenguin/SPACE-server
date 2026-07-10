@@ -93,13 +93,6 @@ func hashPassword(password string) (string, error) {
 }
 
 func (u *User) CreateUser(param CreateUserParam) error {
-	if err := ValidateAccountID(param.AccountID); err != nil {
-		return err
-	}
-	if err := ValidateUserName(param.Name); err != nil {
-		return err
-	}
-
 	hashedPassword, err := hashPassword(param.Password)
 	if err != nil {
 		return err

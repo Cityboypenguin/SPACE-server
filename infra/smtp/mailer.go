@@ -32,12 +32,12 @@ func NewSMTPMailer() repository.Mailer {
 	}
 }
 
-func (m *SMTPMailer) SendPasswordResetOTP(_ context.Context, toEmail, otp string) error {
+func (m *SMTPMailer) SendPasswordResetLink(_ context.Context, toEmail, resetLink string) error {
 	auth := smtp.PlainAuth("", m.username, m.password, m.host)
 	addr := fmt.Sprintf("%s:%d", m.host, m.port)
 
-	subject := "パスワードリセット認証コード"
-	body := fmt.Sprintf("認証コード: %s\n\nこのコードは10分間有効です。\n心当たりがない場合は無視してください。", otp)
+	subject := "パスワードリセットリンク"
+	body := fmt.Sprintf("以下のリンクからパスワードを再設定してください。\n\n%s\n\nこのリンクは15分間有効です。\n心当たりがない場合は無視してください。", resetLink)
 	msg := []byte(fmt.Sprintf(
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
 		m.from, toEmail, subject, body,

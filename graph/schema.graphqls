@@ -6,7 +6,12 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
-  myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
+  myNotifications(
+    limit: Int = 20
+    offset: Int = 0
+    type: String
+    actorID: ID
+  ): NotificationPage!
   myNotificationGroups(limit: Int = 20, offset: Int = 0): NotificationGroupPage!
   notification(id: ID!): Notification
   myUnreadNotificationCount: Int!
@@ -109,8 +114,15 @@ type Query {
   isReportServiceEnabled: Boolean!
 
   adminGetAnalytics: AnalyticsSummary!
-  adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
-  adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
+  adminGetCommunityAnalytics(
+    limit: Int = 20
+    offset: Int = 0
+  ): CommunityStatsPage!
+  adminGetTimeSeries(
+    granularity: TimeSeriesGranularity!
+    from: String!
+    to: String!
+  ): TimeSeriesData!
 }
 
 type User {
@@ -211,8 +223,6 @@ input LoginInput {
 }
 
 type Mutation {
-  sendEmailOTP(email: String!): Boolean!
-  verifyEmailOTP(email: String!, otp: String!): Boolean!
   createUser(input: CreateUserInput!): User!
   deleteUser(id: ID!): Boolean!
   deleteMyAccount: Boolean!
@@ -221,7 +231,6 @@ type Mutation {
   refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
   requestPasswordReset(email: String!): Boolean!
-  verifyPasswordResetOTP(email: String!, otp: String!): String!
   resetPassword(resetToken: String!, newPassword: String!): Boolean!
 
   createAdministrator(input: CreateAdministratorInput!): Administrator!
@@ -379,7 +388,6 @@ input CreateUserInput {
   name: String!
   email: String!
   password: String!
-  otp: String!
 }
 
 input UpdateUserInput {

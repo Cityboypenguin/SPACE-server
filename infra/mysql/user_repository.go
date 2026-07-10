@@ -338,8 +338,7 @@ func (r *MySQLUserRepository) CreateUser(ctx context.Context, u *model.User) (in
 			if strings.Contains(mysqlErr.Message, "account_id") {
 				return 0, errors.New("account_id is already taken")
 			}
-			// メールアドレス重複は詳細を開示しない（ユーザー列挙攻撃対策）
-			return 0, errors.New("registration failed: check your input")
+			return 0, errors.New("email is already taken")
 		}
 		return 0, err
 	}

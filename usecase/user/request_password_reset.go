@@ -2,14 +2,11 @@ package user
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"time"
+	"os"
 
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
-
-const otpTTL = 10 * time.Minute
 
 type RequestPasswordResetUseCase interface {
 	Execute(ctx context.Context, email string) error
@@ -18,9 +15,9 @@ type RequestPasswordResetUseCase interface {
 var _ RequestPasswordResetUseCase = &RequestPasswordResetInteractor{}
 
 type RequestPasswordResetInteractor struct {
-	userRepo      repository.UserRepository
-	pwResetRepo   repository.PasswordResetRepository
-	mailer        repository.Mailer
+	userRepo    repository.UserRepository
+	pwResetRepo repository.PasswordResetRepository
+	mailer      repository.Mailer
 }
 
 func NewRequestPasswordResetUseCase(
@@ -45,23 +42,19 @@ func (uc *RequestPasswordResetInteractor) Execute(ctx context.Context, email str
 		return nil
 	}
 
-	otp, err := generateOTP()
+	token, err := generateResetToken()
 	if err != nil {
 		return err
 	}
 
-	if err := uc.pwResetRepo.SaveOTP(ctx, email, otp, otpTTL); err != nil {
+	if err := uc.pwResetRepo.SaveResetToken(ctx, token, email, resetTokenTTL); err != nil {
 		return err
 	}
 
-	return uc.mailer.SendPasswordResetOTP(ctx, email, otp)
-}
-
-func generateOTP() (string, error) {
-	b := make([]byte, 3)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
 	}
-	n := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
-	return fmt.Sprintf("%06d", n%1000000), nil
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", frontendURL, token)
+	return uc.mailer.SendPasswordResetLink(ctx, email, resetLink)
 }
