@@ -1408,7 +1408,7 @@ func (r *mutationResolver) CreateFavoriteUser(ctx context.Context, favoriteUserI
 		UserID:  numericTargetID,
 		Type:    notificationuc.TypeFollow,
 		ActorID: &claims.ID,
-		Message: "あなたがフォローされました",
+		Message: "あなたがお気に入り登録されました",
 	}); err != nil {
 		logger.Log.Error().Err(err).Msg("failed to publish follow notification")
 	}
