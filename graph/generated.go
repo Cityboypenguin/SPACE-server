@@ -75,6 +75,7 @@ type ComplexityRoot struct {
 		AvgSessionsPerDay           func(childComplexity int) int
 		AvgTimeToFirstPostMinutes   func(childComplexity int) int
 		CommentsToday               func(childComplexity int) int
+		CurrentActiveUsers          func(childComplexity int) int
 		Dau                         func(childComplexity int) int
 		DauMauRatio                 func(childComplexity int) int
 		ErrorRate5xx                func(childComplexity int) int
@@ -188,6 +189,16 @@ type ComplexityRoot struct {
 		UserID         func(childComplexity int) int
 	}
 
+	HashtagSuggestion struct {
+		Count func(childComplexity int) int
+		Tag   func(childComplexity int) int
+	}
+
+	HashtagSuggestionPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Inquiry struct {
 		Category  func(childComplexity int) int
 		Content   func(childComplexity int) int
@@ -287,7 +298,6 @@ type ComplexityRoot struct {
 		SetAvatar                         func(childComplexity int, objectKey string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
 		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
-		ToggleReportSystem                func(childComplexity int, enabled bool) int
 		UnfreezeUser                      func(childComplexity int, id string) int
 		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
 		UpdateAnnouncement                func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
@@ -429,6 +439,7 @@ type ComplexityRoot struct {
 		MyUnreadNotificationCount       func(childComplexity int) int
 		NewFeedPostsCount               func(childComplexity int, since string) int
 		Notification                    func(childComplexity int, id string) int
+		PopularHashtags                 func(childComplexity int) int
 		Posts                           func(childComplexity int, limit *int32, offset *int32) int
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
@@ -442,8 +453,10 @@ type ComplexityRoot struct {
 		SearchFavoriteUsers             func(childComplexity int, keyword string) int
 		SearchInquiries                 func(childComplexity int, status *model.InquiryStatus, limit *int32, offset *int32) int
 		SearchPosts                     func(childComplexity int, keyword string) int
+		SearchPostsByHashtag            func(childComplexity int, tag string) int
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string, limit *int32, offset *int32) int
+		SuggestHashtags                 func(childComplexity int, prefix string, limit *int32) int
 		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
 		Users                           func(childComplexity int, limit *int32, offset *int32) int
 	}
@@ -481,7 +494,6 @@ type ComplexityRoot struct {
 		MessageAdded          func(childComplexity int, roomID string) int
 		MessageDeleted        func(childComplexity int, roomID string) int
 		MessageUpdated        func(childComplexity int, roomID string) int
-		MyUnreadUpdated       func(childComplexity int) int
 		RoomReadStatusUpdated func(childComplexity int, roomID string) int
 	}
 
@@ -514,17 +526,13 @@ type ComplexityRoot struct {
 	}
 
 	TimeSeriesPoint struct {
-		Comments func(childComplexity int) int
-		Label    func(childComplexity int) int
-		Likes    func(childComplexity int) int
-		Messages func(childComplexity int) int
-		NewUsers func(childComplexity int) int
-		Posts    func(childComplexity int) int
-	}
-
-	UnreadUpdate struct {
-		RoomID      func(childComplexity int) int
-		UnreadCount func(childComplexity int) int
+		ActiveUsers func(childComplexity int) int
+		Comments    func(childComplexity int) int
+		Label       func(childComplexity int) int
+		Likes       func(childComplexity int) int
+		Messages    func(childComplexity int) int
+		NewUsers    func(childComplexity int) int
+		Posts       func(childComplexity int) int
 	}
 
 	User struct {
@@ -631,7 +639,6 @@ type MutationResolver interface {
 	UpdateMessage(ctx context.Context, roomID string, id string, content string) (*model.Message, error)
 	CreateReport(ctx context.Context, input model.CreateReportInput) (*model.UserReport, error)
 	UpdateReportStatus(ctx context.Context, id string, status model.ReportStatus) (*model.UserReport, error)
-	ToggleReportSystem(ctx context.Context, enabled bool) (bool, error)
 	CreateFavoriteUser(ctx context.Context, favoriteUserID string) (*model.FavoriteUser, error)
 	DeleteFavoriteUser(ctx context.Context, favoriteUserID string) (bool, error)
 	CreateBlocker(ctx context.Context, blockedUserID string) (*model.Blocker, error)
@@ -690,6 +697,9 @@ type QueryResolver interface {
 	GetRepliesByPostID(ctx context.Context, postID string) ([]*model.Post, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID string, limit *int32, offset *int32) (*model.PostPage, error)
 	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
+	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
+	PopularHashtags(ctx context.Context) (*model.HashtagSuggestionPage, error)
+	SuggestHashtags(ctx context.Context, prefix string, limit *int32) ([]*model.HashtagSuggestion, error)
 	Favorites(ctx context.Context) ([]*model.Favorite, error)
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
@@ -737,7 +747,6 @@ type SubscriptionResolver interface {
 	MessageDeleted(ctx context.Context, roomID string) (<-chan *model.Message, error)
 	MessageUpdated(ctx context.Context, roomID string) (<-chan *model.Message, error)
 	RoomReadStatusUpdated(ctx context.Context, roomID string) (<-chan *model.RoomReadStatusUpdate, error)
-	MyUnreadUpdated(ctx context.Context) (<-chan *model.UnreadUpdate, error)
 }
 type UserResolver interface {
 	AvatarURL(ctx context.Context, obj *model.User) (*string, error)
@@ -896,6 +905,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AnalyticsSummary.CommentsToday(childComplexity), true
+	case "AnalyticsSummary.currentActiveUsers":
+		if e.ComplexityRoot.AnalyticsSummary.CurrentActiveUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CurrentActiveUsers(childComplexity), true
 	case "AnalyticsSummary.dau":
 		if e.ComplexityRoot.AnalyticsSummary.Dau == nil {
 			break
@@ -1392,6 +1407,32 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FavoriteUser.UserID(childComplexity), true
+
+	case "HashtagSuggestion.count":
+		if e.ComplexityRoot.HashtagSuggestion.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestion.Count(childComplexity), true
+	case "HashtagSuggestion.tag":
+		if e.ComplexityRoot.HashtagSuggestion.Tag == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestion.Tag(childComplexity), true
+
+	case "HashtagSuggestionPage.items":
+		if e.ComplexityRoot.HashtagSuggestionPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestionPage.Items(childComplexity), true
+	case "HashtagSuggestionPage.total":
+		if e.ComplexityRoot.HashtagSuggestionPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.HashtagSuggestionPage.Total(childComplexity), true
 
 	case "Inquiry.category":
 		if e.ComplexityRoot.Inquiry.Category == nil {
@@ -2167,17 +2208,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ToggleMaintenanceMode(childComplexity, args["enabled"].(bool)), true
-	case "Mutation.toggleReportSystem":
-		if e.ComplexityRoot.Mutation.ToggleReportSystem == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_toggleReportSystem_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.ToggleReportSystem(childComplexity, args["enabled"].(bool)), true
 	case "Mutation.unfreezeUser":
 		if e.ComplexityRoot.Mutation.UnfreezeUser == nil {
 			break
@@ -3100,6 +3130,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Notification(childComplexity, args["id"].(string)), true
+	case "Query.popularHashtags":
+		if e.ComplexityRoot.Query.PopularHashtags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PopularHashtags(childComplexity), true
 	case "Query.posts":
 		if e.ComplexityRoot.Query.Posts == nil {
 			break
@@ -3238,6 +3274,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchPosts(childComplexity, args["keyword"].(string)), true
+	case "Query.searchPostsByHashtag":
+		if e.ComplexityRoot.Query.SearchPostsByHashtag == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchPostsByHashtag_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SearchPostsByHashtag(childComplexity, args["tag"].(string)), true
 	case "Query.searchReports":
 		if e.ComplexityRoot.Query.SearchReports == nil {
 			break
@@ -3260,6 +3307,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchUsers(childComplexity, args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.suggestHashtags":
+		if e.ComplexityRoot.Query.SuggestHashtags == nil {
+			break
+		}
+
+		args, err := ec.field_Query_suggestHashtags_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SuggestHashtags(childComplexity, args["prefix"].(string), args["limit"].(*int32)), true
 	case "Query.topLevelPosts":
 		if e.ComplexityRoot.Query.TopLevelPosts == nil {
 			break
@@ -3422,12 +3480,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.MessageUpdated(childComplexity, args["roomID"].(string)), true
-	case "Subscription.myUnreadUpdated":
-		if e.ComplexityRoot.Subscription.MyUnreadUpdated == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Subscription.MyUnreadUpdated(childComplexity), true
 	case "Subscription.roomReadStatusUpdated":
 		if e.ComplexityRoot.Subscription.RoomReadStatusUpdated == nil {
 			break
@@ -3523,6 +3575,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TimeSeriesData.Points(childComplexity), true
 
+	case "TimeSeriesPoint.activeUsers":
+		if e.ComplexityRoot.TimeSeriesPoint.ActiveUsers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.ActiveUsers(childComplexity), true
 	case "TimeSeriesPoint.comments":
 		if e.ComplexityRoot.TimeSeriesPoint.Comments == nil {
 			break
@@ -3559,19 +3617,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TimeSeriesPoint.Posts(childComplexity), true
-
-	case "UnreadUpdate.roomID":
-		if e.ComplexityRoot.UnreadUpdate.RoomID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UnreadUpdate.RoomID(childComplexity), true
-	case "UnreadUpdate.unreadCount":
-		if e.ComplexityRoot.UnreadUpdate.UnreadCount == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UnreadUpdate.UnreadCount(childComplexity), true
 
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
@@ -3947,6 +3992,8 @@ func (ec *executionContext) childFields_AnalyticsSummary(ctx context.Context, fi
 		return ec.fieldContext_AnalyticsSummary_totalBlocks(ctx, field)
 	case "totalInquiries":
 		return ec.fieldContext_AnalyticsSummary_totalInquiries(ctx, field)
+	case "currentActiveUsers":
+		return ec.fieldContext_AnalyticsSummary_currentActiveUsers(ctx, field)
 	case "dau":
 		return ec.fieldContext_AnalyticsSummary_dau(ctx, field)
 	case "wau":
@@ -4167,6 +4214,26 @@ func (ec *executionContext) childFields_FavoriteUser(ctx context.Context, field 
 		return ec.fieldContext_FavoriteUser_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type FavoriteUser", field.Name)
+}
+
+func (ec *executionContext) childFields_HashtagSuggestion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "tag":
+		return ec.fieldContext_HashtagSuggestion_tag(ctx, field)
+	case "count":
+		return ec.fieldContext_HashtagSuggestion_count(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type HashtagSuggestion", field.Name)
+}
+
+func (ec *executionContext) childFields_HashtagSuggestionPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_HashtagSuggestionPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_HashtagSuggestionPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type HashtagSuggestionPage", field.Name)
 }
 
 func (ec *executionContext) childFields_Inquiry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4535,18 +4602,10 @@ func (ec *executionContext) childFields_TimeSeriesPoint(ctx context.Context, fie
 		return ec.fieldContext_TimeSeriesPoint_newUsers(ctx, field)
 	case "likes":
 		return ec.fieldContext_TimeSeriesPoint_likes(ctx, field)
+	case "activeUsers":
+		return ec.fieldContext_TimeSeriesPoint_activeUsers(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TimeSeriesPoint", field.Name)
-}
-
-func (ec *executionContext) childFields_UnreadUpdate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "roomID":
-		return ec.fieldContext_UnreadUpdate_roomID(ctx, field)
-	case "unreadCount":
-		return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type UnreadUpdate", field.Name)
 }
 
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -5558,20 +5617,6 @@ func (ec *executionContext) field_Mutation_setReportServiceStatus_args(ctx conte
 }
 
 func (ec *executionContext) field_Mutation_toggleMaintenanceMode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
-		func(ctx context.Context, v any) (bool, error) {
-			return ec.unmarshalNBoolean2bool(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["enabled"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_toggleReportSystem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
@@ -6783,6 +6828,20 @@ func (ec *executionContext) field_Query_searchInquiries_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_searchPostsByHashtag_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "tag",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["tag"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_searchPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -6854,6 +6913,28 @@ func (ec *executionContext) field_Query_searchUsers_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["offset"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_suggestHashtags_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "prefix",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["prefix"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
 	return args, nil
 }
 
@@ -7584,6 +7665,29 @@ func (ec *executionContext) _AnalyticsSummary_totalInquiries(ctx context.Context
 	)
 }
 func (ec *executionContext) fieldContext_AnalyticsSummary_totalInquiries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_currentActiveUsers(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_currentActiveUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentActiveUsers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_currentActiveUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -9465,6 +9569,107 @@ func (ec *executionContext) _FavoriteUser_createdAt(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_FavoriteUser_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FavoriteUser", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestion_tag(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestion_tag(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tag, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestion_tag(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestion_count(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestion_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestion_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestion", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _HashtagSuggestionPage_items(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestionPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestionPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestionPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HashtagSuggestionPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HashtagSuggestionPage_total(ctx context.Context, field graphql.CollectedField, obj *model.HashtagSuggestionPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_HashtagSuggestionPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_HashtagSuggestionPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("HashtagSuggestionPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Inquiry_id(ctx context.Context, field graphql.CollectedField, obj *model.Inquiry) (ret graphql.Marshaler) {
@@ -12250,50 +12455,6 @@ func (ec *executionContext) fieldContext_Mutation_updateReportStatus(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateReportStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_toggleReportSystem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_toggleReportSystem(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ToggleReportSystem(ctx, fc.Args["enabled"].(bool))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_toggleReportSystem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_toggleReportSystem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -15439,6 +15600,126 @@ func (ec *executionContext) fieldContext_Query_searchPosts(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_searchPostsByHashtag(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_searchPostsByHashtag(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SearchPostsByHashtag(ctx, fc.Args["tag"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Post) graphql.Marshaler {
+			return ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_searchPostsByHashtag(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Post(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchPostsByHashtag_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_popularHashtags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_popularHashtags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PopularHashtags(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.HashtagSuggestionPage) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestionPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_popularHashtags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestionPage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_suggestHashtags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_suggestHashtags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SuggestHashtags(ctx, fc.Args["prefix"].(string), fc.Args["limit"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+			return ec.marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_suggestHashtags(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_HashtagSuggestion(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_suggestHashtags_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_favorites(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17787,38 +18068,6 @@ func (ec *executionContext) fieldContext_Subscription_roomReadStatusUpdated(ctx 
 	return fc, nil
 }
 
-func (ec *executionContext) _Subscription_myUnreadUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
-	return graphql.ResolveFieldStream(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Subscription_myUnreadUpdated(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Subscription().MyUnreadUpdated(ctx)
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.UnreadUpdate) graphql.Marshaler {
-			return ec.marshalNUnreadUpdate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Subscription_myUnreadUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Subscription",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_UnreadUpdate(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _TermsConsentPage_items(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18292,39 +18541,16 @@ func (ec *executionContext) fieldContext_TimeSeriesPoint_likes(_ context.Context
 	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
-func (ec *executionContext) _UnreadUpdate_roomID(ctx context.Context, field graphql.CollectedField, obj *model.UnreadUpdate) (ret graphql.Marshaler) {
+func (ec *executionContext) _TimeSeriesPoint_activeUsers(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UnreadUpdate_roomID(ctx, field)
+			return ec.fieldContext_TimeSeriesPoint_activeUsers(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.RoomID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UnreadUpdate_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UnreadUpdate", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _UnreadUpdate_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.UnreadUpdate) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UnreadUpdate_unreadCount(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.UnreadCount, nil
+			return obj.ActiveUsers, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
@@ -18334,8 +18560,8 @@ func (ec *executionContext) _UnreadUpdate_unreadCount(ctx context.Context, field
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_UnreadUpdate_unreadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UnreadUpdate", field, false, false, errors.New("field of type Int does not have child fields"))
+func (ec *executionContext) fieldContext_TimeSeriesPoint_activeUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _User_ID(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
@@ -21413,6 +21639,11 @@ func (ec *executionContext) _AnalyticsSummary(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "currentActiveUsers":
+			out.Values[i] = ec._AnalyticsSummary_currentActiveUsers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "dau":
 			out.Values[i] = ec._AnalyticsSummary_dau(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -22233,6 +22464,94 @@ func (ec *executionContext) _FavoriteUser(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var hashtagSuggestionImplementors = []string{"HashtagSuggestion"}
+
+func (ec *executionContext) _HashtagSuggestion(ctx context.Context, sel ast.SelectionSet, obj *model.HashtagSuggestion) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, hashtagSuggestionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HashtagSuggestion")
+		case "tag":
+			out.Values[i] = ec._HashtagSuggestion_tag(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._HashtagSuggestion_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var hashtagSuggestionPageImplementors = []string{"HashtagSuggestionPage"}
+
+func (ec *executionContext) _HashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, obj *model.HashtagSuggestionPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, hashtagSuggestionPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HashtagSuggestionPage")
+		case "items":
+			out.Values[i] = ec._HashtagSuggestionPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._HashtagSuggestionPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var inquiryImplementors = []string{"Inquiry"}
 
 func (ec *executionContext) _Inquiry(ctx context.Context, sel ast.SelectionSet, obj *model.Inquiry) graphql.Marshaler {
@@ -22989,13 +23308,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateReportStatus":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateReportStatus(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "toggleReportSystem":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_toggleReportSystem(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -24490,6 +24802,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchPostsByHashtag":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchPostsByHashtag(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "popularHashtags":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_popularHashtags(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "suggestHashtags":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_suggestHashtags(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "favorites":
 			field := field
 
@@ -25671,8 +26049,6 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_messageUpdated(ctx, fields[0])
 	case "roomReadStatusUpdated":
 		return ec._Subscription_roomReadStatusUpdated(ctx, fields[0])
-	case "myUnreadUpdated":
-		return ec._Subscription_myUnreadUpdated(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -25954,47 +26330,8 @@ func (ec *executionContext) _TimeSeriesPoint(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var unreadUpdateImplementors = []string{"UnreadUpdate"}
-
-func (ec *executionContext) _UnreadUpdate(ctx context.Context, sel ast.SelectionSet, obj *model.UnreadUpdate) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, unreadUpdateImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("UnreadUpdate")
-		case "roomID":
-			out.Values[i] = ec._UnreadUpdate_roomID(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "unreadCount":
-			out.Values[i] = ec._UnreadUpdate_unreadCount(ctx, field, obj)
+		case "activeUsers":
+			out.Values[i] = ec._TimeSeriesPoint_activeUsers(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -27127,6 +27464,46 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 	return graphql.WrapContextMarshaler(ctx, res)
 }
 
+func (ec *executionContext) marshalNHashtagSuggestion2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.HashtagSuggestion) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNHashtagSuggestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestion(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNHashtagSuggestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestion(ctx context.Context, sel ast.SelectionSet, v *model.HashtagSuggestion) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HashtagSuggestion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNHashtagSuggestionPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, v model.HashtagSuggestionPage) graphql.Marshaler {
+	return ec._HashtagSuggestionPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNHashtagSuggestionPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐHashtagSuggestionPage(ctx context.Context, sel ast.SelectionSet, v *model.HashtagSuggestionPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HashtagSuggestionPage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -27781,20 +28158,6 @@ func (ec *executionContext) marshalNTimeSeriesPoint2ᚖgithubᚗcomᚋCityboypen
 		return graphql.Null
 	}
 	return ec._TimeSeriesPoint(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNUnreadUpdate2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v model.UnreadUpdate) graphql.Marshaler {
-	return ec._UnreadUpdate(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNUnreadUpdate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUnreadUpdate(ctx context.Context, sel ast.SelectionSet, v *model.UnreadUpdate) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._UnreadUpdate(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNUpdateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateAdministratorInput(ctx context.Context, v any) (model.UpdateAdministratorInput, error) {

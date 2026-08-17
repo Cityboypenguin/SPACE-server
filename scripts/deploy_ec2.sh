@@ -16,6 +16,7 @@ MESSAGE_ENCRYPTION_KEY="$(get_param /space/message-encryption-key)"
 SMTP_PASSWORD="$(get_param /space/smtp-password)"
 MINIO_ACCESS_KEY="$(get_param /space/aws-access-key)"
 MINIO_SECRET_KEY="$(get_param /space/aws-secret-key)"
+OPAQUE_ID_SECRET="$(get_param /space/opaque-id-secret)"
 
 cat > .env.prod <<EOF
 ECR_IMAGE=${ECR_IMAGE}
@@ -26,6 +27,7 @@ JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRATION_MINUTES=60
 JWT_REFRESH_EXPIRATION_MINUTES=43200
 MESSAGE_ENCRYPTION_KEY=${MESSAGE_ENCRYPTION_KEY}
+OPAQUE_ID_SECRET=${OPAQUE_ID_SECRET}
 INIT_ADMIN_NAME=Initial_Admin
 INIT_ADMIN_EMAIL=kosugi.pjt@gmail.com
 MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -33,7 +35,7 @@ MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
 MINIO_BUCKET=space-avatars
 AWS_REGION=${REGION}
 MINIO_PUBLIC_ENDPOINT=https://s3.${REGION}.amazonaws.com
-ALLOWED_ORIGINS=https://d2ihoct532mxwc.cloudfront.net
+ALLOWED_ORIGINS=https://d2ihoct532mxwc.cloudfront.net,https://senshu-universe.com,https://www.senshu-universe.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=kosugi.pjt@gmail.com

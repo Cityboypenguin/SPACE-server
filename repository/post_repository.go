@@ -27,6 +27,12 @@ type PostRepository interface {
 	CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error)
 	ListPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
 	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
+	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
+	CreatePostHashtags(ctx context.Context, postID int64, tags []string) error
+	DeletePostHashtagsByPostID(ctx context.Context, postID int64) error
+	ListPopularHashtags(ctx context.Context, limit int) ([]*model.HashtagSuggestion, error)
+	CountDistinctHashtags(ctx context.Context) (int, error)
+	SuggestHashtagsByPrefix(ctx context.Context, prefix string, limit int) ([]*model.HashtagSuggestion, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 }

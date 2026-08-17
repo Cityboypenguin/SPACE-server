@@ -103,7 +103,11 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 			case <-ctx.Done():
 				return nil
 			case <-keepAlive.C:
-				_, _ = fmt.Fprint(res.Writer, ": ping\n\n")
+				// ping の書き込みが失敗したらクライアントは既に居ないとみなし、
+				// goroutine・チャンネル・接続スロットを最大 15 秒で回収する。
+				if _, err := fmt.Fprint(res.Writer, ": ping\n\n"); err != nil {
+					return nil
+				}
 				flusher.Flush()
 			case ev, ok := <-cl.ch:
 				if !ok {

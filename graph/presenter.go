@@ -12,6 +12,17 @@ const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 const deletedAccountDisplayName = "削除されたアカウント"
 
+func toGraphHashtagSuggestions(suggestions []*model.HashtagSuggestion) []*gqlmodel.HashtagSuggestion {
+	result := make([]*gqlmodel.HashtagSuggestion, 0, len(suggestions))
+	for _, s := range suggestions {
+		result = append(result, &gqlmodel.HashtagSuggestion{
+			Tag:   s.Tag,
+			Count: int32(s.Count),
+		})
+	}
+	return result
+}
+
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
 		return nil
@@ -182,8 +193,8 @@ func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*mo
 		return nil
 	}
 	var key string
-	if g.ActorID != nil {
-		key = fmt.Sprintf("%s-%d", g.Type, *g.ActorID)
+	if g.Type == "dm" && g.ActorID != nil {
+		key = fmt.Sprintf("dm-%d", *g.ActorID)
 	} else {
 		key = fmt.Sprintf("single-%d", g.LatestID)
 	}
@@ -344,6 +355,7 @@ func toGraphAnalyticsSummary(s *model.AnalyticsSummary) *gqlmodel.AnalyticsSumma
 		TotalReports:                int32(s.TotalReports),
 		TotalBlocks:                 int32(s.TotalBlocks),
 		TotalInquiries:              int32(s.TotalInquiries),
+		CurrentActiveUsers:          int32(s.CurrentActiveUsers),
 		Dau:                         int32(s.DAU),
 		Wau:                         int32(s.WAU),
 		Mau:                         int32(s.MAU),

@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	MaxUserNameLength  = 50
+	MaxAccountIDLength = 25
 )
 
 const (
@@ -65,6 +71,16 @@ func ValidateAccountID(accountID string) error {
 	if !accountIDRe.MatchString(accountID) {
 		return fmt.Errorf("ユーザーIDは半角英数字・_・-のみ使用できます")
 	}
+	if utf8.RuneCountInString(accountID) > MaxAccountIDLength {
+		return fmt.Errorf("ユーザーIDは%d文字以内で入力してください", MaxAccountIDLength)
+	}
+	return nil
+}
+
+func ValidateUserName(name string) error {
+	if utf8.RuneCountInString(name) > MaxUserNameLength {
+		return fmt.Errorf("名前は%d文字以内で入力してください", MaxUserNameLength)
+	}
 	return nil
 }
 
@@ -78,6 +94,9 @@ func hashPassword(password string) (string, error) {
 
 func (u *User) CreateUser(param CreateUserParam) error {
 	if err := ValidateAccountID(param.AccountID); err != nil {
+		return err
+	}
+	if err := ValidateUserName(param.Name); err != nil {
 		return err
 	}
 
@@ -104,6 +123,9 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 		u.AccountID = *param.AccountID
 	}
 	if param.Name != nil {
+		if err := ValidateUserName(*param.Name); err != nil {
+			return err
+		}
 		u.Name = *param.Name
 	}
 	if param.Email != nil {

@@ -33,7 +33,13 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 
 			userID := claims.ID
 			go func() {
-				_ = userRepo.UpdateLastActiveAt(context.Background(), userID, time.Now().Unix())
+				now := time.Now()
+				jst, err := time.LoadLocation("Asia/Tokyo")
+				if err != nil {
+					jst = time.FixedZone("JST", 9*60*60)
+				}
+				_ = userRepo.UpdateLastActiveAt(context.Background(), userID, now.Unix())
+				_ = userRepo.LogActivityDate(context.Background(), userID, now.In(jst).Format("2006-01-02"))
 			}()
 
 			return next(c)

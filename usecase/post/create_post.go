@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 )
 
 type MediaInput struct {
@@ -22,20 +24,23 @@ type CreatePostUseCase interface {
 var _ CreatePostUseCase = &CreatePostInteractor{}
 
 type CreatePostInteractor struct {
-	postRepo  repository.PostRepository
-	mediaRepo repository.MediaRepository
-	txManager repository.TxManager
+	postRepo              repository.PostRepository
+	mediaRepo             repository.MediaRepository
+	txManager             repository.TxManager
+	notificationPublisher notificationuc.NotificationPublisher
 }
 
 func NewCreatePostUseCase(
 	postRepo repository.PostRepository,
 	mediaRepo repository.MediaRepository,
 	txManager repository.TxManager,
+	notificationPublisher notificationuc.NotificationPublisher,
 ) CreatePostUseCase {
 	return &CreatePostInteractor{
-		postRepo:  postRepo,
-		mediaRepo: mediaRepo,
-		txManager: txManager,
+		postRepo:              postRepo,
+		mediaRepo:             mediaRepo,
+		txManager:             txManager,
+		notificationPublisher: notificationPublisher,
 	}
 }
 
@@ -67,6 +72,12 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		}
 		post.ID = id
 
+		if tags := ExtractHashtags(post.Content); len(tags) > 0 {
+			if err := uc.postRepo.CreatePostHashtags(ctx, post.ID, tags); err != nil {
+				return err
+			}
+		}
+
 		for i, input := range mediaInputs {
 			media := &model.Media{
 				UploaderUserID: param.UserID,
@@ -84,6 +95,24 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+
+	// 返信の場合、親投稿の投稿者へ通知する（自分自身への返信は除く）。
+	// 配信失敗は投稿作成の成否に影響させない。
+	if uc.notificationPublisher != nil && param.ParentID != nil {
+		if parent, perr := uc.postRepo.GetPostByID(ctx, *param.ParentID); perr == nil && parent != nil && parent.UserID != param.UserID {
+			targetType := notificationuc.TargetPost
+			if err := uc.notificationPublisher.Publish(ctx, notificationuc.PublishParams{
+				UserID:     parent.UserID,
+				Type:       notificationuc.TypeReply,
+				ActorID:    &param.UserID,
+				TargetType: &targetType,
+				TargetID:   param.ParentID,
+				Message:    "あなたの投稿に返信がありました",
+			}); err != nil {
+				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
+			}
+		}
 	}
 
 	return post, nil

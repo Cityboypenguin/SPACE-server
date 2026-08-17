@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -24,7 +25,9 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -38,7 +41,6 @@ import (
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
-	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -56,9 +58,18 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 func main() {
+	isProd := os.Getenv("APP_ENV") == "production"
+
+	// 起動時に必須設定をまとめて検証し、欠落・危険な設定は即座に落とす。
+	// 「その機能を最初に使ったとき」まで問題が潜伏するのを防ぐ。
+	if err := config.Validate(isProd); err != nil {
+		logger.Log.Fatal().Err(err).Msg("configuration validation failed")
+	}
+
 	database, err := mysql.New()
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to connect to database")
@@ -70,8 +81,6 @@ func main() {
 	logger.Log.Info().Msg("database migrations applied")
 
 	e := echo.New()
-
-	isProd := os.Getenv("APP_ENV") == "production"
 
 	// Behind AWS ALB: trust private-network IPs as proxy hops so c.RealIP()
 	// returns the real client IP instead of being spoofable via X-Forwarded-For.
@@ -102,8 +111,11 @@ func main() {
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to initialize message encryption")
 	}
+	// 既存平文メッセージの暗号化はベストエフォートのバックフィル。
+	// 一時的な DB 不調で起動をクラッシュループさせないよう、失敗しても続行する
+	// （暗号鍵の設定ミスは NewMySQLMessageRepository 側が Fatal で検出する）。
 	if encryptedCount, err := messageRepository.EncryptPlaintextMessages(context.Background(), 500); err != nil {
-		logger.Log.Fatal().Err(err).Msg("failed to encrypt existing message history")
+		logger.Log.Error().Err(err).Msg("failed to encrypt existing message history; will retry on next startup")
 	} else if encryptedCount > 0 {
 		logger.Log.Info().Int("count", encryptedCount).Msg("encrypted existing message history")
 	}
@@ -148,7 +160,8 @@ func main() {
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
-	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager)
+	// createPostUseCase は通知発行のため notificationPublisher に依存する。
+	// publisher 構築後（下方）に生成する。
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
@@ -157,6 +170,9 @@ func main() {
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
+	searchPostsByHashtagUseCase := postusecase.NewSearchPostsByHashtagUseCase(postRepository)
+	popularHashtagsUseCase := postusecase.NewPopularHashtagsUseCase(postRepository)
+	suggestHashtagsUseCase := postusecase.NewSuggestHashtagsUseCase(postRepository)
 	getPostsByUserIDUseCase := postusecase.NewGetPostsByUserIDUseCase(postRepository)
 	getRepliesByIDUseCase := postusecase.NewGetRepliesByIDUseCase(postRepository)
 	getRepliesByPostIDsIncludeDeletedUseCase := postusecase.NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepository)
@@ -167,7 +183,7 @@ func main() {
 	getfavoritePostsByUserIDUseCase := postusecase.NewGetFavoritePostsByUserIDUseCase(postRepository)
 	getFollowersTopLevelPostsByUserIDUseCase := postusecase.NewGetFollowersTopLevelPostsByUserIDUseCase(postRepository)
 
-	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository)
+	// createFavoriteUseCase も notificationPublisher に依存するため publisher 構築後に生成する。
 	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
 	deleteFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewDeleteFavoriteByUserIDAndPostIDUseCase(favoriteRepository, postRepository)
 	getFavoriteByIDUseCase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
@@ -236,17 +252,7 @@ func main() {
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
-	createCommunityUseCase := communityusecase.NewCreateCommunityUseCase(communityRepository, mediaRepository)
-	getCommunityUseCase := communityusecase.NewGetCommunityUseCase(communityRepository)
-	updateCommunityUseCase := communityusecase.NewUpdateCommunityUseCase(communityRepository)
-	searchCommunityUseCase := communityusecase.NewSearchCommunityUseCase(communityRepository)
-	listMyCommunitiesUseCase := communityusecase.NewListMyCommunitiesUseCase(communityRepository)
-	listAllCommunitiesUseCase := communityusecase.NewListAllCommunitiesUseCase(communityRepository)
-	updateCommunityMembersUseCase := communityusecase.NewUpdateCommunityMembersUseCase(communityRepository, roomUserRepository, txManager)
-	promoteToCommunityOwnerUseCase := communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepository, roomUserRepository)
-	demoteFromCommunityOwnerUseCase := communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepository, roomUserRepository)
-	isSoleOwnerWithOtherMembersUseCase := communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepository)
-	getRandomCommunitiesUseCase := communityusecase.NewGetRandomCommunitiesUseCase(communityRepository)
+	// コミュニティ系ユースケースの生成は graph.NewCommunityUseCases に集約。
 
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
@@ -285,6 +291,10 @@ func main() {
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
 	sseBroker := sse.NewBroker()
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+
+	// 通知発行を伴うユースケースは publisher を注入して生成する。
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager, notificationPublisher)
+	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
 	createTermsUseCase := termsusecase.NewCreateTermsUseCase(termsRepository)
@@ -365,6 +375,9 @@ func main() {
 			DeletePostUseCase:                        deletePostUseCase,
 			UpdatePostUseCase:                        updatePostUseCase,
 			SearchPostsUseCase:                       searchPostsUseCase,
+			SearchPostsByHashtagUseCase:              searchPostsByHashtagUseCase,
+			PopularHashtagsUseCase:                   popularHashtagsUseCase,
+			SuggestHashtagsUseCase:                   suggestHashtagsUseCase,
 			ListTopLevelPostsUseCase:                 listTopLevelPostsUseCase,
 			GetFeedPostsUseCase:                      getFeedPostsUseCase,
 			CountNewFeedPostsUseCase:                 countNewFeedPostsUseCase,
@@ -413,23 +426,11 @@ func main() {
 			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
 		},
 
-		CommunityUseCases: graph.CommunityUseCases{
-			CreateCommunityUseCase:             createCommunityUseCase,
-			GetCommunityUseCase:                getCommunityUseCase,
-			UpdateCommunityUseCase:             updateCommunityUseCase,
-			UpdateCommunityMembersUseCase:      updateCommunityMembersUseCase,
-			SearchCommunityUseCase:             searchCommunityUseCase,
-			ListMyCommunitiesUseCase:           listMyCommunitiesUseCase,
-			ListAllCommunitiesUseCase:          listAllCommunitiesUseCase,
-			PromoteToCommunityOwnerUseCase:     promoteToCommunityOwnerUseCase,
-			DemoteFromCommunityOwnerUseCase:    demoteFromCommunityOwnerUseCase,
-			IsSoleOwnerWithOtherMembersUseCase: isSoleOwnerWithOtherMembersUseCase,
-			GetRandomCommunitiesUseCase:        *getRandomCommunitiesUseCase,
-		},
+		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
 
-		CreateReportUsecase:        *createReportUseCase,
-		ManageReportUsecase:        *manageReportUseCase,
-		ManageSystemSettingUsecase: *manageSystemSettingUseCase,
+		CreateReportUsecase:          *createReportUseCase,
+		ManageReportUsecase:          *manageReportUseCase,
+		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
 		GetAnalyticsUseCase:          getAnalyticsUseCase,
 		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
 		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
@@ -592,6 +593,17 @@ func main() {
 	gqlServer.AddTransport(transport.MultipartForm{})
 	gqlServer.Use(extension.FixedComplexityLimit(300))
 
+	// エラーメッセージ本文ではなく extensions.code を API 契約にする。
+	// クライアントは文言ではなくコードで分岐できるので、文言変更で壊れない。
+	gqlServer.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
+		gqlErr := graphql.DefaultErrorPresenter(ctx, e)
+		if gqlErr.Extensions == nil {
+			gqlErr.Extensions = map[string]interface{}{}
+		}
+		gqlErr.Extensions["code"] = string(errorCodeFor(e))
+		return gqlErr
+	})
+
 	if !isProd {
 		gqlServer.Use(extension.Introspection{})
 	}
@@ -663,6 +675,29 @@ func schedulePendingTerms(termsRepo repository.TermsRepository, broker *sse.Brok
 			logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
 		})
 		logger.Log.Info().Str("version", version).Dur("delay", delay).Msg("scheduled terms broadcast timer set")
+	}
+}
+
+// errorCodeFor maps a resolver error to a stable machine-readable code exposed
+// via GraphQL extensions.code. Typed *apperr.Error carry their own code; legacy
+// auth errors (from JWT validation middleware) are matched by message so they
+// also carry a code without every call site being rewritten.
+func errorCodeFor(err error) apperr.Code {
+	if code := apperr.CodeOf(err); code != apperr.CodeInternal {
+		return code
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "unauthorized"),
+		strings.Contains(msg, "invalid token"),
+		strings.Contains(msg, "token has been revoked"),
+		strings.Contains(msg, "token is expired"),
+		strings.Contains(msg, "missing authorization"):
+		return apperr.CodeUnauthorized
+	case strings.Contains(msg, "forbidden"):
+		return apperr.CodeForbidden
+	default:
+		return apperr.CodeInternal
 	}
 }
 

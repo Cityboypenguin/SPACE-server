@@ -30,6 +30,7 @@ type CreateReportInput struct {
 	TargetID     string
 	Reason       string
 	CustomReason *string
+	Content	     *string
 }
 
 func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInput) (*model.Report, error) {
@@ -61,6 +62,11 @@ func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInp
 		Status:       model.StatusPending,
 		CreatedAt:    now,
 		UpdatedAt:    now,
+	}
+
+	// 保存時に通報された投稿のスナップショット（本文）を保存する
+	if input.Content != nil {
+		report.PostContent = input.Content
 	}
 
 	if err := u.reportRepo.Save(ctx, report); err != nil {

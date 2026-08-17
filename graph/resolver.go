@@ -151,6 +151,9 @@ type PostUseCases struct {
 	DeletePostUseCase                        post.DeletePostUseCase
 	UpdatePostUseCase                        post.UpdatePostUseCase
 	SearchPostsUseCase                       post.SearchPostsUseCase
+	SearchPostsByHashtagUseCase              post.SearchPostsByHashtagUseCase
+	PopularHashtagsUseCase                   post.PopularHashtagsUseCase
+	SuggestHashtagsUseCase                   post.SuggestHashtagsUseCase
 	ListTopLevelPostsUseCase                 post.ListTopLevelPostsUseCase
 	GetFeedPostsUseCase                      post.GetFeedPostsUseCase
 	CountNewFeedPostsUseCase                 post.CountNewFeedPostsUseCase

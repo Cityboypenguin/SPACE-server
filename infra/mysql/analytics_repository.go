@@ -8,7 +8,12 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"golang.org/x/sync/errgroup"
 )
+
+// analyticsQueryConcurrency bounds how many analytics queries run at once against
+// the shared *sql.DB pool, so a single dashboard load can't starve other traffic.
+const analyticsQueryConcurrency = 10
 
 type MySQLAnalyticsRepository struct {
 	DB *sql.DB
@@ -48,6 +53,7 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 		{&s.TotalReports, `SELECT COUNT(*) FROM user_reports`, nil},
 		{&s.TotalBlocks, `SELECT COUNT(*) FROM blocks`, nil},
 		{&s.TotalInquiries, `SELECT COUNT(*) FROM inquiries`, nil},
+		{&s.CurrentActiveUsers, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{now.AddDate(0, 0, -3).Unix()}},
 		{&s.DAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{todayStart}},
 		{&s.WAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{weekStart}},
 		{&s.MAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{monthStart}},
@@ -89,16 +95,58 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 			AND m.content_type LIKE 'video/%'`, nil},
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(analyticsQueryConcurrency)
+
 	for _, q := range intQueries {
-		var err error
-		if q.args != nil {
-			err = r.DB.QueryRowContext(ctx, q.query, q.args...).Scan(q.dest)
-		} else {
-			err = r.DB.QueryRowContext(ctx, q.query).Scan(q.dest)
-		}
-		if err != nil {
-			return nil, err
-		}
+		q := q
+		g.Go(func() error {
+			if q.args != nil {
+				return r.DB.QueryRowContext(gctx, q.query, q.args...).Scan(q.dest)
+			}
+			return r.DB.QueryRowContext(gctx, q.query).Scan(q.dest)
+		})
+	}
+
+	// コミュニティ平均メンバー数の元データ
+	var totalCommunityMembers int
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT COUNT(*) FROM room_users ru
+			INNER JOIN communities c ON c.room_id = ru.room_id`).Scan(&totalCommunityMembers)
+	})
+
+	// オンボーディング完了率（プロフィール + アバター + 初投稿）の元データ
+	var onboardingComplete int
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT COUNT(DISTINCT u.id) FROM users u
+			INNER JOIN profiles p ON p.user_id = u.id AND p.avatar_media_id IS NOT NULL
+			WHERE EXISTS (SELECT 1 FROM posts po WHERE po.user_id = u.id AND po.deleted_at IS NULL)`).Scan(&onboardingComplete)
+	})
+
+	// 初投稿までの平均時間（分）
+	var avgSeconds sql.NullFloat64
+	g.Go(func() error {
+		return r.DB.QueryRowContext(gctx, `
+			SELECT AVG(first_post.created_at - u.created_at) / 60.0
+			FROM users u
+			INNER JOIN (
+				SELECT user_id, MIN(created_at) AS created_at
+				FROM posts WHERE deleted_at IS NULL
+				GROUP BY user_id
+			) first_post ON first_post.user_id = u.id`).Scan(&avgSeconds)
+	})
+
+	// セッションデータ（user_session_summaries テーブルが存在する場合のみ）。
+	// テーブル未作成環境ではベストエフォートで無視するため、他クエリの失敗としては扱わない。
+	g.Go(func() error {
+		_ = r.loadSessionStats(gctx, s)
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// 計算値
@@ -120,12 +168,6 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 	}
 
 	// コミュニティ平均メンバー数
-	var totalCommunityMembers int
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM room_users ru
-		INNER JOIN communities c ON c.room_id = ru.room_id`).Scan(&totalCommunityMembers); err != nil {
-		return nil, err
-	}
 	if s.TotalCommunities > 0 {
 		s.AvgCommunityMembers = float64(totalCommunityMembers) / float64(s.TotalCommunities)
 	}
@@ -142,37 +184,13 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context) (*mo
 	}
 
 	// オンボーディング完了率（プロフィール + アバター + 初投稿）
-	var onboardingComplete int
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT u.id) FROM users u
-		INNER JOIN profiles p ON p.user_id = u.id AND p.avatar_media_id IS NOT NULL
-		WHERE EXISTS (SELECT 1 FROM posts po WHERE po.user_id = u.id AND po.deleted_at IS NULL)`).Scan(&onboardingComplete); err != nil {
-		return nil, err
-	}
 	if s.TotalUsers > 0 {
 		s.OnboardingCompleteRate = float64(onboardingComplete) / float64(s.TotalUsers) * 100
 	}
 
 	// 初投稿までの平均時間（分）
-	var avgSeconds sql.NullFloat64
-	if err := r.DB.QueryRowContext(ctx, `
-		SELECT AVG(first_post.created_at - u.created_at) / 60.0
-		FROM users u
-		INNER JOIN (
-			SELECT user_id, MIN(created_at) AS created_at
-			FROM posts WHERE deleted_at IS NULL
-			GROUP BY user_id
-		) first_post ON first_post.user_id = u.id`).Scan(&avgSeconds); err != nil {
-		return nil, err
-	}
 	if avgSeconds.Valid {
 		s.AvgTimeToFirstPostMinutes = avgSeconds.Float64
-	}
-
-	// セッションデータ（user_session_summaries テーブルが存在する場合のみ）
-	if err := r.loadSessionStats(ctx, s); err != nil {
-		// テーブルがまだない場合は無視
-		_ = err
 	}
 
 	// インフラ（in-memory）
@@ -327,6 +345,26 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	messages := map[string]int{}
 	newUsers := map[string]int{}
 	likes := map[string]int{}
+	// rawActiveSlots: スロット単位の生カウント（ローリングウィンドウ計算用に拡張範囲で取得）
+	rawActiveSlots := map[string]int{}
+
+	// 日次は3日、時間別は72時間分さかのぼって取得
+	var rollingSlots int
+	var activeSlotQuery string
+	if granularity == "hour" {
+		// 時間別は last_active_at ベース（user_activity_dates は日単位のため）
+		rollingSlots = 72
+		activeExtendedFromUnix := fromT.Add(-71 * time.Hour).Unix()
+		localActiveTS := fmt.Sprintf("(last_active_at + %d)", jstOffsetSec)
+		activeUsersBetween := fmt.Sprintf("last_active_at >= %d AND last_active_at < %d", activeExtendedFromUnix, toUnix)
+		activeSlotQuery = fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%%Y-%%m-%%d %%H:00') as lbl, COUNT(DISTINCT id) FROM users WHERE %s GROUP BY lbl`, localActiveTS, activeUsersBetween)
+	} else {
+		// 日次は user_activity_dates を使って正確な活動履歴を集計
+		rollingSlots = 3
+		activeExtendedFrom := fromT.AddDate(0, 0, -2).Format("2006-01-02")
+		activeExtendedTo := toT.AddDate(0, 0, -1).Format("2006-01-02") // toT は翌日 00:00 なので1日戻す
+		activeSlotQuery = fmt.Sprintf(`SELECT activity_date, COUNT(DISTINCT user_id) FROM user_activity_dates WHERE activity_date >= '%s' AND activity_date <= '%s' GROUP BY activity_date`, activeExtendedFrom, activeExtendedTo)
+	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
 	mqs := []metricQuery{
@@ -335,26 +373,31 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
 		{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)},
+		{rawActiveSlots, activeSlotQuery},
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
 	for _, mq := range mqs {
-		rows, err := r.DB.QueryContext(ctx, mq.query)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var lbl string
-			var cnt int
-			if err := rows.Scan(&lbl, &cnt); err != nil {
-				rows.Close()
-				return nil, err
+		mq := mq
+		g.Go(func() error {
+			rows, err := r.DB.QueryContext(gctx, mq.query)
+			if err != nil {
+				return err
 			}
-			mq.dest[lbl] = cnt
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+			defer rows.Close()
+			for rows.Next() {
+				var lbl string
+				var cnt int
+				if err := rows.Scan(&lbl, &cnt); err != nil {
+					return err
+				}
+				mq.dest[lbl] = cnt
+			}
+			return rows.Err()
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// 範囲内の全スロットを生成してギャップを0で埋める
@@ -369,15 +412,39 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		}
 	}
 
+	// 各スロットで過去3日（日次）または72時間（時間別）のローリングウィンドウを集計
+	// last_active_at はユーザーごとに1値のみなので、スロット間の重複なし
+	activeUsers := make(map[string]int, len(labels))
+	for _, l := range labels {
+		var slotT time.Time
+		if granularity == "hour" {
+			slotT, _ = time.ParseInLocation("2006-01-02 15:04", l, jst)
+		} else {
+			slotT, _ = time.ParseInLocation(dateFmt, l, jst)
+		}
+		total := 0
+		for i := 0; i < rollingSlots; i++ {
+			var key string
+			if granularity == "hour" {
+				key = slotT.Add(-time.Duration(i) * time.Hour).Format("2006-01-02 15:00")
+			} else {
+				key = slotT.AddDate(0, 0, -i).Format(dateFmt)
+			}
+			total += rawActiveSlots[key]
+		}
+		activeUsers[l] = total
+	}
+
 	points := make([]*model.TimeSeriesPoint, len(labels))
 	for i, l := range labels {
 		points[i] = &model.TimeSeriesPoint{
-			Label:    l,
-			Posts:    posts[l],
-			Comments: comments[l],
-			Messages: messages[l],
-			NewUsers: newUsers[l],
-			Likes:    likes[l],
+			Label:       l,
+			Posts:       posts[l],
+			Comments:    comments[l],
+			Messages:    messages[l],
+			NewUsers:    newUsers[l],
+			Likes:       likes[l],
+			ActiveUsers: activeUsers[l],
 		}
 	}
 	return points, nil

@@ -36,6 +36,9 @@ type Query {
     offset: Int = 0
   ): PostPage!
   searchPosts(keyword: String!): [Post!]!
+  searchPostsByHashtag(tag: String!): [Post!]!
+  popularHashtags: HashtagSuggestionPage!
+  suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
@@ -268,7 +271,6 @@ type Mutation {
 
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
-  toggleReportSystem(enabled: Boolean!): Boolean!
 
   createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
   deleteFavoriteUser(favoriteUserID: ID!): Boolean!
@@ -537,17 +539,11 @@ type RoomReadStatusUpdate {
   lastReadAt: String!
 }
 
-type UnreadUpdate {
-  roomID: ID!
-  unreadCount: Int!
-}
-
 type Subscription {
   messageAdded(roomID: ID!): Message!
   messageDeleted(roomID: ID!): Message!
   messageUpdated(roomID: ID!): Message!
   roomReadStatusUpdated(roomID: ID!): RoomReadStatusUpdate!
-  myUnreadUpdated: UnreadUpdate!
 }
 
 enum ReportStatus {
@@ -645,6 +641,18 @@ type PostPage {
   total: Int!
 }
 
+type HashtagSuggestion {
+  tag: String!
+  count: Int!
+}
+
+# items は人気上位のタグ（最大 500 件）。total はタグの種類数。
+# total <= items の件数なら全タグを先読みできている（complete）と判断できる。
+type HashtagSuggestionPage {
+  items: [HashtagSuggestion!]!
+  total: Int!
+}
+
 type ReportPage {
   items: [UserReport!]!
   total: Int!
@@ -689,6 +697,7 @@ type AnalyticsSummary {
   totalInquiries: Int!
 
   # アクティビティ
+  currentActiveUsers: Int!
   dau: Int!
   wau: Int!
   mau: Int!
@@ -794,6 +803,7 @@ type TimeSeriesPoint {
   messages: Int!
   newUsers: Int!
   likes: Int!
+  activeUsers: Int!
 }
 
 type TimeSeriesData {

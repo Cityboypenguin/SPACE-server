@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -400,22 +401,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	if numericParentID != nil {
-		parent, perr := r.GetPostByIDUseCase.Execute(ctx, *numericParentID)
-		if perr == nil && parent != nil && parent.UserID != claims.ID {
-			targetType := notificationuc.TargetPost
-			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-				UserID:     parent.UserID,
-				Type:       notificationuc.TypeReply,
-				ActorID:    &claims.ID,
-				TargetType: &targetType,
-				TargetID:   numericParentID,
-				Message:    "あなたの投稿に返信がありました",
-			}); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
-			}
-		}
-	}
+	// 返信先投稿者への通知は CreatePostUseCase 内で発行される。
 
 	return toGraphPost(post), nil
 }
@@ -500,20 +486,7 @@ func (r *mutationResolver) CreateFavorite(ctx context.Context, input gqlmodel.Cr
 		return nil, err
 	}
 
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
-	if err == nil && post != nil && post.UserID != claims.ID {
-		targetType := notificationuc.TargetPost
-		if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-			UserID:     post.UserID,
-			Type:       notificationuc.TypeFavorite,
-			ActorID:    &claims.ID,
-			TargetType: &targetType,
-			TargetID:   &numericPostID,
-			Message:    "あなたの投稿がいいねされました",
-		}); err != nil {
-			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
-		}
-	}
+	// 投稿者への「いいね」通知は CreateFavoriteUseCase 内で発行される。
 
 	return toGraphFavorite(favorite), nil
 }
@@ -1227,12 +1200,28 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	gqlMsg := toGraphMessage(msg)
 	r.PubSub.Publish(roomID+":message:added", gqlMsg)
 
-	// 各メンバーの未読カウントをリアルタイム通知
+	// 一覧画面のプレビュー・通知文言に使う要約テキスト（画像/ファイルのみの場合は代替文言）
+	previewMessage := msg.Content
+	if previewMessage == "" {
+		if len(ucMediaInputs) > 0 {
+			previewMessage = "[画像/ファイルを送信しました]"
+		} else {
+			previewMessage = "新しいメッセージが届きました"
+		}
+	} else {
+		const maxPreviewRunes = 50
+		if runes := []rune(previewMessage); utf8.RuneCountInString(previewMessage) > maxPreviewRunes {
+			previewMessage = string(runes[:maxPreviewRunes]) + "…"
+		}
+	}
+
+	// 各メンバーの未読カウント・最新メッセージプレビューをリアルタイム通知
 	if unreadCounts, err := r.GetMembersUnreadCountsUseCase.Execute(ctx, rid, claims.ID); err == nil {
 		for memberID, count := range unreadCounts {
-			r.PubSub.Publish(fmt.Sprintf("user:%d:unread", memberID), &gqlmodel.UnreadUpdate{
-				RoomID:      roomID,
-				UnreadCount: int32(count),
+			r.SSEBroker.PublishToUser(memberID, "unread_room", map[string]any{
+				"roomID":      roomID,
+				"unreadCount": count,
+				"lastMessage": previewMessage,
 			})
 		}
 	}
@@ -1240,19 +1229,6 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	// DM ルームの場合、相手に通知を送る
 	if room != nil && room.Type == model.RoomTypeDM {
 		targetType := notificationuc.TargetRoom
-		notifMessage := msg.Content
-		if notifMessage == "" {
-			if len(ucMediaInputs) > 0 {
-				notifMessage = "[画像/ファイルを送信しました]"
-			} else {
-				notifMessage = "新しいメッセージが届きました"
-			}
-		} else {
-			const maxNotifMessageRunes = 50
-			if runes := []rune(notifMessage); utf8.RuneCountInString(notifMessage) > maxNotifMessageRunes {
-				notifMessage = string(runes[:maxNotifMessageRunes]) + "…"
-			}
-		}
 		for _, memberID := range memberIDs {
 			if memberID == claims.ID {
 				continue
@@ -1263,7 +1239,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 				ActorID:    &claims.ID,
 				TargetType: &targetType,
 				TargetID:   &rid,
-				Message:    notifMessage,
+				Message:    previewMessage,
 			}); err != nil {
 				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
 			}
@@ -1341,9 +1317,6 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	if err != nil {
 		return nil, err
 	}
-	if !isReportServiceEnabled.Load() {
-		return nil, fmt.Errorf("現在、システム全体の通報機能は一時的に停止されています")
-	}
 	kind := reportTargetKind(input.TargetType)
 	if kind == "" {
 		return nil, fmt.Errorf("unsupported target type: %s", input.TargetType)
@@ -1353,12 +1326,24 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, fmt.Errorf("invalid target id")
 	}
 
+	var snapshotContent *string
+
+	if strings.ToUpper(string(input.TargetType)) == "POST" || input.TargetType == "post" {
+		post, err := r.GetPostByIDUseCase.Execute(ctx, numericTargetID)
+		if err == nil && post != nil {
+			snapshotContent = &post.Content
+		} else if err != nil {
+			log.Printf("Failed to fetch post for report: %v", err)
+		}
+	}
+
 	res, err := r.CreateReportUsecase.Execute(ctx, report.CreateReportInput{
 		ReporterID:   claims.ID,
 		TargetType:   model.ReportTargetType(input.TargetType),
 		TargetID:     fmt.Sprintf("%d", numericTargetID),
 		Reason:       input.Reason,
 		CustomReason: input.CustomReason,
+		Content:      snapshotContent,
 	})
 	if err != nil {
 		return nil, err
@@ -1377,6 +1362,7 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		CustomReason: res.CustomReason,
 		Status:       gqlmodel.ReportStatusPending,
 		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -1416,18 +1402,10 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		CustomReason: res.CustomReason,
 		Status:       status,
 		Reporter:     toGraphUser(reporter),
+		Content:      res.PostContent,
 		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
 	}, nil
-}
-
-// ToggleReportSystem is the resolver for the toggleReportSystem field.
-func (r *mutationResolver) ToggleReportSystem(ctx context.Context, enabled bool) (bool, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
-		return false, err
-	}
-
-	return r.ManageReportUsecase.ToggleSystem(ctx, enabled)
 }
 
 // CreateFavoriteUser is the resolver for the createFavoriteUser field.
@@ -1739,9 +1717,9 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 		UserID:     encodeGraphID("user", claims.ID),
 		LastReadAt: nowStr,
 	})
-	r.PubSub.Publish(fmt.Sprintf("user:%d:unread", claims.ID), &gqlmodel.UnreadUpdate{
-		RoomID:      roomID,
-		UnreadCount: 0,
+	r.SSEBroker.PublishToUser(claims.ID, "unread_room", map[string]any{
+		"roomID":      roomID,
+		"unreadCount": 0,
 	})
 	return true, nil
 }
@@ -1806,9 +1784,11 @@ func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled b
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return false, err
 	}
-	isReportServiceEnabled.Store(enabled)
+	if err := r.ManageSystemSettingUsecase.Execute(ctx, enabled); err != nil {
+		return false, err
+	}
 
-	return isReportServiceEnabled.Load(), nil
+	return enabled, nil
 }
 
 // RecordSessionData is the resolver for the recordSessionData field.
@@ -2518,6 +2498,55 @@ func (r *queryResolver) SearchPosts(ctx context.Context, keyword string) ([]*gql
 		gqlPosts = append(gqlPosts, toGraphPost(post))
 	}
 	return gqlPosts, nil
+}
+
+// SearchPostsByHashtag is the resolver for the searchPostsByHashtag field.
+func (r *queryResolver) SearchPostsByHashtag(ctx context.Context, tag string) ([]*gqlmodel.Post, error) {
+	_, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	posts, err := r.SearchPostsByHashtagUseCase.Execute(ctx, tag)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlPosts []*gqlmodel.Post
+	for _, post := range posts {
+		gqlPosts = append(gqlPosts, toGraphPost(post))
+	}
+	return gqlPosts, nil
+}
+
+// PopularHashtags is the resolver for the popularHashtags field.
+func (r *queryResolver) PopularHashtags(ctx context.Context) (*gqlmodel.HashtagSuggestionPage, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	items, total, err := r.PopularHashtagsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.HashtagSuggestionPage{
+		Items: toGraphHashtagSuggestions(items),
+		Total: int32(total),
+	}, nil
+}
+
+// SuggestHashtags is the resolver for the suggestHashtags field.
+func (r *queryResolver) SuggestHashtags(ctx context.Context, prefix string, limit *int32) ([]*gqlmodel.HashtagSuggestion, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	l := 0
+	if limit != nil {
+		l = int(*limit)
+	}
+	suggestions, err := r.SuggestHashtagsUseCase.Execute(ctx, prefix, l)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphHashtagSuggestions(suggestions), nil
 }
 
 // Favorites is the resolver for the favorites field.
@@ -3448,7 +3477,7 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 
 // IsReportServiceEnabled is the resolver for the isReportServiceEnabled field.
 func (r *queryResolver) IsReportServiceEnabled(ctx context.Context) (bool, error) {
-	return isReportServiceEnabled.Load(), nil
+	return r.ManageSystemSettingUsecase.IsReportEnabled(ctx)
 }
 
 // AdminGetAnalytics is the resolver for the adminGetAnalytics field.
@@ -3498,12 +3527,13 @@ func (r *queryResolver) AdminGetTimeSeries(ctx context.Context, granularity gqlm
 	gqlPoints := make([]*gqlmodel.TimeSeriesPoint, len(points))
 	for i, p := range points {
 		gqlPoints[i] = &gqlmodel.TimeSeriesPoint{
-			Label:    p.Label,
-			Posts:    int32(p.Posts),
-			Comments: int32(p.Comments),
-			Messages: int32(p.Messages),
-			NewUsers: int32(p.NewUsers),
-			Likes:    int32(p.Likes),
+			Label:       p.Label,
+			Posts:       int32(p.Posts),
+			Comments:    int32(p.Comments),
+			Messages:    int32(p.Messages),
+			NewUsers:    int32(p.NewUsers),
+			Likes:       int32(p.Likes),
+			ActiveUsers: int32(p.ActiveUsers),
 		}
 	}
 	return &gqlmodel.TimeSeriesData{Points: gqlPoints}, nil
@@ -3566,39 +3596,6 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 					if update.UserID != currentUserGraphID {
 						ch <- update
 					}
-				}
-			}
-		}
-	}()
-
-	return ch, nil
-}
-
-// MyUnreadUpdated is the resolver for the myUnreadUpdated field.
-func (r *subscriptionResolver) MyUnreadUpdated(ctx context.Context) (<-chan *gqlmodel.UnreadUpdate, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan *gqlmodel.UnreadUpdate, 1)
-	topic := fmt.Sprintf("user:%d:unread", claims.ID)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if update, ok := data.(*gqlmodel.UnreadUpdate); ok {
-					ch <- update
 				}
 			}
 		}
