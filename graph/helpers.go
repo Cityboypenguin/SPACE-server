@@ -33,6 +33,90 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 	return r.StorageRepository.PublicURL(c.AvatarMedia.StorageKey)
 }
 
+// anonymousIdentityForCourseRoom returns the author's per-room anonymous identity
+// when roomID is a course-type room (F-05), or nil for every other room type so the
+// caller falls back to showing the real user. Used by the message/question/answer
+// user field resolvers. This lives in helpers.go (not schema.resolvers.go) because
+// gqlgen comments out any function in the resolver file that isn't a recognized
+// resolver stub on every `gqlgen generate` run.
+func (r *Resolver) anonymousIdentityForCourseRoom(ctx context.Context, roomID string, authorUserID int64) (*model.RoomAnonymousIdentity, error) {
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, nil
+	}
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil || room == nil || room.Type != model.RoomTypeCourse {
+		return nil, nil
+	}
+
+	return r.GetOrCreateAnonymousIdentityUseCase.Execute(ctx, rid, authorUserID)
+}
+
+// requireRoomReadAccess verifies the caller may read roomID: course rooms are open to
+// any authenticated user (F-04 "全授業公開"), other room types require room_users
+// membership. Used by the question/answer/poll resolvers and subscriptions added in
+// Phase 4/5, which are new code paths (unlike the message paths in schema.resolvers.go,
+// which keep their own inline checks to avoid changing existing DM/community behavior).
+func (r *Resolver) requireRoomReadAccess(ctx context.Context, claims *auth.Claims, roomID int64) (*model.Room, error) {
+	room, err := r.GetRoomUseCase.Execute(ctx, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room")
+	}
+	if room != nil && room.Type == model.RoomTypeCourse {
+		return room, nil
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+	return room, nil
+}
+
+// questionSubscription handles the auth/access guard and PubSub fan-out for
+// room-scoped question subscriptions (added, updated), mirroring messageSubscription.
+func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID, topic string) (<-chan *gqlmodel.Question, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan *gqlmodel.Question, 1)
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					close(ch)
+					return
+				}
+				if q, ok := data.(*gqlmodel.Question); ok {
+					ch <- q
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
 	return authz.RequireAuth(ctx)
 }
@@ -233,12 +317,19 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
+		return nil, fmt.Errorf("failed to get room")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
+	if room == nil || room.Type != model.RoomTypeCourse {
+		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify room membership")
+		}
+		if !containsInt64(memberIDs, claims.ID) {
+			return nil, errors.New("forbidden: not a member of this room")
+		}
 	}
 
 	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("topic", topic).Msg("subscription start")

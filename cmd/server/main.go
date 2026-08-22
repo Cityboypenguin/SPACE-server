@@ -123,6 +123,18 @@ func main() {
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
+	courseRepository := mysql.NewMySQLCourseRepository(database)
+	timetableRepository := mysql.NewMySQLTimetableRepository(database)
+	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
+	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize question repository")
+	}
+	answerRepository, err := mysql.NewMySQLAnswerRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize answer repository")
+	}
+	pollRepository := mysql.NewMySQLPollRepository(database)
 
 	var storageRepository repository.StorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
@@ -426,6 +438,9 @@ func main() {
 		},
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
+		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository),
+		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, courseRepository, systemSettingRepository),
+		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,

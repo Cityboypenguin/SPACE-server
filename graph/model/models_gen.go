@@ -103,6 +103,14 @@ type AnnouncementPage struct {
 	Total int32           `json:"total"`
 }
 
+type Answer struct {
+	ID         string `json:"ID"`
+	QuestionID string `json:"questionID"`
+	User       *User  `json:"user"`
+	Body       string `json:"body"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 type Blocker struct {
 	ID            string `json:"ID"`
 	UserID        string `json:"userID"`
@@ -149,6 +157,23 @@ type CommunityStatItem struct {
 type CommunityStatsPage struct {
 	Items []*CommunityStatItem `json:"items"`
 	Total int32                `json:"total"`
+}
+
+type Course struct {
+	ID          string `json:"ID"`
+	RoomID      string `json:"roomID"`
+	DayOfWeek   string `json:"dayOfWeek"`
+	Period      int32  `json:"period"`
+	TeacherName string `json:"teacherName"`
+	CourseName  string `json:"courseName"`
+	Year        int32  `json:"year"`
+	Semester    string `json:"semester"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+type CoursePage struct {
+	Items []*Course `json:"items"`
+	Total int32     `json:"total"`
 }
 
 type CreateAdministratorInput struct {
@@ -209,6 +234,11 @@ type CreateUserInput struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
 	Otp       string `json:"otp"`
+}
+
+type CurrentSemester struct {
+	Year     int32  `json:"year"`
+	Semester string `json:"semester"`
 }
 
 type DeleteFavoriteInput struct {
@@ -343,6 +373,28 @@ type PageViewStat struct {
 	TotalViews         int32   `json:"totalViews"`
 }
 
+type Poll struct {
+	ID                  string        `json:"ID"`
+	RoomID              string        `json:"roomID"`
+	User                *User         `json:"user"`
+	Question            string        `json:"question"`
+	AllowMultipleChoice bool          `json:"allowMultipleChoice"`
+	Options             []*PollOption `json:"options"`
+	CreatedAt           string        `json:"createdAt"`
+}
+
+type PollOption struct {
+	ID        string `json:"ID"`
+	Label     string `json:"label"`
+	VoteCount int32  `json:"voteCount"`
+	VotedByMe bool   `json:"votedByMe"`
+}
+
+type PollPage struct {
+	Items []*Poll `json:"items"`
+	Total int32   `json:"total"`
+}
+
 type Post struct {
 	ID         string      `json:"ID"`
 	Content    string      `json:"content"`
@@ -378,6 +430,23 @@ type Profile struct {
 }
 
 type Query struct {
+}
+
+type Question struct {
+	ID         string    `json:"ID"`
+	RoomID     string    `json:"roomID"`
+	User       *User     `json:"user"`
+	Body       string    `json:"body"`
+	IsAnswered bool      `json:"isAnswered"`
+	BestAnswer *Answer   `json:"bestAnswer,omitempty"`
+	Answers    []*Answer `json:"answers"`
+	CreatedAt  string    `json:"createdAt"`
+	UpdatedAt  string    `json:"updatedAt"`
+}
+
+type QuestionPage struct {
+	Items []*Question `json:"items"`
+	Total int32       `json:"total"`
 }
 
 type RecordSessionDataInput struct {
@@ -464,6 +533,13 @@ type TimeSeriesPoint struct {
 	NewUsers    int32  `json:"newUsers"`
 	Likes       int32  `json:"likes"`
 	ActiveUsers int32  `json:"activeUsers"`
+}
+
+type TimetableEntry struct {
+	ID               string  `json:"ID"`
+	Course           *Course `json:"course"`
+	IsProfileVisible bool    `json:"isProfileVisible"`
+	CreatedAt        string  `json:"createdAt"`
 }
 
 type UpdateAdministratorInput struct {

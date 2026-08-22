@@ -111,6 +111,20 @@ type Query {
   adminGetAnalytics: AnalyticsSummary!
   adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
   adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
+
+  searchCourses(
+    dayOfWeek: String!
+    period: Int!
+    keyword: String
+    limit: Int = 50
+    offset: Int = 0
+  ): CoursePage!
+  myTimetable(year: Int, semester: String): [TimetableEntry!]!
+  currentSemester: CurrentSemester!
+  questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
+  question(id: ID!): Question
+  polls(roomID: ID!, limit: Int = 50, offset: Int = 0): PollPage!
+  poll(id: ID!): Poll
 }
 
 type User {
@@ -244,6 +258,15 @@ type Mutation {
   removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
   deleteRoom(roomID: ID!): Boolean!
   createCommunity(input: CreateCommunityInput!): Community!
+  registerTimetableEntry(courseID: ID!): TimetableEntry!
+  removeTimetableEntry(id: ID!): Boolean!
+  setTimetableProfileVisibility(id: ID!, visible: Boolean!): TimetableEntry!
+  updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
+  createQuestion(roomID: ID!, body: String!): Question!
+  answerQuestion(questionID: ID!, body: String!): Answer!
+  selectBestAnswer(questionID: ID!, answerID: ID!): Question!
+  createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false): Poll!
+  votePoll(pollID: ID!, optionIDs: [ID!]!): Poll!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
   updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
@@ -531,11 +554,92 @@ type RoomReadStatusUpdate {
   lastReadAt: String!
 }
 
+type Course {
+  ID: ID!
+  roomID: ID!
+  dayOfWeek: String!
+  period: Int!
+  teacherName: String!
+  courseName: String!
+  year: Int!
+  semester: String!
+  createdAt: String!
+}
+
+type CoursePage {
+  items: [Course!]!
+  total: Int!
+}
+
+type TimetableEntry {
+  ID: ID!
+  course: Course!
+  isProfileVisible: Boolean!
+  createdAt: String!
+}
+
+type CurrentSemester {
+  year: Int!
+  semester: String!
+}
+
+type Question {
+  ID: ID!
+  roomID: ID!
+  user: User!
+  body: String!
+  isAnswered: Boolean!
+  bestAnswer: Answer
+  answers: [Answer!]!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Answer {
+  ID: ID!
+  questionID: ID!
+  user: User!
+  body: String!
+  createdAt: String!
+}
+
+type QuestionPage {
+  items: [Question!]!
+  total: Int!
+}
+
+type Poll {
+  ID: ID!
+  roomID: ID!
+  user: User!
+  question: String!
+  allowMultipleChoice: Boolean!
+  options: [PollOption!]!
+  createdAt: String!
+}
+
+type PollOption {
+  ID: ID!
+  label: String!
+  voteCount: Int!
+  votedByMe: Boolean!
+}
+
+type PollPage {
+  items: [Poll!]!
+  total: Int!
+}
+
 type Subscription {
   messageAdded(roomID: ID!): Message!
   messageDeleted(roomID: ID!): Message!
   messageUpdated(roomID: ID!): Message!
   roomReadStatusUpdated(roomID: ID!): RoomReadStatusUpdate!
+  questionAdded(roomID: ID!): Question!
+  questionUpdated(roomID: ID!): Question!
+  answerAdded(questionID: ID!): Answer!
+  pollAdded(roomID: ID!): Poll!
+  pollUpdated(pollID: ID!): Poll!
 }
 
 enum ReportStatus {

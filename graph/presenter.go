@@ -6,6 +6,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 const timeFormat = "2006-01-02T15:04:05Z07:00"
@@ -96,6 +97,122 @@ func toGraphCommunity(c *model.Community, avatarURL string) *gqlmodel.Community 
 		AvatarURL:   avatarURL,
 		CreatedAt:   c.CreatedAt.Format(timeFormat),
 		UpdatedAt:   c.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphCourse(c *model.Course) *gqlmodel.Course {
+	if c == nil {
+		return nil
+	}
+	return &gqlmodel.Course{
+		ID:          encodeGraphID("course", c.ID),
+		RoomID:      encodeGraphID("room", c.RoomID),
+		DayOfWeek:   c.DayOfWeek,
+		Period:      int32(c.Period),
+		TeacherName: c.TeacherName,
+		CourseName:  c.CourseName,
+		Year:        int32(c.Year),
+		Semester:    c.Semester,
+		CreatedAt:   c.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphTimetableEntry(t *model.Timetable, course *model.Course) *gqlmodel.TimetableEntry {
+	if t == nil {
+		return nil
+	}
+	return &gqlmodel.TimetableEntry{
+		ID:               encodeGraphID("timetable", t.ID),
+		Course:           toGraphCourse(course),
+		IsProfileVisible: t.IsProfileVisible,
+		CreatedAt:        t.CreatedAt.Format(timeFormat),
+	}
+}
+
+// toGraphAnonymousUser builds a synthetic User for a course-room author, using the
+// per-room anonymous identity instead of the real account. The ID is derived from
+// the identity row (not the real user ID), so it cannot be correlated with the
+// user's identity elsewhere in the app.
+func toGraphAnonymousUser(identity *model.RoomAnonymousIdentity) *gqlmodel.User {
+	if identity == nil {
+		return nil
+	}
+	createdAt := identity.CreatedAt.Format(timeFormat)
+	return &gqlmodel.User{
+		ID:        encodeGraphID("anon", identity.ID),
+		AccountID: "",
+		Name:      identity.Label,
+		Email:     "",
+		Role:      "",
+		Status:    "",
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
+	}
+}
+
+// toGraphQuestion sets User/BestAnswer as ID-only placeholders (matching the
+// toGraphPost pattern): the questionResolver.User/BestAnswer field resolvers read
+// obj.User.ID / obj.BestAnswer.ID to know what to fetch (and, for User, whether to
+// anonymize it), since Question does not expose a raw askerUserID field.
+func toGraphQuestion(q *model.Question) *gqlmodel.Question {
+	if q == nil {
+		return nil
+	}
+	var bestAnswer *gqlmodel.Answer
+	if q.BestAnswerID != nil {
+		bestAnswer = &gqlmodel.Answer{ID: encodeGraphID("answer", *q.BestAnswerID)}
+	}
+	return &gqlmodel.Question{
+		ID:         encodeGraphID("question", q.ID),
+		RoomID:     encodeGraphID("room", q.RoomID),
+		User:       &gqlmodel.User{ID: encodeGraphID("user", q.AskerUserID)},
+		Body:       q.Body,
+		IsAnswered: q.IsAnswered,
+		BestAnswer: bestAnswer,
+		CreatedAt:  q.CreatedAt.Format(timeFormat),
+		UpdatedAt:  q.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphAnswer(a *model.Answer) *gqlmodel.Answer {
+	if a == nil {
+		return nil
+	}
+	return &gqlmodel.Answer{
+		ID:         encodeGraphID("answer", a.ID),
+		QuestionID: encodeGraphID("question", a.QuestionID),
+		User:       &gqlmodel.User{ID: encodeGraphID("user", a.AuthorUserID)},
+		Body:       a.Body,
+		CreatedAt:  a.CreatedAt.Format(timeFormat),
+	}
+}
+
+// toGraphPoll sets User as an ID-only placeholder (matching the toGraphPost/
+// toGraphQuestion pattern): the pollResolver.User field resolver reads obj.User.ID
+// to know what to fetch (and whether to anonymize it).
+func toGraphPoll(p *model.Poll) *gqlmodel.Poll {
+	if p == nil {
+		return nil
+	}
+	return &gqlmodel.Poll{
+		ID:                  encodeGraphID("poll", p.ID),
+		RoomID:              encodeGraphID("room", p.RoomID),
+		User:                &gqlmodel.User{ID: encodeGraphID("user", p.AuthorUserID)},
+		Question:            p.Question,
+		AllowMultipleChoice: p.AllowMultipleChoice,
+		CreatedAt:           p.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphPollOption(o *repository.PollOptionResult) *gqlmodel.PollOption {
+	if o == nil {
+		return nil
+	}
+	return &gqlmodel.PollOption{
+		ID:        encodeGraphID("pollOption", o.Option.ID),
+		Label:     o.Option.Label,
+		VoteCount: int32(o.VoteCount),
+		VotedByMe: o.VotedByMe,
 	}
 }
 

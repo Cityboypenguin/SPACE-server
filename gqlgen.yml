@@ -160,6 +160,8 @@ models:
         resolver: true
   Message:
     fields:
+      userID:
+        resolver: true
       user:
         resolver: true
       room:
@@ -175,6 +177,24 @@ models:
   Notification:
     fields:
       actor:
+        resolver: true
+  Question:
+    fields:
+      user:
+        resolver: true
+      answers:
+        resolver: true
+      bestAnswer:
+        resolver: true
+  Answer:
+    fields:
+      user:
+        resolver: true
+  Poll:
+    fields:
+      user:
+        resolver: true
+      options:
         resolver: true
   # The GraphQL spec explicitly states that the Int type is a signed 32-bit
   # integer. Using Go int or int64 to represent it can lead to unexpected

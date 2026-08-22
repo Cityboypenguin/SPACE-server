@@ -3,6 +3,10 @@
 # ---- dev ----
 FROM golang:1.25-alpine AS dev
 WORKDIR /app
+# curl is required by cmd/scraper: the target syllabus site only offers a classic
+# DHE (non-ECDHE) TLS cipher suite, which Go's crypto/tls does not implement, so
+# that command shells out to curl (backed by OpenSSL) instead of net/http.
+RUN apk add --no-cache curl
 RUN go install github.com/air-verse/air@latest
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]

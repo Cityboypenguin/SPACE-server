@@ -5,6 +5,7 @@ import "time"
 const (
 	RoomTypeCommunity = "community"
 	RoomTypeDM        = "dm"
+	RoomTypeCourse    = "course"
 )
 
 type Room struct {

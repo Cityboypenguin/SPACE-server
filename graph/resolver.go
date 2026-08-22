@@ -6,24 +6,31 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
-	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
+	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
+	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
+	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	favoriteuser "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
+	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
+	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
+	timetableusecase "github.com/Cityboypenguin/SPACE-server/usecase/timetable"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
 
@@ -68,6 +75,9 @@ type Resolver struct {
 
 	MessageRoomUseCases
 	CommunityUseCases
+	CourseUseCases
+	QuestionUseCases
+	PollUseCases
 
 	CreateReportUsecase reportusecase.CreateReportUsecase
 	ManageReportUsecase reportusecase.ManageReportUsecase
@@ -203,6 +213,37 @@ type CommunityUseCases struct {
 	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
 	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
 	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+}
+
+type CourseUseCases struct {
+	SearchCoursesUseCase                 courseusecase.SearchCoursesUseCase
+	GetCourseByIDUseCase                 courseusecase.GetCourseByIDUseCase
+	RegisterTimetableUseCase             timetableusecase.RegisterTimetableUseCase
+	RemoveTimetableUseCase               timetableusecase.RemoveTimetableUseCase
+	SetTimetableProfileVisibilityUseCase timetableusecase.SetTimetableProfileVisibilityUseCase
+	ListTimetableUseCase                 timetableusecase.ListTimetableUseCase
+	GetCurrentSemesterUseCase            semesterusecase.GetCurrentSemesterUseCase
+	UpdateCurrentSemesterUseCase         semesterusecase.UpdateCurrentSemesterUseCase
+	CheckRoomWritableUseCase             courseusecase.CheckRoomWritableUseCase
+	GetOrCreateAnonymousIdentityUseCase  anonusecase.GetOrCreateAnonymousIdentityUseCase
+}
+
+type QuestionUseCases struct {
+	CreateQuestionUseCase   questionusecase.CreateQuestionUseCase
+	ListQuestionsUseCase    questionusecase.ListQuestionsUseCase
+	GetQuestionByIDUseCase  questionusecase.GetQuestionByIDUseCase
+	SelectBestAnswerUseCase questionusecase.SelectBestAnswerUseCase
+	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
+	ListAnswersUseCase      answerusecase.ListAnswersUseCase
+	GetAnswerByIDUseCase    answerusecase.GetAnswerByIDUseCase
+}
+
+type PollUseCases struct {
+	CreatePollUseCase            pollusecase.CreatePollUseCase
+	VotePollUseCase              pollusecase.VotePollUseCase
+	ListPollsUseCase             pollusecase.ListPollsUseCase
+	GetPollByIDUseCase           pollusecase.GetPollByIDUseCase
+	ListPollOptionResultsUseCase pollusecase.ListPollOptionResultsUseCase
 }
 
 type NotificationUseCases struct {
