@@ -157,6 +157,22 @@ func decodeGraphID(ctx context.Context, kind string, value string) (int64, error
 	return id, nil
 }
 
+// isCallerID reports whether userGraphID (an opaque "user"-kind ID, decoded before
+// any per-room anonymization is applied) refers to the currently authenticated
+// caller. Used to compute isMine on Message/Question/Answer so the frontend can
+// tell its own posts apart even when the author is displayed anonymously.
+func isCallerID(ctx context.Context, userGraphID string) bool {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return false
+	}
+	numericID, err := decodeGraphID(ctx, "user", userGraphID)
+	if err != nil {
+		return false
+	}
+	return numericID == claims.ID
+}
+
 // scheduleTermsBroadcast broadcasts "terms_updated" immediately if effectiveDate is
 // in the past or present, or schedules a one-shot timer to fire at effectiveDate.
 func scheduleTermsBroadcast(broker *sse.Broker, version string, effectiveDate time.Time) {

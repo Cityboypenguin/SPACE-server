@@ -5,6 +5,7 @@ import (
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -115,6 +116,34 @@ func toGraphCourse(c *model.Course) *gqlmodel.Course {
 		Semester:    c.Semester,
 		CreatedAt:   c.CreatedAt.Format(timeFormat),
 	}
+}
+
+func toGraphCourseImportStatus(status courseimport.Status) *gqlmodel.CourseImportStatus {
+	out := &gqlmodel.CourseImportStatus{
+		State: gqlmodel.CourseImportState(status.State),
+	}
+	if status.Year != 0 {
+		year := int32(status.Year)
+		out.Year = &year
+	}
+	if status.State == courseimport.StateSucceeded {
+		imported := int32(status.Imported)
+		skipped := int32(status.Skipped)
+		out.Imported = &imported
+		out.Skipped = &skipped
+	}
+	if status.ErrorMessage != "" {
+		out.ErrorMessage = &status.ErrorMessage
+	}
+	if status.StartedAt != nil {
+		startedAt := status.StartedAt.Format(timeFormat)
+		out.StartedAt = &startedAt
+	}
+	if status.FinishedAt != nil {
+		finishedAt := status.FinishedAt.Format(timeFormat)
+		out.FinishedAt = &finishedAt
+	}
+	return out
 }
 
 func toGraphTimetableEntry(t *model.Timetable, course *model.Course) *gqlmodel.TimetableEntry {

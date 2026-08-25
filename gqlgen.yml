@@ -168,6 +168,8 @@ models:
         resolver: true
       media:
         resolver: true
+      isMine:
+        resolver: true
   Favorite:
     fields:
       user:
@@ -186,9 +188,13 @@ models:
         resolver: true
       bestAnswer:
         resolver: true
+      isMine:
+        resolver: true
   Answer:
     fields:
       user:
+        resolver: true
+      isMine:
         resolver: true
   Poll:
     fields:

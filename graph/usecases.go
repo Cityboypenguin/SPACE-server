@@ -46,7 +46,7 @@ func NewCourseUseCases(
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 ) CourseUseCases {
 	return CourseUseCases{
-		SearchCoursesUseCase:                 courseusecase.NewSearchCoursesUseCase(courseRepo),
+		SearchCoursesUseCase:                 courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
 		GetCourseByIDUseCase:                 courseusecase.NewGetCourseByIDUseCase(courseRepo),
 		RegisterTimetableUseCase:             timetableusecase.NewRegisterTimetableUseCase(timetableRepo),
 		RemoveTimetableUseCase:               timetableusecase.NewRemoveTimetableUseCase(timetableRepo),
@@ -56,6 +56,9 @@ func NewCourseUseCases(
 		UpdateCurrentSemesterUseCase:         semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		CheckRoomWritableUseCase:             courseusecase.NewCheckRoomWritableUseCase(courseRepo, settingRepo),
 		GetOrCreateAnonymousIdentityUseCase:  anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo),
+		ImportCoursesUseCase:                 courseusecase.NewImportCoursesUseCase(courseRepo),
+		ListCoursesUseCase:                   courseusecase.NewListCoursesUseCase(courseRepo),
+		ListCourseYearsUseCase:               courseusecase.NewListCourseYearsUseCase(courseRepo),
 	}
 }
 

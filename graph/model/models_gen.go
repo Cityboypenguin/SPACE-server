@@ -109,6 +109,7 @@ type Answer struct {
 	User       *User  `json:"user"`
 	Body       string `json:"body"`
 	CreatedAt  string `json:"createdAt"`
+	IsMine     bool   `json:"isMine"`
 }
 
 type Blocker struct {
@@ -169,6 +170,16 @@ type Course struct {
 	Year        int32  `json:"year"`
 	Semester    string `json:"semester"`
 	CreatedAt   string `json:"createdAt"`
+}
+
+type CourseImportStatus struct {
+	State        CourseImportState `json:"state"`
+	Year         *int32            `json:"year,omitempty"`
+	Imported     *int32            `json:"imported,omitempty"`
+	Skipped      *int32            `json:"skipped,omitempty"`
+	ErrorMessage *string           `json:"errorMessage,omitempty"`
+	StartedAt    *string           `json:"startedAt,omitempty"`
+	FinishedAt   *string           `json:"finishedAt,omitempty"`
 }
 
 type CoursePage struct {
@@ -313,6 +324,7 @@ type Message struct {
 	Media     []*Media `json:"media"`
 	CreatedAt string   `json:"createdAt"`
 	UpdatedAt string   `json:"updatedAt"`
+	IsMine    bool     `json:"isMine"`
 }
 
 type MessagePage struct {
@@ -442,6 +454,7 @@ type Question struct {
 	Answers    []*Answer `json:"answers"`
 	CreatedAt  string    `json:"createdAt"`
 	UpdatedAt  string    `json:"updatedAt"`
+	IsMine     bool      `json:"isMine"`
 }
 
 type QuestionPage struct {
@@ -673,6 +686,65 @@ func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
 }
 
 func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseImportState string
+
+const (
+	CourseImportStateIdle      CourseImportState = "IDLE"
+	CourseImportStateRunning   CourseImportState = "RUNNING"
+	CourseImportStateSucceeded CourseImportState = "SUCCEEDED"
+	CourseImportStateFailed    CourseImportState = "FAILED"
+)
+
+var AllCourseImportState = []CourseImportState{
+	CourseImportStateIdle,
+	CourseImportStateRunning,
+	CourseImportStateSucceeded,
+	CourseImportStateFailed,
+}
+
+func (e CourseImportState) IsValid() bool {
+	switch e {
+	case CourseImportStateIdle, CourseImportStateRunning, CourseImportStateSucceeded, CourseImportStateFailed:
+		return true
+	}
+	return false
+}
+
+func (e CourseImportState) String() string {
+	return string(e)
+}
+
+func (e *CourseImportState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseImportState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseImportState", str)
+	}
+	return nil
+}
+
+func (e CourseImportState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseImportState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseImportState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

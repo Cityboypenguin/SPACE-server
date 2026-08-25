@@ -29,6 +29,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
@@ -124,6 +125,7 @@ func main() {
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	courseRepository := mysql.NewMySQLCourseRepository(database)
+	courseImportTracker := courseimport.NewTracker()
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
 	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
 	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
@@ -499,6 +501,8 @@ func main() {
 		SSEBroker: sseBroker,
 
 		PubSub: ps,
+
+		CourseImportTracker: courseImportTracker,
 	}
 
 	// middleware

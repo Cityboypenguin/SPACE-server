@@ -121,10 +121,21 @@ type Query {
   ): CoursePage!
   myTimetable(year: Int, semester: String): [TimetableEntry!]!
   currentSemester: CurrentSemester!
+  courseYears: [Int!]!
   questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
   question(id: ID!): Question
   polls(roomID: ID!, limit: Int = 50, offset: Int = 0): PollPage!
   poll(id: ID!): Poll
+  adminCourseImportStatus: CourseImportStatus!
+  adminListCourseYears: [Int!]!
+  adminListCourses(
+    year: Int
+    semester: String
+    dayOfWeek: String
+    keyword: String
+    limit: Int = 20
+    offset: Int = 0
+  ): CoursePage!
 }
 
 type User {
@@ -267,6 +278,7 @@ type Mutation {
   selectBestAnswer(questionID: ID!, answerID: ID!): Question!
   createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false): Poll!
   votePoll(pollID: ID!, optionIDs: [ID!]!): Poll!
+  adminTriggerCourseImport(year: Int!): CourseImportStatus!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
   updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
@@ -471,6 +483,7 @@ type Message {
   media: [Media!]!
   createdAt: String!
   updatedAt: String!
+  isMine: Boolean!
 }
 
 type MessagePage {
@@ -583,6 +596,23 @@ type CurrentSemester {
   semester: String!
 }
 
+enum CourseImportState {
+  IDLE
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+type CourseImportStatus {
+  state: CourseImportState!
+  year: Int
+  imported: Int
+  skipped: Int
+  errorMessage: String
+  startedAt: String
+  finishedAt: String
+}
+
 type Question {
   ID: ID!
   roomID: ID!
@@ -593,6 +623,7 @@ type Question {
   answers: [Answer!]!
   createdAt: String!
   updatedAt: String!
+  isMine: Boolean!
 }
 
 type Answer {
@@ -601,6 +632,7 @@ type Answer {
   user: User!
   body: String!
   createdAt: String!
+  isMine: Boolean!
 }
 
 type QuestionPage {

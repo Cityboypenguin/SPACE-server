@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -23,6 +24,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
+	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
@@ -54,6 +56,11 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 		return nil, err
 	}
 	return toGraphUser(u), nil
+}
+
+// IsMine is the resolver for the isMine field.
+func (r *answerResolver) IsMine(ctx context.Context, obj *gqlmodel.Answer) (bool, error) {
+	return isCallerID(ctx, obj.User.ID), nil
 }
 
 // User is the resolver for the user field on Favorite.
@@ -157,6 +164,11 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
 	}
 	return result, nil
+}
+
+// IsMine is the resolver for the isMine field.
+func (r *messageResolver) IsMine(ctx context.Context, obj *gqlmodel.Message) (bool, error) {
+	return isCallerID(ctx, obj.UserID), nil
 }
 
 // SendEmailOtp is the resolver for the sendEmailOTP field.
@@ -965,6 +977,33 @@ func (r *mutationResolver) VotePoll(ctx context.Context, pollID string, optionID
 	gqlP := toGraphPoll(p)
 	r.PubSub.Publish(pollID+":poll:updated", gqlP)
 	return gqlP, nil
+}
+
+// AdminTriggerCourseImport is the resolver for the adminTriggerCourseImport field.
+func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32) (*gqlmodel.CourseImportStatus, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context) (int, int, error) {
+		sc, err := scraper.NewSenshuSyllabusScraper()
+		if err != nil {
+			return 0, 0, err
+		}
+		defer sc.Close()
+		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year))
+		if err != nil {
+			return 0, skippedRows, err
+		}
+		result, err := r.ImportCoursesUseCase.Execute(bgCtx, scraped)
+		if err != nil {
+			return 0, skippedRows, err
+		}
+		return result.Imported, skippedRows + result.Skipped, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCourseImportStatus(status), nil
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
@@ -1890,19 +1929,26 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 	if err != nil {
 		return false, fmt.Errorf("invalid room id")
 	}
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil {
-		return false, fmt.Errorf("failed to verify room membership")
+		return false, fmt.Errorf("failed to get room")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return false, errors.New("forbidden: not a member of this room")
+	var memberIDs []int64
+	if room == nil || room.Type != model.RoomTypeCourse {
+		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+		if err != nil {
+			return false, fmt.Errorf("failed to verify room membership")
+		}
+		if !containsInt64(memberIDs, claims.ID) {
+			return false, errors.New("forbidden: not a member of this room")
+		}
 	}
 	if err := r.MarkRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
 		return false, err
 	}
 
 	// DM ルームを既読にした際は、相手からの DM 通知も既読にする
-	if room, rerr := r.GetRoomUseCase.Execute(ctx, rid); rerr == nil && room != nil && room.Type == model.RoomTypeDM {
+	if room != nil && room.Type == model.RoomTypeDM {
 		for _, memberID := range memberIDs {
 			if memberID == claims.ID {
 				continue
@@ -2963,12 +3009,17 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		return nil, err
 	}
 
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
+	var memberIDs []int64
+	if room == nil || room.Type != model.RoomTypeCourse {
+		// 授業内チャットは全授業公開のため誰でも閲覧できる。それ以外の room は
+		// 従来通り room_users membership（または管理者）を要求する。
+		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify room membership")
+		}
+		if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
+			return nil, errors.New("forbidden: not a member of this room")
+		}
 	}
 
 	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
@@ -3844,6 +3895,24 @@ func (r *queryResolver) CurrentSemester(ctx context.Context) (*gqlmodel.CurrentS
 	return &gqlmodel.CurrentSemester{Year: int32(year), Semester: semesterName}, nil
 }
 
+// CourseYears is the resolver for the courseYears field.
+func (r *queryResolver) CourseYears(ctx context.Context) ([]int32, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	years, err := r.ListCourseYearsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]int32, 0, len(years))
+	for _, y := range years {
+		result = append(result, int32(y))
+	}
+	return result, nil
+}
+
 // Questions is the resolver for the questions field.
 func (r *queryResolver) Questions(ctx context.Context, roomID string, limit *int32, offset *int32) (*gqlmodel.QuestionPage, error) {
 	claims, err := requireAuth(ctx)
@@ -3960,6 +4029,75 @@ func (r *queryResolver) Poll(ctx context.Context, id string) (*gqlmodel.Poll, er
 	return toGraphPoll(p), nil
 }
 
+// AdminCourseImportStatus is the resolver for the adminCourseImportStatus field.
+func (r *queryResolver) AdminCourseImportStatus(ctx context.Context) (*gqlmodel.CourseImportStatus, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	return toGraphCourseImportStatus(r.CourseImportTracker.Get()), nil
+}
+
+// AdminListCourseYears is the resolver for the adminListCourseYears field.
+func (r *queryResolver) AdminListCourseYears(ctx context.Context) ([]int32, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	years, err := r.ListCourseYearsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]int32, 0, len(years))
+	for _, y := range years {
+		result = append(result, int32(y))
+	}
+	return result, nil
+}
+
+// AdminListCourses is the resolver for the adminListCourses field.
+func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	var y *int
+	if year != nil {
+		v := int(*year)
+		y = &v
+	}
+	kw := ""
+	if keyword != nil {
+		kw = *keyword
+	}
+	l, o := 20, 0
+	if limit != nil {
+		l = int(*limit)
+	}
+	if offset != nil {
+		o = int(*offset)
+	}
+
+	items, total, err := r.ListCoursesUseCase.Execute(ctx, courseusecase.ListCoursesParam{
+		Year:      y,
+		Semester:  semester,
+		DayOfWeek: dayOfWeek,
+		Keyword:   kw,
+		Limit:     l,
+		Offset:    o,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	gqlItems := make([]*gqlmodel.Course, 0, len(items))
+	for _, c := range items {
+		gqlItems = append(gqlItems, toGraphCourse(c))
+	}
+
+	return &gqlmodel.CoursePage{Items: gqlItems, Total: int32(total)}, nil
+}
+
 // User is the resolver for the user field.
 func (r *questionResolver) User(ctx context.Context, obj *gqlmodel.Question) (*gqlmodel.User, error) {
 	numericUserID, err := decodeGraphID(ctx, "user", obj.User.ID)
@@ -4013,6 +4151,11 @@ func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question) 
 	return result, nil
 }
 
+// IsMine is the resolver for the isMine field.
+func (r *questionResolver) IsMine(ctx context.Context, obj *gqlmodel.Question) (bool, error) {
+	return isCallerID(ctx, obj.User.ID), nil
+}
+
 // MessageAdded is the resolver for the messageAdded field.
 func (r *subscriptionResolver) MessageAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Message, error) {
 	return r.messageSubscription(ctx, roomID, roomID+":message:added")
@@ -4040,12 +4183,18 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
+		return nil, fmt.Errorf("failed to get room")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
+	if room == nil || room.Type != model.RoomTypeCourse {
+		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify room membership")
+		}
+		if !containsInt64(memberIDs, claims.ID) {
+			return nil, errors.New("forbidden: not a member of this room")
+		}
 	}
 
 	currentUserGraphID := encodeGraphID("user", claims.ID)

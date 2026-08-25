@@ -3,6 +3,7 @@ package graph
 import (
 	"sync/atomic"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -96,6 +97,8 @@ type Resolver struct {
 	SSEBroker *sse.Broker
 
 	PubSub *pubsub.PubSub
+
+	CourseImportTracker *courseimport.Tracker
 
 	CreateBlockUseCase            block.BlockUserUseCase
 	DeleteBlockUseCase            block.DeleteBlockerUseCase
@@ -226,6 +229,9 @@ type CourseUseCases struct {
 	UpdateCurrentSemesterUseCase         semesterusecase.UpdateCurrentSemesterUseCase
 	CheckRoomWritableUseCase             courseusecase.CheckRoomWritableUseCase
 	GetOrCreateAnonymousIdentityUseCase  anonusecase.GetOrCreateAnonymousIdentityUseCase
+	ImportCoursesUseCase                 courseusecase.ImportCoursesUseCase
+	ListCoursesUseCase                   courseusecase.ListCoursesUseCase
+	ListCourseYearsUseCase               courseusecase.ListCourseYearsUseCase
 }
 
 type QuestionUseCases struct {

@@ -139,6 +139,7 @@ type ComplexityRoot struct {
 		Body       func(childComplexity int) int
 		CreatedAt  func(childComplexity int) int
 		ID         func(childComplexity int) int
+		IsMine     func(childComplexity int) int
 		QuestionID func(childComplexity int) int
 		User       func(childComplexity int) int
 	}
@@ -196,6 +197,16 @@ type ComplexityRoot struct {
 		Semester    func(childComplexity int) int
 		TeacherName func(childComplexity int) int
 		Year        func(childComplexity int) int
+	}
+
+	CourseImportStatus struct {
+		ErrorMessage func(childComplexity int) int
+		FinishedAt   func(childComplexity int) int
+		Imported     func(childComplexity int) int
+		Skipped      func(childComplexity int) int
+		StartedAt    func(childComplexity int) int
+		State        func(childComplexity int) int
+		Year         func(childComplexity int) int
 	}
 
 	CoursePage struct {
@@ -260,6 +271,7 @@ type ComplexityRoot struct {
 		Content   func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
+		IsMine    func(childComplexity int) int
 		Media     func(childComplexity int) int
 		Room      func(childComplexity int) int
 		RoomID    func(childComplexity int) int
@@ -277,6 +289,7 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
 		AdminDeletePost                   func(childComplexity int, id string) int
+		AdminTriggerCourseImport          func(childComplexity int, year int32) int
 		AdminUpdateProfile                func(childComplexity int, userID string, input model.UpdateProfileInput) int
 		AdminUpdateUser                   func(childComplexity int, id string, input model.UpdateUserInput) int
 		AnswerQuestion                    func(childComplexity int, questionID string, body string) int
@@ -455,6 +468,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AdminCourseImportStatus         func(childComplexity int) int
 		AdminGetAnalytics               func(childComplexity int) int
 		AdminGetBlockers                func(childComplexity int, userID string) int
 		AdminGetCommunityAnalytics      func(childComplexity int, limit *int32, offset *int32) int
@@ -462,11 +476,14 @@ type ComplexityRoot struct {
 		AdminGetTimeSeries              func(childComplexity int, granularity model.TimeSeriesGranularity, from string, to string) int
 		AdminListAnnouncements          func(childComplexity int, limit *int32, offset *int32) int
 		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
+		AdminListCourseYears            func(childComplexity int) int
+		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int) int
 		Administrators                  func(childComplexity int, limit *int32, offset *int32) int
 		Announcement                    func(childComplexity int, id string) int
 		Announcements                   func(childComplexity int, limit *int32, offset *int32) int
 		Communities                     func(childComplexity int, limit *int32, offset *int32) int
+		CourseYears                     func(childComplexity int) int
 		CurrentSemester                 func(childComplexity int) int
 		CurrentTerms                    func(childComplexity int) int
 		Favorites                       func(childComplexity int) int
@@ -539,6 +556,7 @@ type ComplexityRoot struct {
 		CreatedAt  func(childComplexity int) int
 		ID         func(childComplexity int) int
 		IsAnswered func(childComplexity int) int
+		IsMine     func(childComplexity int) int
 		RoomID     func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 		User       func(childComplexity int) int
@@ -680,6 +698,8 @@ type ComplexityRoot struct {
 
 type AnswerResolver interface {
 	User(ctx context.Context, obj *model.Answer) (*model.User, error)
+
+	IsMine(ctx context.Context, obj *model.Answer) (bool, error)
 }
 type FavoriteResolver interface {
 	User(ctx context.Context, obj *model.Favorite) (*model.User, error)
@@ -691,6 +711,8 @@ type MessageResolver interface {
 	User(ctx context.Context, obj *model.Message) (*model.User, error)
 
 	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
+
+	IsMine(ctx context.Context, obj *model.Message) (bool, error)
 }
 type MutationResolver interface {
 	SendEmailOtp(ctx context.Context, email string) (bool, error)
@@ -732,6 +754,7 @@ type MutationResolver interface {
 	SelectBestAnswer(ctx context.Context, questionID string, answerID string) (*model.Question, error)
 	CreatePoll(ctx context.Context, roomID string, question string, options []string, allowMultipleChoice *bool) (*model.Poll, error)
 	VotePoll(ctx context.Context, pollID string, optionIDs []string) (*model.Poll, error)
+	AdminTriggerCourseImport(ctx context.Context, year int32) (*model.CourseImportStatus, error)
 	AdminUpdateUser(ctx context.Context, id string, input model.UpdateUserInput) (*model.User, error)
 	AdminUpdateProfile(ctx context.Context, userID string, input model.UpdateProfileInput) (*model.Profile, error)
 	UpdateCommunity(ctx context.Context, id string, input model.UpdateCommunityInput) (*model.Community, error)
@@ -860,16 +883,22 @@ type QueryResolver interface {
 	SearchCourses(ctx context.Context, dayOfWeek string, period int32, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
 	MyTimetable(ctx context.Context, year *int32, semester *string) ([]*model.TimetableEntry, error)
 	CurrentSemester(ctx context.Context) (*model.CurrentSemester, error)
+	CourseYears(ctx context.Context) ([]int32, error)
 	Questions(ctx context.Context, roomID string, limit *int32, offset *int32) (*model.QuestionPage, error)
 	Question(ctx context.Context, id string) (*model.Question, error)
 	Polls(ctx context.Context, roomID string, limit *int32, offset *int32) (*model.PollPage, error)
 	Poll(ctx context.Context, id string) (*model.Poll, error)
+	AdminCourseImportStatus(ctx context.Context) (*model.CourseImportStatus, error)
+	AdminListCourseYears(ctx context.Context) ([]int32, error)
+	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
 }
 type QuestionResolver interface {
 	User(ctx context.Context, obj *model.Question) (*model.User, error)
 
 	BestAnswer(ctx context.Context, obj *model.Question) (*model.Answer, error)
 	Answers(ctx context.Context, obj *model.Question) ([]*model.Answer, error)
+
+	IsMine(ctx context.Context, obj *model.Question) (bool, error)
 }
 type SubscriptionResolver interface {
 	MessageAdded(ctx context.Context, roomID string) (<-chan *model.Message, error)
@@ -1354,6 +1383,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Answer.ID(childComplexity), true
+	case "Answer.isMine":
+		if e.ComplexityRoot.Answer.IsMine == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Answer.IsMine(childComplexity), true
 	case "Answer.questionID":
 		if e.ComplexityRoot.Answer.QuestionID == nil {
 			break
@@ -1578,6 +1613,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Course.Year(childComplexity), true
 
+	case "CourseImportStatus.errorMessage":
+		if e.ComplexityRoot.CourseImportStatus.ErrorMessage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.ErrorMessage(childComplexity), true
+	case "CourseImportStatus.finishedAt":
+		if e.ComplexityRoot.CourseImportStatus.FinishedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.FinishedAt(childComplexity), true
+	case "CourseImportStatus.imported":
+		if e.ComplexityRoot.CourseImportStatus.Imported == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.Imported(childComplexity), true
+	case "CourseImportStatus.skipped":
+		if e.ComplexityRoot.CourseImportStatus.Skipped == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.Skipped(childComplexity), true
+	case "CourseImportStatus.startedAt":
+		if e.ComplexityRoot.CourseImportStatus.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.StartedAt(childComplexity), true
+	case "CourseImportStatus.state":
+		if e.ComplexityRoot.CourseImportStatus.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.State(childComplexity), true
+	case "CourseImportStatus.year":
+		if e.ComplexityRoot.CourseImportStatus.Year == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.Year(childComplexity), true
+
 	case "CoursePage.items":
 		if e.ComplexityRoot.CoursePage.Items == nil {
 			break
@@ -1791,6 +1869,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.ID(childComplexity), true
+	case "Message.isMine":
+		if e.ComplexityRoot.Message.IsMine == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.IsMine(childComplexity), true
 	case "Message.media":
 		if e.ComplexityRoot.Message.Media == nil {
 			break
@@ -1869,6 +1953,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminDeletePost(childComplexity, args["id"].(string)), true
+	case "Mutation.adminTriggerCourseImport":
+		if e.ComplexityRoot.Mutation.AdminTriggerCourseImport == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminTriggerCourseImport_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminTriggerCourseImport(childComplexity, args["year"].(int32)), true
 	case "Mutation.adminUpdateProfile":
 		if e.ComplexityRoot.Mutation.AdminUpdateProfile == nil {
 			break
@@ -3076,6 +3171,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Profile.Username(childComplexity), true
 
+	case "Query.adminCourseImportStatus":
+		if e.ComplexityRoot.Query.AdminCourseImportStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminCourseImportStatus(childComplexity), true
 	case "Query.adminGetAnalytics":
 		if e.ComplexityRoot.Query.AdminGetAnalytics == nil {
 			break
@@ -3148,6 +3249,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminListConsents(childComplexity, args["termsID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminListCourseYears":
+		if e.ComplexityRoot.Query.AdminListCourseYears == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminListCourseYears(childComplexity), true
+	case "Query.adminListCourses":
+		if e.ComplexityRoot.Query.AdminListCourses == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListCourses_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListCourses(childComplexity, args["year"].(*int32), args["semester"].(*string), args["dayOfWeek"].(*string), args["keyword"].(*string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListTerms":
 		if e.ComplexityRoot.Query.AdminListTerms == nil {
 			break
@@ -3198,6 +3316,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Communities(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.courseYears":
+		if e.ComplexityRoot.Query.CourseYears == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.CourseYears(childComplexity), true
 	case "Query.currentSemester":
 		if e.ComplexityRoot.Query.CurrentSemester == nil {
 			break
@@ -3864,6 +3988,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Question.IsAnswered(childComplexity), true
+	case "Question.isMine":
+		if e.ComplexityRoot.Question.IsMine == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Question.IsMine(childComplexity), true
 	case "Question.roomID":
 		if e.ComplexityRoot.Question.RoomID == nil {
 			break
@@ -4748,6 +4878,8 @@ func (ec *executionContext) childFields_Answer(ctx context.Context, field graphq
 		return ec.fieldContext_Answer_body(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Answer_createdAt(ctx, field)
+	case "isMine":
+		return ec.fieldContext_Answer_isMine(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Answer", field.Name)
 }
@@ -4860,6 +4992,26 @@ func (ec *executionContext) childFields_Course(ctx context.Context, field graphq
 		return ec.fieldContext_Course_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Course", field.Name)
+}
+
+func (ec *executionContext) childFields_CourseImportStatus(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "state":
+		return ec.fieldContext_CourseImportStatus_state(ctx, field)
+	case "year":
+		return ec.fieldContext_CourseImportStatus_year(ctx, field)
+	case "imported":
+		return ec.fieldContext_CourseImportStatus_imported(ctx, field)
+	case "skipped":
+		return ec.fieldContext_CourseImportStatus_skipped(ctx, field)
+	case "errorMessage":
+		return ec.fieldContext_CourseImportStatus_errorMessage(ctx, field)
+	case "startedAt":
+		return ec.fieldContext_CourseImportStatus_startedAt(ctx, field)
+	case "finishedAt":
+		return ec.fieldContext_CourseImportStatus_finishedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CourseImportStatus", field.Name)
 }
 
 func (ec *executionContext) childFields_CoursePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4998,6 +5150,8 @@ func (ec *executionContext) childFields_Message(ctx context.Context, field graph
 		return ec.fieldContext_Message_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_Message_updatedAt(ctx, field)
+	case "isMine":
+		return ec.fieldContext_Message_isMine(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Message", field.Name)
 }
@@ -5232,6 +5386,8 @@ func (ec *executionContext) childFields_Question(ctx context.Context, field grap
 		return ec.fieldContext_Question_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_Question_updatedAt(ctx, field)
+	case "isMine":
+		return ec.fieldContext_Question_isMine(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Question", field.Name)
 }
@@ -5611,6 +5767,20 @@ func (ec *executionContext) field_Mutation_adminDeletePost_args(ctx context.Cont
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminTriggerCourseImport_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "year",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["year"] = arg0
 	return args, nil
 }
 
@@ -7033,6 +7203,60 @@ func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Conte
 		return nil, err
 	}
 	args["offset"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_adminListCourses_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "year",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["year"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "semester",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["semester"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "dayOfWeek",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["dayOfWeek"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg5
 	return args, nil
 }
 
@@ -10087,6 +10311,29 @@ func (ec *executionContext) fieldContext_Answer_createdAt(_ context.Context, fie
 	return graphql.NewScalarFieldContext("Answer", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Answer_isMine(ctx context.Context, field graphql.CollectedField, obj *model.Answer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Answer_isMine(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Answer().IsMine(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Answer_isMine(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Answer", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Blocker_ID(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10894,6 +11141,167 @@ func (ec *executionContext) _Course_createdAt(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Course_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_state(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.CourseImportState) graphql.Marshaler {
+			return ec.marshalNCourseImportState2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type CourseImportState does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_year(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_year(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Year, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_imported(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_imported(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Imported, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_imported(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_skipped(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_skipped(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Skipped, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_skipped(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_errorMessage(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_errorMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ErrorMessage, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_errorMessage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_startedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_finishedAt(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_finishedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FinishedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CoursePage_items(ctx context.Context, field graphql.CollectedField, obj *model.CoursePage) (ret graphql.Marshaler) {
@@ -11886,6 +12294,29 @@ func (ec *executionContext) _Message_updatedAt(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_Message_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Message_isMine(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_isMine(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Message().IsMine(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Message_isMine(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Message", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _MessagePage_items(ctx context.Context, field graphql.CollectedField, obj *model.MessagePage) (ret graphql.Marshaler) {
@@ -13655,6 +14086,50 @@ func (ec *executionContext) fieldContext_Mutation_votePoll(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_votePoll_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminTriggerCourseImport(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminTriggerCourseImport(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminTriggerCourseImport(ctx, fc.Args["year"].(int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CourseImportStatus) graphql.Marshaler {
+			return ec.marshalNCourseImportStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminTriggerCourseImport(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CourseImportStatus(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminTriggerCourseImport_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19824,6 +20299,29 @@ func (ec *executionContext) fieldContext_Query_currentSemester(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_courseYears(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_courseYears(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().CourseYears(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []int32) graphql.Marshaler {
+			return ec.marshalNInt2ᚕint32ᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_courseYears(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _Query_questions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19994,6 +20492,105 @@ func (ec *executionContext) fieldContext_Query_poll(ctx context.Context, field g
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_poll_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminCourseImportStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminCourseImportStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminCourseImportStatus(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CourseImportStatus) graphql.Marshaler {
+			return ec.marshalNCourseImportStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminCourseImportStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CourseImportStatus(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminListCourseYears(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminListCourseYears(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminListCourseYears(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []int32) graphql.Marshaler {
+			return ec.marshalNInt2ᚕint32ᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminListCourseYears(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_adminListCourses(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminListCourses(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListCourses(ctx, fc.Args["year"].(*int32), fc.Args["semester"].(*string), fc.Args["dayOfWeek"].(*string), fc.Args["keyword"].(*string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CoursePage) graphql.Marshaler {
+			return ec.marshalNCoursePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCoursePage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminListCourses(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CoursePage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListCourses_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -20308,6 +20905,29 @@ func (ec *executionContext) _Question_updatedAt(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_Question_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Question", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Question_isMine(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Question_isMine(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Question().IsMine(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Question_isMine(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Question", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _QuestionPage_items(ctx context.Context, field graphql.CollectedField, obj *model.QuestionPage) (ret graphql.Marshaler) {
@@ -25193,6 +25813,42 @@ func (ec *executionContext) _Answer(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "isMine":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Answer_isMine(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -25599,6 +26255,75 @@ func (ec *executionContext) _Course(ctx context.Context, sel ast.SelectionSet, o
 		case "createdAt":
 			out.Values[i] = ec._Course_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var courseImportStatusImplementors = []string{"CourseImportStatus"}
+
+func (ec *executionContext) _CourseImportStatus(ctx context.Context, sel ast.SelectionSet, obj *model.CourseImportStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, courseImportStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CourseImportStatus")
+		case "state":
+			out.Values[i] = ec._CourseImportStatus_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "year":
+			out.Values[i] = ec._CourseImportStatus_year(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "imported":
+			out.Values[i] = ec._CourseImportStatus_imported(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "skipped":
+			out.Values[i] = ec._CourseImportStatus_skipped(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "errorMessage":
+			out.Values[i] = ec._CourseImportStatus_errorMessage(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._CourseImportStatus_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "finishedAt":
+			out.Values[i] = ec._CourseImportStatus_finishedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -26327,6 +27052,42 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "isMine":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_isMine(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -26687,6 +27448,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "votePoll":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_votePoll(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminTriggerCourseImport":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminTriggerCourseImport(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -29570,6 +30338,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "courseYears":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_courseYears(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "questions":
 			field := field
 
@@ -29647,6 +30437,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_poll(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminCourseImportStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminCourseImportStatus(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListCourseYears":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListCourseYears(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListCourses":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListCourses(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -29844,6 +30700,42 @@ func (ec *executionContext) _Question(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "isMine":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Question_isMine(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -31568,6 +32460,30 @@ func (ec *executionContext) marshalNCourse2ᚖgithubᚗcomᚋCityboypenguinᚋSP
 	return ec._Course(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNCourseImportState2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportState(ctx context.Context, v any) (model.CourseImportState, error) {
+	var res model.CourseImportState
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCourseImportState2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportState(ctx context.Context, sel ast.SelectionSet, v model.CourseImportState) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNCourseImportStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportStatus(ctx context.Context, sel ast.SelectionSet, v model.CourseImportStatus) graphql.Marshaler {
+	return ec._CourseImportStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCourseImportStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportStatus(ctx context.Context, sel ast.SelectionSet, v *model.CourseImportStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CourseImportStatus(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCoursePage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCoursePage(ctx context.Context, sel ast.SelectionSet, v model.CoursePage) graphql.Marshaler {
 	return ec._CoursePage(ctx, sel, &v)
 }
@@ -31875,6 +32791,36 @@ func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.Selec
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNInt2ᚕint32ᚄ(ctx context.Context, v any) ([]int32, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]int32, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInt2int32(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNInt2ᚕint32ᚄ(ctx context.Context, sel ast.SelectionSet, v []int32) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNInt2int32(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐLoginInput(ctx context.Context, v any) (model.LoginInput, error) {
