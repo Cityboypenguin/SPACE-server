@@ -94,23 +94,26 @@ func (r *MySQLCourseRepository) GetCourseByRoomID(ctx context.Context, roomID in
 	return scanCourse(row)
 }
 
+// SearchByDayPeriod includes 通年 (full-year) courses alongside exact matches on
+// semester: a 通年 course occupies its slot in both terms, so it must be visible
+// (and registerable) whichever term the student is currently searching in.
 func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, limit, offset int) ([]*model.Course, int, error) {
 	searchParam := "%" + keyword + "%"
 
 	var total int
 	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND c.semester = ? AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)`,
-		dayOfWeek, period, year, semester, searchParam, searchParam,
+		`SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)`,
+		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT `+courseColumns+` FROM courses c
-		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND c.semester = ? AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
+		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
 		 ORDER BY c.course_name
 		 LIMIT ? OFFSET ?`,
-		dayOfWeek, period, year, semester, searchParam, searchParam, limit, offset,
+		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, err

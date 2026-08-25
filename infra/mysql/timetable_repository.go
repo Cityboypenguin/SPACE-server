@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -108,14 +110,17 @@ func (r *MySQLTimetableRepository) SetProfileVisibility(ctx context.Context, id,
 }
 
 func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64, year int, semester string) ([]*repository.TimetableEntryWithCourse, error) {
+	// 通年 (full-year) courses have a single courses row for the whole year and
+	// must show up in both semester's views, so they're included alongside an
+	// exact match on the requested semester rather than only exact matches.
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT t.id, t.user_id, t.course_id, t.is_profile_visible, t.created_at, t.updated_at,
 		       `+courseColumns+`
 		FROM timetables t
 		JOIN courses c ON t.course_id = c.id
-		WHERE t.user_id = ? AND c.year = ? AND c.semester = ?
+		WHERE t.user_id = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?)
 		ORDER BY FIELD(c.day_of_week, '月', '火', '水', '木', '金', '土'), c.period
-	`, userID, year, semester)
+	`, userID, year, semester, model.SemesterFull)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +144,149 @@ func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64,
 		list = append(list, &repository.TimetableEntryWithCourse{Timetable: &t, Course: &c})
 	}
 	return list, rows.Err()
+}
+
+// ReplaceForSemester implements the "edit mode" batch-commit flow: the whole
+// desired course list for a semester is applied in one transaction, guarded by an
+// optimistic-concurrency check against baselineEntryIDs. See the interface doc
+// comment for the full contract.
+func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userID int64, year int, semester string, baselineEntryIDs, desiredCourseIDs []int64) ([]*repository.TimetableEntryWithCourse, error) {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// FOR UPDATE locks the rows for the duration of the transaction so a concurrent
+	// ReplaceForSemester call for the same user/semester can't interleave between
+	// this check and the writes below. 通年 (full-year) entries are included (same
+	// as ListByUser) so the baseline the client diffed against - and the "current
+	// entries in this view" set used below - matches what was actually displayed.
+	rows, err := tx.QueryContext(ctx, `
+		SELECT t.id, t.course_id
+		FROM timetables t
+		JOIN courses c ON t.course_id = c.id
+		WHERE t.user_id = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?)
+		FOR UPDATE
+	`, userID, year, semester, model.SemesterFull)
+	if err != nil {
+		return nil, err
+	}
+	currentCourseByEntry := make(map[int64]int64)
+	for rows.Next() {
+		var entryID, courseID int64
+		if err := rows.Scan(&entryID, &courseID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		currentCourseByEntry[entryID] = courseID
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	if len(currentCourseByEntry) != len(baselineEntryIDs) {
+		return nil, repository.ErrTimetableConflict
+	}
+	for _, id := range baselineEntryIDs {
+		if _, ok := currentCourseByEntry[id]; !ok {
+			return nil, repository.ErrTimetableConflict
+		}
+	}
+
+	if err := checkNoSlotConflicts(ctx, tx, desiredCourseIDs); err != nil {
+		return nil, err
+	}
+
+	currentCourseIDs := make(map[int64]bool, len(currentCourseByEntry))
+	for _, courseID := range currentCourseByEntry {
+		currentCourseIDs[courseID] = true
+	}
+	desiredCourseSet := make(map[int64]bool, len(desiredCourseIDs))
+	for _, courseID := range desiredCourseIDs {
+		desiredCourseSet[courseID] = true
+	}
+
+	for entryID, courseID := range currentCourseByEntry {
+		if !desiredCourseSet[courseID] {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM timetables WHERE id = ?`, entryID); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	now := time.Now().Unix()
+	for _, courseID := range desiredCourseIDs {
+		if currentCourseIDs[courseID] {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO timetables (user_id, course_id, is_profile_visible, created_at, updated_at) VALUES (?, ?, TRUE, ?, ?)`,
+			userID, courseID, now, now,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.ListByUser(ctx, userID, year, semester)
+}
+
+// checkNoSlotConflicts returns repository.ErrTimetableSlotConflict if courseIDs
+// contains two courses occupying the same (day_of_week, period) slot.
+func checkNoSlotConflicts(ctx context.Context, tx *sql.Tx, courseIDs []int64) error {
+	if len(courseIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(courseIDs))
+	args := make([]any, len(courseIDs))
+	for i, id := range courseIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := tx.QueryContext(ctx,
+		`SELECT day_of_week, period FROM courses WHERE id IN (`+strings.Join(placeholders, ",")+`)`,
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	seen := make(map[string]bool, len(courseIDs))
+	for rows.Next() {
+		var day string
+		var period int
+		if err := rows.Scan(&day, &period); err != nil {
+			return err
+		}
+		key := day + ":" + strconv.Itoa(period)
+		if seen[key] {
+			return repository.ErrTimetableSlotConflict
+		}
+		seen[key] = true
+	}
+	return rows.Err()
+}
+
+func (r *MySQLTimetableRepository) IsRegistered(ctx context.Context, userID, courseID int64) (bool, error) {
+	var exists int
+	err := r.DB.QueryRowContext(ctx,
+		`SELECT 1 FROM timetables WHERE user_id = ? AND course_id = ? LIMIT 1`,
+		userID, courseID,
+	).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 type timetableScanner interface {

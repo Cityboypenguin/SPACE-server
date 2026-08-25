@@ -348,6 +348,7 @@ type ComplexityRoot struct {
 		SendEmailOtp                      func(childComplexity int, email string) int
 		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                         func(childComplexity int, objectKey string) int
+		SetMyTimetable                    func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
 		SetTimetableProfileVisibility     func(childComplexity int, id string, visible bool) int
 		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
@@ -748,6 +749,7 @@ type MutationResolver interface {
 	RegisterTimetableEntry(ctx context.Context, courseID string) (*model.TimetableEntry, error)
 	RemoveTimetableEntry(ctx context.Context, id string) (bool, error)
 	SetTimetableProfileVisibility(ctx context.Context, id string, visible bool) (*model.TimetableEntry, error)
+	SetMyTimetable(ctx context.Context, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*model.CurrentSemester, error)
 	CreateQuestion(ctx context.Context, roomID string, body string) (*model.Question, error)
 	AnswerQuestion(ctx context.Context, questionID string, body string) (*model.Answer, error)
@@ -2582,6 +2584,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAvatar(childComplexity, args["objectKey"].(string)), true
+	case "Mutation.setMyTimetable":
+		if e.ComplexityRoot.Mutation.SetMyTimetable == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMyTimetable_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMyTimetable(childComplexity, args["year"].(int32), args["semester"].(string), args["baselineEntryIDs"].([]string), args["courseIDs"].([]string)), true
 	case "Mutation.setReportServiceStatus":
 		if e.ComplexityRoot.Mutation.SetReportServiceStatus == nil {
 			break
@@ -6673,6 +6686,44 @@ func (ec *executionContext) field_Mutation_setAvatar_args(ctx context.Context, r
 		return nil, err
 	}
 	args["objectKey"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMyTimetable_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "year",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["year"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "semester",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["semester"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "baselineEntryIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["baselineEntryIDs"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "courseIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["courseIDs"] = arg3
 	return args, nil
 }
 
@@ -13822,6 +13873,50 @@ func (ec *executionContext) fieldContext_Mutation_setTimetableProfileVisibility(
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setTimetableProfileVisibility_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMyTimetable(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setMyTimetable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMyTimetable(ctx, fc.Args["year"].(int32), fc.Args["semester"].(string), fc.Args["baselineEntryIDs"].([]string), fc.Args["courseIDs"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TimetableEntry) graphql.Marshaler {
+			return ec.marshalNTimetableEntry2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setMyTimetable(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TimetableEntry(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMyTimetable_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -27406,6 +27501,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setTimetableProfileVisibility":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setTimetableProfileVisibility(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMyTimetable":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMyTimetable(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

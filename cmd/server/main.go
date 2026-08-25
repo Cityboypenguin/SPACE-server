@@ -441,8 +441,8 @@ func main() {
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
 		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository),
-		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, courseRepository, systemSettingRepository),
-		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository),
+		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, courseRepository, systemSettingRepository, timetableRepository),
+		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,

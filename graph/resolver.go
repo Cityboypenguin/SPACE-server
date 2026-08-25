@@ -225,6 +225,7 @@ type CourseUseCases struct {
 	RemoveTimetableUseCase               timetableusecase.RemoveTimetableUseCase
 	SetTimetableProfileVisibilityUseCase timetableusecase.SetTimetableProfileVisibilityUseCase
 	ListTimetableUseCase                 timetableusecase.ListTimetableUseCase
+	ReplaceTimetableUseCase              timetableusecase.ReplaceTimetableUseCase
 	GetCurrentSemesterUseCase            semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase         semesterusecase.UpdateCurrentSemesterUseCase
 	CheckRoomWritableUseCase             courseusecase.CheckRoomWritableUseCase

@@ -40,9 +40,15 @@ const (
 var (
 	timestampRe  = regexp.MustCompile(`name="timestamp"\s+value="([^"]*)"`)
 	totalCountRe = regexp.MustCompile(`件表示/([0-9,]+)件中`)
-	rowRe        = regexp.MustCompile(`(?s)<tr class="column_(?:odd|even)"[^>]*>\s*<td[^>]*>\s*\d+\s*</td>\s*<td>\s*<a href="([^"]+)"[^>]*>([^<]*)</a>\s*</td>\s*<td>([^<]*)</td>\s*<td>([^<]*)</td>\s*</tr>`)
+	// The period and teacher cells' content is captured non-greedily (rather than
+	// [^<]*) because either can contain an embedded <br/> - the period cell when a
+	// course meets in two slots per week, the teacher cell when co-taught - which
+	// would otherwise make the whole row (and thus the course) invisible to
+	// FindAllStringSubmatch instead of merely falling through to a skip below.
+	rowRe        = regexp.MustCompile(`(?s)<tr class="column_(?:odd|even)"[^>]*>\s*<td[^>]*>\s*\d+\s*</td>\s*<td>\s*<a href="([^"]+)"[^>]*>([^<]*)</a>\s*</td>\s*<td>(.*?)</td>\s*<td>(.*?)</td>\s*</tr>`)
 	kougicdRe    = regexp.MustCompile(`kougicd\)=(\d+)`)
-	periodCellRe = regexp.MustCompile(`^(前期|後期)\x{3000}(月|火|水|木|金|土)曜日\x{3000}(\d+)時限$`)
+	periodCellRe = regexp.MustCompile(`^(前期|後期|通年)\x{3000}(月|火|水|木|金|土)曜日\x{3000}(\d+)時限$`)
+	brTagRe      = regexp.MustCompile(`(?i)<br\s*/?>`)
 )
 
 // SenshuSyllabusScraper fetches the full course catalog for a given academic year
@@ -80,9 +86,10 @@ func (s *SenshuSyllabusScraper) Close() error {
 }
 
 // FetchCourses retrieves every course offered in the given academic year (both
-// semesters), across all departments. skipped counts listing rows that could not
-// be mapped to a single weekly day/period slot (e.g. 定時外 or 通年 offerings),
-// which the current timetable model does not represent.
+// semesters, plus 通年 full-year courses), across all departments. skipped counts
+// listing rows that could not be mapped to a single weekly day/period slot (e.g.
+// 定時外 non-standard-time offerings), which the current timetable model does not
+// represent.
 func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
 	body, err := s.get(ctx, senshuSearchDo)
 	if err != nil {
@@ -222,9 +229,9 @@ func extractTotalCount(body string) (int, error) {
 }
 
 // parseRows extracts one ScrapedCourseInput per listing row that names a single
-// weekly day/period slot. Rows for 定時外 (non-standard time) or 通年 (full-year)
-// offerings don't fit that shape and are reported back via the skipped count
-// instead of being silently dropped.
+// weekly day/period slot, including 通年 (full-year) rows (Semester will be "通年").
+// Rows for 定時外 (non-standard time) offerings don't fit that shape and are
+// reported back via the skipped count instead of being silently dropped.
 func parseRows(body string, year int) (courses []courseusecase.ScrapedCourseInput, skipped int) {
 	for _, m := range rowRe.FindAllStringSubmatch(body, -1) {
 		href, name, periodCell, teacher := m[1], m[2], m[3], m[4]
@@ -249,10 +256,14 @@ func parseRows(body string, year int) (courses []courseusecase.ScrapedCourseInpu
 			continue
 		}
 
+		// Co-taught courses separate teacher names with <br/> in this cell; join
+		// them with a full-width comma instead since TeacherName is a single field.
+		teacherName := strings.TrimSpace(html.UnescapeString(brTagRe.ReplaceAllString(teacher, "、")))
+
 		courses = append(courses, courseusecase.ScrapedCourseInput{
 			DayOfWeek:   dayOfWeek,
 			Period:      period,
-			TeacherName: strings.TrimSpace(html.UnescapeString(teacher)),
+			TeacherName: teacherName,
 			CourseName:  strings.TrimSpace(html.UnescapeString(name)),
 			Year:        year,
 			Semester:    semester,

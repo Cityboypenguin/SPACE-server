@@ -864,6 +864,38 @@ func (r *mutationResolver) SetTimetableProfileVisibility(ctx context.Context, id
 	return toGraphTimetableEntry(t, c), nil
 }
 
+// SetMyTimetable is the resolver for the setMyTimetable field.
+func (r *mutationResolver) SetMyTimetable(ctx context.Context, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*gqlmodel.TimetableEntry, error) {
+	baselineIDs := make([]int64, 0, len(baselineEntryIDs))
+	for _, id := range baselineEntryIDs {
+		numericID, err := decodeGraphID(ctx, "timetable", id)
+		if err != nil {
+			return nil, err
+		}
+		baselineIDs = append(baselineIDs, numericID)
+	}
+
+	cIDs := make([]int64, 0, len(courseIDs))
+	for _, id := range courseIDs {
+		numericID, err := decodeGraphID(ctx, "course", id)
+		if err != nil {
+			return nil, err
+		}
+		cIDs = append(cIDs, numericID)
+	}
+
+	entries, err := r.ReplaceTimetableUseCase.Execute(ctx, int(year), semester, baselineIDs, cIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.TimetableEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, toGraphTimetableEntry(e.Timetable, e.Course))
+	}
+	return result, nil
+}
+
 // UpdateCurrentSemester is the resolver for the updateCurrentSemester field.
 func (r *mutationResolver) UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*gqlmodel.CurrentSemester, error) {
 	if err := r.UpdateCurrentSemesterUseCase.Execute(ctx, int(year), semester); err != nil {
@@ -1391,8 +1423,8 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 	var memberIDs []int64
 	if room != nil && room.Type == model.RoomTypeCourse {
-		// 授業内チャットは登録不要で誰でも読み書きできるため room_users membership は
-		// 使わず、代わりに現在の学期と一致するか（アーカイブされていないか）だけ見る。
+		// 授業内チャットは room_users membership を使わず、現在の学期と一致するか
+		// （アーカイブされていないか）と、時間割に登録済みかを CheckRoomWritableUseCase 側で見る。
 		if err := r.CheckRoomWritableUseCase.Execute(ctx, rid); err != nil {
 			return nil, err
 		}

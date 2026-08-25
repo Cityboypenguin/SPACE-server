@@ -52,9 +52,10 @@ func NewCourseUseCases(
 		RemoveTimetableUseCase:               timetableusecase.NewRemoveTimetableUseCase(timetableRepo),
 		SetTimetableProfileVisibilityUseCase: timetableusecase.NewSetTimetableProfileVisibilityUseCase(timetableRepo),
 		ListTimetableUseCase:                 timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
+		ReplaceTimetableUseCase:              timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
 		GetCurrentSemesterUseCase:            semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:         semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
-		CheckRoomWritableUseCase:             courseusecase.NewCheckRoomWritableUseCase(courseRepo, settingRepo),
+		CheckRoomWritableUseCase:             courseusecase.NewCheckRoomWritableUseCase(courseRepo, settingRepo, timetableRepo),
 		GetOrCreateAnonymousIdentityUseCase:  anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo),
 		ImportCoursesUseCase:                 courseusecase.NewImportCoursesUseCase(courseRepo),
 		ListCoursesUseCase:                   courseusecase.NewListCoursesUseCase(courseRepo),
@@ -69,8 +70,9 @@ func NewQuestionUseCases(
 	answerRepo repository.AnswerRepository,
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
+	timetableRepo repository.TimetableRepository,
 ) QuestionUseCases {
-	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo)
+	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return QuestionUseCases{
 		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, requireWritable),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
@@ -88,8 +90,9 @@ func NewPollUseCases(
 	pollRepo repository.PollRepository,
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
+	timetableRepo repository.TimetableRepository,
 ) PollUseCases {
-	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo)
+	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return PollUseCases{
 		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable),
 		VotePollUseCase:              pollusecase.NewVotePollUseCase(pollRepo, requireWritable),

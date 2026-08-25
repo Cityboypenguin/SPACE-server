@@ -272,6 +272,15 @@ type Mutation {
   registerTimetableEntry(courseID: ID!): TimetableEntry!
   removeTimetableEntry(id: ID!): Boolean!
   setTimetableProfileVisibility(id: ID!, visible: Boolean!): TimetableEntry!
+  # 「編集モード」の一括確定用。year/semester の時間割を courseIDs の内容に丸ごと
+  # 置き換える（1トランザクション）。baselineEntryIDs が現在の登録内容と一致しない
+  # 場合（他タブでの変更等）は何も変更せず CONFLICT エラーを返す。
+  setMyTimetable(
+    year: Int!
+    semester: String!
+    baselineEntryIDs: [ID!]!
+    courseIDs: [ID!]!
+  ): [TimetableEntry!]!
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
   createQuestion(roomID: ID!, body: String!): Question!
   answerQuestion(questionID: ID!, body: String!): Answer!
