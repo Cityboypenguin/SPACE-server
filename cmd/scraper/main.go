@@ -39,8 +39,13 @@ func main() {
 
 	ctx := context.Background()
 
-	logger.Log.Info().Int("year", *year).Msg("fetching course catalog")
-	scraped, skipped, err := syllabusScraper.FetchCourses(ctx, *year)
+	knownDedupKeys, err := courseRepository.ListDedupKeysByYear(ctx, *year)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to list already-imported courses")
+	}
+
+	logger.Log.Info().Int("year", *year).Int("already_imported", len(knownDedupKeys)).Msg("fetching course catalog")
+	scraped, skipped, err := syllabusScraper.FetchCourses(ctx, *year, knownDedupKeys)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to fetch course catalog")
 	}

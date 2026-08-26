@@ -1017,12 +1017,17 @@ func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year in
 		return nil, err
 	}
 	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context) (int, int, error) {
+		knownDedupKeys, err := r.ListDedupKeysByYearUseCase.Execute(bgCtx, int(year))
+		if err != nil {
+			return 0, 0, err
+		}
+
 		sc, err := scraper.NewSenshuSyllabusScraper()
 		if err != nil {
 			return 0, 0, err
 		}
 		defer sc.Close()
-		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year))
+		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys)
 		if err != nil {
 			return 0, skippedRows, err
 		}

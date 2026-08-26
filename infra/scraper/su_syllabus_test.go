@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
@@ -188,6 +189,23 @@ func TestKeyOf_IgnoresCourseNameSuffix(t *testing.T) {
 	}
 }
 
+func TestAllKnown(t *testing.T) {
+	rows := []scrapedRow{
+		{course: courseusecase.ScrapedCourseInput{DedupKey: "a"}},
+		{course: courseusecase.ScrapedCourseInput{DedupKey: "b"}},
+	}
+
+	if allKnown(rows, []int{0, 1}, map[string]bool{"a": true}) {
+		t.Fatal("a group with an unknown member must not be reported as all-known")
+	}
+	if !allKnown(rows, []int{0, 1}, map[string]bool{"a": true, "b": true}) {
+		t.Fatal("a group whose every member is in knownDedupKeys must be reported as all-known")
+	}
+	if allKnown(rows, []int{0, 1}, nil) {
+		t.Fatal("a nil knownDedupKeys map must never report a group as all-known")
+	}
+}
+
 func TestCleanDetailField(t *testing.T) {
 	got := cleanDetailField("\n\n\n一部生田／生田&nbsp;\n\n")
 	if want := "一部生田／生田"; got != want {
@@ -232,5 +250,70 @@ func TestCampusAndAssignmentRegexes(t *testing.T) {
 	}
 	if got := cleanDetailField(m[1]); got != "マーケ学科３４" {
 		t.Fatalf("assignment = %q, want %q", got, "マーケ学科３４")
+	}
+}
+
+func TestAllSameContent_ByteIdenticalPages(t *testing.T) {
+	body := `<td class="kougi">同じ内容の授業です&nbsp;</td>`
+	if !allSameContent([]string{body, body}) {
+		t.Fatal("two byte-identical pages must be treated as the same course")
+	}
+}
+
+// Pins the real-world case found in production data: two saves of the same
+// course whose only difference is the page's own save timestamp and a trivial
+// formatting change to an unrelated, otherwise-empty field. These must still
+// merge - only the actual syllabus content matters.
+func TestAllSameContent_OnlyTimestampAndTrivialFormattingDiffer(t *testing.T) {
+	// A realistic detail page runs to a couple thousand characters; padding with a
+	// shared filler block keeps the six-character "【主要授業科目】" difference
+	// proportionally as small as it is on a real page (see levenshteinRatio).
+	filler := strings.Repeat("シラバス本文のテキストです。", 80)
+	a := `<td class="kougi">【主要授業科目】<BR><BR>特になし。&nbsp;` + filler + `</td>
+		2025-02-18 17:26:15.122`
+	b := `<td class="kougi">特になし。&nbsp;` + filler + `</td>
+		2025-03-25 17:06:00.203`
+	if !allSameContent([]string{a, b}) {
+		t.Fatal("pages differing only by save timestamp and tag-only formatting must be treated as the same course")
+	}
+}
+
+// Pins the other real-world case: two rows sharing name/teacher/slot that are
+// genuinely different course sections (e.g. different seminar themes) - these
+// must never be merged into one course.
+func TestAllSameContent_GenuinelyDifferentContent(t *testing.T) {
+	a := `<td class="kougi">＜到達目標＞卒論・卒制指導を行う。&nbsp;</td>`
+	b := `<td class="kougi">＜到達目標＞映像番組の制作を行う。&nbsp;</td>`
+	if allSameContent([]string{a, b}) {
+		t.Fatal("pages with genuinely different syllabus content must not be treated as the same course")
+	}
+}
+
+func TestAllSameContent_SingleBodyIsTriviallySame(t *testing.T) {
+	if !allSameContent([]string{"anything"}) {
+		t.Fatal("a group of one is trivially \"all the same\"")
+	}
+}
+
+func TestLevenshteinRatio(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b string
+		want float64
+	}{
+		{"identical", "同じ文字列", "同じ文字列", 1},
+		{"both empty", "", "", 1},
+		{"one empty", "何か", "", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := levenshteinRatio(c.a, c.b); got != c.want {
+				t.Fatalf("levenshteinRatio(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+			}
+		})
+	}
+
+	if got := levenshteinRatio("あいうえお", "あいうえか"); got != 0.8 {
+		t.Fatalf("one-character substitution out of five ratio = %v, want 0.8", got)
 	}
 }

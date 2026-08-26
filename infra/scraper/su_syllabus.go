@@ -55,6 +55,12 @@ var (
 	// The label is rendered as "配　当" with a full-width space (\x{3000}), which Go's
 	// \s (ASCII-only) doesn't match, so it's matched explicitly alongside \s.
 	assignmentRe = regexp.MustCompile(`(?s)配[\s\x{3000}]*当.*?<td class="kougi">\s*(.*?)\s*</td>`)
+	tagRe        = regexp.MustCompile(`(?s)<[^>]+>`)
+	// The site stamps each detail page with its own last-saved time near the
+	// bottom, formatted like "2025-03-25 14:39:33.847" - this is the one piece of
+	// visible (non-tag) text that differs between two saves of an otherwise
+	// identical page, so it's stripped before comparing pages for equality.
+	timestampLineRe = regexp.MustCompile(`\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(\.\d+)?`)
 )
 
 // SenshuSyllabusScraper fetches the full course catalog for a given academic year
@@ -96,7 +102,16 @@ func (s *SenshuSyllabusScraper) Close() error {
 // listing rows that could not be mapped to a single weekly day/period slot (e.g.
 // 定時外 non-standard-time offerings), which the current timetable model does not
 // represent.
-func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
+//
+// knownDedupKeys is the set of dedup_key values the caller has already imported
+// for this year (nil/empty is fine, e.g. for a year's first-ever import). A
+// re-scrape of a year that's already fully imported is a very common case (an
+// admin re-running the import to pick up a handful of newly-published courses),
+// and every course whose dedup_key is already known is guaranteed to be a no-op
+// on import regardless of what FetchCourses returns for it - so disambiguation,
+// which is the expensive part (an extra page fetch per colliding row), is
+// skipped entirely for any colliding group where every member is already known.
+func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
 	var rows []scrapedRow
 
 	body, err := s.get(ctx, senshuSearchDo)
@@ -179,7 +194,7 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (cou
 		skipped += rowsSkipped
 	}
 
-	courses, err = s.disambiguateCampuses(ctx, rows)
+	courses, err = s.disambiguateCampuses(ctx, rows, knownDedupKeys)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -201,8 +216,18 @@ func (s *SenshuSyllabusScraper) post(ctx context.Context, target string, values 
 	)
 }
 
-// curl runs curl with cookie persistence across calls, a hard timeout, and -f so
-// non-2xx responses surface as an error instead of being returned as body text.
+// curlMaxAttempts is how many times curl runs a request before giving up. The
+// university's server occasionally times out or drops a connection under no
+// fault of the request itself (seen in practice fetching a course detail page:
+// "Connection timed out after 30002 milliseconds"), and retrying a couple times
+// with a short backoff costs far less than aborting an entire scrape run - which
+// can be mid-way through importing thousands of courses - over one flaky blip.
+const curlMaxAttempts = 3
+
+// curl runs curl with cookie persistence across calls, a hard per-attempt
+// timeout, -f so non-2xx responses surface as an error instead of being
+// returned as body text, and retries (see curlMaxAttempts) with backoff before
+// giving up.
 func (s *SenshuSyllabusScraper) curl(ctx context.Context, args ...string) (string, error) {
 	fullArgs := append([]string{
 		"-s", "-S", "-f", "-L",
@@ -210,14 +235,25 @@ func (s *SenshuSyllabusScraper) curl(ctx context.Context, args ...string) (strin
 		"--max-time", "30",
 	}, args...)
 
-	cmd := exec.CommandContext(ctx, "curl", fullArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("curl request failed: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
+	var lastErr error
+	for attempt := 1; attempt <= curlMaxAttempts; attempt++ {
+		cmd := exec.CommandContext(ctx, "curl", fullArgs...)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			lastErr = fmt.Errorf("curl request failed: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
+			if attempt < curlMaxAttempts {
+				if sleepErr := sleepCtx(ctx, time.Duration(attempt)*2*time.Second); sleepErr != nil {
+					return "", sleepErr
+				}
+				continue
+			}
+			return "", lastErr
+		}
+		return stdout.String(), nil
 	}
-	return stdout.String(), nil
+	return "", lastErr
 }
 
 func extractTimestamp(body string) (string, error) {
@@ -315,70 +351,198 @@ func keyOf(c courseusecase.ScrapedCourseInput) disambiguationKey {
 	return disambiguationKey{c.Year, c.Semester, c.DayOfWeek, c.Period, c.CourseName, c.TeacherName}
 }
 
-// disambiguateCampuses appends a "（校舎・配当）" suffix to CourseName for rows
-// that collide on disambiguationKey, e.g. "情報科教育法１（生田・...）" vs
-// "情報科教育法１（神田・...）", so students can tell which one to register for.
-// That distinguishing info (campus, target department/year) isn't in the listing
-// at all - only each course's own detail page has it - so this only pays the cost
-// of an extra page fetch for rows that actually collide, not all of them.
-func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow) ([]courseusecase.ScrapedCourseInput, error) {
-	counts := make(map[disambiguationKey]int, len(rows))
-	for _, r := range rows {
-		counts[keyOf(r.course)]++
+// allKnown reports whether every row referenced by idxs already has its
+// dedup_key present in knownDedupKeys.
+func allKnown(rows []scrapedRow, idxs []int, knownDedupKeys map[string]bool) bool {
+	for _, i := range idxs {
+		if !knownDedupKeys[rows[i].course.DedupKey] {
+			return false
+		}
+	}
+	return true
+}
+
+// disambiguateCampuses resolves rows that collide on disambiguationKey - a
+// student browsing the timetable/search UI can't otherwise tell them apart - by
+// fetching each colliding row's own detail page, which the listing itself doesn't
+// carry. Within a colliding group this only pays for a page fetch per row that
+// actually collides, not all of them.
+//
+// A collision is one of two things in practice:
+//   - The same class really is listed twice (an administrative duplicate on the
+//     site's own end): its detail page content is identical (a save timestamp and
+//     inconsequential formatting aside) across every row in the group. Only the
+//     first such row is kept; the rest are dropped rather than imported as
+//     separate courses/chat rooms for what is really one class.
+//   - The rows are genuinely different offerings under the same name/teacher/slot
+//     (e.g. once per campus, or once per enrolling department) - their content
+//     differs. Each is kept, with a "（校舎・配当）" suffix appended to CourseName
+//     (e.g. "情報科教育法１（生田・...）" vs "情報科教育法１（神田・...）") so
+//     students can tell which one to register for.
+//
+// A colliding group is skipped entirely - no page fetches at all - when every
+// member's dedup_key is already in knownDedupKeys: re-importing an already-known
+// course is always a no-op, so there's nothing disambiguation could change about
+// the outcome for that group.
+func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow, knownDedupKeys map[string]bool) ([]courseusecase.ScrapedCourseInput, error) {
+	groups := make(map[disambiguationKey][]int, len(rows))
+	for i, r := range rows {
+		k := keyOf(r.course)
+		groups[k] = append(groups[k], i)
 	}
 
-	courses := make([]courseusecase.ScrapedCourseInput, len(rows))
-	for i, r := range rows {
-		courses[i] = r.course
-		if counts[keyOf(r.course)] < 2 {
+	drop := make(map[int]bool)
+	for _, idxs := range groups {
+		if len(idxs) < 2 {
+			continue
+		}
+		if allKnown(rows, idxs, knownDedupKeys) {
 			continue
 		}
 
-		if err := sleepCtx(ctx, s.RequestInterval); err != nil {
-			return nil, err
-		}
-		campus, assignment, err := s.FetchCourseDetail(ctx, r.detailPath)
-		if err != nil {
-			return nil, fmt.Errorf("fetching detail page %q: %w", r.detailPath, err)
+		bodies := make([]string, len(idxs))
+		for j, i := range idxs {
+			if err := sleepCtx(ctx, s.RequestInterval); err != nil {
+				return nil, err
+			}
+			body, err := s.get(ctx, senshuOrigin+rows[i].detailPath)
+			if err != nil {
+				return nil, fmt.Errorf("fetching detail page %q: %w", rows[i].detailPath, err)
+			}
+			bodies[j] = body
 		}
 
-		label := strings.TrimSpace(campus + "・" + assignment)
-		label = strings.Trim(label, "・")
-		if label != "" {
-			courses[i].CourseName = fmt.Sprintf("%s（%s）", r.course.CourseName, label)
+		if allSameContent(bodies) {
+			for _, i := range idxs[1:] {
+				drop[i] = true
+			}
+			continue
 		}
+
+		for j, i := range idxs {
+			campus, assignment := extractCampusAndAssignment(bodies[j])
+			label := strings.TrimSpace(campus + "・" + assignment)
+			label = strings.Trim(label, "・")
+			if label != "" {
+				rows[i].course.CourseName = fmt.Sprintf("%s（%s）", rows[i].course.CourseName, label)
+			}
+		}
+	}
+
+	courses := make([]courseusecase.ScrapedCourseInput, 0, len(rows))
+	for i, r := range rows {
+		if drop[i] {
+			continue
+		}
+		courses = append(courses, r.course)
 	}
 	return courses, nil
 }
 
-// FetchCourseDetail fetches a single course's detail page (detailPath is the
-// relative slbssbdr.do link from a listing row, or can be reconstructed as
-// fmt.Sprintf("/syllsenshu/slbssbdr.do?value(risyunen)=%d&value(semekikn)=1&value(kougicd)=%s&value(crclumcd)=", year, kougicd))
-// and extracts its campus (開講区分／校舎) and target department/year (配当)
-// fields, which the listing itself doesn't include. Exported so a one-off
-// backfill can look these up for courses that were imported before
-// disambiguateCampuses existed.
-func (s *SenshuSyllabusScraper) FetchCourseDetail(ctx context.Context, detailPath string) (campus, assignment string, err error) {
-	body, err := s.get(ctx, senshuOrigin+detailPath)
-	if err != nil {
-		return "", "", err
-	}
-
+// extractCampusAndAssignment reads a detail page's campus (開講区分／校舎) and
+// target department/year (配当) fields, which the listing itself doesn't include.
+func extractCampusAndAssignment(body string) (campus, assignment string) {
 	if m := campusRe.FindStringSubmatch(body); m != nil {
 		campus = cleanDetailField(m[1])
 	}
 	if m := assignmentRe.FindStringSubmatch(body); m != nil {
 		assignment = cleanDetailField(m[1])
 	}
-	return campus, assignment, nil
+	return campus, assignment
 }
 
-// cleanDetailField strips the &nbsp; padding these detail-page cells are rendered
-// with and normalizes the result to plain text.
+// cleanDetailField strips the   padding these detail-page cells are rendered
+// with (from &nbsp;) and normalizes the result to plain text.
 func cleanDetailField(raw string) string {
 	unescaped := html.UnescapeString(raw)
 	unescaped = strings.ReplaceAll(unescaped, " ", "")
 	return strings.TrimSpace(unescaped)
+}
+
+// contentSimilarityThreshold is how close two detail pages' normalized content
+// must be (1.0 = identical) to be treated as the same course listed twice. It's
+// not 1.0 because two saves of the same syllabus can differ by a stray empty
+// field's label (seen in production: "【主要授業科目】" appearing in one save and
+// not the other, nothing else different) - a few characters out of a page that's
+// easily 1-2 thousand. 0.98 comfortably absorbs that while still rejecting pages
+// that genuinely describe a different course (differing across whole paragraphs).
+const contentSimilarityThreshold = 0.98
+
+// allSameContent reports whether every detail page in bodies is close enough to
+// be the same course listed more than once - cosmetic differences (a save
+// timestamp, a stray empty field's exact markup) aside - as opposed to genuinely
+// different course content sharing the same name/teacher/slot (e.g. two seminar
+// sections with different themes, which must not be merged).
+func allSameContent(bodies []string) bool {
+	if len(bodies) < 2 {
+		return true
+	}
+	first := normalizeContent(bodies[0])
+	for _, b := range bodies[1:] {
+		if levenshteinRatio(first, normalizeContent(b)) < contentSimilarityThreshold {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeContent strips markup, the page's own save timestamp, and all
+// whitespace, leaving just the visible text content for a similarity comparison
+// between two detail pages.
+func normalizeContent(body string) string {
+	text := timestampLineRe.ReplaceAllString(body, "")
+	text = tagRe.ReplaceAllString(text, "")
+	text = html.UnescapeString(text)
+	return strings.Join(strings.Fields(text), "")
+}
+
+// levenshteinRatio returns how similar a and b are as a ratio in [0,1], where 1
+// means identical and 0 means an edit distance equal to the longer string's
+// entire length. Detail pages here run to a couple thousand characters at most,
+// so the O(len(a)*len(b)) cost is negligible even though this only ever runs on
+// the handful of rows that collide within a single scrape.
+func levenshteinRatio(a, b string) float64 {
+	if a == b {
+		return 1
+	}
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) == 0 || len(rb) == 0 {
+		return 0
+	}
+
+	prev := make([]int, len(rb)+1)
+	curr := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		curr[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			del := prev[j] + 1
+			ins := curr[j-1] + 1
+			sub := prev[j-1] + cost
+			min := del
+			if ins < min {
+				min = ins
+			}
+			if sub < min {
+				min = sub
+			}
+			curr[j] = min
+		}
+		prev, curr = curr, prev
+	}
+	dist := prev[len(rb)]
+
+	maxLen := len(ra)
+	if len(rb) > maxLen {
+		maxLen = len(rb)
+	}
+	return 1 - float64(dist)/float64(maxLen)
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

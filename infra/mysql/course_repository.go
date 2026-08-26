@@ -146,6 +146,24 @@ func (r *MySQLCourseRepository) ListDistinctYears(ctx context.Context) ([]int, e
 	return years, rows.Err()
 }
 
+func (r *MySQLCourseRepository) ListDedupKeysByYear(ctx context.Context, year int) (map[string]bool, error) {
+	rows, err := r.DB.QueryContext(ctx, `SELECT dedup_key FROM courses WHERE year = ?`, year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make(map[string]bool)
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys[k] = true
+	}
+	return keys, rows.Err()
+}
+
 // ListCourses returns courses matching the optional filters (admin course listing),
 // ordered newest-first by year/semester then by day/period for stable paging.
 func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repository.ListCoursesParam) ([]*model.Course, int, error) {

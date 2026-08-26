@@ -43,4 +43,9 @@ type CourseRepository interface {
 	// admin course-management screen can offer a year picker backed by actual data
 	// instead of an arbitrary free-typed number.
 	ListDistinctYears(ctx context.Context) ([]int, error)
+	// ListDedupKeysByYear returns every dedup_key already stored for the given
+	// year, so a re-scrape of a year that's already been imported can skip
+	// re-deriving anything (e.g. scraper-side duplicate/campus disambiguation)
+	// for courses whose import is going to be a no-op anyway.
+	ListDedupKeysByYear(ctx context.Context, year int) (map[string]bool, error)
 }

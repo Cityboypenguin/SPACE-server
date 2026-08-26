@@ -233,6 +233,7 @@ type CourseUseCases struct {
 	ImportCoursesUseCase                 courseusecase.ImportCoursesUseCase
 	ListCoursesUseCase                   courseusecase.ListCoursesUseCase
 	ListCourseYearsUseCase               courseusecase.ListCourseYearsUseCase
+	ListDedupKeysByYearUseCase           courseusecase.ListDedupKeysByYearUseCase
 }
 
 type QuestionUseCases struct {

@@ -60,6 +60,7 @@ func NewCourseUseCases(
 		ImportCoursesUseCase:                 courseusecase.NewImportCoursesUseCase(courseRepo),
 		ListCoursesUseCase:                   courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:               courseusecase.NewListCourseYearsUseCase(courseRepo),
+		ListDedupKeysByYearUseCase:           courseusecase.NewListDedupKeysByYearUseCase(courseRepo),
 	}
 }
 
