@@ -33,6 +33,7 @@ import (
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	timetableusecase "github.com/Cityboypenguin/SPACE-server/usecase/timetable"
 	"github.com/Cityboypenguin/SPACE-server/usecase/user"
+	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
 )
 
 // This file will not be regenerated automatically.
@@ -123,6 +124,7 @@ type Resolver struct {
 	ListConsentsUseCase    *termsusecase.ListConsentsUseCase
 
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
+	ManageUserSettingUsecase   usersettingsusecase.ManageUserSettingUsecase
 
 	GetAnalyticsUseCase          analyticsusecase.GetAnalyticsUseCase
 	GetCommunityAnalyticsUseCase analyticsusecase.GetCommunityAnalyticsUseCase
