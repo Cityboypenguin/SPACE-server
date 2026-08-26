@@ -24,11 +24,13 @@ import (
 // 専修大学Web講義要項（シラバス）. Its search screen (slbssrch.do) guards form
 // submission with a session-scoped, single-use "timestamp" token that is reissued
 // on every response, so results can only be paged through sequentially, not fetched
-// in parallel or resumed from a token captured earlier. The listing itself already
-// carries course name / teacher / day / period, so no per-course detail-page fetch
-// is needed.
+// in parallel or resumed from a token captured earlier. The listing itself carries
+// course name / teacher / day / period, so no per-course detail-page fetch is
+// needed for most rows - only disambiguateCampuses fetches individual detail
+// pages (slbssbdr.do), and only for the rows that need it.
 const (
-	senshuBaseURL   = "https://syllabus.acc.senshu-u.ac.jp/syllsenshu"
+	senshuOrigin    = "https://syllabus.acc.senshu-u.ac.jp"
+	senshuBaseURL   = senshuOrigin + "/syllsenshu"
 	senshuSearchDo  = senshuBaseURL + "/slbssrch.do"
 	senshuUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
@@ -49,6 +51,10 @@ var (
 	kougicdRe    = regexp.MustCompile(`kougicd\)=(\d+)`)
 	periodCellRe = regexp.MustCompile(`^(前期|後期|通年)\x{3000}(月|火|水|木|金|土)曜日\x{3000}(\d+)時限$`)
 	brTagRe      = regexp.MustCompile(`(?i)<br\s*/?>`)
+	campusRe     = regexp.MustCompile(`(?s)開講区分／校舎.*?<td class="kougi">\s*(.*?)\s*</td>`)
+	// The label is rendered as "配　当" with a full-width space (\x{3000}), which Go's
+	// \s (ASCII-only) doesn't match, so it's matched explicitly alongside \s.
+	assignmentRe = regexp.MustCompile(`(?s)配[\s\x{3000}]*当.*?<td class="kougi">\s*(.*?)\s*</td>`)
 )
 
 // SenshuSyllabusScraper fetches the full course catalog for a given academic year
@@ -91,6 +97,8 @@ func (s *SenshuSyllabusScraper) Close() error {
 // 定時外 non-standard-time offerings), which the current timetable model does not
 // represent.
 func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
+	var rows []scrapedRow
+
 	body, err := s.get(ctx, senshuSearchDo)
 	if err != nil {
 		return nil, 0, fmt.Errorf("fetching search form: %w", err)
@@ -142,8 +150,8 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (cou
 		return nil, 0, err
 	}
 
-	rows, rowsSkipped := parseRows(body, year)
-	courses = append(courses, rows...)
+	pageRows, rowsSkipped := parseRows(body, year)
+	rows = append(rows, pageRows...)
 	skipped += rowsSkipped
 
 	totalPages := (total + pageSize - 1) / pageSize
@@ -166,11 +174,15 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int) (cou
 			return nil, 0, fmt.Errorf("fetching page %d: %w", page, err)
 		}
 
-		rows, rowsSkipped := parseRows(body, year)
-		courses = append(courses, rows...)
+		pageRows, rowsSkipped := parseRows(body, year)
+		rows = append(rows, pageRows...)
 		skipped += rowsSkipped
 	}
 
+	courses, err = s.disambiguateCampuses(ctx, rows)
+	if err != nil {
+		return nil, 0, err
+	}
 	return courses, skipped, nil
 }
 
@@ -228,11 +240,20 @@ func extractTotalCount(body string) (int, error) {
 	return n, nil
 }
 
-// parseRows extracts one ScrapedCourseInput per listing row that names a single
-// weekly day/period slot, including 通年 (full-year) rows (Semester will be "通年").
+// scrapedRow pairs a parsed course with the listing row's detail-page path. The
+// path is only used by disambiguateCampuses, which fetches it for the (usually
+// small) subset of rows that turn out to collide with another one - the listing
+// itself doesn't carry enough information to tell those apart on its own.
+type scrapedRow struct {
+	course     courseusecase.ScrapedCourseInput
+	detailPath string
+}
+
+// parseRows extracts one scrapedRow per listing row that names a single weekly
+// day/period slot, including 通年 (full-year) rows (Semester will be "通年").
 // Rows for 定時外 (non-standard time) offerings don't fit that shape and are
 // reported back via the skipped count instead of being silently dropped.
-func parseRows(body string, year int) (courses []courseusecase.ScrapedCourseInput, skipped int) {
+func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
 	for _, m := range rowRe.FindAllStringSubmatch(body, -1) {
 		href, name, periodCell, teacher := m[1], m[2], m[3], m[4]
 
@@ -260,17 +281,104 @@ func parseRows(body string, year int) (courses []courseusecase.ScrapedCourseInpu
 		// them with a full-width comma instead since TeacherName is a single field.
 		teacherName := strings.TrimSpace(html.UnescapeString(brTagRe.ReplaceAllString(teacher, "、")))
 
-		courses = append(courses, courseusecase.ScrapedCourseInput{
-			DayOfWeek:   dayOfWeek,
-			Period:      period,
-			TeacherName: teacherName,
-			CourseName:  strings.TrimSpace(html.UnescapeString(name)),
-			Year:        year,
-			Semester:    semester,
-			DedupKey:    fmt.Sprintf("senshu:%d:%s:%s:%s:%d", year, semester, kougicd, dayOfWeek, period),
+		rows = append(rows, scrapedRow{
+			course: courseusecase.ScrapedCourseInput{
+				DayOfWeek:   dayOfWeek,
+				Period:      period,
+				TeacherName: teacherName,
+				CourseName:  strings.TrimSpace(html.UnescapeString(name)),
+				Year:        year,
+				Semester:    semester,
+				DedupKey:    fmt.Sprintf("senshu:%d:%s:%s:%s:%d", year, semester, kougicd, dayOfWeek, period),
+			},
+			detailPath: html.UnescapeString(href),
 		})
 	}
-	return courses, skipped
+	return rows, skipped
+}
+
+// disambiguationKey groups rows that a student browsing the timetable/search UI
+// cannot otherwise tell apart: same name, teacher, and weekly slot. The listing
+// doesn't carry anything else, but the same class is sometimes listed once per
+// campus or once per enrolling department, so two rows can legitimately share a
+// key while being genuinely different course offerings.
+type disambiguationKey struct {
+	year        int
+	semester    string
+	dayOfWeek   string
+	period      int
+	courseName  string
+	teacherName string
+}
+
+func keyOf(c courseusecase.ScrapedCourseInput) disambiguationKey {
+	return disambiguationKey{c.Year, c.Semester, c.DayOfWeek, c.Period, c.CourseName, c.TeacherName}
+}
+
+// disambiguateCampuses appends a "（校舎・配当）" suffix to CourseName for rows
+// that collide on disambiguationKey, e.g. "情報科教育法１（生田・...）" vs
+// "情報科教育法１（神田・...）", so students can tell which one to register for.
+// That distinguishing info (campus, target department/year) isn't in the listing
+// at all - only each course's own detail page has it - so this only pays the cost
+// of an extra page fetch for rows that actually collide, not all of them.
+func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow) ([]courseusecase.ScrapedCourseInput, error) {
+	counts := make(map[disambiguationKey]int, len(rows))
+	for _, r := range rows {
+		counts[keyOf(r.course)]++
+	}
+
+	courses := make([]courseusecase.ScrapedCourseInput, len(rows))
+	for i, r := range rows {
+		courses[i] = r.course
+		if counts[keyOf(r.course)] < 2 {
+			continue
+		}
+
+		if err := sleepCtx(ctx, s.RequestInterval); err != nil {
+			return nil, err
+		}
+		campus, assignment, err := s.FetchCourseDetail(ctx, r.detailPath)
+		if err != nil {
+			return nil, fmt.Errorf("fetching detail page %q: %w", r.detailPath, err)
+		}
+
+		label := strings.TrimSpace(campus + "・" + assignment)
+		label = strings.Trim(label, "・")
+		if label != "" {
+			courses[i].CourseName = fmt.Sprintf("%s（%s）", r.course.CourseName, label)
+		}
+	}
+	return courses, nil
+}
+
+// FetchCourseDetail fetches a single course's detail page (detailPath is the
+// relative slbssbdr.do link from a listing row, or can be reconstructed as
+// fmt.Sprintf("/syllsenshu/slbssbdr.do?value(risyunen)=%d&value(semekikn)=1&value(kougicd)=%s&value(crclumcd)=", year, kougicd))
+// and extracts its campus (開講区分／校舎) and target department/year (配当)
+// fields, which the listing itself doesn't include. Exported so a one-off
+// backfill can look these up for courses that were imported before
+// disambiguateCampuses existed.
+func (s *SenshuSyllabusScraper) FetchCourseDetail(ctx context.Context, detailPath string) (campus, assignment string, err error) {
+	body, err := s.get(ctx, senshuOrigin+detailPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	if m := campusRe.FindStringSubmatch(body); m != nil {
+		campus = cleanDetailField(m[1])
+	}
+	if m := assignmentRe.FindStringSubmatch(body); m != nil {
+		assignment = cleanDetailField(m[1])
+	}
+	return campus, assignment, nil
+}
+
+// cleanDetailField strips the &nbsp; padding these detail-page cells are rendered
+// with and normalizes the result to plain text.
+func cleanDetailField(raw string) string {
+	unescaped := html.UnescapeString(raw)
+	unescaped = strings.ReplaceAll(unescaped, " ", "")
+	return strings.TrimSpace(unescaped)
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

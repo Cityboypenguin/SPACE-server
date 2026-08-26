@@ -41,9 +41,9 @@ func TestExtractTimestamp(t *testing.T) {
 }
 
 func TestParseRows(t *testing.T) {
-	courses, skipped := parseRows(loadFixture(t), 2026)
+	rows, skipped := parseRows(loadFixture(t), 2026)
 
-	if len(courses) == 0 {
+	if len(rows) == 0 {
 		t.Fatal("parsed 0 courses from a fixture known to contain listings")
 	}
 	if skipped == 0 {
@@ -59,11 +59,15 @@ func TestParseRows(t *testing.T) {
 		Semester:    "前期",
 		DedupKey:    "senshu:2026:前期:26070:木:3",
 	}
-	if courses[0] != want {
-		t.Fatalf("first course = %+v, want %+v", courses[0], want)
+	if rows[0].course != want {
+		t.Fatalf("first course = %+v, want %+v", rows[0].course, want)
+	}
+	if rows[0].detailPath == "" {
+		t.Fatal("detailPath is empty")
 	}
 
-	for _, c := range courses {
+	for _, r := range rows {
+		c := r.course
 		if c.DayOfWeek == "" || c.Period == 0 || c.CourseName == "" || c.TeacherName == "" {
 			t.Fatalf("incomplete course parsed: %+v", c)
 		}
@@ -86,12 +90,12 @@ func TestParseRows_FullYearCourse(t *testing.T) {
               <td>テスト　太郎</td>
           </tr>`
 
-	courses, skipped := parseRows(row, 2026)
+	rows, skipped := parseRows(row, 2026)
 	if skipped != 0 {
 		t.Fatalf("skipped = %d, want 0 (通年 rows with a single day/period slot must not be skipped)", skipped)
 	}
-	if len(courses) != 1 {
-		t.Fatalf("len(courses) = %d, want 1", len(courses))
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want 1", len(rows))
 	}
 
 	want := courseusecase.ScrapedCourseInput{
@@ -103,8 +107,8 @@ func TestParseRows_FullYearCourse(t *testing.T) {
 		Semester:    "通年",
 		DedupKey:    "senshu:2026:通年:99999:月:1",
 	}
-	if courses[0] != want {
-		t.Fatalf("course = %+v, want %+v", courses[0], want)
+	if rows[0].course != want {
+		t.Fatalf("course = %+v, want %+v", rows[0].course, want)
 	}
 }
 
@@ -123,12 +127,12 @@ func TestParseRows_CoTaughtCourse(t *testing.T) {
               <td>安藤　映<br/>重中　秀介</td>
           </tr>`
 
-	courses, skipped := parseRows(row, 2026)
+	rows, skipped := parseRows(row, 2026)
 	if skipped != 0 {
 		t.Fatalf("skipped = %d, want 0", skipped)
 	}
-	if len(courses) != 1 {
-		t.Fatalf("len(courses) = %d, want 1", len(courses))
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want 1", len(rows))
 	}
 
 	want := courseusecase.ScrapedCourseInput{
@@ -140,8 +144,8 @@ func TestParseRows_CoTaughtCourse(t *testing.T) {
 		Semester:    "前期",
 		DedupKey:    "senshu:2026:前期:32212:水:4",
 	}
-	if courses[0] != want {
-		t.Fatalf("course = %+v, want %+v", courses[0], want)
+	if rows[0].course != want {
+		t.Fatalf("course = %+v, want %+v", rows[0].course, want)
 	}
 }
 
@@ -159,11 +163,74 @@ func TestParseRows_MultiSlotCourseIsSkipped(t *testing.T) {
               <td>テスト　次郎</td>
           </tr>`
 
-	courses, skipped := parseRows(row, 2026)
-	if len(courses) != 0 {
-		t.Fatalf("len(courses) = %d, want 0 (multi-slot courses aren't representable yet)", len(courses))
+	rows, skipped := parseRows(row, 2026)
+	if len(rows) != 0 {
+		t.Fatalf("len(rows) = %d, want 0 (multi-slot courses aren't representable yet)", len(rows))
 	}
 	if skipped != 1 {
 		t.Fatalf("skipped = %d, want 1", skipped)
+	}
+}
+
+// disambiguateCampuses must recognize a colliding pair even when campus alone
+// wouldn't distinguish them (the two rows are cross-listed for different
+// departments/years via 配当, not different campuses) - pinned via keyOf directly
+// since the surrounding disambiguateCampuses method needs a live HTTP fetch.
+func TestKeyOf_IgnoresCourseNameSuffix(t *testing.T) {
+	a := courseusecase.ScrapedCourseInput{Year: 2026, Semester: "前期", DayOfWeek: "木", Period: 4, CourseName: "情報科教育法１", TeacherName: "鶴田　利郎"}
+	b := a
+	if keyOf(a) != keyOf(b) {
+		t.Fatal("identical rows must share a disambiguationKey")
+	}
+	b.CourseName = "情報科教育法２"
+	if keyOf(a) == keyOf(b) {
+		t.Fatal("different course names must not share a disambiguationKey")
+	}
+}
+
+func TestCleanDetailField(t *testing.T) {
+	got := cleanDetailField("\n\n\n一部生田／生田&nbsp;\n\n")
+	if want := "一部生田／生田"; got != want {
+		t.Fatalf("cleanDetailField = %q, want %q", got, want)
+	}
+}
+
+// Pins campusRe/assignmentRe against the detail page's actual markup structure
+// (captured live from two real course pages that otherwise collide).
+func TestCampusAndAssignmentRegexes(t *testing.T) {
+	body := `
+		<td class="label_kougi">開講区分／校舎</td>
+		<td class="line_y_label"></td>
+		<td class="kougi">
+
+
+
+一部神田／神田&nbsp;
+
+		</td>
+		<td class="label_kougi">配　当</td>
+		<td class="line_y_label"></td>
+		<td class="kougi">
+
+
+
+マーケ学科３４&nbsp;
+
+		</td>`
+
+	m := campusRe.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("campusRe did not match")
+	}
+	if got := cleanDetailField(m[1]); got != "一部神田／神田" {
+		t.Fatalf("campus = %q, want %q", got, "一部神田／神田")
+	}
+
+	m = assignmentRe.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("assignmentRe did not match")
+	}
+	if got := cleanDetailField(m[1]); got != "マーケ学科３４" {
+		t.Fatalf("assignment = %q, want %q", got, "マーケ学科３４")
 	}
 }
