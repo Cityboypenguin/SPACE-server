@@ -1770,6 +1770,14 @@ func (r *mutationResolver) SetReportServiceStatus(ctx context.Context, enabled b
 	return enabled, nil
 }
 
+// SetThemePreference is the resolver for the setThemePreference field.
+func (r *mutationResolver) SetThemePreference(ctx context.Context, theme gqlmodel.ThemePreference) (gqlmodel.ThemePreference, error) {
+	if err := r.ManageUserSettingUsecase.Set(ctx, "theme", string(theme)); err != nil {
+		return "", err
+	}
+	return theme, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -1982,6 +1990,19 @@ func (r *queryResolver) Me(ctx context.Context) (*gqlmodel.User, error) {
 	}
 
 	return toGraphUser(user), nil
+}
+
+// ThemePreference is the resolver for the themePreference field.
+func (r *queryResolver) ThemePreference(ctx context.Context) (*gqlmodel.ThemePreference, error) {
+	value, found, err := r.ManageUserSettingUsecase.Get(ctx, "theme")
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	t := gqlmodel.ThemePreference(value)
+	return &t, nil
 }
 
 // GetUserByID is the resolver for the getUserByID field.

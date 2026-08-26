@@ -55,6 +55,7 @@ import (
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
+	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -98,6 +99,7 @@ func main() {
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
 	systemSettingRepository := mysql.NewMySQLSystemSettingRepository(database)
+	userSettingRepository := mysql.NewMySQLUserSettingRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -256,6 +258,7 @@ func main() {
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
+	manageUserSettingUseCase := usersettingsusecase.NewManageUserSettingUsecase(userSettingRepository)
 
 	cachedAnalyticsRepo := infracache.NewCachedAnalyticsRepository(
 		mysql.NewMySQLAnalyticsRepository(database),
@@ -430,6 +433,7 @@ func main() {
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
+		ManageUserSettingUsecase:     *manageUserSettingUseCase,
 		GetAnalyticsUseCase:          getAnalyticsUseCase,
 		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
 		GetTimeSeriesUseCase:         getTimeSeriesUseCase,

@@ -4,6 +4,9 @@
 type Query {
   users(limit: Int = 20, offset: Int = 0): UserPage!
   me: User!
+  # 未設定（サーバー側にまだ明示的な選択が保存されていない）なら null。
+  # 初期表示はクライアント側で localStorage / prefers-color-scheme から決める。
+  themePreference: ThemePreference
   getUserByID(id: ID!): User
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
   myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
@@ -295,6 +298,8 @@ type Mutation {
 
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
   setReportServiceStatus(enabled: Boolean!): Boolean!
+
+  setThemePreference(theme: ThemePreference!): ThemePreference!
 
   recordSessionData(input: RecordSessionDataInput!): Boolean!
 }
@@ -786,6 +791,11 @@ input PageViewInput {
 enum TimeSeriesGranularity {
   day
   hour
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
 }
 
 type TimeSeriesPoint {

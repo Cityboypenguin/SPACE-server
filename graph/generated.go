@@ -297,6 +297,7 @@ type ComplexityRoot struct {
 		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
 		SetAvatar                         func(childComplexity int, objectKey string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
+		SetThemePreference                func(childComplexity int, theme model.ThemePreference) int
 		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
 		UnfreezeUser                      func(childComplexity int, id string) int
 		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -457,6 +458,7 @@ type ComplexityRoot struct {
 		SearchReports                   func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                     func(childComplexity int, keyword string, limit *int32, offset *int32) int
 		SuggestHashtags                 func(childComplexity int, prefix string, limit *int32) int
+		ThemePreference                 func(childComplexity int) int
 		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
 		Users                           func(childComplexity int, limit *int32, offset *int32) int
 	}
@@ -658,6 +660,7 @@ type MutationResolver interface {
 	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
 	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
 	SetReportServiceStatus(ctx context.Context, enabled bool) (bool, error)
+	SetThemePreference(ctx context.Context, theme model.ThemePreference) (model.ThemePreference, error)
 	RecordSessionData(ctx context.Context, input model.RecordSessionDataInput) (bool, error)
 }
 type NotificationResolver interface {
@@ -674,6 +677,7 @@ type PostResolver interface {
 type QueryResolver interface {
 	Users(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	Me(ctx context.Context) (*model.User, error)
+	ThemePreference(ctx context.Context) (*model.ThemePreference, error)
 	GetUserByID(ctx context.Context, id string) (*model.User, error)
 	SearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*model.UserPage, error)
 	MyNotifications(ctx context.Context, limit *int32, offset *int32, typeArg *string, actorID *string) (*model.NotificationPage, error)
@@ -2185,6 +2189,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetReportServiceStatus(childComplexity, args["enabled"].(bool)), true
+	case "Mutation.setThemePreference":
+		if e.ComplexityRoot.Mutation.SetThemePreference == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setThemePreference_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetThemePreference(childComplexity, args["theme"].(model.ThemePreference)), true
 	case "Mutation.toggleMaintenanceMode":
 		if e.ComplexityRoot.Mutation.ToggleMaintenanceMode == nil {
 			break
@@ -3306,6 +3321,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SuggestHashtags(childComplexity, args["prefix"].(string), args["limit"].(*int32)), true
+	case "Query.themePreference":
+		if e.ComplexityRoot.Query.ThemePreference == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ThemePreference(childComplexity), true
 	case "Query.topLevelPosts":
 		if e.ComplexityRoot.Query.TopLevelPosts == nil {
 			break
@@ -5586,6 +5607,20 @@ func (ec *executionContext) field_Mutation_setReportServiceStatus_args(ctx conte
 		return nil, err
 	}
 	args["enabled"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setThemePreference_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "theme",
+		func(ctx context.Context, v any) (model.ThemePreference, error) {
+			return ec.unmarshalNThemePreference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["theme"] = arg0
 	return args, nil
 }
 
@@ -13228,6 +13263,50 @@ func (ec *executionContext) fieldContext_Mutation_setReportServiceStatus(ctx con
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_setThemePreference(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setThemePreference(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetThemePreference(ctx, fc.Args["theme"].(model.ThemePreference))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.ThemePreference) graphql.Marshaler {
+			return ec.marshalNThemePreference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setThemePreference(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ThemePreference does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setThemePreference_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_recordSessionData(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14622,6 +14701,29 @@ func (ec *executionContext) fieldContext_Query_me(_ context.Context, field graph
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Query_themePreference(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_themePreference(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ThemePreference(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ThemePreference) graphql.Marshaler {
+			return ec.marshalOThemePreference2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_themePreference(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type ThemePreference does not have child fields"))
 }
 
 func (ec *executionContext) _Query_getUserByID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -23323,6 +23425,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setThemePreference":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setThemePreference(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "recordSessionData":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_recordSessionData(ctx, field)
@@ -24178,6 +24287,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_me(ctx, field)
 				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "themePreference":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_themePreference(ctx, field)
+				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -27976,6 +28107,16 @@ func (ec *executionContext) marshalNTermsOfService2ᚖgithubᚗcomᚋCityboypeng
 	return ec._TermsOfService(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNThemePreference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx context.Context, v any) (model.ThemePreference, error) {
+	var res model.ThemePreference
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNThemePreference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx context.Context, sel ast.SelectionSet, v model.ThemePreference) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNTimeSeriesData2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimeSeriesData(ctx context.Context, sel ast.SelectionSet, v model.TimeSeriesData) graphql.Marshaler {
 	return ec._TimeSeriesData(ctx, sel, &v)
 }
@@ -28533,6 +28674,22 @@ func (ec *executionContext) marshalOTermsOfService2ᚖgithubᚗcomᚋCityboypeng
 		return graphql.Null
 	}
 	return ec._TermsOfService(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOThemePreference2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx context.Context, v any) (*model.ThemePreference, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ThemePreference)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOThemePreference2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐThemePreference(ctx context.Context, sel ast.SelectionSet, v *model.ThemePreference) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
