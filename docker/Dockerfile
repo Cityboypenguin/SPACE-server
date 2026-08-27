@@ -3,6 +3,7 @@
 # ---- dev ----
 FROM golang:1.25-alpine AS dev
 WORKDIR /app
+RUN apk add --no-cache curl
 RUN go install github.com/air-verse/air@v1.64.5
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]
@@ -18,6 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
 # ---- prod ----
 FROM alpine:3.21 AS prod
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=builder /app/server .
 EXPOSE 8080
 CMD ["./server"]
