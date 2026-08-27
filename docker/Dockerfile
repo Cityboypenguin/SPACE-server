@@ -3,7 +3,7 @@
 # ---- dev ----
 FROM golang:1.25-alpine AS dev
 WORKDIR /app
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@v1.64.5
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]
 
