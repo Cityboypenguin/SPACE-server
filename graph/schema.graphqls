@@ -606,15 +606,45 @@ type TimetableEntry {
 }
 
 # 時間割のコマに表示する色。ユーザーは自由な色ではなく、この決まったパレットから選ぶ。
+# パレット画像の3行構成に対応: 鮮やか(無印)、淡い(_LIGHT)、くすみ(_MUTED)に加えて、
+# 各色をさらに鮮やかにした0行目(_VIVID)。数字・接尾辞なしは各行の左から右の並びに対応する。
 enum TimetableEntryColor {
-  BLUE
-  GREEN
-  PURPLE
-  PINK
-  ORANGE
-  TEAL
+  RED_VIVID
+  ORANGE_VIVID
+  YELLOW_VIVID
+  GREEN_VIVID
+  CYAN_VIVID
+  BLUE_VIVID
+  INDIGO_VIVID
+  PURPLE_VIVID
+  MAGENTA_VIVID
   RED
+  ORANGE
   YELLOW
+  GREEN
+  CYAN
+  BLUE
+  INDIGO
+  PURPLE
+  MAGENTA
+  RED_LIGHT
+  ORANGE_LIGHT
+  YELLOW_LIGHT
+  GREEN_LIGHT
+  CYAN_LIGHT
+  BLUE_LIGHT
+  INDIGO_LIGHT
+  PURPLE_LIGHT
+  MAGENTA_LIGHT
+  RED_MUTED
+  ORANGE_MUTED
+  YELLOW_MUTED
+  GREEN_MUTED
+  CYAN_MUTED
+  BLUE_MUTED
+  INDIGO_MUTED
+  PURPLE_MUTED
+  MAGENTA_MUTED
 }
 
 type CurrentSemester {

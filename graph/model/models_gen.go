@@ -1099,30 +1099,86 @@ func (e TimeSeriesGranularity) MarshalJSON() ([]byte, error) {
 type TimetableEntryColor string
 
 const (
-	TimetableEntryColorBlue   TimetableEntryColor = "BLUE"
-	TimetableEntryColorGreen  TimetableEntryColor = "GREEN"
-	TimetableEntryColorPurple TimetableEntryColor = "PURPLE"
-	TimetableEntryColorPink   TimetableEntryColor = "PINK"
-	TimetableEntryColorOrange TimetableEntryColor = "ORANGE"
-	TimetableEntryColorTeal   TimetableEntryColor = "TEAL"
-	TimetableEntryColorRed    TimetableEntryColor = "RED"
-	TimetableEntryColorYellow TimetableEntryColor = "YELLOW"
+	TimetableEntryColorRedVivid     TimetableEntryColor = "RED_VIVID"
+	TimetableEntryColorOrangeVivid  TimetableEntryColor = "ORANGE_VIVID"
+	TimetableEntryColorYellowVivid  TimetableEntryColor = "YELLOW_VIVID"
+	TimetableEntryColorGreenVivid   TimetableEntryColor = "GREEN_VIVID"
+	TimetableEntryColorCyanVivid    TimetableEntryColor = "CYAN_VIVID"
+	TimetableEntryColorBlueVivid    TimetableEntryColor = "BLUE_VIVID"
+	TimetableEntryColorIndigoVivid  TimetableEntryColor = "INDIGO_VIVID"
+	TimetableEntryColorPurpleVivid  TimetableEntryColor = "PURPLE_VIVID"
+	TimetableEntryColorMagentaVivid TimetableEntryColor = "MAGENTA_VIVID"
+	TimetableEntryColorRed          TimetableEntryColor = "RED"
+	TimetableEntryColorOrange       TimetableEntryColor = "ORANGE"
+	TimetableEntryColorYellow       TimetableEntryColor = "YELLOW"
+	TimetableEntryColorGreen        TimetableEntryColor = "GREEN"
+	TimetableEntryColorCyan         TimetableEntryColor = "CYAN"
+	TimetableEntryColorBlue         TimetableEntryColor = "BLUE"
+	TimetableEntryColorIndigo       TimetableEntryColor = "INDIGO"
+	TimetableEntryColorPurple       TimetableEntryColor = "PURPLE"
+	TimetableEntryColorMagenta      TimetableEntryColor = "MAGENTA"
+	TimetableEntryColorRedLight     TimetableEntryColor = "RED_LIGHT"
+	TimetableEntryColorOrangeLight  TimetableEntryColor = "ORANGE_LIGHT"
+	TimetableEntryColorYellowLight  TimetableEntryColor = "YELLOW_LIGHT"
+	TimetableEntryColorGreenLight   TimetableEntryColor = "GREEN_LIGHT"
+	TimetableEntryColorCyanLight    TimetableEntryColor = "CYAN_LIGHT"
+	TimetableEntryColorBlueLight    TimetableEntryColor = "BLUE_LIGHT"
+	TimetableEntryColorIndigoLight  TimetableEntryColor = "INDIGO_LIGHT"
+	TimetableEntryColorPurpleLight  TimetableEntryColor = "PURPLE_LIGHT"
+	TimetableEntryColorMagentaLight TimetableEntryColor = "MAGENTA_LIGHT"
+	TimetableEntryColorRedMuted     TimetableEntryColor = "RED_MUTED"
+	TimetableEntryColorOrangeMuted  TimetableEntryColor = "ORANGE_MUTED"
+	TimetableEntryColorYellowMuted  TimetableEntryColor = "YELLOW_MUTED"
+	TimetableEntryColorGreenMuted   TimetableEntryColor = "GREEN_MUTED"
+	TimetableEntryColorCyanMuted    TimetableEntryColor = "CYAN_MUTED"
+	TimetableEntryColorBlueMuted    TimetableEntryColor = "BLUE_MUTED"
+	TimetableEntryColorIndigoMuted  TimetableEntryColor = "INDIGO_MUTED"
+	TimetableEntryColorPurpleMuted  TimetableEntryColor = "PURPLE_MUTED"
+	TimetableEntryColorMagentaMuted TimetableEntryColor = "MAGENTA_MUTED"
 )
 
 var AllTimetableEntryColor = []TimetableEntryColor{
-	TimetableEntryColorBlue,
-	TimetableEntryColorGreen,
-	TimetableEntryColorPurple,
-	TimetableEntryColorPink,
-	TimetableEntryColorOrange,
-	TimetableEntryColorTeal,
+	TimetableEntryColorRedVivid,
+	TimetableEntryColorOrangeVivid,
+	TimetableEntryColorYellowVivid,
+	TimetableEntryColorGreenVivid,
+	TimetableEntryColorCyanVivid,
+	TimetableEntryColorBlueVivid,
+	TimetableEntryColorIndigoVivid,
+	TimetableEntryColorPurpleVivid,
+	TimetableEntryColorMagentaVivid,
 	TimetableEntryColorRed,
+	TimetableEntryColorOrange,
 	TimetableEntryColorYellow,
+	TimetableEntryColorGreen,
+	TimetableEntryColorCyan,
+	TimetableEntryColorBlue,
+	TimetableEntryColorIndigo,
+	TimetableEntryColorPurple,
+	TimetableEntryColorMagenta,
+	TimetableEntryColorRedLight,
+	TimetableEntryColorOrangeLight,
+	TimetableEntryColorYellowLight,
+	TimetableEntryColorGreenLight,
+	TimetableEntryColorCyanLight,
+	TimetableEntryColorBlueLight,
+	TimetableEntryColorIndigoLight,
+	TimetableEntryColorPurpleLight,
+	TimetableEntryColorMagentaLight,
+	TimetableEntryColorRedMuted,
+	TimetableEntryColorOrangeMuted,
+	TimetableEntryColorYellowMuted,
+	TimetableEntryColorGreenMuted,
+	TimetableEntryColorCyanMuted,
+	TimetableEntryColorBlueMuted,
+	TimetableEntryColorIndigoMuted,
+	TimetableEntryColorPurpleMuted,
+	TimetableEntryColorMagentaMuted,
 }
 
 func (e TimetableEntryColor) IsValid() bool {
 	switch e {
-	case TimetableEntryColorBlue, TimetableEntryColorGreen, TimetableEntryColorPurple, TimetableEntryColorPink, TimetableEntryColorOrange, TimetableEntryColorTeal, TimetableEntryColorRed, TimetableEntryColorYellow:
+	case TimetableEntryColorRedVivid, TimetableEntryColorOrangeVivid, TimetableEntryColorYellowVivid, TimetableEntryColorGreenVivid, TimetableEntryColorCyanVivid, TimetableEntryColorBlueVivid, TimetableEntryColorIndigoVivid, TimetableEntryColorPurpleVivid, TimetableEntryColorMagentaVivid, TimetableEntryColorRed, TimetableEntryColorOrange, TimetableEntryColorYellow, TimetableEntryColorGreen, TimetableEntryColorCyan, TimetableEntryColorBlue, TimetableEntryColorIndigo, TimetableEntryColorPurple, TimetableEntryColorMagenta, TimetableEntryColorRedLight, TimetableEntryColorOrangeLight, TimetableEntryColorYellowLight, TimetableEntryColorGreenLight, TimetableEntryColorCyanLight, TimetableEntryColorBlueLight, TimetableEntryColorIndigoLight, TimetableEntryColorPurpleLight, TimetableEntryColorMagentaLight, TimetableEntryColorRedMuted, TimetableEntryColorOrangeMuted, TimetableEntryColorYellowMuted, TimetableEntryColorGreenMuted, TimetableEntryColorCyanMuted, TimetableEntryColorBlueMuted, TimetableEntryColorIndigoMuted, TimetableEntryColorPurpleMuted, TimetableEntryColorMagentaMuted:
 		return true
 	}
 	return false
