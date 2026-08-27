@@ -351,7 +351,7 @@ type ComplexityRoot struct {
 		SetMyTimetable                    func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
 		SetThemePreference                func(childComplexity int, theme model.ThemePreference) int
-		SetTimetableProfileVisibility     func(childComplexity int, id string, visible bool) int
+		SetTimetableEntryColor            func(childComplexity int, id string, color model.TimetableEntryColor) int
 		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
 		UnfreezeUser                      func(childComplexity int, id string) int
 		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -650,10 +650,10 @@ type ComplexityRoot struct {
 	}
 
 	TimetableEntry struct {
-		Course           func(childComplexity int) int
-		CreatedAt        func(childComplexity int) int
-		ID               func(childComplexity int) int
-		IsProfileVisible func(childComplexity int) int
+		Color     func(childComplexity int) int
+		Course    func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
 	}
 
 	User struct {
@@ -750,7 +750,7 @@ type MutationResolver interface {
 	CreateCommunity(ctx context.Context, input model.CreateCommunityInput) (*model.Community, error)
 	RegisterTimetableEntry(ctx context.Context, courseID string) (*model.TimetableEntry, error)
 	RemoveTimetableEntry(ctx context.Context, id string) (bool, error)
-	SetTimetableProfileVisibility(ctx context.Context, id string, visible bool) (*model.TimetableEntry, error)
+	SetTimetableEntryColor(ctx context.Context, id string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
 	SetMyTimetable(ctx context.Context, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*model.CurrentSemester, error)
 	CreateQuestion(ctx context.Context, roomID string, body string) (*model.Question, error)
@@ -2621,17 +2621,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetThemePreference(childComplexity, args["theme"].(model.ThemePreference)), true
-	case "Mutation.setTimetableProfileVisibility":
-		if e.ComplexityRoot.Mutation.SetTimetableProfileVisibility == nil {
+	case "Mutation.setTimetableEntryColor":
+		if e.ComplexityRoot.Mutation.SetTimetableEntryColor == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_setTimetableProfileVisibility_args(ctx, rawArgs)
+		args, err := ec.field_Mutation_setTimetableEntryColor_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SetTimetableProfileVisibility(childComplexity, args["id"].(string), args["visible"].(bool)), true
+		return e.ComplexityRoot.Mutation.SetTimetableEntryColor(childComplexity, args["id"].(string), args["color"].(model.TimetableEntryColor)), true
 	case "Mutation.toggleMaintenanceMode":
 		if e.ComplexityRoot.Mutation.ToggleMaintenanceMode == nil {
 			break
@@ -4392,6 +4392,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TimeSeriesPoint.Posts(childComplexity), true
 
+	case "TimetableEntry.color":
+		if e.ComplexityRoot.TimetableEntry.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimetableEntry.Color(childComplexity), true
 	case "TimetableEntry.course":
 		if e.ComplexityRoot.TimetableEntry.Course == nil {
 			break
@@ -4410,12 +4416,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TimetableEntry.ID(childComplexity), true
-	case "TimetableEntry.isProfileVisible":
-		if e.ComplexityRoot.TimetableEntry.IsProfileVisible == nil {
-			break
-		}
-
-		return e.ComplexityRoot.TimetableEntry.IsProfileVisible(childComplexity), true
 
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
@@ -5576,8 +5576,8 @@ func (ec *executionContext) childFields_TimetableEntry(ctx context.Context, fiel
 		return ec.fieldContext_TimetableEntry_ID(ctx, field)
 	case "course":
 		return ec.fieldContext_TimetableEntry_course(ctx, field)
-	case "isProfileVisible":
-		return ec.fieldContext_TimetableEntry_isProfileVisible(ctx, field)
+	case "color":
+		return ec.fieldContext_TimetableEntry_color(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_TimetableEntry_createdAt(ctx, field)
 	}
@@ -6776,7 +6776,7 @@ func (ec *executionContext) field_Mutation_setThemePreference_args(ctx context.C
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_setTimetableProfileVisibility_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Mutation_setTimetableEntryColor_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
@@ -6787,14 +6787,14 @@ func (ec *executionContext) field_Mutation_setTimetableProfileVisibility_args(ct
 		return nil, err
 	}
 	args["id"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "visible",
-		func(ctx context.Context, v any) (bool, error) {
-			return ec.unmarshalNBoolean2bool(ctx, v)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "color",
+		func(ctx context.Context, v any) (model.TimetableEntryColor, error) {
+			return ec.unmarshalNTimetableEntryColor2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryColor(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["visible"] = arg1
+	args["color"] = arg1
 	return args, nil
 }
 
@@ -13870,17 +13870,17 @@ func (ec *executionContext) fieldContext_Mutation_removeTimetableEntry(ctx conte
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_setTimetableProfileVisibility(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_setTimetableEntryColor(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_setTimetableProfileVisibility(ctx, field)
+			return ec.fieldContext_Mutation_setTimetableEntryColor(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SetTimetableProfileVisibility(ctx, fc.Args["id"].(string), fc.Args["visible"].(bool))
+			return ec.Resolvers.Mutation().SetTimetableEntryColor(ctx, fc.Args["id"].(string), fc.Args["color"].(model.TimetableEntryColor))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.TimetableEntry) graphql.Marshaler {
@@ -13890,7 +13890,7 @@ func (ec *executionContext) _Mutation_setTimetableProfileVisibility(ctx context.
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Mutation_setTimetableProfileVisibility(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_setTimetableEntryColor(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -13907,7 +13907,7 @@ func (ec *executionContext) fieldContext_Mutation_setTimetableProfileVisibility(
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_setTimetableProfileVisibility_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_setTimetableEntryColor_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -22547,27 +22547,27 @@ func (ec *executionContext) fieldContext_TimetableEntry_course(_ context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _TimetableEntry_isProfileVisible(ctx context.Context, field graphql.CollectedField, obj *model.TimetableEntry) (ret graphql.Marshaler) {
+func (ec *executionContext) _TimetableEntry_color(ctx context.Context, field graphql.CollectedField, obj *model.TimetableEntry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_TimetableEntry_isProfileVisible(ctx, field)
+			return ec.fieldContext_TimetableEntry_color(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.IsProfileVisible, nil
+			return obj.Color, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v model.TimetableEntryColor) graphql.Marshaler {
+			return ec.marshalNTimetableEntryColor2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryColor(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_TimetableEntry_isProfileVisible(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("TimetableEntry", field, false, false, errors.New("field of type Boolean does not have child fields"))
+func (ec *executionContext) fieldContext_TimetableEntry_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimetableEntry", field, false, false, errors.New("field of type TimetableEntryColor does not have child fields"))
 }
 
 func (ec *executionContext) _TimetableEntry_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.TimetableEntry) (ret graphql.Marshaler) {
@@ -27600,9 +27600,9 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "setTimetableProfileVisibility":
+		case "setTimetableEntryColor":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_setTimetableProfileVisibility(ctx, field)
+				return ec._Mutation_setTimetableEntryColor(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -31618,8 +31618,8 @@ func (ec *executionContext) _TimetableEntry(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "isProfileVisible":
-			out.Values[i] = ec._TimetableEntry_isProfileVisible(ctx, field, obj)
+		case "color":
+			out.Values[i] = ec._TimetableEntry_color(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -33768,6 +33768,16 @@ func (ec *executionContext) marshalNTimetableEntry2ᚖgithubᚗcomᚋCityboypeng
 		return graphql.Null
 	}
 	return ec._TimetableEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNTimetableEntryColor2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryColor(ctx context.Context, v any) (model.TimetableEntryColor, error) {
+	var res model.TimetableEntryColor
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTimetableEntryColor2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryColor(ctx context.Context, sel ast.SelectionSet, v model.TimetableEntryColor) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNUpdateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateAdministratorInput(ctx context.Context, v any) (model.UpdateAdministratorInput, error) {

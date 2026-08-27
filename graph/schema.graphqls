@@ -274,7 +274,7 @@ type Mutation {
   createCommunity(input: CreateCommunityInput!): Community!
   registerTimetableEntry(courseID: ID!): TimetableEntry!
   removeTimetableEntry(id: ID!): Boolean!
-  setTimetableProfileVisibility(id: ID!, visible: Boolean!): TimetableEntry!
+  setTimetableEntryColor(id: ID!, color: TimetableEntryColor!): TimetableEntry!
   # 「編集モード」の一括確定用。year/semester の時間割を courseIDs の内容に丸ごと
   # 置き換える（1トランザクション）。baselineEntryIDs が現在の登録内容と一致しない
   # 場合（他タブでの変更等）は何も変更せず CONFLICT エラーを返す。
@@ -601,8 +601,20 @@ type CoursePage {
 type TimetableEntry {
   ID: ID!
   course: Course!
-  isProfileVisible: Boolean!
+  color: TimetableEntryColor!
   createdAt: String!
+}
+
+# 時間割のコマに表示する色。ユーザーは自由な色ではなく、この決まったパレットから選ぶ。
+enum TimetableEntryColor {
+  BLUE
+  GREEN
+  PURPLE
+  PINK
+  ORANGE
+  TEAL
+  RED
+  YELLOW
 }
 
 type CurrentSemester {

@@ -33,7 +33,9 @@ type TimetableRepository interface {
 	// Remove deletes a timetable entry, scoped to userID so a user can only remove
 	// their own entries.
 	Remove(ctx context.Context, id, userID int64) (bool, error)
-	SetProfileVisibility(ctx context.Context, id, userID int64, visible bool) (*model.Timetable, error)
+	// SetColor updates the entry's display color on the timetable grid. color must be
+	// one of the fixed palette keys enforced by the GraphQL TimetableEntryColor enum.
+	SetColor(ctx context.Context, id, userID int64, color string) (*model.Timetable, error)
 	ListByUser(ctx context.Context, userID int64, year int, semester string) ([]*TimetableEntryWithCourse, error)
 	// IsRegistered reports whether userID has courseID in their timetable — used to
 	// gate course-chat writes (message/question/answer/poll) to students who have
@@ -43,7 +45,7 @@ type TimetableRepository interface {
 	// (year, semester) with exactly desiredCourseIDs, in one transaction: entries
 	// whose course is no longer desired are deleted, courses newly desired are
 	// inserted, and entries whose course is unchanged are left untouched
-	// (preserving IsProfileVisible). The current entry IDs are compared against
+	// (preserving Color). The current entry IDs are compared against
 	// baselineEntryIDs (as a set) before any write; a mismatch aborts the whole
 	// operation with ErrTimetableConflict instead of silently clobbering changes
 	// made elsewhere since the baseline was loaded. Returns ErrTimetableSlotConflict

@@ -48,8 +48,8 @@ func (r *MySQLTimetableRepository) Upsert(ctx context.Context, userID, courseID 
 	now := time.Now()
 	nowUnix := now.Unix()
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO timetables (user_id, course_id, is_profile_visible, created_at, updated_at) VALUES (?, ?, TRUE, ?, ?)`,
-		userID, courseID, nowUnix, nowUnix,
+		`INSERT INTO timetables (user_id, course_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		userID, courseID, model.TimetableEntryColorDefault, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -64,12 +64,12 @@ func (r *MySQLTimetableRepository) Upsert(ctx context.Context, userID, courseID 
 	}
 
 	return &model.Timetable{
-		ID:               id,
-		UserID:           userID,
-		CourseID:         courseID,
-		IsProfileVisible: true,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:        id,
+		UserID:    userID,
+		CourseID:  courseID,
+		Color:     model.TimetableEntryColorDefault,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}, nil
 }
 
@@ -85,11 +85,13 @@ func (r *MySQLTimetableRepository) Remove(ctx context.Context, id, userID int64)
 	return n > 0, nil
 }
 
-func (r *MySQLTimetableRepository) SetProfileVisibility(ctx context.Context, id, userID int64, visible bool) (*model.Timetable, error) {
+// SetColor updates the entry's display color, scoped to userID so a user can only
+// recolor their own entries.
+func (r *MySQLTimetableRepository) SetColor(ctx context.Context, id, userID int64, color string) (*model.Timetable, error) {
 	now := time.Now()
 	result, err := r.DB.ExecContext(ctx,
-		`UPDATE timetables SET is_profile_visible = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
-		visible, now.Unix(), id, userID,
+		`UPDATE timetables SET color = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+		color, now.Unix(), id, userID,
 	)
 	if err != nil {
 		return nil, err
@@ -103,7 +105,7 @@ func (r *MySQLTimetableRepository) SetProfileVisibility(ctx context.Context, id,
 	}
 
 	row := r.DB.QueryRowContext(ctx,
-		`SELECT id, user_id, course_id, is_profile_visible, created_at, updated_at FROM timetables WHERE id = ? AND user_id = ?`,
+		`SELECT id, user_id, course_id, color, created_at, updated_at FROM timetables WHERE id = ? AND user_id = ?`,
 		id, userID,
 	)
 	return scanTimetable(row)
@@ -114,7 +116,7 @@ func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64,
 	// must show up in both semester's views, so they're included alongside an
 	// exact match on the requested semester rather than only exact matches.
 	rows, err := r.DB.QueryContext(ctx, `
-		SELECT t.id, t.user_id, t.course_id, t.is_profile_visible, t.created_at, t.updated_at,
+		SELECT t.id, t.user_id, t.course_id, t.color, t.created_at, t.updated_at,
 		       `+courseColumns+`
 		FROM timetables t
 		JOIN courses c ON t.course_id = c.id
@@ -132,7 +134,7 @@ func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64,
 		var c model.Course
 		var tCreatedAt, tUpdatedAt, cCreatedAt, cUpdatedAt int64
 		if err := rows.Scan(
-			&t.ID, &t.UserID, &t.CourseID, &t.IsProfileVisible, &tCreatedAt, &tUpdatedAt,
+			&t.ID, &t.UserID, &t.CourseID, &t.Color, &tCreatedAt, &tUpdatedAt,
 			&c.ID, &c.RoomID, &c.DayOfWeek, &c.Period, &c.TeacherName, &c.CourseName, &c.Year, &c.Semester, &c.DedupKey, &cCreatedAt, &cUpdatedAt,
 		); err != nil {
 			return nil, err
@@ -223,8 +225,8 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 			continue
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO timetables (user_id, course_id, is_profile_visible, created_at, updated_at) VALUES (?, ?, TRUE, ?, ?)`,
-			userID, courseID, now, now,
+			`INSERT INTO timetables (user_id, course_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+			userID, courseID, model.TimetableEntryColorDefault, now, now,
 		); err != nil {
 			return nil, err
 		}
@@ -296,7 +298,7 @@ type timetableScanner interface {
 func scanTimetable(row timetableScanner) (*model.Timetable, error) {
 	var t model.Timetable
 	var createdAt, updatedAt int64
-	if err := row.Scan(&t.ID, &t.UserID, &t.CourseID, &t.IsProfileVisible, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.UserID, &t.CourseID, &t.Color, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}

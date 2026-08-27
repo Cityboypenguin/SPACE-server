@@ -549,10 +549,10 @@ type TimeSeriesPoint struct {
 }
 
 type TimetableEntry struct {
-	ID               string  `json:"ID"`
-	Course           *Course `json:"course"`
-	IsProfileVisible bool    `json:"isProfileVisible"`
-	CreatedAt        string  `json:"createdAt"`
+	ID        string              `json:"ID"`
+	Course    *Course             `json:"course"`
+	Color     TimetableEntryColor `json:"color"`
+	CreatedAt string              `json:"createdAt"`
 }
 
 type UpdateAdministratorInput struct {
@@ -1091,6 +1091,73 @@ func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
 }
 
 func (e TimeSeriesGranularity) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TimetableEntryColor string
+
+const (
+	TimetableEntryColorBlue   TimetableEntryColor = "BLUE"
+	TimetableEntryColorGreen  TimetableEntryColor = "GREEN"
+	TimetableEntryColorPurple TimetableEntryColor = "PURPLE"
+	TimetableEntryColorPink   TimetableEntryColor = "PINK"
+	TimetableEntryColorOrange TimetableEntryColor = "ORANGE"
+	TimetableEntryColorTeal   TimetableEntryColor = "TEAL"
+	TimetableEntryColorRed    TimetableEntryColor = "RED"
+	TimetableEntryColorYellow TimetableEntryColor = "YELLOW"
+)
+
+var AllTimetableEntryColor = []TimetableEntryColor{
+	TimetableEntryColorBlue,
+	TimetableEntryColorGreen,
+	TimetableEntryColorPurple,
+	TimetableEntryColorPink,
+	TimetableEntryColorOrange,
+	TimetableEntryColorTeal,
+	TimetableEntryColorRed,
+	TimetableEntryColorYellow,
+}
+
+func (e TimetableEntryColor) IsValid() bool {
+	switch e {
+	case TimetableEntryColorBlue, TimetableEntryColorGreen, TimetableEntryColorPurple, TimetableEntryColorPink, TimetableEntryColorOrange, TimetableEntryColorTeal, TimetableEntryColorRed, TimetableEntryColorYellow:
+		return true
+	}
+	return false
+}
+
+func (e TimetableEntryColor) String() string {
+	return string(e)
+}
+
+func (e *TimetableEntryColor) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TimetableEntryColor(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TimetableEntryColor", str)
+	}
+	return nil
+}
+
+func (e TimetableEntryColor) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TimetableEntryColor) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TimetableEntryColor) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

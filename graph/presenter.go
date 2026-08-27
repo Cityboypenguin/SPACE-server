@@ -151,10 +151,10 @@ func toGraphTimetableEntry(t *model.Timetable, course *model.Course) *gqlmodel.T
 		return nil
 	}
 	return &gqlmodel.TimetableEntry{
-		ID:               encodeGraphID("timetable", t.ID),
-		Course:           toGraphCourse(course),
-		IsProfileVisible: t.IsProfileVisible,
-		CreatedAt:        t.CreatedAt.Format(timeFormat),
+		ID:        encodeGraphID("timetable", t.ID),
+		Course:    toGraphCourse(course),
+		Color:     gqlmodel.TimetableEntryColor(t.Color),
+		CreatedAt: t.CreatedAt.Format(timeFormat),
 	}
 }
 

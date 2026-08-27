@@ -844,14 +844,14 @@ func (r *mutationResolver) RemoveTimetableEntry(ctx context.Context, id string) 
 	return r.RemoveTimetableUseCase.Execute(ctx, tID)
 }
 
-// SetTimetableProfileVisibility is the resolver for the setTimetableProfileVisibility field.
-func (r *mutationResolver) SetTimetableProfileVisibility(ctx context.Context, id string, visible bool) (*gqlmodel.TimetableEntry, error) {
+// SetTimetableEntryColor is the resolver for the setTimetableEntryColor field.
+func (r *mutationResolver) SetTimetableEntryColor(ctx context.Context, id string, color gqlmodel.TimetableEntryColor) (*gqlmodel.TimetableEntry, error) {
 	tID, err := decodeGraphID(ctx, "timetable", id)
 	if err != nil {
 		return nil, err
 	}
 
-	t, err := r.SetTimetableProfileVisibilityUseCase.Execute(ctx, tID, visible)
+	t, err := r.SetTimetableEntryColorUseCase.Execute(ctx, tID, string(color))
 	if err != nil {
 		return nil, err
 	}

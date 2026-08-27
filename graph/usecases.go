@@ -50,7 +50,7 @@ func NewCourseUseCases(
 		GetCourseByIDUseCase:                 courseusecase.NewGetCourseByIDUseCase(courseRepo),
 		RegisterTimetableUseCase:             timetableusecase.NewRegisterTimetableUseCase(timetableRepo),
 		RemoveTimetableUseCase:               timetableusecase.NewRemoveTimetableUseCase(timetableRepo),
-		SetTimetableProfileVisibilityUseCase: timetableusecase.NewSetTimetableProfileVisibilityUseCase(timetableRepo),
+		SetTimetableEntryColorUseCase: timetableusecase.NewSetTimetableEntryColorUseCase(timetableRepo),
 		ListTimetableUseCase:                 timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
 		ReplaceTimetableUseCase:              timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
 		GetCurrentSemesterUseCase:            semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
