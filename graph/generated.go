@@ -306,7 +306,7 @@ type ComplexityRoot struct {
 		CreateFavorite                    func(childComplexity int, input model.CreateFavoriteInput) int
 		CreateFavoriteUser                func(childComplexity int, favoriteUserID string) int
 		CreateInquiry                     func(childComplexity int, input model.CreateInquiryInput) int
-		CreatePoll                        func(childComplexity int, roomID string, question string, options []string, allowMultipleChoice *bool) int
+		CreatePoll                        func(childComplexity int, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) int
 		CreatePost                        func(childComplexity int, input model.CreatePostInput) int
 		CreateQuestion                    func(childComplexity int, roomID string, body string) int
 		CreateReport                      func(childComplexity int, input model.CreateReportInput) int
@@ -426,6 +426,7 @@ type ComplexityRoot struct {
 	Poll struct {
 		AllowMultipleChoice func(childComplexity int) int
 		CreatedAt           func(childComplexity int) int
+		Deadline            func(childComplexity int) int
 		ID                  func(childComplexity int) int
 		IsMine              func(childComplexity int) int
 		Options             func(childComplexity int) int
@@ -776,7 +777,7 @@ type MutationResolver interface {
 	UnlikeAnswer(ctx context.Context, id string) (*model.Answer, error)
 	SelectBestAnswer(ctx context.Context, questionID string, answerID string) (*model.Question, error)
 	CancelBestAnswer(ctx context.Context, questionID string) (*model.Question, error)
-	CreatePoll(ctx context.Context, roomID string, question string, options []string, allowMultipleChoice *bool) (*model.Poll, error)
+	CreatePoll(ctx context.Context, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) (*model.Poll, error)
 	VotePoll(ctx context.Context, pollID string, optionIDs []string) (*model.Poll, error)
 	DeletePoll(ctx context.Context, pollID string) (bool, error)
 	AdminDeleteQuestion(ctx context.Context, id string) (bool, error)
@@ -2169,7 +2170,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.CreatePoll(childComplexity, args["roomID"].(string), args["question"].(string), args["options"].([]string), args["allowMultipleChoice"].(*bool)), true
+		return e.ComplexityRoot.Mutation.CreatePoll(childComplexity, args["roomID"].(string), args["question"].(string), args["options"].([]string), args["allowMultipleChoice"].(*bool), args["deadline"].(*string)), true
 	case "Mutation.createPost":
 		if e.ComplexityRoot.Mutation.CreatePost == nil {
 			break
@@ -3117,6 +3118,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Poll.CreatedAt(childComplexity), true
+	case "Poll.deadline":
+		if e.ComplexityRoot.Poll.Deadline == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Poll.Deadline(childComplexity), true
 	case "Poll.ID":
 		if e.ComplexityRoot.Poll.ID == nil {
 			break
@@ -5481,6 +5488,8 @@ func (ec *executionContext) childFields_Poll(ctx context.Context, field graphql.
 		return ec.fieldContext_Poll_allowMultipleChoice(ctx, field)
 	case "options":
 		return ec.fieldContext_Poll_options(ctx, field)
+	case "deadline":
+		return ec.fieldContext_Poll_deadline(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Poll_createdAt(ctx, field)
 	case "isMine":
@@ -6240,6 +6249,14 @@ func (ec *executionContext) field_Mutation_createPoll_args(ctx context.Context, 
 		return nil, err
 	}
 	args["allowMultipleChoice"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "deadline",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["deadline"] = arg4
 	return args, nil
 }
 
@@ -14776,7 +14793,7 @@ func (ec *executionContext) _Mutation_createPoll(ctx context.Context, field grap
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().CreatePoll(ctx, fc.Args["roomID"].(string), fc.Args["question"].(string), fc.Args["options"].([]string), fc.Args["allowMultipleChoice"].(*bool))
+			return ec.Resolvers.Mutation().CreatePoll(ctx, fc.Args["roomID"].(string), fc.Args["question"].(string), fc.Args["options"].([]string), fc.Args["allowMultipleChoice"].(*bool), fc.Args["deadline"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Poll) graphql.Marshaler {
@@ -17544,6 +17561,29 @@ func (ec *executionContext) fieldContext_Poll_options(_ context.Context, field g
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Poll_deadline(ctx context.Context, field graphql.CollectedField, obj *model.Poll) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Poll_deadline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deadline, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Poll_deadline(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Poll", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Poll_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Poll) (ret graphql.Marshaler) {
@@ -29393,6 +29433,11 @@ func (ec *executionContext) _Poll(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "deadline":
+			out.Values[i] = ec._Poll_deadline(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "createdAt":
 			out.Values[i] = ec._Poll_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

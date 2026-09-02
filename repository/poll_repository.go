@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
@@ -12,6 +13,7 @@ type CreatePollParam struct {
 	AuthorRole          string
 	Question            string
 	AllowMultipleChoice bool
+	Deadline            *time.Time
 	OptionLabels        []string
 }
 

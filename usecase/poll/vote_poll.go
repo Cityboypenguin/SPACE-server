@@ -2,6 +2,7 @@ package poll
 
 import (
 	"context"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
@@ -41,6 +42,9 @@ func (uc *VotePollInteractor) Execute(ctx context.Context, pollID int64, optionI
 	}
 	if p == nil {
 		return apperr.NotFound("投票が見つかりません")
+	}
+	if p.Deadline != nil && !time.Now().Before(*p.Deadline) {
+		return apperr.InvalidInput("回答期限を過ぎているため投票できません")
 	}
 	if _, err := uc.requireWritable.Execute(ctx, p.RoomID); err != nil {
 		return err

@@ -395,6 +395,7 @@ type Poll struct {
 	Question            string        `json:"question"`
 	AllowMultipleChoice bool          `json:"allowMultipleChoice"`
 	Options             []*PollOption `json:"options"`
+	Deadline            *string       `json:"deadline,omitempty"`
 	CreatedAt           string        `json:"createdAt"`
 	IsMine              bool          `json:"isMine"`
 }

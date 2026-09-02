@@ -234,12 +234,18 @@ func toGraphPoll(p *model.Poll) *gqlmodel.Poll {
 	if p == nil {
 		return nil
 	}
+	var deadline *string
+	if p.Deadline != nil {
+		formatted := p.Deadline.Format(timeFormat)
+		deadline = &formatted
+	}
 	return &gqlmodel.Poll{
 		ID:                  encodeGraphID("poll", p.ID),
 		RoomID:              encodeGraphID("room", p.RoomID),
 		User:                &gqlmodel.User{ID: encodeGraphID("user", p.AuthorUserID)},
 		Question:            p.Question,
 		AllowMultipleChoice: p.AllowMultipleChoice,
+		Deadline:            deadline,
 		CreatedAt:           p.CreatedAt.Format(timeFormat),
 	}
 }

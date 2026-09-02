@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS polls (
     author_role           VARCHAR(20)  NOT NULL DEFAULT 'STUDENT',
     question              VARCHAR(255) NOT NULL,
     allow_multiple_choice BOOLEAN      NOT NULL DEFAULT FALSE,
+    deadline              BIGINT       NULL,
     created_at            BIGINT       NOT NULL,
     updated_at            BIGINT       NOT NULL,
     PRIMARY KEY (id),

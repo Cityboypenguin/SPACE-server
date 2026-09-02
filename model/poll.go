@@ -9,6 +9,7 @@ type Poll struct {
 	AuthorRole          string
 	Question            string
 	AllowMultipleChoice bool
+	Deadline            *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

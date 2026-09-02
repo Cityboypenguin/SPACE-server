@@ -294,7 +294,7 @@ type Mutation {
   unlikeAnswer(id: ID!): Answer!
   selectBestAnswer(questionID: ID!, answerID: ID!): Question!
   cancelBestAnswer(questionID: ID!): Question!
-  createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false): Poll!
+  createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false, deadline: String): Poll!
   votePoll(pollID: ID!, optionIDs: [ID!]!): Poll!
   deletePoll(pollID: ID!): Boolean!
   adminDeleteQuestion(id: ID!): Boolean!
@@ -714,6 +714,7 @@ type Poll {
   question: String!
   allowMultipleChoice: Boolean!
   options: [PollOption!]!
+  deadline: String
   createdAt: String!
   isMine: Boolean!
 }

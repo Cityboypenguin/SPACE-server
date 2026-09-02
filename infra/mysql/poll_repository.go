@@ -29,10 +29,15 @@ func (r *MySQLPollRepository) CreatePoll(ctx context.Context, param repository.C
 	now := time.Now()
 	nowUnix := now.Unix()
 
+	var deadlineUnix sql.NullInt64
+	if param.Deadline != nil {
+		deadlineUnix = sql.NullInt64{Int64: param.Deadline.Unix(), Valid: true}
+	}
+
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO polls (room_id, author_user_id, author_role, question, allow_multiple_choice, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		param.RoomID, param.AuthorUserID, param.AuthorRole, param.Question, param.AllowMultipleChoice, nowUnix, nowUnix,
+		`INSERT INTO polls (room_id, author_user_id, author_role, question, allow_multiple_choice, deadline, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		param.RoomID, param.AuthorUserID, param.AuthorRole, param.Question, param.AllowMultipleChoice, deadlineUnix, nowUnix, nowUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -62,6 +67,7 @@ func (r *MySQLPollRepository) CreatePoll(ctx context.Context, param repository.C
 		AuthorRole:          param.AuthorRole,
 		Question:            param.Question,
 		AllowMultipleChoice: param.AllowMultipleChoice,
+		Deadline:            param.Deadline,
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}, nil
@@ -69,7 +75,7 @@ func (r *MySQLPollRepository) CreatePoll(ctx context.Context, param repository.C
 
 func (r *MySQLPollRepository) GetPollByID(ctx context.Context, id int64) (*model.Poll, error) {
 	row := r.DB.QueryRowContext(ctx,
-		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, created_at, updated_at
+		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, deadline, created_at, updated_at
 		 FROM polls WHERE id = ?`, id)
 	return scanPoll(row)
 }
@@ -81,7 +87,7 @@ func (r *MySQLPollRepository) ListPollsByRoomID(ctx context.Context, roomID int6
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, created_at, updated_at
+		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, deadline, created_at, updated_at
 		 FROM polls WHERE room_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		roomID, limit, offset,
 	)
@@ -183,11 +189,16 @@ type pollScanner interface {
 func scanPoll(row pollScanner) (*model.Poll, error) {
 	var p model.Poll
 	var createdAt, updatedAt int64
-	if err := row.Scan(&p.ID, &p.RoomID, &p.AuthorUserID, &p.AuthorRole, &p.Question, &p.AllowMultipleChoice, &createdAt, &updatedAt); err != nil {
+	var deadline sql.NullInt64
+	if err := row.Scan(&p.ID, &p.RoomID, &p.AuthorUserID, &p.AuthorRole, &p.Question, &p.AllowMultipleChoice, &deadline, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if deadline.Valid {
+		t := time.Unix(deadline.Int64, 0)
+		p.Deadline = &t
 	}
 	p.CreatedAt = time.Unix(createdAt, 0)
 	p.UpdatedAt = time.Unix(updatedAt, 0)

@@ -1045,7 +1045,7 @@ func (r *mutationResolver) CancelBestAnswer(ctx context.Context, questionID stri
 }
 
 // CreatePoll is the resolver for the createPoll field.
-func (r *mutationResolver) CreatePoll(ctx context.Context, roomID string, question string, options []string, allowMultipleChoice *bool) (*gqlmodel.Poll, error) {
+func (r *mutationResolver) CreatePoll(ctx context.Context, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) (*gqlmodel.Poll, error) {
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
@@ -1056,7 +1056,16 @@ func (r *mutationResolver) CreatePoll(ctx context.Context, roomID string, questi
 		amc = *allowMultipleChoice
 	}
 
-	p, err := r.CreatePollUseCase.Execute(ctx, rid, question, options, amc)
+	var dl *time.Time
+	if deadline != nil {
+		parsed, err := time.Parse(timeFormat, *deadline)
+		if err != nil {
+			return nil, fmt.Errorf("invalid deadline")
+		}
+		dl = &parsed
+	}
+
+	p, err := r.CreatePollUseCase.Execute(ctx, rid, question, options, amc, dl)
 	if err != nil {
 		return nil, err
 	}
