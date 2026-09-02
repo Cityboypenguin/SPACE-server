@@ -2258,7 +2258,13 @@ func (r *pollResolver) User(ctx context.Context, obj *gqlmodel.Poll) (*gqlmodel.
 	}
 
 	if identity, err := r.anonymousIdentityForCourseRoom(ctx, obj.RoomID, numericUserID); err == nil && identity != nil {
-		return toGraphAnonymousUser(identity), nil
+		anon := toGraphAnonymousUser(identity)
+		// 投票の「先生からの投票」表示のため、匿名化しつつも role だけは実ユーザーのものを
+		// 引き継ぐ(name/avatarUrl/ID等は匿名IDのまま個人を特定できないようにする)。
+		if u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID); err == nil && u != nil {
+			anon.Role = u.Role
+		}
+		return anon, nil
 	}
 
 	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
