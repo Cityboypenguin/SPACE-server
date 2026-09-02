@@ -117,6 +117,54 @@ func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID,
 	return ch, nil
 }
 
+// answerSubscription handles the auth/access guard and PubSub fan-out for
+// question-scoped answer subscriptions (added, updated, deleted), mirroring
+// questionSubscription.
+func (r *subscriptionResolver) answerSubscription(ctx context.Context, questionID, topic string) (<-chan *gqlmodel.Answer, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	qid, err := decodeGraphID(ctx, "question", questionID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid question id")
+	}
+	q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid)
+	if err != nil {
+		return nil, err
+	}
+	if q == nil {
+		return nil, fmt.Errorf("question not found")
+	}
+	if _, err := r.requireRoomReadAccess(ctx, claims, q.RoomID); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan *gqlmodel.Answer, 1)
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					close(ch)
+					return
+				}
+				if a, ok := data.(*gqlmodel.Answer); ok {
+					ch <- a
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
 	return authz.RequireAuth(ctx)
 }

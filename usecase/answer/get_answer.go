@@ -4,12 +4,11 @@ import (
 	"context"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
-	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type GetAnswerByIDUseCase interface {
-	Execute(ctx context.Context, id int64) (*model.Answer, error)
+	Execute(ctx context.Context, id int64) (*repository.AnswerWithLikes, error)
 }
 
 var _ GetAnswerByIDUseCase = &GetAnswerByIDInteractor{}
@@ -22,9 +21,10 @@ func NewGetAnswerByIDUseCase(answerRepo repository.AnswerRepository) GetAnswerBy
 	return &GetAnswerByIDInteractor{answerRepo: answerRepo}
 }
 
-func (uc *GetAnswerByIDInteractor) Execute(ctx context.Context, id int64) (*model.Answer, error) {
-	if _, err := authz.RequireAuth(ctx); err != nil {
+func (uc *GetAnswerByIDInteractor) Execute(ctx context.Context, id int64) (*repository.AnswerWithLikes, error) {
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return uc.answerRepo.GetAnswerByID(ctx, id)
+	return uc.answerRepo.GetAnswerWithLikesByID(ctx, id, claims.ID)
 }

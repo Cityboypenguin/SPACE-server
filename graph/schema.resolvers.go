@@ -938,6 +938,74 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 	return gqlA, nil
 }
 
+// UpdateAnswer is the resolver for the updateAnswer field.
+func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body string) (*gqlmodel.Answer, error) {
+	aid, err := decodeGraphID(ctx, "answer", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid answer id")
+	}
+
+	aw, err := r.UpdateAnswerUseCase.Execute(ctx, aid, body)
+	if err != nil {
+		return nil, err
+	}
+
+	gqlA := toGraphAnswerWithLikes(aw)
+	r.PubSub.Publish(encodeGraphID("question", aw.Answer.QuestionID)+":answer:updated", gqlA)
+	return gqlA, nil
+}
+
+// DeleteAnswer is the resolver for the deleteAnswer field.
+func (r *mutationResolver) DeleteAnswer(ctx context.Context, id string) (bool, error) {
+	aid, err := decodeGraphID(ctx, "answer", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid answer id")
+	}
+
+	a, err := r.DeleteAnswerUseCase.Execute(ctx, aid)
+	if err != nil {
+		return false, err
+	}
+
+	gqlA := toGraphAnswer(a)
+	r.PubSub.Publish(encodeGraphID("question", a.QuestionID)+":answer:deleted", gqlA)
+	return true, nil
+}
+
+// LikeAnswer is the resolver for the likeAnswer field.
+func (r *mutationResolver) LikeAnswer(ctx context.Context, id string) (*gqlmodel.Answer, error) {
+	aid, err := decodeGraphID(ctx, "answer", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid answer id")
+	}
+
+	aw, err := r.LikeAnswerUseCase.Execute(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	gqlA := toGraphAnswerWithLikes(aw)
+	r.PubSub.Publish(encodeGraphID("question", aw.Answer.QuestionID)+":answer:updated", gqlA)
+	return gqlA, nil
+}
+
+// UnlikeAnswer is the resolver for the unlikeAnswer field.
+func (r *mutationResolver) UnlikeAnswer(ctx context.Context, id string) (*gqlmodel.Answer, error) {
+	aid, err := decodeGraphID(ctx, "answer", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid answer id")
+	}
+
+	aw, err := r.UnlikeAnswerUseCase.Execute(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	gqlA := toGraphAnswerWithLikes(aw)
+	r.PubSub.Publish(encodeGraphID("question", aw.Answer.QuestionID)+":answer:updated", gqlA)
+	return gqlA, nil
+}
+
 // SelectBestAnswer is the resolver for the selectBestAnswer field.
 func (r *mutationResolver) SelectBestAnswer(ctx context.Context, questionID string, answerID string) (*gqlmodel.Question, error) {
 	qid, err := decodeGraphID(ctx, "question", questionID)
@@ -950,6 +1018,23 @@ func (r *mutationResolver) SelectBestAnswer(ctx context.Context, questionID stri
 	}
 
 	q, err := r.SelectBestAnswerUseCase.Execute(ctx, qid, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	gqlQ := toGraphQuestion(q)
+	r.PubSub.Publish(encodeGraphID("room", q.RoomID)+":question:updated", gqlQ)
+	return gqlQ, nil
+}
+
+// CancelBestAnswer is the resolver for the cancelBestAnswer field.
+func (r *mutationResolver) CancelBestAnswer(ctx context.Context, questionID string) (*gqlmodel.Question, error) {
+	qid, err := decodeGraphID(ctx, "question", questionID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid question id")
+	}
+
+	q, err := r.CancelBestAnswerUseCase.Execute(ctx, qid)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,6 +1094,37 @@ func (r *mutationResolver) VotePoll(ctx context.Context, pollID string, optionID
 	gqlP := toGraphPoll(p)
 	r.PubSub.Publish(pollID+":poll:updated", gqlP)
 	return gqlP, nil
+}
+
+// DeletePoll is the resolver for the deletePoll field.
+func (r *mutationResolver) DeletePoll(ctx context.Context, pollID string) (bool, error) {
+	pid, err := decodeGraphID(ctx, "poll", pollID)
+	if err != nil {
+		return false, fmt.Errorf("invalid poll id")
+	}
+
+	p, err := r.DeletePollUseCase.Execute(ctx, pid)
+	if err != nil {
+		return false, err
+	}
+
+	gqlP := toGraphPoll(p)
+	r.PubSub.Publish(encodeGraphID("room", p.RoomID)+":poll:deleted", gqlP)
+	return true, nil
+}
+
+// AdminDeleteQuestion is the resolver for the adminDeleteQuestion field.
+func (r *mutationResolver) AdminDeleteQuestion(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "question", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid question id")
+	}
+
+	return r.DeleteQuestionUseCase.Execute(ctx, numericID)
 }
 
 // AdminTriggerCourseImport is the resolver for the adminTriggerCourseImport field.
@@ -2160,6 +2276,11 @@ func (r *pollResolver) Options(ctx context.Context, obj *gqlmodel.Poll) ([]*gqlm
 		out = append(out, toGraphPollOption(res))
 	}
 	return out, nil
+}
+
+// IsMine is the resolver for the isMine field.
+func (r *pollResolver) IsMine(ctx context.Context, obj *gqlmodel.Poll) (bool, error) {
+	return isCallerID(ctx, obj.User.ID), nil
 }
 
 // User is the resolver for the user field on Post.
@@ -4113,6 +4234,24 @@ func (r *queryResolver) AdminListCourseYears(ctx context.Context) ([]int32, erro
 	return result, nil
 }
 
+// AdminGetCourse is the resolver for the adminGetCourse field.
+func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmodel.Course, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "course", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course id")
+	}
+
+	c, err := r.GetCourseByIDUseCase.Execute(ctx, numericID)
+	if err != nil || c == nil {
+		return nil, err
+	}
+	return toGraphCourse(c), nil
+}
+
 // AdminListCourses is the resolver for the adminListCourses field.
 func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -4187,7 +4326,7 @@ func (r *questionResolver) BestAnswer(ctx context.Context, obj *gqlmodel.Questio
 	if err != nil || a == nil {
 		return nil, err
 	}
-	return toGraphAnswer(a), nil
+	return toGraphAnswerWithLikes(a), nil
 }
 
 // Answers is the resolver for the answers field.
@@ -4204,7 +4343,7 @@ func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question) 
 
 	result := make([]*gqlmodel.Answer, 0, len(answers))
 	for _, a := range answers {
-		result = append(result, toGraphAnswer(a))
+		result = append(result, toGraphAnswerWithLikes(a))
 	}
 	return result, nil
 }
@@ -4297,50 +4436,17 @@ func (r *subscriptionResolver) QuestionUpdated(ctx context.Context, roomID strin
 
 // AnswerAdded is the resolver for the answerAdded field.
 func (r *subscriptionResolver) AnswerAdded(ctx context.Context, questionID string) (<-chan *gqlmodel.Answer, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
+	return r.answerSubscription(ctx, questionID, questionID+":answer:added")
+}
 
-	qid, err := decodeGraphID(ctx, "question", questionID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid question id")
-	}
-	q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid)
-	if err != nil {
-		return nil, err
-	}
-	if q == nil {
-		return nil, fmt.Errorf("question not found")
-	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, q.RoomID); err != nil {
-		return nil, err
-	}
+// AnswerUpdated is the resolver for the answerUpdated field.
+func (r *subscriptionResolver) AnswerUpdated(ctx context.Context, questionID string) (<-chan *gqlmodel.Answer, error) {
+	return r.answerSubscription(ctx, questionID, questionID+":answer:updated")
+}
 
-	topic := questionID + ":answer:added"
-	ch := make(chan *gqlmodel.Answer, 1)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if a, ok := data.(*gqlmodel.Answer); ok {
-					ch <- a
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+// AnswerDeleted is the resolver for the answerDeleted field.
+func (r *subscriptionResolver) AnswerDeleted(ctx context.Context, questionID string) (<-chan *gqlmodel.Answer, error) {
+	return r.answerSubscription(ctx, questionID, questionID+":answer:deleted")
 }
 
 // PollAdded is the resolver for the pollAdded field.
@@ -4405,6 +4511,46 @@ func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (
 	}
 
 	topic := pollID + ":poll:updated"
+	ch := make(chan *gqlmodel.Poll, 1)
+	sub := r.PubSub.Subscribe(topic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(topic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					close(ch)
+					return
+				}
+				if p, ok := data.(*gqlmodel.Poll); ok {
+					ch <- p
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// PollDeleted is the resolver for the pollDeleted field.
+func (r *subscriptionResolver) PollDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Poll, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+		return nil, err
+	}
+
+	topic := roomID + ":poll:deleted"
 	ch := make(chan *gqlmodel.Poll, 1)
 	sub := r.PubSub.Subscribe(topic)
 

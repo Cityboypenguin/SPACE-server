@@ -79,9 +79,15 @@ func NewQuestionUseCases(
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
 		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(questionRepo, answerRepo),
+		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo),
+		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
 		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, requireWritable),
 		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
 		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
+		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo),
+		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo),
+		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(answerRepo),
+		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(answerRepo),
 	}
 }
 
@@ -97,6 +103,7 @@ func NewPollUseCases(
 	return PollUseCases{
 		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable),
 		VotePollUseCase:              pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
+		DeletePollUseCase:            pollusecase.NewDeletePollUseCase(pollRepo),
 		ListPollsUseCase:             pollusecase.NewListPollsUseCase(pollRepo),
 		GetPollByIDUseCase:           pollusecase.NewGetPollByIDUseCase(pollRepo),
 		ListPollOptionResultsUseCase: pollusecase.NewListPollOptionResultsUseCase(pollRepo),

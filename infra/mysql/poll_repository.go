@@ -164,6 +164,18 @@ func (r *MySQLPollRepository) ReplaceVotes(ctx context.Context, pollID, userID i
 	return tx.Commit()
 }
 
+func (r *MySQLPollRepository) DeletePoll(ctx context.Context, pollID int64) (bool, error) {
+	result, err := r.DB.ExecContext(ctx, `DELETE FROM polls WHERE id = ?`, pollID)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 type pollScanner interface {
 	Scan(dest ...any) error
 }

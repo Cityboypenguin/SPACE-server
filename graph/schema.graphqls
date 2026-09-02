@@ -131,6 +131,7 @@ type Query {
   poll(id: ID!): Poll
   adminCourseImportStatus: CourseImportStatus!
   adminListCourseYears: [Int!]!
+  adminGetCourse(id: ID!): Course
   adminListCourses(
     year: Int
     semester: String
@@ -287,9 +288,16 @@ type Mutation {
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
   createQuestion(roomID: ID!, body: String!): Question!
   answerQuestion(questionID: ID!, body: String!): Answer!
+  updateAnswer(id: ID!, body: String!): Answer!
+  deleteAnswer(id: ID!): Boolean!
+  likeAnswer(id: ID!): Answer!
+  unlikeAnswer(id: ID!): Answer!
   selectBestAnswer(questionID: ID!, answerID: ID!): Question!
+  cancelBestAnswer(questionID: ID!): Question!
   createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false): Poll!
   votePoll(pollID: ID!, optionIDs: [ID!]!): Poll!
+  deletePoll(pollID: ID!): Boolean!
+  adminDeleteQuestion(id: ID!): Boolean!
   adminTriggerCourseImport(year: Int!): CourseImportStatus!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
@@ -688,7 +696,10 @@ type Answer {
   user: User!
   body: String!
   createdAt: String!
+  updatedAt: String!
   isMine: Boolean!
+  likeCount: Int!
+  likedByMe: Boolean!
 }
 
 type QuestionPage {
@@ -704,6 +715,7 @@ type Poll {
   allowMultipleChoice: Boolean!
   options: [PollOption!]!
   createdAt: String!
+  isMine: Boolean!
 }
 
 type PollOption {
@@ -726,8 +738,11 @@ type Subscription {
   questionAdded(roomID: ID!): Question!
   questionUpdated(roomID: ID!): Question!
   answerAdded(questionID: ID!): Answer!
+  answerUpdated(questionID: ID!): Answer!
+  answerDeleted(questionID: ID!): Answer!
   pollAdded(roomID: ID!): Poll!
   pollUpdated(pollID: ID!): Poll!
+  pollDeleted(roomID: ID!): Poll!
 }
 
 enum ReportStatus {

@@ -243,14 +243,21 @@ type QuestionUseCases struct {
 	ListQuestionsUseCase    questionusecase.ListQuestionsUseCase
 	GetQuestionByIDUseCase  questionusecase.GetQuestionByIDUseCase
 	SelectBestAnswerUseCase questionusecase.SelectBestAnswerUseCase
+	CancelBestAnswerUseCase questionusecase.CancelBestAnswerUseCase
+	DeleteQuestionUseCase   questionusecase.DeleteQuestionUseCase
 	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
 	ListAnswersUseCase      answerusecase.ListAnswersUseCase
 	GetAnswerByIDUseCase    answerusecase.GetAnswerByIDUseCase
+	UpdateAnswerUseCase     answerusecase.UpdateAnswerUseCase
+	DeleteAnswerUseCase     answerusecase.DeleteAnswerUseCase
+	LikeAnswerUseCase       answerusecase.LikeAnswerUseCase
+	UnlikeAnswerUseCase     answerusecase.UnlikeAnswerUseCase
 }
 
 type PollUseCases struct {
 	CreatePollUseCase            pollusecase.CreatePollUseCase
 	VotePollUseCase              pollusecase.VotePollUseCase
+	DeletePollUseCase            pollusecase.DeletePollUseCase
 	ListPollsUseCase             pollusecase.ListPollsUseCase
 	GetPollByIDUseCase           pollusecase.GetPollByIDUseCase
 	ListPollOptionResultsUseCase pollusecase.ListPollOptionResultsUseCase

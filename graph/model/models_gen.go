@@ -109,7 +109,10 @@ type Answer struct {
 	User       *User  `json:"user"`
 	Body       string `json:"body"`
 	CreatedAt  string `json:"createdAt"`
+	UpdatedAt  string `json:"updatedAt"`
 	IsMine     bool   `json:"isMine"`
+	LikeCount  int32  `json:"likeCount"`
+	LikedByMe  bool   `json:"likedByMe"`
 }
 
 type Blocker struct {
@@ -393,6 +396,7 @@ type Poll struct {
 	AllowMultipleChoice bool          `json:"allowMultipleChoice"`
 	Options             []*PollOption `json:"options"`
 	CreatedAt           string        `json:"createdAt"`
+	IsMine              bool          `json:"isMine"`
 }
 
 type PollOption struct {

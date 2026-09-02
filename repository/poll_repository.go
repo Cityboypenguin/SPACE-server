@@ -35,4 +35,7 @@ type PollRepository interface {
 	// enforced at the SQL level). Used for both single- and multiple-choice polls:
 	// re-voting always replaces the previous selection.
 	ReplaceVotes(ctx context.Context, pollID, userID int64, optionIDs []int64) error
+	// DeletePoll removes a poll (and its options and votes, via ON DELETE CASCADE). It
+	// returns false if no row matched.
+	DeletePoll(ctx context.Context, pollID int64) (bool, error)
 }

@@ -213,7 +213,18 @@ func toGraphAnswer(a *model.Answer) *gqlmodel.Answer {
 		User:       &gqlmodel.User{ID: encodeGraphID("user", a.AuthorUserID)},
 		Body:       a.Body,
 		CreatedAt:  a.CreatedAt.Format(timeFormat),
+		UpdatedAt:  a.UpdatedAt.Format(timeFormat),
 	}
+}
+
+func toGraphAnswerWithLikes(aw *repository.AnswerWithLikes) *gqlmodel.Answer {
+	if aw == nil {
+		return nil
+	}
+	gqlA := toGraphAnswer(aw.Answer)
+	gqlA.LikeCount = int32(aw.LikeCount)
+	gqlA.LikedByMe = aw.LikedByMe
+	return gqlA
 }
 
 // toGraphPoll sets User as an ID-only placeholder (matching the toGraphPost/

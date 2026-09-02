@@ -59,26 +59,94 @@ func (r *MySQLAnswerRepository) GetAnswerByID(ctx context.Context, id int64) (*m
 	return r.scanAnswer(row)
 }
 
-func (r *MySQLAnswerRepository) ListAnswersByQuestionID(ctx context.Context, questionID int64) ([]*model.Answer, error) {
-	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, question_id, author_user_id, author_role, body, created_at, updated_at
-		 FROM answers WHERE question_id = ? ORDER BY created_at ASC`,
-		questionID,
-	)
+func (r *MySQLAnswerRepository) GetAnswerWithLikesByID(ctx context.Context, id, viewerUserID int64) (*repository.AnswerWithLikes, error) {
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx, `
+		SELECT a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at,
+		       COUNT(al.id) AS like_count,
+		       SUM(CASE WHEN al.user_id = ? THEN 1 ELSE 0 END) AS my_like_count
+		FROM answers a
+		LEFT JOIN answer_likes al ON al.answer_id = a.id
+		WHERE a.id = ?
+		GROUP BY a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at
+	`, viewerUserID, id)
+	return r.scanAnswerWithLikes(row)
+}
+
+func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64) ([]*repository.AnswerWithLikes, error) {
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at,
+		       COUNT(al.id) AS like_count,
+		       SUM(CASE WHEN al.user_id = ? THEN 1 ELSE 0 END) AS my_like_count
+		FROM answers a
+		LEFT JOIN answer_likes al ON al.answer_id = a.id
+		WHERE a.question_id = ?
+		GROUP BY a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at
+		ORDER BY like_count DESC, a.created_at ASC
+	`, viewerUserID, questionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var list []*model.Answer
+	var list []*repository.AnswerWithLikes
 	for rows.Next() {
-		a, err := r.scanAnswer(rows)
+		aw, err := r.scanAnswerWithLikes(rows)
 		if err != nil {
 			return nil, err
 		}
-		list = append(list, a)
+		list = append(list, aw)
 	}
 	return list, rows.Err()
+}
+
+func (r *MySQLAnswerRepository) UpdateAnswerBody(ctx context.Context, answerID, authorUserID int64, body string) (bool, error) {
+	encrypted, err := r.cipher.Encrypt(body)
+	if err != nil {
+		return false, fmt.Errorf("encrypt answer body: %w", err)
+	}
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`UPDATE answers SET body = ?, updated_at = ? WHERE id = ? AND author_user_id = ?`,
+		encrypted, time.Now().Unix(), answerID, authorUserID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (r *MySQLAnswerRepository) DeleteAnswer(ctx context.Context, answerID, authorUserID int64) (bool, error) {
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`DELETE FROM answers WHERE id = ? AND author_user_id = ?`,
+		answerID, authorUserID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (r *MySQLAnswerRepository) LikeAnswer(ctx context.Context, answerID, userID int64) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`INSERT IGNORE INTO answer_likes (answer_id, user_id, created_at) VALUES (?, ?, ?)`,
+		answerID, userID, time.Now().Unix(),
+	)
+	return err
+}
+
+func (r *MySQLAnswerRepository) UnlikeAnswer(ctx context.Context, answerID, userID int64) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`DELETE FROM answer_likes WHERE answer_id = ? AND user_id = ?`,
+		answerID, userID,
+	)
+	return err
 }
 
 type answerScanner interface {
@@ -104,4 +172,31 @@ func (r *MySQLAnswerRepository) scanAnswer(row answerScanner) (*model.Answer, er
 	a.Body = body
 
 	return &a, nil
+}
+
+func (r *MySQLAnswerRepository) scanAnswerWithLikes(row answerScanner) (*repository.AnswerWithLikes, error) {
+	var a model.Answer
+	var createdAt, updatedAt int64
+	var likeCount int
+	var myLikeCount sql.NullInt64
+	if err := row.Scan(&a.ID, &a.QuestionID, &a.AuthorUserID, &a.AuthorRole, &a.Body, &createdAt, &updatedAt, &likeCount, &myLikeCount); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	a.CreatedAt = time.Unix(createdAt, 0)
+	a.UpdatedAt = time.Unix(updatedAt, 0)
+
+	body, err := r.cipher.Decrypt(a.Body)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt answer body: %w", err)
+	}
+	a.Body = body
+
+	return &repository.AnswerWithLikes{
+		Answer:    &a,
+		LikeCount: likeCount,
+		LikedByMe: myLikeCount.Valid && myLikeCount.Int64 > 0,
+	}, nil
 }
