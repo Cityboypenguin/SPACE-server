@@ -9,7 +9,7 @@ import (
 )
 
 type ListPollsUseCase interface {
-	Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error)
+	Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, int, error)
 }
 
 var _ ListPollsUseCase = &ListPollsInteractor{}
@@ -22,9 +22,18 @@ func NewListPollsUseCase(pollRepo repository.PollRepository) ListPollsUseCase {
 	return &ListPollsInteractor{pollRepo: pollRepo}
 }
 
-func (uc *ListPollsInteractor) Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error) {
-	if _, err := authz.RequireAuth(ctx); err != nil {
-		return nil, 0, err
+func (uc *ListPollsInteractor) Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, int, error) {
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
+		return nil, 0, 0, err
 	}
-	return uc.pollRepo.ListPollsByRoomID(ctx, roomID, limit, offset)
+	items, total, err := uc.pollRepo.ListPollsByRoomID(ctx, roomID, limit, offset)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	unvotedTotal, err := uc.pollRepo.CountUnvotedPollsByRoomID(ctx, roomID, claims.ID)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return items, total, unvotedTotal, nil
 }

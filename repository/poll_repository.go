@@ -31,6 +31,7 @@ type PollRepository interface {
 	CreatePoll(ctx context.Context, param CreatePollParam) (*model.Poll, error)
 	GetPollByID(ctx context.Context, id int64) (*model.Poll, error)
 	ListPollsByRoomID(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error)
+	CountUnvotedPollsByRoomID(ctx context.Context, roomID, viewerUserID int64) (int, error)
 	ListOptionsWithResults(ctx context.Context, pollID, viewerUserID int64) ([]*PollOptionResult, error)
 	// ReplaceVotes atomically clears userID's existing votes on pollID and inserts new
 	// votes for optionIDs (only options that actually belong to pollID are accepted,

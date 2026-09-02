@@ -729,6 +729,7 @@ type PollOption {
 type PollPage {
   items: [Poll!]!
   total: Int!
+  unvotedTotal: Int!
 }
 
 type Subscription {

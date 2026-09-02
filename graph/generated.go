@@ -443,8 +443,9 @@ type ComplexityRoot struct {
 	}
 
 	PollPage struct {
-		Items func(childComplexity int) int
-		Total func(childComplexity int) int
+		Items        func(childComplexity int) int
+		Total        func(childComplexity int) int
+		UnvotedTotal func(childComplexity int) int
 	}
 
 	Post struct {
@@ -3198,6 +3199,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PollPage.Total(childComplexity), true
+	case "PollPage.unvotedTotal":
+		if e.ComplexityRoot.PollPage.UnvotedTotal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PollPage.UnvotedTotal(childComplexity), true
 
 	case "Post.content":
 		if e.ComplexityRoot.Post.Content == nil {
@@ -5518,6 +5525,8 @@ func (ec *executionContext) childFields_PollPage(ctx context.Context, field grap
 		return ec.fieldContext_PollPage_items(ctx, field)
 	case "total":
 		return ec.fieldContext_PollPage_total(ctx, field)
+	case "unvotedTotal":
+		return ec.fieldContext_PollPage_unvotedTotal(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PollPage", field.Name)
 }
@@ -17779,6 +17788,29 @@ func (ec *executionContext) fieldContext_PollPage_total(_ context.Context, field
 	return graphql.NewScalarFieldContext("PollPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _PollPage_unvotedTotal(ctx context.Context, field graphql.CollectedField, obj *model.PollPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PollPage_unvotedTotal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnvotedTotal, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PollPage_unvotedTotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PollPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _Post_ID(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29574,6 +29606,11 @@ func (ec *executionContext) _PollPage(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "total":
 			out.Values[i] = ec._PollPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unvotedTotal":
+			out.Values[i] = ec._PollPage_unvotedTotal(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

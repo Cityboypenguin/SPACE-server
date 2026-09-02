@@ -4188,7 +4188,7 @@ func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, 
 		o = int(*offset)
 	}
 
-	items, total, err := r.ListPollsUseCase.Execute(ctx, rid, l, o)
+	items, total, unvotedTotal, err := r.ListPollsUseCase.Execute(ctx, rid, l, o)
 	if err != nil {
 		return nil, err
 	}
@@ -4197,7 +4197,7 @@ func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, 
 	for _, p := range items {
 		gqlItems = append(gqlItems, toGraphPoll(p))
 	}
-	return &gqlmodel.PollPage{Items: gqlItems, Total: int32(total)}, nil
+	return &gqlmodel.PollPage{Items: gqlItems, Total: int32(total), UnvotedTotal: int32(unvotedTotal)}, nil
 }
 
 // Poll is the resolver for the poll field.

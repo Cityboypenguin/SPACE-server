@@ -408,8 +408,9 @@ type PollOption struct {
 }
 
 type PollPage struct {
-	Items []*Poll `json:"items"`
-	Total int32   `json:"total"`
+	Items        []*Poll `json:"items"`
+	Total        int32   `json:"total"`
+	UnvotedTotal int32   `json:"unvotedTotal"`
 }
 
 type Post struct {
