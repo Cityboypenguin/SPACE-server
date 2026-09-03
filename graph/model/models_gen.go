@@ -104,15 +104,16 @@ type AnnouncementPage struct {
 }
 
 type Answer struct {
-	ID         string `json:"ID"`
-	QuestionID string `json:"questionID"`
-	User       *User  `json:"user"`
-	Body       string `json:"body"`
-	CreatedAt  string `json:"createdAt"`
-	UpdatedAt  string `json:"updatedAt"`
-	IsMine     bool   `json:"isMine"`
-	LikeCount  int32  `json:"likeCount"`
-	LikedByMe  bool   `json:"likedByMe"`
+	ID         string   `json:"ID"`
+	QuestionID string   `json:"questionID"`
+	User       *User    `json:"user"`
+	Body       string   `json:"body"`
+	Media      []*Media `json:"media"`
+	CreatedAt  string   `json:"createdAt"`
+	UpdatedAt  string   `json:"updatedAt"`
+	IsMine     bool     `json:"isMine"`
+	LikeCount  int32    `json:"likeCount"`
+	LikedByMe  bool     `json:"likedByMe"`
 }
 
 type AnswerPage struct {
@@ -463,6 +464,7 @@ type Question struct {
 	IsAnswered bool        `json:"isAnswered"`
 	BestAnswer *Answer     `json:"bestAnswer,omitempty"`
 	Answers    *AnswerPage `json:"answers"`
+	Media      []*Media    `json:"media"`
 	CreatedAt  string      `json:"createdAt"`
 	UpdatedAt  string      `json:"updatedAt"`
 	IsMine     bool        `json:"isMine"`

@@ -142,6 +142,7 @@ type ComplexityRoot struct {
 		IsMine     func(childComplexity int) int
 		LikeCount  func(childComplexity int) int
 		LikedByMe  func(childComplexity int) int
+		Media      func(childComplexity int) int
 		QuestionID func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 		User       func(childComplexity int) int
@@ -301,7 +302,7 @@ type ComplexityRoot struct {
 		AdminTriggerCourseImport          func(childComplexity int, year int32) int
 		AdminUpdateProfile                func(childComplexity int, userID string, input model.UpdateProfileInput) int
 		AdminUpdateUser                   func(childComplexity int, id string, input model.UpdateUserInput) int
-		AnswerQuestion                    func(childComplexity int, questionID string, body string) int
+		AnswerQuestion                    func(childComplexity int, questionID string, body string, mediaInputs []*model.MediaUploadInput) int
 		CancelBestAnswer                  func(childComplexity int, questionID string) int
 		ConsentToTerms                    func(childComplexity int, termsID string) int
 		CreateAdministrator               func(childComplexity int, input model.CreateAdministratorInput) int
@@ -313,7 +314,7 @@ type ComplexityRoot struct {
 		CreateInquiry                     func(childComplexity int, input model.CreateInquiryInput) int
 		CreatePoll                        func(childComplexity int, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) int
 		CreatePost                        func(childComplexity int, input model.CreatePostInput) int
-		CreateQuestion                    func(childComplexity int, roomID string, body string) int
+		CreateQuestion                    func(childComplexity int, roomID string, body string, mediaInputs []*model.MediaUploadInput) int
 		CreateReport                      func(childComplexity int, input model.CreateReportInput) int
 		CreateRoom                        func(childComplexity int, input model.CreateRoomInput) int
 		CreateTermsOfService              func(childComplexity int, input model.CreateTermsOfServiceInput) int
@@ -581,6 +582,7 @@ type ComplexityRoot struct {
 		ID         func(childComplexity int) int
 		IsAnswered func(childComplexity int) int
 		IsMine     func(childComplexity int) int
+		Media      func(childComplexity int) int
 		RoomID     func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 		User       func(childComplexity int) int
@@ -727,6 +729,8 @@ type ComplexityRoot struct {
 type AnswerResolver interface {
 	User(ctx context.Context, obj *model.Answer) (*model.User, error)
 
+	Media(ctx context.Context, obj *model.Answer) ([]*model.Media, error)
+
 	IsMine(ctx context.Context, obj *model.Answer) (bool, error)
 }
 type FavoriteResolver interface {
@@ -778,10 +782,10 @@ type MutationResolver interface {
 	SetTimetableEntryColor(ctx context.Context, id string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
 	SetMyTimetable(ctx context.Context, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*model.CurrentSemester, error)
-	CreateQuestion(ctx context.Context, roomID string, body string) (*model.Question, error)
+	CreateQuestion(ctx context.Context, roomID string, body string, mediaInputs []*model.MediaUploadInput) (*model.Question, error)
 	UpdateQuestion(ctx context.Context, id string, body string) (*model.Question, error)
 	DeleteQuestion(ctx context.Context, id string) (bool, error)
-	AnswerQuestion(ctx context.Context, questionID string, body string) (*model.Answer, error)
+	AnswerQuestion(ctx context.Context, questionID string, body string, mediaInputs []*model.MediaUploadInput) (*model.Answer, error)
 	UpdateAnswer(ctx context.Context, id string, body string) (*model.Answer, error)
 	DeleteAnswer(ctx context.Context, id string) (bool, error)
 	LikeAnswer(ctx context.Context, id string) (*model.Answer, error)
@@ -940,6 +944,7 @@ type QuestionResolver interface {
 
 	BestAnswer(ctx context.Context, obj *model.Question) (*model.Answer, error)
 	Answers(ctx context.Context, obj *model.Question, limit *int32, offset *int32) (*model.AnswerPage, error)
+	Media(ctx context.Context, obj *model.Question) ([]*model.Media, error)
 
 	IsMine(ctx context.Context, obj *model.Question) (bool, error)
 }
@@ -1448,6 +1453,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Answer.LikedByMe(childComplexity), true
+	case "Answer.media":
+		if e.ComplexityRoot.Answer.Media == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Answer.Media(childComplexity), true
 	case "Answer.questionID":
 		if e.ComplexityRoot.Answer.QuestionID == nil {
 			break
@@ -2085,7 +2096,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.AnswerQuestion(childComplexity, args["questionID"].(string), args["body"].(string)), true
+		return e.ComplexityRoot.Mutation.AnswerQuestion(childComplexity, args["questionID"].(string), args["body"].(string), args["mediaInputs"].([]*model.MediaUploadInput)), true
 	case "Mutation.cancelBestAnswer":
 		if e.ComplexityRoot.Mutation.CancelBestAnswer == nil {
 			break
@@ -2217,7 +2228,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.CreateQuestion(childComplexity, args["roomID"].(string), args["body"].(string)), true
+		return e.ComplexityRoot.Mutation.CreateQuestion(childComplexity, args["roomID"].(string), args["body"].(string), args["mediaInputs"].([]*model.MediaUploadInput)), true
 	case "Mutation.createReport":
 		if e.ComplexityRoot.Mutation.CreateReport == nil {
 			break
@@ -4233,6 +4244,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Question.IsMine(childComplexity), true
+	case "Question.media":
+		if e.ComplexityRoot.Question.Media == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Question.Media(childComplexity), true
 	case "Question.roomID":
 		if e.ComplexityRoot.Question.RoomID == nil {
 			break
@@ -5159,6 +5176,8 @@ func (ec *executionContext) childFields_Answer(ctx context.Context, field graphq
 		return ec.fieldContext_Answer_user(ctx, field)
 	case "body":
 		return ec.fieldContext_Answer_body(ctx, field)
+	case "media":
+		return ec.fieldContext_Answer_media(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Answer_createdAt(ctx, field)
 	case "updatedAt":
@@ -5687,6 +5706,8 @@ func (ec *executionContext) childFields_Question(ctx context.Context, field grap
 		return ec.fieldContext_Question_bestAnswer(ctx, field)
 	case "answers":
 		return ec.fieldContext_Question_answers(ctx, field)
+	case "media":
+		return ec.fieldContext_Question_media(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Question_createdAt(ctx, field)
 	case "updatedAt":
@@ -6166,6 +6187,14 @@ func (ec *executionContext) field_Mutation_answerQuestion_args(ctx context.Conte
 		return nil, err
 	}
 	args["body"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "mediaInputs",
+		func(ctx context.Context, v any) ([]*model.MediaUploadInput, error) {
+			return ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mediaInputs"] = arg2
 	return args, nil
 }
 
@@ -6374,6 +6403,14 @@ func (ec *executionContext) field_Mutation_createQuestion_args(ctx context.Conte
 		return nil, err
 	}
 	args["body"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "mediaInputs",
+		func(ctx context.Context, v any) ([]*model.MediaUploadInput, error) {
+			return ec.unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaUploadInputᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mediaInputs"] = arg2
 	return args, nil
 }
 
@@ -10887,6 +10924,38 @@ func (ec *executionContext) fieldContext_Answer_body(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Answer", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Answer_media(ctx context.Context, field graphql.CollectedField, obj *model.Answer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Answer_media(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Answer().Media(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+			return ec.marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Answer_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Answer",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Answer_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Answer) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14649,7 +14718,7 @@ func (ec *executionContext) _Mutation_createQuestion(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().CreateQuestion(ctx, fc.Args["roomID"].(string), fc.Args["body"].(string))
+			return ec.Resolvers.Mutation().CreateQuestion(ctx, fc.Args["roomID"].(string), fc.Args["body"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Question) graphql.Marshaler {
@@ -14781,7 +14850,7 @@ func (ec *executionContext) _Mutation_answerQuestion(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().AnswerQuestion(ctx, fc.Args["questionID"].(string), fc.Args["body"].(string))
+			return ec.Resolvers.Mutation().AnswerQuestion(ctx, fc.Args["questionID"].(string), fc.Args["body"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Answer) graphql.Marshaler {
@@ -22216,6 +22285,38 @@ func (ec *executionContext) fieldContext_Question_answers(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Question_media(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Question_media(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Question().Media(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+			return ec.marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Question_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Question",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Question_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27339,6 +27440,42 @@ func (ec *executionContext) _Answer(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "media":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Answer_media(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			out.Values[i] = ec._Answer_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -32421,6 +32558,42 @@ func (ec *executionContext) _Question(ctx context.Context, sel ast.SelectionSet,
 					}
 				}()
 				res = ec._Question_answers(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "media":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Question_media(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

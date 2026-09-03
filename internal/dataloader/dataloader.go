@@ -18,6 +18,12 @@ type ListMediaByPostIDsUseCase interface {
 type ListMediaByMessageIDsUseCase interface {
 	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error)
 }
+type ListMediaByQuestionIDsUseCase interface {
+	Execute(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error)
+}
+type ListMediaByAnswerIDsUseCase interface {
+	Execute(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
+}
 type GetRepliesByPostIDsUseCase interface {
 	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 }
@@ -35,12 +41,14 @@ type ctxKey string
 const loadersKey = ctxKey("dataloaders")
 
 type Loaders struct {
-	UserLoader         *dataloadgen.Loader[int64, *model.User]
-	MediaLoader        *dataloadgen.Loader[int64, []*model.Media]
-	MessageMediaLoader *dataloadgen.Loader[int64, []*model.Media]
-	ReplyLoader        *dataloadgen.Loader[int64, []*model.Post]
-	AdminReplyLoader   *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
-	FavoriteLoader     *dataloadgen.Loader[int64, []*model.Favorite]
+	UserLoader          *dataloadgen.Loader[int64, *model.User]
+	MediaLoader         *dataloadgen.Loader[int64, []*model.Media]
+	MessageMediaLoader  *dataloadgen.Loader[int64, []*model.Media]
+	QuestionMediaLoader *dataloadgen.Loader[int64, []*model.Media]
+	AnswerMediaLoader   *dataloadgen.Loader[int64, []*model.Media]
+	ReplyLoader         *dataloadgen.Loader[int64, []*model.Post]
+	AdminReplyLoader    *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
+	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
 }
 
 // batchFromMap は「IDのスライスを受け取り map[ID]V を返す関数」を DataLoader が要求する
@@ -69,6 +77,8 @@ func Middleware(
 	getUsersUseCase GetUsersByIDsUseCase,
 	listMediaUseCase ListMediaByPostIDsUseCase,
 	listMessageMediaUseCase ListMediaByMessageIDsUseCase,
+	listQuestionMediaUseCase ListMediaByQuestionIDsUseCase,
+	listAnswerMediaUseCase ListMediaByAnswerIDsUseCase,
 	getRepliesUseCase GetRepliesByPostIDsUseCase,
 	getAdminRepliesUseCase GetRepliesByPostIDsIncludeDeletedUseCase, // ⭕️ 引数に追加
 	getFavoritesUseCase GetFavoritesByPostIDsUseCase,
@@ -99,12 +109,14 @@ func Middleware(
 			}
 
 			loaders := &Loaders{
-				UserLoader:         dataloadgen.NewLoader(fetchUsers, dataloadgen.WithWait(10*time.Millisecond)),
-				MediaLoader:        dataloadgen.NewLoader(batchFromMap(listMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
-				MessageMediaLoader: dataloadgen.NewLoader(batchFromMap(listMessageMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
-				ReplyLoader:        dataloadgen.NewLoader(batchFromMap(getRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
-				AdminReplyLoader:   dataloadgen.NewLoader(batchFromMap(getAdminRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
-				FavoriteLoader:     dataloadgen.NewLoader(batchFromMap(getFavoritesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				UserLoader:          dataloadgen.NewLoader(fetchUsers, dataloadgen.WithWait(10*time.Millisecond)),
+				MediaLoader:         dataloadgen.NewLoader(batchFromMap(listMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				MessageMediaLoader:  dataloadgen.NewLoader(batchFromMap(listMessageMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				QuestionMediaLoader: dataloadgen.NewLoader(batchFromMap(listQuestionMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				AnswerMediaLoader:   dataloadgen.NewLoader(batchFromMap(listAnswerMediaUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				ReplyLoader:         dataloadgen.NewLoader(batchFromMap(getRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				AdminReplyLoader:    dataloadgen.NewLoader(batchFromMap(getAdminRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
+				FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(getFavoritesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 			}
 
 			ctx = context.WithValue(ctx, loadersKey, loaders)

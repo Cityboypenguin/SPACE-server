@@ -241,6 +241,8 @@ func main() {
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
 	listMediaByMessageIDsUseCase := mediausecase.NewListMediaByMessageIDsUseCase(mediaRepository)
+	listMediaByQuestionIDsUseCase := mediausecase.NewListMediaByQuestionIDsUseCase(mediaRepository)
+	listMediaByAnswerIDsUseCase := mediausecase.NewListMediaByAnswerIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
@@ -444,7 +446,7 @@ func main() {
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
 		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository),
-		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, courseRepository, systemSettingRepository, timetableRepository),
+		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
 		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
@@ -541,6 +543,8 @@ func main() {
 		getUsersByIDsUseCase,
 		listMediaByPostIDsUseCase,
 		listMediaByMessageIDsUseCase,
+		listMediaByQuestionIDsUseCase,
+		listMediaByAnswerIDsUseCase,
 		getRepliesByPostIDsUseCase,
 		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,

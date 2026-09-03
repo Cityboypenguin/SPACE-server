@@ -31,6 +31,9 @@ func (uc *UpdateAnswerInteractor) Execute(ctx context.Context, answerID int64, b
 	if err != nil {
 		return nil, err
 	}
+	if err := validateBody(body); err != nil {
+		return nil, err
+	}
 
 	a, err := uc.answerRepo.GetAnswerByID(ctx, answerID)
 	if err != nil {

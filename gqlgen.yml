@@ -188,11 +188,15 @@ models:
         resolver: true
       bestAnswer:
         resolver: true
+      media:
+        resolver: true
       isMine:
         resolver: true
   Answer:
     fields:
       user:
+        resolver: true
+      media:
         resolver: true
       isMine:
         resolver: true

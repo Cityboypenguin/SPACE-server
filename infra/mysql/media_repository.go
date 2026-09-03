@@ -49,6 +49,20 @@ func (r *MySQLMediaRepository) CreateMessageMedia(ctx context.Context, messageID
 	return err
 }
 
+func (r *MySQLMediaRepository) CreateQuestionMedia(ctx context.Context, questionID, mediaID int64, position int) error {
+	db := extractDB(ctx, r.DB)
+	query := `INSERT INTO question_media (question_id, media_id, position) VALUES (?, ?, ?)`
+	_, err := db.ExecContext(ctx, query, questionID, mediaID, position)
+	return err
+}
+
+func (r *MySQLMediaRepository) CreateAnswerMedia(ctx context.Context, answerID, mediaID int64, position int) error {
+	db := extractDB(ctx, r.DB)
+	query := `INSERT INTO answer_media (answer_id, media_id, position) VALUES (?, ?, ?)`
+	_, err := db.ExecContext(ctx, query, answerID, mediaID, position)
+	return err
+}
+
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {
 	query := `
 		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at
@@ -141,4 +155,12 @@ func (r *MySQLMediaRepository) ListByMessageIDs(ctx context.Context, messageIDs 
 
 func (r *MySQLMediaRepository) ListByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error) {
 	return r.listByParentIDs(ctx, postIDs, "post_media", "post_id")
+}
+
+func (r *MySQLMediaRepository) ListByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error) {
+	return r.listByParentIDs(ctx, questionIDs, "question_media", "question_id")
+}
+
+func (r *MySQLMediaRepository) ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error) {
+	return r.listByParentIDs(ctx, answerIDs, "answer_media", "answer_id")
 }

@@ -286,10 +286,10 @@ type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
-  createQuestion(roomID: ID!, body: String!): Question!
+  createQuestion(roomID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Question!
   updateQuestion(id: ID!, body: String!): Question!
   deleteQuestion(id: ID!): Boolean!
-  answerQuestion(questionID: ID!, body: String!): Answer!
+  answerQuestion(questionID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Answer!
   updateAnswer(id: ID!, body: String!): Answer!
   deleteAnswer(id: ID!): Boolean!
   likeAnswer(id: ID!): Answer!
@@ -687,6 +687,7 @@ type Question {
   isAnswered: Boolean!
   bestAnswer: Answer
   answers(limit: Int = 20, offset: Int = 0): AnswerPage!
+  media: [Media!]!
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!
@@ -697,6 +698,7 @@ type Answer {
   questionID: ID!
   user: User!
   body: String!
+  media: [Media!]!
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!

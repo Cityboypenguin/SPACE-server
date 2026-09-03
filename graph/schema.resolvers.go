@@ -23,12 +23,14 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
+	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	"github.com/google/uuid"
@@ -56,6 +58,23 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 		return nil, err
 	}
 	return toGraphUser(u), nil
+}
+
+// Media is the resolver for the media field.
+func (r *answerResolver) Media(ctx context.Context, obj *gqlmodel.Answer) ([]*gqlmodel.Media, error) {
+	numericID, err := decodeGraphID(ctx, "answer", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	mediaList, err := dataloader.For(ctx).AnswerMediaLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.Media
+	for _, m := range mediaList {
+		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+	}
+	return result, nil
 }
 
 // IsMine is the resolver for the isMine field.
@@ -905,13 +924,23 @@ func (r *mutationResolver) UpdateCurrentSemester(ctx context.Context, year int32
 }
 
 // CreateQuestion is the resolver for the createQuestion field.
-func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, body string) (*gqlmodel.Question, error) {
+func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, body string, mediaInputs []*gqlmodel.MediaUploadInput) (*gqlmodel.Question, error) {
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	q, err := r.CreateQuestionUseCase.Execute(ctx, rid, body)
+	var ucMediaInputs []questionusecase.MediaInput
+	for _, m := range mediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, questionusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
+	q, err := r.CreateQuestionUseCase.Execute(ctx, rid, body, ucMediaInputs)
 	if err != nil {
 		return nil, err
 	}
@@ -955,13 +984,23 @@ func (r *mutationResolver) DeleteQuestion(ctx context.Context, id string) (bool,
 }
 
 // AnswerQuestion is the resolver for the answerQuestion field.
-func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string, body string) (*gqlmodel.Answer, error) {
+func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string, body string, mediaInputs []*gqlmodel.MediaUploadInput) (*gqlmodel.Answer, error) {
 	qid, err := decodeGraphID(ctx, "question", questionID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	a, err := r.AnswerQuestionUseCase.Execute(ctx, qid, body)
+	var ucMediaInputs []answerusecase.MediaInput
+	for _, m := range mediaInputs {
+		if m != nil {
+			ucMediaInputs = append(ucMediaInputs, answerusecase.MediaInput{
+				StorageKey:  m.ObjectKey,
+				ContentType: m.ContentType,
+			})
+		}
+	}
+
+	a, err := r.AnswerQuestionUseCase.Execute(ctx, qid, body, ucMediaInputs)
 	if err != nil {
 		return nil, err
 	}
@@ -4403,6 +4442,23 @@ func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question, 
 		items = append(items, toGraphAnswerWithLikes(a))
 	}
 	return &gqlmodel.AnswerPage{Items: items, Total: int32(total)}, nil
+}
+
+// Media is the resolver for the media field.
+func (r *questionResolver) Media(ctx context.Context, obj *gqlmodel.Question) ([]*gqlmodel.Media, error) {
+	numericID, err := decodeGraphID(ctx, "question", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	mediaList, err := dataloader.For(ctx).QuestionMediaLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	var result []*gqlmodel.Media
+	for _, m := range mediaList {
+		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+	}
+	return result, nil
 }
 
 // IsMine is the resolver for the isMine field.

@@ -32,6 +32,9 @@ func (uc *UpdateQuestionInteractor) Execute(ctx context.Context, questionID int6
 	if strings.TrimSpace(body) == "" {
 		return nil, apperr.InvalidInput("質問本文を入力してください")
 	}
+	if err := validateBody(body); err != nil {
+		return nil, err
+	}
 
 	ok, err := uc.questionRepo.UpdateQuestionBody(ctx, questionID, claims.ID, body)
 	if err != nil {

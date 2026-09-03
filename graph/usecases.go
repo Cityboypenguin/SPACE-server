@@ -69,13 +69,15 @@ func NewCourseUseCases(
 func NewQuestionUseCases(
 	questionRepo repository.QuestionRepository,
 	answerRepo repository.AnswerRepository,
+	mediaRepo repository.MediaRepository,
+	txManager repository.TxManager,
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
 ) QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, requireWritable),
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
 		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(questionRepo),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
@@ -83,7 +85,7 @@ func NewQuestionUseCases(
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, requireWritable),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
 		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
 		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo),
