@@ -72,7 +72,7 @@ func (r *MySQLAnswerRepository) GetAnswerWithLikesByID(ctx context.Context, id, 
 	return r.scanAnswerWithLikes(row)
 }
 
-func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64) ([]*repository.AnswerWithLikes, error) {
+func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64, limit, offset int) ([]*repository.AnswerWithLikes, error) {
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at,
 		       COUNT(al.id) AS like_count,
@@ -81,8 +81,9 @@ func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Con
 		LEFT JOIN answer_likes al ON al.answer_id = a.id
 		WHERE a.question_id = ?
 		GROUP BY a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at
-		ORDER BY like_count DESC, a.created_at ASC
-	`, viewerUserID, questionID)
+		ORDER BY like_count DESC, a.created_at ASC, a.id ASC
+		LIMIT ? OFFSET ?
+	`, viewerUserID, questionID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +98,15 @@ func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Con
 		list = append(list, aw)
 	}
 	return list, rows.Err()
+}
+
+func (r *MySQLAnswerRepository) CountAnswersByQuestionID(ctx context.Context, questionID int64) (int, error) {
+	var total int
+	err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM answers WHERE question_id = ?`, questionID).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (r *MySQLAnswerRepository) UpdateAnswerBody(ctx context.Context, answerID, authorUserID int64, body string) (bool, error) {

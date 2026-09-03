@@ -287,6 +287,8 @@ type Mutation {
   ): [TimetableEntry!]!
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
   createQuestion(roomID: ID!, body: String!): Question!
+  updateQuestion(id: ID!, body: String!): Question!
+  deleteQuestion(id: ID!): Boolean!
   answerQuestion(questionID: ID!, body: String!): Answer!
   updateAnswer(id: ID!, body: String!): Answer!
   deleteAnswer(id: ID!): Boolean!
@@ -684,7 +686,7 @@ type Question {
   body: String!
   isAnswered: Boolean!
   bestAnswer: Answer
-  answers: [Answer!]!
+  answers(limit: Int = 20, offset: Int = 0): AnswerPage!
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!
@@ -700,6 +702,11 @@ type Answer {
   isMine: Boolean!
   likeCount: Int!
   likedByMe: Boolean!
+}
+
+type AnswerPage {
+  items: [Answer!]!
+  total: Int!
 }
 
 type QuestionPage {
@@ -739,6 +746,7 @@ type Subscription {
   roomReadStatusUpdated(roomID: ID!): RoomReadStatusUpdate!
   questionAdded(roomID: ID!): Question!
   questionUpdated(roomID: ID!): Question!
+  questionDeleted(roomID: ID!): Question!
   answerAdded(questionID: ID!): Answer!
   answerUpdated(questionID: ID!): Answer!
   answerDeleted(questionID: ID!): Answer!

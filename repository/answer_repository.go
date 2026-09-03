@@ -19,10 +19,12 @@ type AnswerRepository interface {
 	SaveAnswer(ctx context.Context, a *model.Answer) error
 	GetAnswerByID(ctx context.Context, id int64) (*model.Answer, error)
 	GetAnswerWithLikesByID(ctx context.Context, id, viewerUserID int64) (*AnswerWithLikes, error)
-	// ListAnswersWithLikesByQuestionID returns every answer to questionID along with its
-	// like count, ordered by like count descending (ties broken by createdAt ascending)
-	// so the most-liked answers surface first (F-04-2 いいねの多い回答を上に表示).
-	ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64) ([]*AnswerWithLikes, error)
+	// ListAnswersWithLikesByQuestionID returns a page of questionID's answers along with
+	// their like counts, ordered by like count descending (ties broken by createdAt
+	// ascending) so the most-liked answers surface first (F-04-2 いいねの多い回答を上に表示)。
+	ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64, limit, offset int) ([]*AnswerWithLikes, error)
+	// CountAnswersByQuestionID returns questionID's total answer count, for pagination.
+	CountAnswersByQuestionID(ctx context.Context, questionID int64) (int, error)
 	// UpdateAnswerBody edits an answer's body, scoped to authorUserID so only the
 	// author can edit it. Returns false if no row matched (not found, or the caller
 	// isn't the author).

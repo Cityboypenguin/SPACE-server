@@ -147,6 +147,11 @@ type ComplexityRoot struct {
 		User       func(childComplexity int) int
 	}
 
+	AnswerPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Blocker struct {
 		BlockedUserID func(childComplexity int) int
 		CreatedAt     func(childComplexity int) int
@@ -325,6 +330,7 @@ type ComplexityRoot struct {
 		DeleteNotifications               func(childComplexity int, ids []string) int
 		DeletePoll                        func(childComplexity int, pollID string) int
 		DeletePost                        func(childComplexity int, id string) int
+		DeleteQuestion                    func(childComplexity int, id string) int
 		DeleteReadNotifications           func(childComplexity int) int
 		DeleteReadNotificationsByActor    func(childComplexity int, typeArg string, actorID string) int
 		DeleteRoom                        func(childComplexity int, roomID string) int
@@ -373,6 +379,7 @@ type ComplexityRoot struct {
 		UpdateMessage                     func(childComplexity int, roomID string, id string, content string) int
 		UpdatePost                        func(childComplexity int, input model.UpdatePostInput) int
 		UpdateProfile                     func(childComplexity int, input model.UpdateProfileInput) int
+		UpdateQuestion                    func(childComplexity int, id string, body string) int
 		UpdateReportStatus                func(childComplexity int, id string, status model.ReportStatus) int
 		UpdateUser                        func(childComplexity int, input model.UpdateUserInput) int
 		VerifyEmailOtp                    func(childComplexity int, email string, otp string) int
@@ -567,7 +574,7 @@ type ComplexityRoot struct {
 	}
 
 	Question struct {
-		Answers    func(childComplexity int) int
+		Answers    func(childComplexity int, limit *int32, offset *int32) int
 		BestAnswer func(childComplexity int) int
 		Body       func(childComplexity int) int
 		CreatedAt  func(childComplexity int) int
@@ -624,6 +631,7 @@ type ComplexityRoot struct {
 		PollDeleted           func(childComplexity int, roomID string) int
 		PollUpdated           func(childComplexity int, pollID string) int
 		QuestionAdded         func(childComplexity int, roomID string) int
+		QuestionDeleted       func(childComplexity int, roomID string) int
 		QuestionUpdated       func(childComplexity int, roomID string) int
 		RoomReadStatusUpdated func(childComplexity int, roomID string) int
 	}
@@ -771,6 +779,8 @@ type MutationResolver interface {
 	SetMyTimetable(ctx context.Context, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*model.CurrentSemester, error)
 	CreateQuestion(ctx context.Context, roomID string, body string) (*model.Question, error)
+	UpdateQuestion(ctx context.Context, id string, body string) (*model.Question, error)
+	DeleteQuestion(ctx context.Context, id string) (bool, error)
 	AnswerQuestion(ctx context.Context, questionID string, body string) (*model.Answer, error)
 	UpdateAnswer(ctx context.Context, id string, body string) (*model.Answer, error)
 	DeleteAnswer(ctx context.Context, id string) (bool, error)
@@ -929,7 +939,7 @@ type QuestionResolver interface {
 	User(ctx context.Context, obj *model.Question) (*model.User, error)
 
 	BestAnswer(ctx context.Context, obj *model.Question) (*model.Answer, error)
-	Answers(ctx context.Context, obj *model.Question) ([]*model.Answer, error)
+	Answers(ctx context.Context, obj *model.Question, limit *int32, offset *int32) (*model.AnswerPage, error)
 
 	IsMine(ctx context.Context, obj *model.Question) (bool, error)
 }
@@ -940,6 +950,7 @@ type SubscriptionResolver interface {
 	RoomReadStatusUpdated(ctx context.Context, roomID string) (<-chan *model.RoomReadStatusUpdate, error)
 	QuestionAdded(ctx context.Context, roomID string) (<-chan *model.Question, error)
 	QuestionUpdated(ctx context.Context, roomID string) (<-chan *model.Question, error)
+	QuestionDeleted(ctx context.Context, roomID string) (<-chan *model.Question, error)
 	AnswerAdded(ctx context.Context, questionID string) (<-chan *model.Answer, error)
 	AnswerUpdated(ctx context.Context, questionID string) (<-chan *model.Answer, error)
 	AnswerDeleted(ctx context.Context, questionID string) (<-chan *model.Answer, error)
@@ -1455,6 +1466,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Answer.User(childComplexity), true
+
+	case "AnswerPage.items":
+		if e.ComplexityRoot.AnswerPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnswerPage.Items(childComplexity), true
+	case "AnswerPage.total":
+		if e.ComplexityRoot.AnswerPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnswerPage.Total(childComplexity), true
 
 	case "Blocker.blockedUserID":
 		if e.ComplexityRoot.Blocker.BlockedUserID == nil {
@@ -2360,6 +2384,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeletePost(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteQuestion":
+		if e.ComplexityRoot.Mutation.DeleteQuestion == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteQuestion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteQuestion(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteReadNotifications":
 		if e.ComplexityRoot.Mutation.DeleteReadNotifications == nil {
 			break
@@ -2878,6 +2913,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateProfile(childComplexity, args["input"].(model.UpdateProfileInput)), true
+	case "Mutation.updateQuestion":
+		if e.ComplexityRoot.Mutation.UpdateQuestion == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateQuestion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateQuestion(childComplexity, args["id"].(string), args["body"].(string)), true
 	case "Mutation.updateReportStatus":
 		if e.ComplexityRoot.Mutation.UpdateReportStatus == nil {
 			break
@@ -4145,7 +4191,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Question.Answers(childComplexity), true
+		args, err := ec.field_Question_answers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Question.Answers(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Question.bestAnswer":
 		if e.ComplexityRoot.Question.BestAnswer == nil {
 			break
@@ -4430,6 +4481,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.QuestionAdded(childComplexity, args["roomID"].(string)), true
+	case "Subscription.questionDeleted":
+		if e.ComplexityRoot.Subscription.QuestionDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_questionDeleted_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.QuestionDeleted(childComplexity, args["roomID"].(string)), true
 	case "Subscription.questionUpdated":
 		if e.ComplexityRoot.Subscription.QuestionUpdated == nil {
 			break
@@ -5109,6 +5171,16 @@ func (ec *executionContext) childFields_Answer(ctx context.Context, field graphq
 		return ec.fieldContext_Answer_likedByMe(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Answer", field.Name)
+}
+
+func (ec *executionContext) childFields_AnswerPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_AnswerPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_AnswerPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AnswerPage", field.Name)
 }
 
 func (ec *executionContext) childFields_Blocker(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -6509,6 +6581,20 @@ func (ec *executionContext) field_Mutation_deletePost_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteQuestion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteReadNotificationsByActor_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -7326,6 +7412,28 @@ func (ec *executionContext) field_Mutation_updateProfile_args(ctx context.Contex
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateQuestion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "body",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["body"] = arg1
 	return args, nil
 }
 
@@ -8745,6 +8853,28 @@ func (ec *executionContext) field_Query_users_args(ctx context.Context, rawArgs 
 	return args, nil
 }
 
+func (ec *executionContext) field_Question_answers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Subscription_answerAdded_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -8872,6 +9002,20 @@ func (ec *executionContext) field_Subscription_pollUpdated_args(ctx context.Cont
 }
 
 func (ec *executionContext) field_Subscription_questionAdded_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_questionDeleted_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
@@ -10856,6 +11000,61 @@ func (ec *executionContext) _Answer_likedByMe(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Answer_likedByMe(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Answer", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AnswerPage_items(ctx context.Context, field graphql.CollectedField, obj *model.AnswerPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnswerPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Answer) graphql.Marshaler {
+			return ec.marshalNAnswer2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswerᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnswerPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AnswerPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Answer(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AnswerPage_total(ctx context.Context, field graphql.CollectedField, obj *model.AnswerPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnswerPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnswerPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnswerPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Blocker_ID(ctx context.Context, field graphql.CollectedField, obj *model.Blocker) (ret graphql.Marshaler) {
@@ -14478,6 +14677,94 @@ func (ec *executionContext) fieldContext_Mutation_createQuestion(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createQuestion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateQuestion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateQuestion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateQuestion(ctx, fc.Args["id"].(string), fc.Args["body"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Question) graphql.Marshaler {
+			return ec.marshalNQuestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐQuestion(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateQuestion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Question(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateQuestion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteQuestion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteQuestion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteQuestion(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteQuestion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteQuestion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -21894,25 +22181,37 @@ func (ec *executionContext) _Question_answers(ctx context.Context, field graphql
 			return ec.fieldContext_Question_answers(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Question().Answers(ctx, obj)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Question().Answers(ctx, obj, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.Answer) graphql.Marshaler {
-			return ec.marshalNAnswer2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswerᚄ(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AnswerPage) graphql.Marshaler {
+			return ec.marshalNAnswerPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswerPage(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Question_answers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Question_answers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Question",
 		Field:      field,
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Answer(ctx, field)
+			return ec.childFields_AnswerPage(ctx, field)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Question_answers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -22717,6 +23016,50 @@ func (ec *executionContext) fieldContext_Subscription_questionUpdated(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Subscription_questionUpdated_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_questionDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Subscription_questionDeleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().QuestionDeleted(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Question) graphql.Marshaler {
+			return ec.marshalNQuestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐQuestion(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Subscription_questionDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Question(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_questionDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -27075,6 +27418,50 @@ func (ec *executionContext) _Answer(ctx context.Context, sel ast.SelectionSet, o
 	return out
 }
 
+var answerPageImplementors = []string{"AnswerPage"}
+
+func (ec *executionContext) _AnswerPage(ctx context.Context, sel ast.SelectionSet, obj *model.AnswerPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, answerPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AnswerPage")
+		case "items":
+			out.Values[i] = ec._AnswerPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._AnswerPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var blockerImplementors = []string{"Blocker"}
 
 func (ec *executionContext) _Blocker(ctx context.Context, sel ast.SelectionSet, obj *model.Blocker) graphql.Marshaler {
@@ -28630,6 +29017,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "createQuestion":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createQuestion(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateQuestion":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateQuestion(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteQuestion":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteQuestion(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -32405,6 +32806,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_questionAdded(ctx, fields[0])
 	case "questionUpdated":
 		return ec._Subscription_questionUpdated(ctx, fields[0])
+	case "questionDeleted":
+		return ec._Subscription_questionDeleted(ctx, fields[0])
 	case "answerAdded":
 		return ec._Subscription_answerAdded(ctx, fields[0])
 	case "answerUpdated":
@@ -33624,6 +34027,20 @@ func (ec *executionContext) marshalNAnswer2ᚖgithubᚗcomᚋCityboypenguinᚋSP
 		return graphql.Null
 	}
 	return ec._Answer(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAnswerPage2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswerPage(ctx context.Context, sel ast.SelectionSet, v model.AnswerPage) graphql.Marshaler {
+	return ec._AnswerPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAnswerPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswerPage(ctx context.Context, sel ast.SelectionSet, v *model.AnswerPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AnswerPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBlocker2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐBlocker(ctx context.Context, sel ast.SelectionSet, v model.Blocker) graphql.Marshaler {

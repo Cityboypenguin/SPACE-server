@@ -221,30 +221,32 @@ type CommunityUseCases struct {
 }
 
 type CourseUseCases struct {
-	SearchCoursesUseCase                 courseusecase.SearchCoursesUseCase
-	GetCourseByIDUseCase                 courseusecase.GetCourseByIDUseCase
-	RegisterTimetableUseCase             timetableusecase.RegisterTimetableUseCase
-	RemoveTimetableUseCase               timetableusecase.RemoveTimetableUseCase
-	SetTimetableEntryColorUseCase timetableusecase.SetTimetableEntryColorUseCase
-	ListTimetableUseCase                 timetableusecase.ListTimetableUseCase
-	ReplaceTimetableUseCase              timetableusecase.ReplaceTimetableUseCase
-	GetCurrentSemesterUseCase            semesterusecase.GetCurrentSemesterUseCase
-	UpdateCurrentSemesterUseCase         semesterusecase.UpdateCurrentSemesterUseCase
-	CheckRoomWritableUseCase             courseusecase.CheckRoomWritableUseCase
-	GetOrCreateAnonymousIdentityUseCase  anonusecase.GetOrCreateAnonymousIdentityUseCase
-	ImportCoursesUseCase                 courseusecase.ImportCoursesUseCase
-	ListCoursesUseCase                   courseusecase.ListCoursesUseCase
-	ListCourseYearsUseCase               courseusecase.ListCourseYearsUseCase
-	ListDedupKeysByYearUseCase           courseusecase.ListDedupKeysByYearUseCase
+	SearchCoursesUseCase                courseusecase.SearchCoursesUseCase
+	GetCourseByIDUseCase                courseusecase.GetCourseByIDUseCase
+	RegisterTimetableUseCase            timetableusecase.RegisterTimetableUseCase
+	RemoveTimetableUseCase              timetableusecase.RemoveTimetableUseCase
+	SetTimetableEntryColorUseCase       timetableusecase.SetTimetableEntryColorUseCase
+	ListTimetableUseCase                timetableusecase.ListTimetableUseCase
+	ReplaceTimetableUseCase             timetableusecase.ReplaceTimetableUseCase
+	GetCurrentSemesterUseCase           semesterusecase.GetCurrentSemesterUseCase
+	UpdateCurrentSemesterUseCase        semesterusecase.UpdateCurrentSemesterUseCase
+	CheckRoomWritableUseCase            courseusecase.CheckRoomWritableUseCase
+	GetOrCreateAnonymousIdentityUseCase anonusecase.GetOrCreateAnonymousIdentityUseCase
+	ImportCoursesUseCase                courseusecase.ImportCoursesUseCase
+	ListCoursesUseCase                  courseusecase.ListCoursesUseCase
+	ListCourseYearsUseCase              courseusecase.ListCourseYearsUseCase
+	ListDedupKeysByYearUseCase          courseusecase.ListDedupKeysByYearUseCase
 }
 
 type QuestionUseCases struct {
 	CreateQuestionUseCase   questionusecase.CreateQuestionUseCase
+	UpdateQuestionUseCase   questionusecase.UpdateQuestionUseCase
 	ListQuestionsUseCase    questionusecase.ListQuestionsUseCase
 	GetQuestionByIDUseCase  questionusecase.GetQuestionByIDUseCase
 	SelectBestAnswerUseCase questionusecase.SelectBestAnswerUseCase
 	CancelBestAnswerUseCase questionusecase.CancelBestAnswerUseCase
 	DeleteQuestionUseCase   questionusecase.DeleteQuestionUseCase
+	DeleteMyQuestionUseCase questionusecase.DeleteMyQuestionUseCase
 	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
 	ListAnswersUseCase      answerusecase.ListAnswersUseCase
 	GetAnswerByIDUseCase    answerusecase.GetAnswerByIDUseCase

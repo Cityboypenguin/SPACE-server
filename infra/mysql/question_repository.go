@@ -104,6 +104,26 @@ func (r *MySQLQuestionRepository) SetBestAnswer(ctx context.Context, questionID,
 	return n > 0, nil
 }
 
+func (r *MySQLQuestionRepository) UpdateQuestionBody(ctx context.Context, questionID, askerUserID int64, body string) (bool, error) {
+	encryptedBody, err := r.cipher.Encrypt(body)
+	if err != nil {
+		return false, fmt.Errorf("encrypt question body: %w", err)
+	}
+
+	result, err := r.DB.ExecContext(ctx,
+		`UPDATE questions SET body = ?, updated_at = ? WHERE id = ? AND asker_user_id = ?`,
+		encryptedBody, time.Now().Unix(), questionID, askerUserID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (r *MySQLQuestionRepository) ClearBestAnswer(ctx context.Context, questionID, askerUserID int64) (bool, error) {
 	result, err := r.DB.ExecContext(ctx,
 		`UPDATE questions SET best_answer_id = NULL, is_answered = FALSE, updated_at = ? WHERE id = ? AND asker_user_id = ?`,
@@ -121,6 +141,18 @@ func (r *MySQLQuestionRepository) ClearBestAnswer(ctx context.Context, questionI
 
 func (r *MySQLQuestionRepository) DeleteQuestion(ctx context.Context, questionID int64) (bool, error) {
 	result, err := r.DB.ExecContext(ctx, `DELETE FROM questions WHERE id = ?`, questionID)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (r *MySQLQuestionRepository) DeleteQuestionByAsker(ctx context.Context, questionID, askerUserID int64) (bool, error) {
+	result, err := r.DB.ExecContext(ctx, `DELETE FROM questions WHERE id = ? AND asker_user_id = ?`, questionID, askerUserID)
 	if err != nil {
 		return false, err
 	}

@@ -921,6 +921,39 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 	return gqlQ, nil
 }
 
+// UpdateQuestion is the resolver for the updateQuestion field.
+func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body string) (*gqlmodel.Question, error) {
+	qid, err := decodeGraphID(ctx, "question", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid question id")
+	}
+
+	q, err := r.UpdateQuestionUseCase.Execute(ctx, qid, body)
+	if err != nil {
+		return nil, err
+	}
+
+	gqlQ := toGraphQuestion(q)
+	r.PubSub.Publish(encodeGraphID("room", q.RoomID)+":question:updated", gqlQ)
+	return gqlQ, nil
+}
+
+// DeleteQuestion is the resolver for the deleteQuestion field.
+func (r *mutationResolver) DeleteQuestion(ctx context.Context, id string) (bool, error) {
+	qid, err := decodeGraphID(ctx, "question", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid question id")
+	}
+
+	q, err := r.DeleteMyQuestionUseCase.Execute(ctx, qid)
+	if err != nil {
+		return false, err
+	}
+
+	r.PubSub.Publish(encodeGraphID("room", q.RoomID)+":question:deleted", toGraphQuestion(q))
+	return true, nil
+}
+
 // AnswerQuestion is the resolver for the answerQuestion field.
 func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string, body string) (*gqlmodel.Answer, error) {
 	qid, err := decodeGraphID(ctx, "question", questionID)
@@ -4345,22 +4378,31 @@ func (r *questionResolver) BestAnswer(ctx context.Context, obj *gqlmodel.Questio
 }
 
 // Answers is the resolver for the answers field.
-func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question) ([]*gqlmodel.Answer, error) {
+func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question, limit *int32, offset *int32) (*gqlmodel.AnswerPage, error) {
 	qid, err := decodeGraphID(ctx, "question", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	answers, err := r.ListAnswersUseCase.Execute(ctx, qid)
+	lim := 20
+	if limit != nil {
+		lim = int(*limit)
+	}
+	off := 0
+	if offset != nil {
+		off = int(*offset)
+	}
+
+	answers, total, err := r.ListAnswersUseCase.Execute(ctx, qid, lim, off)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]*gqlmodel.Answer, 0, len(answers))
+	items := make([]*gqlmodel.Answer, 0, len(answers))
 	for _, a := range answers {
-		result = append(result, toGraphAnswerWithLikes(a))
+		items = append(items, toGraphAnswerWithLikes(a))
 	}
-	return result, nil
+	return &gqlmodel.AnswerPage{Items: items, Total: int32(total)}, nil
 }
 
 // IsMine is the resolver for the isMine field.
@@ -4447,6 +4489,11 @@ func (r *subscriptionResolver) QuestionAdded(ctx context.Context, roomID string)
 // QuestionUpdated is the resolver for the questionUpdated field.
 func (r *subscriptionResolver) QuestionUpdated(ctx context.Context, roomID string) (<-chan *gqlmodel.Question, error) {
 	return r.questionSubscription(ctx, roomID, roomID+":question:updated")
+}
+
+// QuestionDeleted is the resolver for the questionDeleted field.
+func (r *subscriptionResolver) QuestionDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Question, error) {
+	return r.questionSubscription(ctx, roomID, roomID+":question:deleted")
 }
 
 // AnswerAdded is the resolver for the answerAdded field.

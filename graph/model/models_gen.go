@@ -115,6 +115,11 @@ type Answer struct {
 	LikedByMe  bool   `json:"likedByMe"`
 }
 
+type AnswerPage struct {
+	Items []*Answer `json:"items"`
+	Total int32     `json:"total"`
+}
+
 type Blocker struct {
 	ID            string `json:"ID"`
 	UserID        string `json:"userID"`
@@ -451,16 +456,16 @@ type Query struct {
 }
 
 type Question struct {
-	ID         string    `json:"ID"`
-	RoomID     string    `json:"roomID"`
-	User       *User     `json:"user"`
-	Body       string    `json:"body"`
-	IsAnswered bool      `json:"isAnswered"`
-	BestAnswer *Answer   `json:"bestAnswer,omitempty"`
-	Answers    []*Answer `json:"answers"`
-	CreatedAt  string    `json:"createdAt"`
-	UpdatedAt  string    `json:"updatedAt"`
-	IsMine     bool      `json:"isMine"`
+	ID         string      `json:"ID"`
+	RoomID     string      `json:"roomID"`
+	User       *User       `json:"user"`
+	Body       string      `json:"body"`
+	IsAnswered bool        `json:"isAnswered"`
+	BestAnswer *Answer     `json:"bestAnswer,omitempty"`
+	Answers    *AnswerPage `json:"answers"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+	IsMine     bool        `json:"isMine"`
 }
 
 type QuestionPage struct {
