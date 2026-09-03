@@ -7,6 +7,8 @@ type Query {
   # 未設定（サーバー側にまだ明示的な選択が保存されていない）なら null。
   # 初期表示はクライアント側で localStorage / prefers-color-scheme から決める。
   themePreference: ThemePreference
+  # 未設定なら true（デフォルトで公開）。
+  timetableProfileVisibility: Boolean!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
   myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
@@ -354,6 +356,7 @@ type Mutation {
   setReportServiceStatus(enabled: Boolean!): Boolean!
 
   setThemePreference(theme: ThemePreference!): ThemePreference!
+  setTimetableProfileVisibility(visible: Boolean!): Boolean!
 
   recordSessionData(input: RecordSessionDataInput!): Boolean!
 }

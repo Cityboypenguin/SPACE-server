@@ -2283,6 +2283,14 @@ func (r *mutationResolver) SetThemePreference(ctx context.Context, theme gqlmode
 	return theme, nil
 }
 
+// SetTimetableProfileVisibility is the resolver for the setTimetableProfileVisibility field.
+func (r *mutationResolver) SetTimetableProfileVisibility(ctx context.Context, visible bool) (bool, error) {
+	if err := r.ManageUserSettingUsecase.Set(ctx, "timetableProfileVisibility", strconv.FormatBool(visible)); err != nil {
+		return false, err
+	}
+	return visible, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -2556,6 +2564,18 @@ func (r *queryResolver) ThemePreference(ctx context.Context) (*gqlmodel.ThemePre
 	}
 	t := gqlmodel.ThemePreference(value)
 	return &t, nil
+}
+
+// TimetableProfileVisibility is the resolver for the timetableProfileVisibility field.
+func (r *queryResolver) TimetableProfileVisibility(ctx context.Context) (bool, error) {
+	value, found, err := r.ManageUserSettingUsecase.Get(ctx, "timetableProfileVisibility")
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return true, nil
+	}
+	return strconv.ParseBool(value)
 }
 
 // GetUserByID is the resolver for the getUserByID field.
