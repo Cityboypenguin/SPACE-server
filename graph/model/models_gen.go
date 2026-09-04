@@ -585,7 +585,7 @@ func (e *CommunityMemberAction) UnmarshalGQL(v any) error {
 }
 
 func (e CommunityMemberAction) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
@@ -648,7 +648,7 @@ func (e *InquiryCategory) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryCategory) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryCategory) UnmarshalJSON(b []byte) error {
@@ -705,7 +705,7 @@ func (e *InquiryStatus) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
@@ -764,7 +764,7 @@ func (e *ReportStatus) UnmarshalGQL(v any) error {
 }
 
 func (e ReportStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportStatus) UnmarshalJSON(b []byte) error {
@@ -821,7 +821,7 @@ func (e *ReportTargetType) UnmarshalGQL(v any) error {
 }
 
 func (e ReportTargetType) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
@@ -876,7 +876,7 @@ func (e *TimeSeriesGranularity) UnmarshalGQL(v any) error {
 }
 
 func (e TimeSeriesGranularity) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
