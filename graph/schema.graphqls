@@ -273,6 +273,7 @@ type Mutation {
   createFavorite(input: CreateFavoriteInput!): Favorite!
   deleteFavorite(input: DeleteFavoriteInput!): Boolean!
   updateProfile(input: UpdateProfileInput!): Profile!
+  updateMyProfile(input: UpdateMyProfileInput!): Profile!
   createRoom(input: CreateRoomInput!): Room!
   getOrCreateDMRoom(targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!
@@ -493,6 +494,12 @@ type Profile {
 
 input UpdateProfileInput {
   username: String
+  bio: String
+}
+
+input UpdateMyProfileInput {
+  accountID: String
+  name: String
   bio: String
 }
 

@@ -48,10 +48,11 @@ type Resolver struct {
 	UserUseCases
 	PostUseCases
 
-	UpdateProfileUseCase profile.UpdateProfileUseCase
-	GetProfileUseCase    profile.GetProfileUseCase
-	SetAvatarUseCase     profile.SetAvatarUseCase
-	DeleteAvatarUseCase  profile.DeleteAvatarUseCase
+	UpdateProfileUseCase   profile.UpdateProfileUseCase
+	UpdateMyProfileUseCase profile.UpdateMyProfileUseCase
+	GetProfileUseCase      profile.GetProfileUseCase
+	SetAvatarUseCase       profile.SetAvatarUseCase
+	DeleteAvatarUseCase    profile.DeleteAvatarUseCase
 
 	GetAdministratorByIDUseCase      administrator.GetAdministratorByIDUseCase
 	CreateAdministratorUseCase       administrator.CreateAdministratorUseCase

@@ -585,6 +585,12 @@ type UpdateCommunityInput struct {
 	AvatarKey   *string `json:"avatarKey,omitempty"`
 }
 
+type UpdateMyProfileInput struct {
+	AccountID *string `json:"accountID,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Bio       *string `json:"bio,omitempty"`
+}
+
 type UpdatePostInput struct {
 	ID              string              `json:"id"`
 	Content         string              `json:"content"`

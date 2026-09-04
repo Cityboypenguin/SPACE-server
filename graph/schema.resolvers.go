@@ -30,6 +30,7 @@ import (
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
+	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
@@ -614,6 +615,36 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
 
 	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+}
+
+// UpdateMyProfile is the resolver for the updateMyProfile field.
+func (r *mutationResolver) UpdateMyProfile(ctx context.Context, input gqlmodel.UpdateMyProfileInput) (*gqlmodel.Profile, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	numericUserID := claims.ID
+	if _, err := requireSelfOrAdmin(ctx, numericUserID, "update_my_profile"); err != nil {
+		return nil, err
+	}
+
+	param := profile.UpdateMyProfileParam{
+		User: model.UpdateUserParam{
+			AccountID: input.AccountID,
+			Name:      input.Name,
+		},
+		Profile: model.UpdateProfileParam{
+			Bio: input.Bio,
+		},
+	}
+
+	updatedUser, updatedProfile, err := r.UpdateMyProfileUseCase.Execute(ctx, numericUserID, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphProfile(updatedUser, updatedProfile, r.avatarURLFor(updatedProfile)), nil
 }
 
 // CreateRoom is the resolver for the createRoom field.

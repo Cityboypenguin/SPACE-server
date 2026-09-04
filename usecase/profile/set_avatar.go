@@ -17,10 +17,11 @@ type SetAvatarUseCase interface {
 type SetAvatarInteractor struct {
 	profileRepo repository.ProfileRepository
 	mediaRepo   repository.MediaRepository
+	txManager   repository.TxManager
 }
 
-func NewSetAvatarUseCase(profileRepo repository.ProfileRepository, mediaRepo repository.MediaRepository) SetAvatarUseCase {
-	return &SetAvatarInteractor{profileRepo: profileRepo, mediaRepo: mediaRepo}
+func NewSetAvatarUseCase(profileRepo repository.ProfileRepository, mediaRepo repository.MediaRepository, txManager repository.TxManager) SetAvatarUseCase {
+	return &SetAvatarInteractor{profileRepo: profileRepo, mediaRepo: mediaRepo, txManager: txManager}
 }
 
 func (uc *SetAvatarInteractor) Execute(ctx context.Context, userID int64, objectKey string) (*model.Profile, error) {
@@ -35,15 +36,20 @@ func (uc *SetAvatarInteractor) Execute(ctx context.Context, userID int64, object
 		ContentType:    contentTypeFromKey(objectKey),
 		CreatedAt:      time.Now(),
 	}
-	if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
-		return nil, err
-	}
+	var p *model.Profile
+	err := uc.txManager.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := uc.mediaRepo.CreateMedia(txCtx, media); err != nil {
+			return err
+		}
 
-	if err := uc.profileRepo.SetAvatarMedia(ctx, userID, media.ID); err != nil {
-		return nil, err
-	}
+		if err := uc.profileRepo.SetAvatarMedia(txCtx, userID, media.ID); err != nil {
+			return err
+		}
 
-	p, err := uc.profileRepo.GetProfileByUserID(ctx, userID)
+		var err error
+		p, err = uc.profileRepo.GetProfileByUserID(txCtx, userID)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}

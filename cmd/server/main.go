@@ -164,7 +164,8 @@ func main() {
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
-	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
+	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
@@ -369,8 +370,9 @@ func main() {
 		SetAvatarUseCase:    setAvatarUseCase,
 		DeleteAvatarUseCase: deleteAvatarUseCase,
 
-		GetProfileUseCase:    getProfileUseCase,
-		UpdateProfileUseCase: updateProfileUseCase,
+		GetProfileUseCase:      getProfileUseCase,
+		UpdateProfileUseCase:   updateProfileUseCase,
+		UpdateMyProfileUseCase: updateMyProfileUseCase,
 
 		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
 		CreateAdministratorUseCase:       createAdministratorUseCase,

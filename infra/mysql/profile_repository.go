@@ -25,7 +25,7 @@ func (r *MySQLProfileRepository) GetProfileByUserID(ctx context.Context, userID 
 		LEFT JOIN media m ON m.id = p.avatar_media_id
 		WHERE p.user_id = ?
 	`
-	row := r.DB.QueryRowContext(ctx, query, userID)
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx, query, userID)
 
 	var p model.Profile
 	var createdAtUnix, updatedAtUnix int64
@@ -91,7 +91,7 @@ func (r *MySQLProfileRepository) SetAvatarMedia(ctx context.Context, userID int6
 		updated_at = VALUES(updated_at)
 	`
 	now := time.Now().Unix()
-	_, err := r.DB.ExecContext(ctx, query, userID, mediaID, now, now)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, userID, mediaID, now, now)
 	return err
 }
 
@@ -99,6 +99,6 @@ func (r *MySQLProfileRepository) ClearAvatarMedia(ctx context.Context, userID in
 	query := `
 		UPDATE profiles SET avatar_media_id = NULL, updated_at = ? WHERE user_id = ?
 	`
-	_, err := r.DB.ExecContext(ctx, query, time.Now().Unix(), userID)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, time.Now().Unix(), userID)
 	return err
 }
