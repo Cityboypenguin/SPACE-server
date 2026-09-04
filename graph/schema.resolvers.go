@@ -33,6 +33,7 @@ import (
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
+	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
 	"github.com/google/uuid"
 )
 
@@ -904,6 +905,104 @@ func (r *mutationResolver) SetMyTimetable(ctx context.Context, year int32, semes
 	}
 
 	entries, err := r.ReplaceTimetableUseCase.Execute(ctx, int(year), semester, baselineIDs, cIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.TimetableEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, toGraphTimetableEntry(e.Timetable, e.Course))
+	}
+	return result, nil
+}
+
+// AdminRegisterTimetableEntry is the resolver for the adminRegisterTimetableEntry field.
+func (r *mutationResolver) AdminRegisterTimetableEntry(ctx context.Context, userID string, courseID string) (*gqlmodel.TimetableEntry, error) {
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, err
+	}
+	cID, err := decodeGraphID(ctx, "course", courseID)
+	if err != nil {
+		return nil, err
+	}
+
+	t, err := r.AdminRegisterTimetableUseCase.Execute(ctx, uID, cID)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := r.GetCourseByIDUseCase.Execute(ctx, t.CourseID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphTimetableEntry(t, c), nil
+}
+
+// AdminRemoveTimetableEntry is the resolver for the adminRemoveTimetableEntry field.
+func (r *mutationResolver) AdminRemoveTimetableEntry(ctx context.Context, id string, userID string) (bool, error) {
+	tID, err := decodeGraphID(ctx, "timetable", id)
+	if err != nil {
+		return false, err
+	}
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return false, err
+	}
+	return r.AdminRemoveTimetableUseCase.Execute(ctx, tID, uID)
+}
+
+// AdminSetTimetableEntryColor is the resolver for the adminSetTimetableEntryColor field.
+func (r *mutationResolver) AdminSetTimetableEntryColor(ctx context.Context, id string, userID string, color gqlmodel.TimetableEntryColor) (*gqlmodel.TimetableEntry, error) {
+	tID, err := decodeGraphID(ctx, "timetable", id)
+	if err != nil {
+		return nil, err
+	}
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	t, err := r.AdminSetTimetableEntryColorUseCase.Execute(ctx, tID, uID, string(color))
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := r.GetCourseByIDUseCase.Execute(ctx, t.CourseID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphTimetableEntry(t, c), nil
+}
+
+// AdminSetUserTimetable is the resolver for the adminSetUserTimetable field.
+func (r *mutationResolver) AdminSetUserTimetable(ctx context.Context, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*gqlmodel.TimetableEntry, error) {
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	baselineIDs := make([]int64, 0, len(baselineEntryIDs))
+	for _, id := range baselineEntryIDs {
+		numericID, err := decodeGraphID(ctx, "timetable", id)
+		if err != nil {
+			return nil, err
+		}
+		baselineIDs = append(baselineIDs, numericID)
+	}
+
+	cIDs := make([]int64, 0, len(courseIDs))
+	for _, id := range courseIDs {
+		numericID, err := decodeGraphID(ctx, "course", id)
+		if err != nil {
+			return nil, err
+		}
+		cIDs = append(cIDs, numericID)
+	}
+
+	entries, err := r.AdminReplaceTimetableUseCase.Execute(ctx, uID, int(year), semester, baselineIDs, cIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -2285,7 +2384,7 @@ func (r *mutationResolver) SetThemePreference(ctx context.Context, theme gqlmode
 
 // SetTimetableProfileVisibility is the resolver for the setTimetableProfileVisibility field.
 func (r *mutationResolver) SetTimetableProfileVisibility(ctx context.Context, visible bool) (bool, error) {
-	if err := r.ManageUserSettingUsecase.Set(ctx, "timetableProfileVisibility", strconv.FormatBool(visible)); err != nil {
+	if err := r.ManageUserSettingUsecase.Set(ctx, usersettingsusecase.TimetableProfileVisibilityKey, strconv.FormatBool(visible)); err != nil {
 		return false, err
 	}
 	return visible, nil
@@ -2568,7 +2667,7 @@ func (r *queryResolver) ThemePreference(ctx context.Context) (*gqlmodel.ThemePre
 
 // TimetableProfileVisibility is the resolver for the timetableProfileVisibility field.
 func (r *queryResolver) TimetableProfileVisibility(ctx context.Context) (bool, error) {
-	value, found, err := r.ManageUserSettingUsecase.Get(ctx, "timetableProfileVisibility")
+	value, found, err := r.ManageUserSettingUsecase.Get(ctx, usersettingsusecase.TimetableProfileVisibilityKey)
 	if err != nil {
 		return false, err
 	}
@@ -4161,6 +4260,31 @@ func (r *queryResolver) MyTimetable(ctx context.Context, year *int32, semester *
 	}
 
 	entries, err := r.ListTimetableUseCase.Execute(ctx, y, semester)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.TimetableEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, toGraphTimetableEntry(e.Timetable, e.Course))
+	}
+	return result, nil
+}
+
+// UserTimetable is the resolver for the userTimetable field.
+func (r *queryResolver) UserTimetable(ctx context.Context, userID string, year *int32, semester *string) ([]*gqlmodel.TimetableEntry, error) {
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var y *int
+	if year != nil {
+		v := int(*year)
+		y = &v
+	}
+
+	entries, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
 	if err != nil {
 		return nil, err
 	}

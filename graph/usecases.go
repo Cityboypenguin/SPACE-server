@@ -44,6 +44,7 @@ func NewCourseUseCases(
 	timetableRepo repository.TimetableRepository,
 	settingRepo repository.SystemSettingRepository,
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
+	userSettingRepo repository.UserSettingRepository,
 ) CourseUseCases {
 	return CourseUseCases{
 		SearchCoursesUseCase:                courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
@@ -53,6 +54,11 @@ func NewCourseUseCases(
 		SetTimetableEntryColorUseCase:       timetableusecase.NewSetTimetableEntryColorUseCase(timetableRepo),
 		ListTimetableUseCase:                timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
 		ReplaceTimetableUseCase:             timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
+		GetUserTimetableUseCase:             timetableusecase.NewGetUserTimetableUseCase(timetableRepo, settingRepo, userSettingRepo),
+		AdminRegisterTimetableUseCase:       timetableusecase.NewAdminRegisterTimetableUseCase(timetableRepo),
+		AdminRemoveTimetableUseCase:         timetableusecase.NewAdminRemoveTimetableUseCase(timetableRepo),
+		AdminSetTimetableEntryColorUseCase:  timetableusecase.NewAdminSetTimetableEntryColorUseCase(timetableRepo),
+		AdminReplaceTimetableUseCase:        timetableusecase.NewAdminReplaceTimetableUseCase(timetableRepo),
 		GetCurrentSemesterUseCase:           semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:        semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		CheckRoomWritableUseCase:            courseusecase.NewCheckRoomWritableUseCase(courseRepo, settingRepo, timetableRepo),

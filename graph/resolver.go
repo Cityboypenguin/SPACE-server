@@ -228,6 +228,11 @@ type CourseUseCases struct {
 	SetTimetableEntryColorUseCase       timetableusecase.SetTimetableEntryColorUseCase
 	ListTimetableUseCase                timetableusecase.ListTimetableUseCase
 	ReplaceTimetableUseCase             timetableusecase.ReplaceTimetableUseCase
+	GetUserTimetableUseCase             timetableusecase.GetUserTimetableUseCase
+	AdminRegisterTimetableUseCase       timetableusecase.AdminRegisterTimetableUseCase
+	AdminRemoveTimetableUseCase         timetableusecase.AdminRemoveTimetableUseCase
+	AdminSetTimetableEntryColorUseCase  timetableusecase.AdminSetTimetableEntryColorUseCase
+	AdminReplaceTimetableUseCase        timetableusecase.AdminReplaceTimetableUseCase
 	GetCurrentSemesterUseCase           semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase        semesterusecase.UpdateCurrentSemesterUseCase
 	CheckRoomWritableUseCase            courseusecase.CheckRoomWritableUseCase

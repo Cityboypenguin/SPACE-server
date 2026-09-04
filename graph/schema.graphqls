@@ -125,6 +125,10 @@ type Query {
     offset: Int = 0
   ): CoursePage!
   myTimetable(year: Int, semester: String): [TimetableEntry!]!
+  # 対象ユーザーの時間割。本人・管理者以外が呼び出した場合、対象ユーザーが
+  # setTimetableProfileVisibility(false) でプロフィール非公開にしていれば
+  # 空配列を返す。
+  userTimetable(userID: ID!, year: Int, semester: String): [TimetableEntry!]!
   currentSemester: CurrentSemester!
   courseYears: [Int!]!
   questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
@@ -287,6 +291,19 @@ type Mutation {
     baselineEntryIDs: [ID!]!
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
+
+  # 管理者用: 任意のユーザーの時間割を操作する。
+  adminRegisterTimetableEntry(userID: ID!, courseID: ID!): TimetableEntry!
+  adminRemoveTimetableEntry(id: ID!, userID: ID!): Boolean!
+  adminSetTimetableEntryColor(id: ID!, userID: ID!, color: TimetableEntryColor!): TimetableEntry!
+  adminSetUserTimetable(
+    userID: ID!
+    year: Int!
+    semester: String!
+    baselineEntryIDs: [ID!]!
+    courseIDs: [ID!]!
+  ): [TimetableEntry!]!
+
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
   createQuestion(roomID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Question!
   updateQuestion(id: ID!, body: String!): Question!
