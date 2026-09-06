@@ -18,11 +18,17 @@ import (
 // progressStallTimeout aborts a RUNNING import if it goes this long without a
 // single progress report. Every unit of real work the scraper does (one listing
 // page, one disambiguation detail-page fetch) is bounded by curl's own retry
-// budget - well under a minute - so a healthy run reports progress far more often
-// than this. It exists purely as a backstop against a genuine hang (e.g. a
-// deadlock, or a curl child process that somehow ignores its own --max-time)
-// leaving the tracker stuck RUNNING forever with no way to start a new import.
-const progressStallTimeout = 5 * time.Minute
+// budget - curlMaxAttempts attempts at up to curlMaxTime seconds each, plus
+// backoff between them, currently ~4 minutes worst case (see
+// infra/scraper/su_syllabus.go) - so a healthy run, even one grinding through
+// retries on a single flaky page, reports progress well within this window. It
+// exists purely as a backstop against a genuine hang (e.g. a deadlock, or a curl
+// child process that somehow ignores its own --max-time) leaving the tracker
+// stuck RUNNING forever with no way to start a new import. Keep this comfortably
+// above that worst-case retry budget, not just above the common case, or a
+// request stalled on its last legitimate retry attempt gets killed right before
+// it might have succeeded.
+const progressStallTimeout = 10 * time.Minute
 
 type State string
 

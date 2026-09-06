@@ -232,21 +232,31 @@ func (s *SenshuSyllabusScraper) post(ctx context.Context, target string, values 
 
 // curlMaxAttempts is how many times curl runs a request before giving up. The
 // university's server occasionally times out or drops a connection under no
-// fault of the request itself (seen in practice fetching a course detail page:
-// "Connection timed out after 30002 milliseconds"), and retrying a couple times
-// with a short backoff costs far less than aborting an entire scrape run - which
-// can be mid-way through importing thousands of courses - over one flaky blip.
-const curlMaxAttempts = 3
+// fault of the request itself (seen in practice fetching a listing page: "curl:
+// (28) Operation timed out after 30001 milliseconds", and separately a course
+// detail page: "Connection timed out after 30002 milliseconds"), and a single
+// exhausted request currently aborts the entire scrape - discarding every page
+// already fetched, since courses are only saved once FetchCourses returns
+// successfully in full (see ImportCoursesUseCase). Retrying several times with
+// backoff, and giving each attempt more room via curlMaxTime, costs far less than
+// that: an admin re-running an aborted multi-thousand-course scrape over one
+// flaky blip near the end.
+const curlMaxAttempts = 5
+
+// curlMaxTime is curl's own --max-time budget per attempt, i.e. the ceiling on how
+// slow a single response is allowed to be before that attempt is abandoned (not a
+// total-request-count budget - see curlMaxAttempts for that).
+const curlMaxTime = "45"
 
 // curl runs curl with cookie persistence across calls, a hard per-attempt
-// timeout, -f so non-2xx responses surface as an error instead of being
-// returned as body text, and retries (see curlMaxAttempts) with backoff before
-// giving up.
+// timeout (curlMaxTime), -f so non-2xx responses surface as an error instead of
+// being returned as body text, and retries (see curlMaxAttempts) with backoff
+// before giving up.
 func (s *SenshuSyllabusScraper) curl(ctx context.Context, args ...string) (string, error) {
 	fullArgs := append([]string{
 		"-s", "-S", "-f", "-L",
 		"-b", s.cookieJarPath, "-c", s.cookieJarPath,
-		"--max-time", "30",
+		"--max-time", curlMaxTime,
 	}, args...)
 
 	var lastErr error
