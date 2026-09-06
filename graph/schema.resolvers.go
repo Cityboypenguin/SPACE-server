@@ -18,6 +18,7 @@ import (
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -4325,6 +4326,45 @@ func (r *queryResolver) UserTimetable(ctx context.Context, userID string, year *
 		result = append(result, toGraphTimetableEntry(e.Timetable, e.Course))
 	}
 	return result, nil
+}
+
+// UserTimetableProfile is the resolver for the userTimetableProfile field.
+func (r *queryResolver) UserTimetableProfile(ctx context.Context, userID string, year *int32, semester *string) (*gqlmodel.UserTimetableProfile, error) {
+	uID, err := decodeGraphID(ctx, "user", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	visible := true
+	if claims.ID != uID && !authz.IsAdminRole(claims.Role) {
+		visible, err = r.GetUserTimetableUseCase.IsProfileVisible(ctx, uID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var y *int
+	if year != nil {
+		v := int(*year)
+		y = &v
+	}
+
+	entries, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.TimetableEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, toGraphTimetableEntry(e.Timetable, e.Course))
+	}
+
+	return &gqlmodel.UserTimetableProfile{Visible: visible, Entries: result}, nil
 }
 
 // CurrentSemester is the resolver for the currentSemester field.

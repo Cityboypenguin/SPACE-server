@@ -12,6 +12,10 @@ import (
 
 type GetUserTimetableUseCase interface {
 	Execute(ctx context.Context, userID int64, year *int, semesterName *string) ([]*repository.TimetableEntryWithCourse, error)
+	// IsProfileVisible reports whether userID has made their timetable visible to
+	// other users on their profile (true when the caller is userID themselves,
+	// since this is only meant to gate visibility to other users).
+	IsProfileVisible(ctx context.Context, userID int64) (bool, error)
 }
 
 var _ GetUserTimetableUseCase = &GetUserTimetableInteractor{}
@@ -58,6 +62,12 @@ func (uc *GetUserTimetableInteractor) Execute(ctx context.Context, userID int64,
 	}
 
 	return uc.timetableRepo.ListByUser(ctx, userID, y, s)
+}
+
+// IsProfileVisible reports whether userID's timetable is visible to other users
+// on their profile (defaults to true when no preference has been saved).
+func (uc *GetUserTimetableInteractor) IsProfileVisible(ctx context.Context, userID int64) (bool, error) {
+	return uc.isProfileVisible(ctx, userID)
 }
 
 func (uc *GetUserTimetableInteractor) isProfileVisible(ctx context.Context, userID int64) (bool, error) {

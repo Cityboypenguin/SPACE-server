@@ -88,6 +88,32 @@ func TestGetUserTimetable_OtherUserHiddenReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestGetUserTimetable_IsProfileVisible(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		found bool
+		want  bool
+	}{
+		{name: "hidden", value: "false", found: true, want: false},
+		{name: "shown", value: "true", found: true, want: true},
+		{name: "unset defaults to visible", found: false, want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{value: tc.value, found: tc.found})
+			got, err := uc.IsProfileVisible(context.Background(), 7)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("IsProfileVisible() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestGetUserTimetable_OtherUserDefaultVisibleReturnsEntries(t *testing.T) {
 	want := []*repository.TimetableEntryWithCourse{{}}
 	repo := &fakeListTimetableRepo{result: want}

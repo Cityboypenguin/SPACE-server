@@ -653,6 +653,11 @@ type UserReport struct {
 	Content      *string          `json:"content,omitempty"`
 }
 
+type UserTimetableProfile struct {
+	Visible bool              `json:"visible"`
+	Entries []*TimetableEntry `json:"entries"`
+}
+
 type CommunityMemberAction string
 
 const (

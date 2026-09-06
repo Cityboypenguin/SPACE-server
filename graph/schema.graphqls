@@ -127,8 +127,13 @@ type Query {
   myTimetable(year: Int, semester: String): [TimetableEntry!]!
   # 対象ユーザーの時間割。本人・管理者以外が呼び出した場合、対象ユーザーが
   # setTimetableProfileVisibility(false) でプロフィール非公開にしていれば
-  # 空配列を返す。
+  # 空配列を返す。空配列は「非公開」と「公開しているが未登録」を区別できないため、
+  # プロフィール画面での表示分岐には userTimetableProfile を使うこと。
   userTimetable(userID: ID!, year: Int, semester: String): [TimetableEntry!]!
+  # 対象ユーザーの時間割とプロフィール公開設定。visible が false の場合、entries は
+  # 常に空配列（非公開のため内容は返さない）。visible が true で entries が空なのは
+  # 「公開しているが時間割が未登録」を意味する。本人・管理者は常に visible=true。
+  userTimetableProfile(userID: ID!, year: Int, semester: String): UserTimetableProfile!
   currentSemester: CurrentSemester!
   courseYears: [Int!]!
   questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
@@ -640,6 +645,11 @@ type TimetableEntry {
   course: Course!
   color: TimetableEntryColor!
   createdAt: String!
+}
+
+type UserTimetableProfile {
+  visible: Boolean!
+  entries: [TimetableEntry!]!
 }
 
 # 時間割のコマに表示する色。ユーザーは自由な色ではなく、この決まったパレットから選ぶ。

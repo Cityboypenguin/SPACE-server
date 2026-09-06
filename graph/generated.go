@@ -579,6 +579,7 @@ type ComplexityRoot struct {
 		TimetableProfileVisibility      func(childComplexity int) int
 		TopLevelPosts                   func(childComplexity int, limit *int32, offset *int32) int
 		UserTimetable                   func(childComplexity int, userID string, year *int32, semester *string) int
+		UserTimetableProfile            func(childComplexity int, userID string, year *int32, semester *string) int
 		Users                           func(childComplexity int, limit *int32, offset *int32) int
 	}
 
@@ -727,6 +728,11 @@ type ComplexityRoot struct {
 		TargetID     func(childComplexity int) int
 		TargetType   func(childComplexity int) int
 		UpdatedAt    func(childComplexity int) int
+	}
+
+	UserTimetableProfile struct {
+		Entries func(childComplexity int) int
+		Visible func(childComplexity int) int
 	}
 }
 
@@ -944,6 +950,7 @@ type QueryResolver interface {
 	SearchCourses(ctx context.Context, dayOfWeek string, period int32, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
 	MyTimetable(ctx context.Context, year *int32, semester *string) ([]*model.TimetableEntry, error)
 	UserTimetable(ctx context.Context, userID string, year *int32, semester *string) ([]*model.TimetableEntry, error)
+	UserTimetableProfile(ctx context.Context, userID string, year *int32, semester *string) (*model.UserTimetableProfile, error)
 	CurrentSemester(ctx context.Context) (*model.CurrentSemester, error)
 	CourseYears(ctx context.Context) ([]int32, error)
 	Questions(ctx context.Context, roomID string, limit *int32, offset *int32) (*model.QuestionPage, error)
@@ -4284,6 +4291,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.UserTimetable(childComplexity, args["userID"].(string), args["year"].(*int32), args["semester"].(*string)), true
+	case "Query.userTimetableProfile":
+		if e.ComplexityRoot.Query.UserTimetableProfile == nil {
+			break
+		}
+
+		args, err := ec.field_Query_userTimetableProfile_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.UserTimetableProfile(childComplexity, args["userID"].(string), args["year"].(*int32), args["semester"].(*string)), true
 	case "Query.users":
 		if e.ComplexityRoot.Query.Users == nil {
 			break
@@ -4941,6 +4959,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserReport.UpdatedAt(childComplexity), true
+
+	case "UserTimetableProfile.entries":
+		if e.ComplexityRoot.UserTimetableProfile.Entries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserTimetableProfile.Entries(childComplexity), true
+	case "UserTimetableProfile.visible":
+		if e.ComplexityRoot.UserTimetableProfile.Visible == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserTimetableProfile.Visible(childComplexity), true
 
 	}
 	return 0, false
@@ -6050,6 +6081,16 @@ func (ec *executionContext) childFields_UserReport(ctx context.Context, field gr
 		return ec.fieldContext_UserReport_content(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserReport", field.Name)
+}
+
+func (ec *executionContext) childFields_UserTimetableProfile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "visible":
+		return ec.fieldContext_UserTimetableProfile_visible(ctx, field)
+	case "entries":
+		return ec.fieldContext_UserTimetableProfile_entries(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UserTimetableProfile", field.Name)
 }
 
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9113,6 +9154,36 @@ func (ec *executionContext) field_Query_topLevelPosts_args(ctx context.Context, 
 		return nil, err
 	}
 	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_userTimetableProfile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "year",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["year"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "semester",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["semester"] = arg2
 	return args, nil
 }
 
@@ -22244,6 +22315,50 @@ func (ec *executionContext) fieldContext_Query_userTimetable(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_userTimetableProfile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_userTimetableProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().UserTimetableProfile(ctx, fc.Args["userID"].(string), fc.Args["year"].(*int32), fc.Args["semester"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.UserTimetableProfile) graphql.Marshaler {
+			return ec.marshalNUserTimetableProfile2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserTimetableProfile(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_userTimetableProfile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserTimetableProfile(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_userTimetableProfile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_currentSemester(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25278,6 +25393,61 @@ func (ec *executionContext) _UserReport_content(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_UserReport_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("UserReport", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UserTimetableProfile_visible(ctx context.Context, field graphql.CollectedField, obj *model.UserTimetableProfile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserTimetableProfile_visible(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Visible, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UserTimetableProfile_visible(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserTimetableProfile", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _UserTimetableProfile_entries(ctx context.Context, field graphql.CollectedField, obj *model.UserTimetableProfile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserTimetableProfile_entries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Entries, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TimetableEntry) graphql.Marshaler {
+			return ec.marshalNTimetableEntry2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐTimetableEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UserTimetableProfile_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserTimetableProfile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TimetableEntry(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -32927,6 +33097,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "userTimetableProfile":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_userTimetableProfile(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "currentSemester":
 			field := field
 
@@ -34367,6 +34559,50 @@ func (ec *executionContext) _UserReport(ctx context.Context, sel ast.SelectionSe
 		case "content":
 			out.Values[i] = ec._UserReport_content(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var userTimetableProfileImplementors = []string{"UserTimetableProfile"}
+
+func (ec *executionContext) _UserTimetableProfile(ctx context.Context, sel ast.SelectionSet, obj *model.UserTimetableProfile) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userTimetableProfileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserTimetableProfile")
+		case "visible":
+			out.Values[i] = ec._UserTimetableProfile_visible(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "entries":
+			out.Values[i] = ec._UserTimetableProfile_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -36359,6 +36595,20 @@ func (ec *executionContext) marshalNUserReport2ᚖgithubᚗcomᚋCityboypenguin�
 		return graphql.Null
 	}
 	return ec._UserReport(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUserTimetableProfile2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserTimetableProfile(ctx context.Context, sel ast.SelectionSet, v model.UserTimetableProfile) graphql.Marshaler {
+	return ec._UserTimetableProfile(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUserTimetableProfile2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserTimetableProfile(ctx context.Context, sel ast.SelectionSet, v *model.UserTimetableProfile) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserTimetableProfile(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
