@@ -1372,6 +1372,42 @@ func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year in
 	return toGraphCourseImportStatus(status), nil
 }
 
+// AdminCreateCourse is the resolver for the adminCreateCourse field.
+func (r *mutationResolver) AdminCreateCourse(ctx context.Context, input gqlmodel.AdminCreateCourseInput) (*gqlmodel.Course, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	c, err := r.AdminCreateCourseUseCase.Execute(ctx, courseusecase.AdminCreateCourseParam{
+		DayOfWeek:   input.DayOfWeek,
+		Period:      int(input.Period),
+		TeacherName: input.TeacherName,
+		CourseName:  input.CourseName,
+		Year:        int(input.Year),
+		Semester:    input.Semester,
+	})
+	if err != nil {
+		return nil, err
+	}
+	gqlCourse := toGraphCourse(c)
+	gqlCourse.RegisteredCount = 0
+	return gqlCourse, nil
+}
+
+// AdminDeleteCourse is the resolver for the adminDeleteCourse field.
+func (r *mutationResolver) AdminDeleteCourse(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+
+	numericID, err := decodeGraphID(ctx, "course", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid course id")
+	}
+
+	return r.AdminDeleteCourseUseCase.Execute(ctx, numericID)
+}
+
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
 func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -4552,7 +4588,13 @@ func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmode
 	if err != nil || c == nil {
 		return nil, err
 	}
-	return toGraphCourse(c), nil
+	gqlCourse := toGraphCourse(c)
+	count, err := r.GetCourseRegisteredCountUseCase.Execute(ctx, c.ID)
+	if err != nil {
+		return nil, err
+	}
+	gqlCourse.RegisteredCount = int32(count)
+	return gqlCourse, nil
 }
 
 // AdminListCourses is the resolver for the adminListCourses field.
@@ -4592,7 +4634,13 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 
 	gqlItems := make([]*gqlmodel.Course, 0, len(items))
 	for _, c := range items {
-		gqlItems = append(gqlItems, toGraphCourse(c))
+		gqlCourse := toGraphCourse(c)
+		count, err := r.GetCourseRegisteredCountUseCase.Execute(ctx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		gqlCourse.RegisteredCount = int32(count)
+		gqlItems = append(gqlItems, gqlCourse)
 	}
 
 	return &gqlmodel.CoursePage{Items: gqlItems, Total: int32(total)}, nil

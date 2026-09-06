@@ -112,11 +112,13 @@ func (s *SenshuSyllabusScraper) Close() error {
 // which is the expensive part (an extra page fetch per colliding row), is
 // skipped entirely for any colliding group where every member is already known.
 //
-// onProgress, if non-nil, is called after every listing page is fetched with the
-// number of rows seen so far and the total row count reported by the site - the
-// page-fetch loop is the dominant, rate-limited (RequestInterval-delayed) part of
-// the run, so this is what a caller should use to show a "X / Y" or percentage
-// indicator.
+// onProgress, if non-nil, is called with a running (fetched, total) pair as work
+// completes: after every listing page, and then again for every detail-page fetch
+// disambiguateCampuses makes afterwards (total grows to include those once the
+// listing is known) - a catalog with many name/teacher/slot collisions can spend
+// far longer in that second phase than fetching the listing itself, so without
+// this the reported progress would look frozen the moment the listing finishes
+// even though the run is still working.
 func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool, onProgress func(fetched, total int)) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
 	var rows []scrapedRow
 
@@ -206,7 +208,7 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 		}
 	}
 
-	courses, err = s.disambiguateCampuses(ctx, rows, knownDedupKeys)
+	courses, err = s.disambiguateCampuses(ctx, rows, knownDedupKeys, onProgress, len(rows), total)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -396,22 +398,43 @@ func allKnown(rows []scrapedRow, idxs []int, knownDedupKeys map[string]bool) boo
 // member's dedup_key is already in knownDedupKeys: re-importing an already-known
 // course is always a no-op, so there's nothing disambiguation could change about
 // the outcome for that group.
-func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow, knownDedupKeys map[string]bool) ([]courseusecase.ScrapedCourseInput, error) {
+//
+// This is the phase most likely to make FetchCourses look stalled if a catalog
+// happens to have many name/teacher/slot collisions (routine for cross-listed or
+// multi-campus courses): every group needing disambiguation costs one sequential,
+// RequestInterval-spaced detail-page fetch per member, which can add up to far
+// longer than the listing itself took - so onProgress, baseProcessed and baseTotal
+// let the caller fold this phase's fetches into the same running total instead of
+// the reported percentage freezing the moment the listing pages are done.
+func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow, knownDedupKeys map[string]bool, onProgress func(fetched, total int), baseProcessed, baseTotal int) ([]courseusecase.ScrapedCourseInput, error) {
 	groups := make(map[disambiguationKey][]int, len(rows))
 	for i, r := range rows {
 		k := keyOf(r.course)
 		groups[k] = append(groups[k], i)
 	}
 
-	drop := make(map[int]bool)
+	type disambiguationJob struct {
+		idxs []int
+	}
+	var jobs []disambiguationJob
+	extraFetches := 0
 	for _, idxs := range groups {
-		if len(idxs) < 2 {
+		if len(idxs) < 2 || allKnown(rows, idxs, knownDedupKeys) {
 			continue
 		}
-		if allKnown(rows, idxs, knownDedupKeys) {
-			continue
-		}
+		jobs = append(jobs, disambiguationJob{idxs: idxs})
+		extraFetches += len(idxs)
+	}
 
+	combinedTotal := baseTotal + extraFetches
+	if onProgress != nil {
+		onProgress(baseProcessed, combinedTotal)
+	}
+
+	drop := make(map[int]bool)
+	fetched := 0
+	for _, job := range jobs {
+		idxs := job.idxs
 		bodies := make([]string, len(idxs))
 		for j, i := range idxs {
 			if err := sleepCtx(ctx, s.RequestInterval); err != nil {
@@ -422,6 +445,10 @@ func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows [
 				return nil, fmt.Errorf("fetching detail page %q: %w", rows[i].detailPath, err)
 			}
 			bodies[j] = body
+			fetched++
+			if onProgress != nil {
+				onProgress(baseProcessed+fetched, combinedTotal)
+			}
 		}
 
 		if allSameContent(bodies) {

@@ -197,15 +197,16 @@ type ComplexityRoot struct {
 	}
 
 	Course struct {
-		CourseName  func(childComplexity int) int
-		CreatedAt   func(childComplexity int) int
-		DayOfWeek   func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Period      func(childComplexity int) int
-		RoomID      func(childComplexity int) int
-		Semester    func(childComplexity int) int
-		TeacherName func(childComplexity int) int
-		Year        func(childComplexity int) int
+		CourseName      func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		DayOfWeek       func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Period          func(childComplexity int) int
+		RegisteredCount func(childComplexity int) int
+		RoomID          func(childComplexity int) int
+		Semester        func(childComplexity int) int
+		TeacherName     func(childComplexity int) int
+		Year            func(childComplexity int) int
 	}
 
 	CourseImportStatus struct {
@@ -300,6 +301,8 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
+		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
+		AdminDeleteCourse                 func(childComplexity int, id string) int
 		AdminDeletePost                   func(childComplexity int, id string) int
 		AdminDeleteQuestion               func(childComplexity int, id string) int
 		AdminRegisterTimetableEntry       func(childComplexity int, userID string, courseID string) int
@@ -820,6 +823,8 @@ type MutationResolver interface {
 	DeletePoll(ctx context.Context, pollID string) (bool, error)
 	AdminDeleteQuestion(ctx context.Context, id string) (bool, error)
 	AdminTriggerCourseImport(ctx context.Context, year int32) (*model.CourseImportStatus, error)
+	AdminCreateCourse(ctx context.Context, input model.AdminCreateCourseInput) (*model.Course, error)
+	AdminDeleteCourse(ctx context.Context, id string) (bool, error)
 	AdminUpdateUser(ctx context.Context, id string, input model.UpdateUserInput) (*model.User, error)
 	AdminUpdateProfile(ctx context.Context, userID string, input model.UpdateProfileInput) (*model.Profile, error)
 	UpdateCommunity(ctx context.Context, id string, input model.UpdateCommunityInput) (*model.Community, error)
@@ -1705,6 +1710,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Course.Period(childComplexity), true
+	case "Course.registeredCount":
+		if e.ComplexityRoot.Course.RegisteredCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Course.RegisteredCount(childComplexity), true
 	case "Course.roomID":
 		if e.ComplexityRoot.Course.RoomID == nil {
 			break
@@ -2077,6 +2088,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddUserToRoom(childComplexity, args["input"].(model.AddUserToRoomInput)), true
+	case "Mutation.adminCreateCourse":
+		if e.ComplexityRoot.Mutation.AdminCreateCourse == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminCreateCourse_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminCreateCourse(childComplexity, args["input"].(model.AdminCreateCourseInput)), true
+	case "Mutation.adminDeleteCourse":
+		if e.ComplexityRoot.Mutation.AdminDeleteCourse == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminDeleteCourse_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminDeleteCourse(childComplexity, args["id"].(string)), true
 	case "Mutation.adminDeletePost":
 		if e.ComplexityRoot.Mutation.AdminDeletePost == nil {
 			break
@@ -5011,6 +5044,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAddUserToRoomInput,
+		ec.unmarshalInputAdminCreateCourseInput,
 		ec.unmarshalInputCommunityMemberUpdateInput,
 		ec.unmarshalInputCreateAdministratorInput,
 		ec.unmarshalInputCreateAnnouncementInput,
@@ -5468,6 +5502,8 @@ func (ec *executionContext) childFields_Course(ctx context.Context, field graphq
 		return ec.fieldContext_Course_semester(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Course_createdAt(ctx, field)
+	case "registeredCount":
+		return ec.fieldContext_Course_registeredCount(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Course", field.Name)
 }
@@ -6255,6 +6291,34 @@ func (ec *executionContext) field_Mutation_addUserToRoom_args(ctx context.Contex
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminCreateCourse_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.AdminCreateCourseInput, error) {
+			return ec.unmarshalNAdminCreateCourseInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCreateCourseInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminDeleteCourse_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -12319,6 +12383,29 @@ func (ec *executionContext) fieldContext_Course_createdAt(_ context.Context, fie
 	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Course_registeredCount(ctx context.Context, field graphql.CollectedField, obj *model.Course) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Course_registeredCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RegisteredCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Course_registeredCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _CourseImportStatus_state(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16035,6 +16122,94 @@ func (ec *executionContext) fieldContext_Mutation_adminTriggerCourseImport(ctx c
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_adminTriggerCourseImport_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminCreateCourse(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminCreateCourse(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminCreateCourse(ctx, fc.Args["input"].(model.AdminCreateCourseInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Course) graphql.Marshaler {
+			return ec.marshalNCourse2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourse(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminCreateCourse(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Course(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminCreateCourse_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminDeleteCourse(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminDeleteCourse(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminDeleteCourse(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminDeleteCourse(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminDeleteCourse_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -26682,6 +26857,71 @@ func (ec *executionContext) unmarshalInputAddUserToRoomInput(ctx context.Context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputAdminCreateCourseInput(ctx context.Context, obj any) (model.AdminCreateCourseInput, error) {
+	var it model.AdminCreateCourseInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"dayOfWeek", "period", "teacherName", "courseName", "year", "semester"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "dayOfWeek":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dayOfWeek"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DayOfWeek = data
+		case "period":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("period"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Period = data
+		case "teacherName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("teacherName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TeacherName = data
+		case "courseName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("courseName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CourseName = data
+		case "year":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("year"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Year = data
+		case "semester":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("semester"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Semester = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCommunityMemberUpdateInput(ctx context.Context, obj any) (model.CommunityMemberUpdateInput, error) {
 	var it model.CommunityMemberUpdateInput
 	if obj == nil {
@@ -28943,6 +29183,11 @@ func (ec *executionContext) _Course(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "registeredCount":
+			out.Values[i] = ec._Course_registeredCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -30261,6 +30506,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "adminTriggerCourseImport":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_adminTriggerCourseImport(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminCreateCourse":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminCreateCourse(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminDeleteCourse":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminDeleteCourse(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -35184,6 +35443,11 @@ func (ec *executionContext) unmarshalNAddUserToRoomInput2githubᚗcomᚋCityboyp
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNAdminCreateCourseInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCreateCourseInput(ctx context.Context, v any) (model.AdminCreateCourseInput, error) {
+	res, err := ec.unmarshalInputAdminCreateCourseInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNAdministrator2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministrator(ctx context.Context, sel ast.SelectionSet, v model.Administrator) graphql.Marshaler {
 	return ec._Administrator(ctx, sel, &v)
 }
@@ -35512,6 +35776,10 @@ func (ec *executionContext) marshalNCommunityStatsPage2ᚖgithubᚗcomᚋCityboy
 		return graphql.Null
 	}
 	return ec._CommunityStatsPage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCourse2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourse(ctx context.Context, sel ast.SelectionSet, v model.Course) graphql.Marshaler {
+	return ec._Course(ctx, sel, &v)
 }
 
 func (ec *executionContext) marshalNCourse2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Course) graphql.Marshaler {

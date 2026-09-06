@@ -326,6 +326,12 @@ type Mutation {
   deletePoll(pollID: ID!): Boolean!
   adminDeleteQuestion(id: ID!): Boolean!
   adminTriggerCourseImport(year: Int!): CourseImportStatus!
+  adminCreateCourse(input: AdminCreateCourseInput!): Course!
+  # Deletes the course's chat room, which cascades to the course row itself, every
+  # user's timetable registration for it, and all of the room's messages/questions/
+  # polls. Irreversible - the resolver's registeredCount on Course is meant to be
+  # shown to the admin as a confirmation prompt before calling this.
+  adminDeleteCourse(id: ID!): Boolean!
   adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
   updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
@@ -633,6 +639,19 @@ type Course {
   year: Int!
   semester: String!
   createdAt: String!
+  # Admin-only: how many users currently have this course in their timetable.
+  # Non-admin callers get 0. Meant to be shown before adminDeleteCourse, since that
+  # deletion cascades away every one of these registrations.
+  registeredCount: Int!
+}
+
+input AdminCreateCourseInput {
+  dayOfWeek: String!
+  period: Int!
+  teacherName: String!
+  courseName: String!
+  year: Int!
+  semester: String!
 }
 
 type CoursePage {

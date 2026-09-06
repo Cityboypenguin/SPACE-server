@@ -41,6 +41,10 @@ type TimetableRepository interface {
 	// gate course-chat writes (message/question/answer/poll) to students who have
 	// actually registered for the course, not just any authenticated user.
 	IsRegistered(ctx context.Context, userID, courseID int64) (bool, error)
+	// CountByCourseID returns how many users currently have courseID in their
+	// timetable - used by the admin course-deletion flow to warn how many students'
+	// registrations (and course-room history) would be wiped out by the cascade.
+	CountByCourseID(ctx context.Context, courseID int64) (int, error)
 	// ReplaceForSemester atomically replaces userID's timetable entries for
 	// (year, semester) with exactly desiredCourseIDs, in one transaction: entries
 	// whose course is no longer desired are deleted, courses newly desired are

@@ -45,6 +45,7 @@ func NewCourseUseCases(
 	settingRepo repository.SystemSettingRepository,
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 	userSettingRepo repository.UserSettingRepository,
+	roomRepo repository.RoomRepository,
 ) CourseUseCases {
 	return CourseUseCases{
 		SearchCoursesUseCase:                courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
@@ -67,6 +68,9 @@ func NewCourseUseCases(
 		ListCoursesUseCase:                  courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:              courseusecase.NewListCourseYearsUseCase(courseRepo),
 		ListDedupKeysByYearUseCase:          courseusecase.NewListDedupKeysByYearUseCase(courseRepo),
+		AdminCreateCourseUseCase:            courseusecase.NewAdminCreateCourseUseCase(courseRepo),
+		AdminDeleteCourseUseCase:            courseusecase.NewAdminDeleteCourseUseCase(courseRepo, roomRepo),
+		GetCourseRegisteredCountUseCase:     courseusecase.NewGetCourseRegisteredCountUseCase(timetableRepo),
 	}
 }
 

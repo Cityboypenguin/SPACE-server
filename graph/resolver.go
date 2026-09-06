@@ -251,6 +251,9 @@ type CourseUseCases struct {
 	ListCoursesUseCase                  courseusecase.ListCoursesUseCase
 	ListCourseYearsUseCase              courseusecase.ListCourseYearsUseCase
 	ListDedupKeysByYearUseCase          courseusecase.ListDedupKeysByYearUseCase
+	AdminCreateCourseUseCase            courseusecase.AdminCreateCourseUseCase
+	AdminDeleteCourseUseCase            courseusecase.AdminDeleteCourseUseCase
+	GetCourseRegisteredCountUseCase     courseusecase.GetCourseRegisteredCountUseCase
 }
 
 type QuestionUseCases struct {

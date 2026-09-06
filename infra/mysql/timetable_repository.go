@@ -291,6 +291,18 @@ func (r *MySQLTimetableRepository) IsRegistered(ctx context.Context, userID, cou
 	return true, nil
 }
 
+func (r *MySQLTimetableRepository) CountByCourseID(ctx context.Context, courseID int64) (int, error) {
+	var count int
+	err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM timetables WHERE course_id = ?`,
+		courseID,
+	).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 type timetableScanner interface {
 	Scan(dest ...any) error
 }

@@ -14,6 +14,15 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type AdminCreateCourseInput struct {
+	DayOfWeek   string `json:"dayOfWeek"`
+	Period      int32  `json:"period"`
+	TeacherName string `json:"teacherName"`
+	CourseName  string `json:"courseName"`
+	Year        int32  `json:"year"`
+	Semester    string `json:"semester"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
@@ -170,15 +179,16 @@ type CommunityStatsPage struct {
 }
 
 type Course struct {
-	ID          string `json:"ID"`
-	RoomID      string `json:"roomID"`
-	DayOfWeek   string `json:"dayOfWeek"`
-	Period      int32  `json:"period"`
-	TeacherName string `json:"teacherName"`
-	CourseName  string `json:"courseName"`
-	Year        int32  `json:"year"`
-	Semester    string `json:"semester"`
-	CreatedAt   string `json:"createdAt"`
+	ID              string `json:"ID"`
+	RoomID          string `json:"roomID"`
+	DayOfWeek       string `json:"dayOfWeek"`
+	Period          int32  `json:"period"`
+	TeacherName     string `json:"teacherName"`
+	CourseName      string `json:"courseName"`
+	Year            int32  `json:"year"`
+	Semester        string `json:"semester"`
+	CreatedAt       string `json:"createdAt"`
+	RegisteredCount int32  `json:"registeredCount"`
 }
 
 type CourseImportStatus struct {

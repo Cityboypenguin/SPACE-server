@@ -7,12 +7,22 @@ package courseimport
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 )
+
+// progressStallTimeout aborts a RUNNING import if it goes this long without a
+// single progress report. Every unit of real work the scraper does (one listing
+// page, one disambiguation detail-page fetch) is bounded by curl's own retry
+// budget - well under a minute - so a healthy run reports progress far more often
+// than this. It exists purely as a backstop against a genuine hang (e.g. a
+// deadlock, or a curl child process that somehow ignores its own --max-time)
+// leaving the tracker stuck RUNNING forever with no way to start a new import.
+const progressStallTimeout = 5 * time.Minute
 
 type State string
 
@@ -104,9 +114,59 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 	t.notify()
 
 	go func() {
-		bgCtx := context.Background()
-		imported, skipped, err := run(bgCtx, t.SetProgress)
+		bgCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		stalled := make(chan struct{})
+		stopWatchdog := make(chan struct{})
+		resetStall := make(chan struct{}, 1)
+		go func() {
+			timer := time.NewTimer(progressStallTimeout)
+			defer timer.Stop()
+			for {
+				select {
+				case <-resetStall:
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(progressStallTimeout)
+				case <-timer.C:
+					close(stalled)
+					return
+				case <-stopWatchdog:
+					return
+				}
+			}
+		}()
+		go func() {
+			select {
+			case <-stalled:
+				cancel()
+			case <-stopWatchdog:
+			}
+		}()
+
+		reportProgress := func(processed, total int) {
+			select {
+			case resetStall <- struct{}{}:
+			default:
+			}
+			t.SetProgress(processed, total)
+		}
+
+		imported, skipped, err := run(bgCtx, reportProgress)
+		close(stopWatchdog)
 		finished := time.Now()
+
+		select {
+		case <-stalled:
+			if err != nil {
+				err = fmt.Errorf("no progress for %s; aborted (last error: %w)", progressStallTimeout, err)
+			} else {
+				err = fmt.Errorf("no progress for %s; aborted", progressStallTimeout)
+			}
+		default:
+		}
 
 		t.mu.Lock()
 		startedAt := t.status.StartedAt
