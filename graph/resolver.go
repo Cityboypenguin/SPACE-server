@@ -36,6 +36,12 @@ import (
 	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
 )
 
+// CourseImportStatusTopic is the PubSub topic the course-import background job
+// (wired up in cmd/server/main.go) publishes to on every state/progress change,
+// letting AdminCourseImportStatusUpdated push updates to admins watching the
+// import screen instead of them having to poll adminCourseImportStatus.
+const CourseImportStatusTopic = "course_import:status"
+
 // This file will not be regenerated automatically.
 //
 // It serves as dependency injection for your app, add any dependencies you require
@@ -100,6 +106,9 @@ type Resolver struct {
 
 	PubSub *pubsub.PubSub
 
+	// CourseImportStatusTracker publishes to CourseImportStatusTopic via PubSub on
+	// every state/progress change (see cmd/server/main.go), which
+	// AdminCourseImportStatusUpdated subscribes to.
 	CourseImportTracker *courseimport.Tracker
 
 	CreateBlockUseCase            block.BlockUserUseCase

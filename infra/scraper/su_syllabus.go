@@ -111,7 +111,13 @@ func (s *SenshuSyllabusScraper) Close() error {
 // on import regardless of what FetchCourses returns for it - so disambiguation,
 // which is the expensive part (an extra page fetch per colliding row), is
 // skipped entirely for any colliding group where every member is already known.
-func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
+//
+// onProgress, if non-nil, is called after every listing page is fetched with the
+// number of rows seen so far and the total row count reported by the site - the
+// page-fetch loop is the dominant, rate-limited (RequestInterval-delayed) part of
+// the run, so this is what a caller should use to show a "X / Y" or percentage
+// indicator.
+func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool, onProgress func(fetched, total int)) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
 	var rows []scrapedRow
 
 	body, err := s.get(ctx, senshuSearchDo)
@@ -168,6 +174,9 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 	pageRows, rowsSkipped := parseRows(body, year)
 	rows = append(rows, pageRows...)
 	skipped += rowsSkipped
+	if onProgress != nil {
+		onProgress(len(rows), total)
+	}
 
 	totalPages := (total + pageSize - 1) / pageSize
 	for page := 2; page <= totalPages; page++ {
@@ -192,6 +201,9 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 		pageRows, rowsSkipped := parseRows(body, year)
 		rows = append(rows, pageRows...)
 		skipped += rowsSkipped
+		if onProgress != nil {
+			onProgress(len(rows), total)
+		}
 	}
 
 	courses, err = s.disambiguateCampuses(ctx, rows, knownDedupKeys)

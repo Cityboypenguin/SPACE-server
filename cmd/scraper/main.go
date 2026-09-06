@@ -45,7 +45,18 @@ func main() {
 	}
 
 	logger.Log.Info().Int("year", *year).Int("already_imported", len(knownDedupKeys)).Msg("fetching course catalog")
-	scraped, skipped, err := syllabusScraper.FetchCourses(ctx, *year, knownDedupKeys)
+	lastPercent := -1
+	scraped, skipped, err := syllabusScraper.FetchCourses(ctx, *year, knownDedupKeys, func(fetched, total int) {
+		percent := 0
+		if total > 0 {
+			percent = fetched * 100 / total
+		}
+		if percent == lastPercent {
+			return
+		}
+		lastPercent = percent
+		logger.Log.Info().Int("fetched", fetched).Int("total", total).Int("percent", percent).Msg("scraping progress")
+	})
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to fetch course catalog")
 	}

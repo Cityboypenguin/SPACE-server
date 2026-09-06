@@ -127,7 +127,10 @@ func main() {
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	courseRepository := mysql.NewMySQLCourseRepository(database)
-	courseImportTracker := courseimport.NewTracker()
+	ps := pubsub.New()
+	courseImportTracker := courseimport.NewTracker(func(status courseimport.Status) {
+		ps.Publish(graph.CourseImportStatusTopic, status)
+	})
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
 	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
 	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
@@ -340,8 +343,6 @@ func main() {
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
-
-	ps := pubsub.New()
 
 	resolver := &graph.Resolver{
 		StorageRepository:     storageRepository,

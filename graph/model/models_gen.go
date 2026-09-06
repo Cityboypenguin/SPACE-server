@@ -182,13 +182,16 @@ type Course struct {
 }
 
 type CourseImportStatus struct {
-	State        CourseImportState `json:"state"`
-	Year         *int32            `json:"year,omitempty"`
-	Imported     *int32            `json:"imported,omitempty"`
-	Skipped      *int32            `json:"skipped,omitempty"`
-	ErrorMessage *string           `json:"errorMessage,omitempty"`
-	StartedAt    *string           `json:"startedAt,omitempty"`
-	FinishedAt   *string           `json:"finishedAt,omitempty"`
+	State           CourseImportState `json:"state"`
+	Year            *int32            `json:"year,omitempty"`
+	Imported        *int32            `json:"imported,omitempty"`
+	Skipped         *int32            `json:"skipped,omitempty"`
+	ErrorMessage    *string           `json:"errorMessage,omitempty"`
+	StartedAt       *string           `json:"startedAt,omitempty"`
+	FinishedAt      *string           `json:"finishedAt,omitempty"`
+	ProcessedCount  *int32            `json:"processedCount,omitempty"`
+	TotalCount      *int32            `json:"totalCount,omitempty"`
+	ProgressPercent *int32            `json:"progressPercent,omitempty"`
 }
 
 type CoursePage struct {

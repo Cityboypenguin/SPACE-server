@@ -19,6 +19,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -1344,7 +1345,7 @@ func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year in
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context) (int, int, error) {
+	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context, reportProgress func(processed, total int)) (int, int, error) {
 		knownDedupKeys, err := r.ListDedupKeysByYearUseCase.Execute(bgCtx, int(year))
 		if err != nil {
 			return 0, 0, err
@@ -1355,7 +1356,7 @@ func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year in
 			return 0, 0, err
 		}
 		defer sc.Close()
-		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys)
+		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys, reportProgress)
 		if err != nil {
 			return 0, skippedRows, err
 		}
@@ -4901,6 +4902,37 @@ func (r *subscriptionResolver) PollDeleted(ctx context.Context, roomID string) (
 				}
 				if p, ok := data.(*gqlmodel.Poll); ok {
 					ch <- p
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// AdminCourseImportStatusUpdated is the resolver for the adminCourseImportStatusUpdated field.
+func (r *subscriptionResolver) AdminCourseImportStatusUpdated(ctx context.Context) (<-chan *gqlmodel.CourseImportStatus, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan *gqlmodel.CourseImportStatus, 1)
+	sub := r.PubSub.Subscribe(CourseImportStatusTopic)
+
+	go func() {
+		defer r.PubSub.Unsubscribe(CourseImportStatusTopic, sub)
+		for {
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			case data, ok := <-sub:
+				if !ok {
+					close(ch)
+					return
+				}
+				if status, ok := data.(courseimport.Status); ok {
+					ch <- toGraphCourseImportStatus(status)
 				}
 			}
 		}

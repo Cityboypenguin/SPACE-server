@@ -714,6 +714,12 @@ type CourseImportStatus {
   errorMessage: String
   startedAt: String
   finishedAt: String
+  # Progress of a RUNNING import: rows fetched so far / total rows reported by the
+  # source site. Present only while state is RUNNING (and briefly after, until the
+  # next poll reflects SUCCEEDED/FAILED).
+  processedCount: Int
+  totalCount: Int
+  progressPercent: Int
 }
 
 type Question {
@@ -792,6 +798,9 @@ type Subscription {
   pollAdded(roomID: ID!): Poll!
   pollUpdated(pollID: ID!): Poll!
   pollDeleted(roomID: ID!): Poll!
+  # Pushes on every state/progress change of the (single, global) course-import job,
+  # letting the admin screen show live progress without polling adminCourseImportStatus.
+  adminCourseImportStatusUpdated: CourseImportStatus!
 }
 
 enum ReportStatus {

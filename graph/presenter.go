@@ -135,6 +135,14 @@ func toGraphCourseImportStatus(status courseimport.Status) *gqlmodel.CourseImpor
 	if status.ErrorMessage != "" {
 		out.ErrorMessage = &status.ErrorMessage
 	}
+	if status.State == courseimport.StateRunning && status.Total > 0 {
+		processed := int32(status.Processed)
+		total := int32(status.Total)
+		percent := int32(status.Processed * 100 / status.Total)
+		out.ProcessedCount = &processed
+		out.TotalCount = &total
+		out.ProgressPercent = &percent
+	}
 	if status.StartedAt != nil {
 		startedAt := status.StartedAt.Format(timeFormat)
 		out.StartedAt = &startedAt

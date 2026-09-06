@@ -209,13 +209,16 @@ type ComplexityRoot struct {
 	}
 
 	CourseImportStatus struct {
-		ErrorMessage func(childComplexity int) int
-		FinishedAt   func(childComplexity int) int
-		Imported     func(childComplexity int) int
-		Skipped      func(childComplexity int) int
-		StartedAt    func(childComplexity int) int
-		State        func(childComplexity int) int
-		Year         func(childComplexity int) int
+		ErrorMessage    func(childComplexity int) int
+		FinishedAt      func(childComplexity int) int
+		Imported        func(childComplexity int) int
+		ProcessedCount  func(childComplexity int) int
+		ProgressPercent func(childComplexity int) int
+		Skipped         func(childComplexity int) int
+		StartedAt       func(childComplexity int) int
+		State           func(childComplexity int) int
+		TotalCount      func(childComplexity int) int
+		Year            func(childComplexity int) int
 	}
 
 	CoursePage struct {
@@ -632,19 +635,20 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		AnswerAdded           func(childComplexity int, questionID string) int
-		AnswerDeleted         func(childComplexity int, questionID string) int
-		AnswerUpdated         func(childComplexity int, questionID string) int
-		MessageAdded          func(childComplexity int, roomID string) int
-		MessageDeleted        func(childComplexity int, roomID string) int
-		MessageUpdated        func(childComplexity int, roomID string) int
-		PollAdded             func(childComplexity int, roomID string) int
-		PollDeleted           func(childComplexity int, roomID string) int
-		PollUpdated           func(childComplexity int, pollID string) int
-		QuestionAdded         func(childComplexity int, roomID string) int
-		QuestionDeleted       func(childComplexity int, roomID string) int
-		QuestionUpdated       func(childComplexity int, roomID string) int
-		RoomReadStatusUpdated func(childComplexity int, roomID string) int
+		AdminCourseImportStatusUpdated func(childComplexity int) int
+		AnswerAdded                    func(childComplexity int, questionID string) int
+		AnswerDeleted                  func(childComplexity int, questionID string) int
+		AnswerUpdated                  func(childComplexity int, questionID string) int
+		MessageAdded                   func(childComplexity int, roomID string) int
+		MessageDeleted                 func(childComplexity int, roomID string) int
+		MessageUpdated                 func(childComplexity int, roomID string) int
+		PollAdded                      func(childComplexity int, roomID string) int
+		PollDeleted                    func(childComplexity int, roomID string) int
+		PollUpdated                    func(childComplexity int, pollID string) int
+		QuestionAdded                  func(childComplexity int, roomID string) int
+		QuestionDeleted                func(childComplexity int, roomID string) int
+		QuestionUpdated                func(childComplexity int, roomID string) int
+		RoomReadStatusUpdated          func(childComplexity int, roomID string) int
 	}
 
 	TermsConsentPage struct {
@@ -985,6 +989,7 @@ type SubscriptionResolver interface {
 	PollAdded(ctx context.Context, roomID string) (<-chan *model.Poll, error)
 	PollUpdated(ctx context.Context, pollID string) (<-chan *model.Poll, error)
 	PollDeleted(ctx context.Context, roomID string) (<-chan *model.Poll, error)
+	AdminCourseImportStatusUpdated(ctx context.Context) (<-chan *model.CourseImportStatus, error)
 }
 type UserResolver interface {
 	AvatarURL(ctx context.Context, obj *model.User) (*string, error)
@@ -1743,6 +1748,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CourseImportStatus.Imported(childComplexity), true
+	case "CourseImportStatus.processedCount":
+		if e.ComplexityRoot.CourseImportStatus.ProcessedCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.ProcessedCount(childComplexity), true
+	case "CourseImportStatus.progressPercent":
+		if e.ComplexityRoot.CourseImportStatus.ProgressPercent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.ProgressPercent(childComplexity), true
 	case "CourseImportStatus.skipped":
 		if e.ComplexityRoot.CourseImportStatus.Skipped == nil {
 			break
@@ -1761,6 +1778,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CourseImportStatus.State(childComplexity), true
+	case "CourseImportStatus.totalCount":
+		if e.ComplexityRoot.CourseImportStatus.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseImportStatus.TotalCount(childComplexity), true
 	case "CourseImportStatus.year":
 		if e.ComplexityRoot.CourseImportStatus.Year == nil {
 			break
@@ -4505,6 +4528,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.RoomReadStatusUpdate.UserID(childComplexity), true
 
+	case "Subscription.adminCourseImportStatusUpdated":
+		if e.ComplexityRoot.Subscription.AdminCourseImportStatusUpdated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Subscription.AdminCourseImportStatusUpdated(childComplexity), true
 	case "Subscription.answerAdded":
 		if e.ComplexityRoot.Subscription.AnswerAdded == nil {
 			break
@@ -5459,6 +5488,12 @@ func (ec *executionContext) childFields_CourseImportStatus(ctx context.Context, 
 		return ec.fieldContext_CourseImportStatus_startedAt(ctx, field)
 	case "finishedAt":
 		return ec.fieldContext_CourseImportStatus_finishedAt(ctx, field)
+	case "processedCount":
+		return ec.fieldContext_CourseImportStatus_processedCount(ctx, field)
+	case "totalCount":
+		return ec.fieldContext_CourseImportStatus_totalCount(ctx, field)
+	case "progressPercent":
+		return ec.fieldContext_CourseImportStatus_progressPercent(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CourseImportStatus", field.Name)
 }
@@ -12443,6 +12478,75 @@ func (ec *executionContext) _CourseImportStatus_finishedAt(ctx context.Context, 
 }
 func (ec *executionContext) fieldContext_CourseImportStatus_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_processedCount(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_processedCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProcessedCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_processedCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_totalCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseImportStatus_progressPercent(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseImportStatus_progressPercent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProgressPercent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CourseImportStatus_progressPercent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseImportStatus", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _CoursePage_items(ctx context.Context, field graphql.CollectedField, obj *model.CoursePage) (ret graphql.Marshaler) {
@@ -24155,6 +24259,38 @@ func (ec *executionContext) fieldContext_Subscription_pollDeleted(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_adminCourseImportStatusUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Subscription_adminCourseImportStatusUpdated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Subscription().AdminCourseImportStatusUpdated(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CourseImportStatus) graphql.Marshaler {
+			return ec.marshalNCourseImportStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Subscription_adminCourseImportStatusUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CourseImportStatus(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _TermsConsentPage_items(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28873,6 +29009,21 @@ func (ec *executionContext) _CourseImportStatus(ctx context.Context, sel ast.Sel
 			}
 		case "finishedAt":
 			out.Values[i] = ec._CourseImportStatus_finishedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "processedCount":
+			out.Values[i] = ec._CourseImportStatus_processedCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._CourseImportStatus_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "progressPercent":
+			out.Values[i] = ec._CourseImportStatus_progressPercent(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -33924,6 +34075,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_pollUpdated(ctx, fields[0])
 	case "pollDeleted":
 		return ec._Subscription_pollDeleted(ctx, fields[0])
+	case "adminCourseImportStatusUpdated":
+		return ec._Subscription_adminCourseImportStatusUpdated(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
