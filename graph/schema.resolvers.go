@@ -3387,6 +3387,29 @@ func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string
 	return r.favoriteUsersToGQL(ctx, favoriteUsers)
 }
 
+// GetFavoritesByPostID is the resolver for the getFavoritesByPostID field.
+func (r *queryResolver) GetFavoritesByPostID(ctx context.Context, postID string) ([]*gqlmodel.Favorite, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericPostID, err := decodeGraphID(ctx, "post", postID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+
+	favorites, err := r.GetFavoritesByPostIDUseCase.Execute(ctx, numericPostID)
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlFavorites []*gqlmodel.Favorite
+	for _, f := range favorites {
+		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
+	}
+	return gqlFavorites, nil
+}
+
 // ListBlockedUsers is the resolver for the listBlockedUsers field.
 func (r *queryResolver) ListBlockedUsers(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
 	claims, err := requireAuth(ctx)

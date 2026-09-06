@@ -6,7 +6,12 @@ type Query {
   me: User!
   getUserByID(id: ID!): User
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
-  myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
+  myNotifications(
+    limit: Int = 20
+    offset: Int = 0
+    type: String
+    actorID: ID
+  ): NotificationPage!
   myNotificationGroups(limit: Int = 20, offset: Int = 0): NotificationGroupPage!
   notification(id: ID!): Notification
   myUnreadNotificationCount: Int!
@@ -100,6 +105,7 @@ type Query {
   searchFavoriteUsers(keyword: String!): [User!]!
   GetFavoriteUsersByUserID(userID: ID!): [User!]!
   adminGetFavoriteUsers(userID: ID!): [User!]!
+  getFavoritesByPostID(post_id: ID!): [Favorite!]!
 
   listBlockedUsers(limit: Int = 20, offset: Int = 0): UserPage!
   searchBlockedUsers(keyword: String!): [User!]!
@@ -109,8 +115,15 @@ type Query {
   isReportServiceEnabled: Boolean!
 
   adminGetAnalytics: AnalyticsSummary!
-  adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
-  adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
+  adminGetCommunityAnalytics(
+    limit: Int = 20
+    offset: Int = 0
+  ): CommunityStatsPage!
+  adminGetTimeSeries(
+    granularity: TimeSeriesGranularity!
+    from: String!
+    to: String!
+  ): TimeSeriesData!
 }
 
 type User {
