@@ -16,9 +16,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"golang.org/x/sync/errgroup"
 )
 
 // 専修大学Web講義要項（シラバス）. Its search screen (slbssrch.do) guards form
@@ -216,11 +218,24 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 }
 
 func (s *SenshuSyllabusScraper) get(ctx context.Context, target string) (string, error) {
-	return s.curl(ctx, "-A", senshuUserAgent, target)
+	return s.curl(ctx, true, "-A", senshuUserAgent, target)
+}
+
+// getConcurrent is get without writing the response's cookies back to the shared
+// jar file, safe to call from multiple goroutines at once. Used only by
+// disambiguateCampuses's parallel detail-page fetches, which run after the
+// listing phase (and its single-use session timestamp token) is entirely done -
+// concurrent curl processes all reading and rewriting the same jar file would
+// otherwise race, each unaware of cookies the others just wrote. Not persisting
+// is fine here: nothing after this phase needs whatever a detail page happens to
+// set, and the session cookie needed to authenticate the request is already
+// established and just gets read, not renewed.
+func (s *SenshuSyllabusScraper) getConcurrent(ctx context.Context, target string) (string, error) {
+	return s.curl(ctx, false, "-A", senshuUserAgent, target)
 }
 
 func (s *SenshuSyllabusScraper) post(ctx context.Context, target string, values url.Values) (string, error) {
-	return s.curl(ctx,
+	return s.curl(ctx, true,
 		"-A", senshuUserAgent,
 		"-H", "Content-Type: application/x-www-form-urlencoded",
 		"-H", "Referer: "+senshuSearchDo,
@@ -248,16 +263,18 @@ const curlMaxAttempts = 5
 // total-request-count budget - see curlMaxAttempts for that).
 const curlMaxTime = "45"
 
-// curl runs curl with cookie persistence across calls, a hard per-attempt
-// timeout (curlMaxTime), -f so non-2xx responses surface as an error instead of
-// being returned as body text, and retries (see curlMaxAttempts) with backoff
-// before giving up.
-func (s *SenshuSyllabusScraper) curl(ctx context.Context, args ...string) (string, error) {
-	fullArgs := append([]string{
-		"-s", "-S", "-f", "-L",
-		"-b", s.cookieJarPath, "-c", s.cookieJarPath,
-		"--max-time", curlMaxTime,
-	}, args...)
+// curl runs curl with cookie persistence across calls (unless persistCookies is
+// false - see getConcurrent), a hard per-attempt timeout (curlMaxTime), -f so
+// non-2xx responses surface as an error instead of being returned as body text,
+// and retries (see curlMaxAttempts) with backoff before giving up.
+func (s *SenshuSyllabusScraper) curl(ctx context.Context, persistCookies bool, args ...string) (string, error) {
+	jarArgs := []string{"-b", s.cookieJarPath, "-c", s.cookieJarPath}
+	if !persistCookies {
+		jarArgs = []string{"-b", s.cookieJarPath}
+	}
+	fullArgs := append([]string{"-s", "-S", "-f", "-L"}, jarArgs...)
+	fullArgs = append(fullArgs, "--max-time", curlMaxTime)
+	fullArgs = append(fullArgs, args...)
 
 	var lastErr error
 	for attempt := 1; attempt <= curlMaxAttempts; attempt++ {
@@ -409,13 +426,26 @@ func allKnown(rows []scrapedRow, idxs []int, knownDedupKeys map[string]bool) boo
 // course is always a no-op, so there's nothing disambiguation could change about
 // the outcome for that group.
 //
-// This is the phase most likely to make FetchCourses look stalled if a catalog
-// happens to have many name/teacher/slot collisions (routine for cross-listed or
-// multi-campus courses): every group needing disambiguation costs one sequential,
-// RequestInterval-spaced detail-page fetch per member, which can add up to far
-// longer than the listing itself took - so onProgress, baseProcessed and baseTotal
-// let the caller fold this phase's fetches into the same running total instead of
-// the reported percentage freezing the moment the listing pages are done.
+// detailFetchConcurrency bounds how many disambiguation detail-page fetches run
+// at once. Unlike the listing pages (which share one session-scoped, single-use
+// timestamp token and so can only ever be walked one at a time), each detail page
+// is a plain, independent GET keyed by kougicd - nothing stops them from running
+// concurrently. Kept deliberately low (and each fetch still waits RequestInterval
+// before firing, same as the listing pages) - this is someone else's shared
+// university server, not ours, and "the site has no documented rate limit" is not
+// the same thing as "hitting it with many requests at once is fine". This trades
+// away most of the possible speedup in exchange for staying a low-impact caller.
+const detailFetchConcurrency = 2
+
+// This is the phase most likely to make FetchCourses look stalled (or just take a
+// very long time) if a catalog happens to have many name/teacher/slot collisions
+// (routine for cross-listed or multi-campus courses): every group needing
+// disambiguation costs one detail-page fetch per member. Unlike the listing pages,
+// these fetches have no ordering dependency on each other, so a couple run at a
+// time (see detailFetchConcurrency) instead of strictly one at a time - onProgress,
+// baseProcessed and baseTotal still let the caller fold this phase's fetches into
+// the same running total, so the reported percentage doesn't freeze the moment the
+// listing pages are done.
 func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows []scrapedRow, knownDedupKeys map[string]bool, onProgress func(fetched, total int), baseProcessed, baseTotal int) ([]courseusecase.ScrapedCourseInput, error) {
 	groups := make(map[disambiguationKey][]int, len(rows))
 	for i, r := range rows {
@@ -441,41 +471,63 @@ func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows [
 		onProgress(baseProcessed, combinedTotal)
 	}
 
+	// drop and fetched are the only state shared across jobs; every job's idxs are
+	// disjoint (groups partitions rows by disambiguationKey), so writes to
+	// rows[i].course.CourseName from different jobs never touch the same i and
+	// need no locking of their own.
+	var mu sync.Mutex
 	drop := make(map[int]bool)
 	fetched := 0
+	reportFetch := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		fetched++
+		if onProgress != nil {
+			onProgress(baseProcessed+fetched, combinedTotal)
+		}
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(detailFetchConcurrency)
 	for _, job := range jobs {
-		idxs := job.idxs
-		bodies := make([]string, len(idxs))
-		for j, i := range idxs {
-			if err := sleepCtx(ctx, s.RequestInterval); err != nil {
-				return nil, err
+		job := job
+		g.Go(func() error {
+			idxs := job.idxs
+			bodies := make([]string, len(idxs))
+			for j, i := range idxs {
+				if err := sleepCtx(gctx, s.RequestInterval); err != nil {
+					return err
+				}
+				body, err := s.getConcurrent(gctx, senshuOrigin+rows[i].detailPath)
+				if err != nil {
+					return fmt.Errorf("fetching detail page %q: %w", rows[i].detailPath, err)
+				}
+				bodies[j] = body
+				reportFetch()
 			}
-			body, err := s.get(ctx, senshuOrigin+rows[i].detailPath)
-			if err != nil {
-				return nil, fmt.Errorf("fetching detail page %q: %w", rows[i].detailPath, err)
-			}
-			bodies[j] = body
-			fetched++
-			if onProgress != nil {
-				onProgress(baseProcessed+fetched, combinedTotal)
-			}
-		}
 
-		if allSameContent(bodies) {
-			for _, i := range idxs[1:] {
-				drop[i] = true
+			if allSameContent(bodies) {
+				mu.Lock()
+				for _, i := range idxs[1:] {
+					drop[i] = true
+				}
+				mu.Unlock()
+				return nil
 			}
-			continue
-		}
 
-		for j, i := range idxs {
-			campus, assignment := extractCampusAndAssignment(bodies[j])
-			label := strings.TrimSpace(campus + "・" + assignment)
-			label = strings.Trim(label, "・")
-			if label != "" {
-				rows[i].course.CourseName = fmt.Sprintf("%s（%s）", rows[i].course.CourseName, label)
+			for j, i := range idxs {
+				campus, assignment := extractCampusAndAssignment(bodies[j])
+				label := strings.TrimSpace(campus + "・" + assignment)
+				label = strings.Trim(label, "・")
+				if label != "" {
+					rows[i].course.CourseName = fmt.Sprintf("%s（%s）", rows[i].course.CourseName, label)
+				}
 			}
-		}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	courses := make([]courseusecase.ScrapedCourseInput, 0, len(rows))
