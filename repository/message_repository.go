@@ -9,8 +9,12 @@ import (
 
 type MessageRepository interface {
 	SaveMessage(ctx context.Context, m *model.Message) error
+	// GetMessageByID returns the message, or nil if it does not exist or has been soft-deleted.
 	GetMessageByID(ctx context.Context, id int64) (*model.Message, error)
-	DeleteMessage(ctx context.Context, id int64) (bool, error)
+	// SoftDeleteMessage marks the message as deleted by deletedBy. It returns false
+	// (with no error) if the message does not exist or was already deleted, so that
+	// repeated delete attempts are idempotent and never corrupt deletedBy/deletedAt.
+	SoftDeleteMessage(ctx context.Context, id int64, deletedBy int64) (bool, error)
 	// beforeID: このID未満を取得, afterID: このIDより大きいを取得, afterTime: この時刻以降を取得
 	// 戻り値: messages, hasMoreBefore, hasMoreAfter, error
 	ListMessagesByRoomID(ctx context.Context, roomID int64, limit int, beforeID *int64, afterID *int64, afterTime *time.Time) ([]*model.Message, bool, bool, error)

@@ -108,6 +108,21 @@ func TestCheckRoomWritable_NotRegisteredIsForbidden(t *testing.T) {
 	}
 }
 
+// チャットテスト項番21: 未ログイン(context に auth.Claims が無い)状態で授業チャットに
+// 投稿しようとすると、認証エラーで拒否される。
+func TestCheckRoomWritable_UnauthenticatedIsRejected(t *testing.T) {
+	repo := &fakeCourseRepoForArchive{course: &model.Course{RoomID: 1, Year: 2026, Semester: model.SemesterFirst}}
+	uc := NewCheckRoomWritableUseCase(repo, &fakeSettingRepo{currentSemester: "2026:前期"}, &fakeTimetableRepoForArchive{registered: true})
+
+	err := uc.Execute(context.Background(), 1)
+	if err == nil {
+		t.Fatal("expected an unauthorized error when no claims are present in the context")
+	}
+	if apperr.CodeOf(err) != apperr.CodeUnauthorized {
+		t.Fatalf("error code = %s, want %s", apperr.CodeOf(err), apperr.CodeUnauthorized)
+	}
+}
+
 func TestRequireWritableCourseRoom_RejectsNonCourseRoom(t *testing.T) {
 	uc := NewRequireWritableCourseRoomUseCase(&fakeCourseRepoForArchive{course: nil}, &fakeSettingRepo{currentSemester: "2026:前期"}, &fakeTimetableRepoForArchive{registered: false})
 

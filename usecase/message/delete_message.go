@@ -7,7 +7,9 @@ import (
 )
 
 type DeleteMessageUseCase interface {
-	Execute(ctx context.Context, messageID int64) (bool, error)
+	// Execute soft-deletes messageID, recording deletedBy as the actor. It returns
+	// false (with no error) if the message does not exist or was already deleted.
+	Execute(ctx context.Context, messageID int64, deletedBy int64) (bool, error)
 }
 
 var _ DeleteMessageUseCase = &DeleteMessageInteractor{}
@@ -20,6 +22,6 @@ func NewDeleteMessageUseCase(messageRepo repository.MessageRepository) DeleteMes
 	return &DeleteMessageInteractor{messageRepo: messageRepo}
 }
 
-func (uc *DeleteMessageInteractor) Execute(ctx context.Context, messageID int64) (bool, error) {
-	return uc.messageRepo.DeleteMessage(ctx, messageID)
+func (uc *DeleteMessageInteractor) Execute(ctx context.Context, messageID int64, deletedBy int64) (bool, error) {
+	return uc.messageRepo.SoftDeleteMessage(ctx, messageID, deletedBy)
 }

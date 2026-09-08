@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -40,8 +41,12 @@ func NewSendMessageUseCase(
 }
 
 func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []MediaInput) (*model.Message, error) {
+	content = strings.TrimSpace(content)
 	if content == "" && len(mediaInputs) == 0 {
-		return nil, fmt.Errorf("content or media is required")
+		return nil, apperr.InvalidInput("content or media is required")
+	}
+	if err := validateContent(content); err != nil {
+		return nil, err
 	}
 
 	prefix := fmt.Sprintf("media/%d/", userID)

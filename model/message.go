@@ -9,6 +9,13 @@ type Message struct {
 	Content   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt *time.Time
+	DeletedBy *int64
+}
+
+// IsDeleted reports whether the message has been soft-deleted.
+func (m *Message) IsDeleted() bool {
+	return m.DeletedAt != nil
 }
 
 type CreateMessageParam struct {

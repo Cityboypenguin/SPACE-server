@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -25,6 +26,14 @@ func (uc *UpdateMessageInteractor) Execute(ctx context.Context, messageID int64,
 	message, err := uc.messageRepo.GetMessageByID(ctx, messageID)
 	if err != nil {
 		return nil, err
+	}
+	if message == nil {
+		return nil, apperr.NotFound("message not found")
+	}
+	if updateParam.Content != nil {
+		if err := validateContent(*updateParam.Content); err != nil {
+			return nil, err
+		}
 	}
 	message.UpdateMessage(updateParam)
 	if err := uc.messageRepo.UpdateMessage(ctx, message); err != nil {

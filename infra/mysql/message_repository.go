@@ -50,7 +50,7 @@ func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Messa
 func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (*model.Message, error) {
 	query := `
 		SELECT id, room_id, user_id, content, created_at, updated_at
-		FROM messages WHERE id = ?
+		FROM messages WHERE id = ? AND deleted_at IS NULL
 	`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
@@ -71,9 +71,13 @@ func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (
 	return &m, nil
 }
 
-func (r *MySQLMessageRepository) DeleteMessage(ctx context.Context, id int64) (bool, error) {
-	query := "DELETE FROM messages WHERE id = ?"
-	result, err := r.DB.ExecContext(ctx, query, id)
+// SoftDeleteMessage marks the message as deleted. The WHERE clause requires
+// deleted_at IS NULL, so a message that no longer exists or was already
+// deleted yields rowsAffected == 0 (returned as false, no error) instead of
+// overwriting a prior deletedBy/deletedAt — repeated calls are idempotent.
+func (r *MySQLMessageRepository) SoftDeleteMessage(ctx context.Context, id int64, deletedBy int64) (bool, error) {
+	query := "UPDATE messages SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL"
+	result, err := r.DB.ExecContext(ctx, query, time.Now().Unix(), deletedBy, id)
 	if err != nil {
 		return false, err
 	}
@@ -156,25 +160,25 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 	case afterTime != nil:
 		// 未読起点: afterTime より新しいメッセージを昇順で取得
 		query = `SELECT id, room_id, user_id, content, created_at, updated_at
-			FROM messages WHERE room_id = ? AND created_at > ? ORDER BY id ASC LIMIT ?`
+			FROM messages WHERE room_id = ? AND created_at > ? AND deleted_at IS NULL ORDER BY id ASC LIMIT ?`
 		args = []interface{}{roomID, afterTime.Unix(), limit + 1}
 		ascOrder = true
 	case afterID != nil:
 		// 新着ページング: afterID より新しいメッセージを昇順で取得
 		query = `SELECT id, room_id, user_id, content, created_at, updated_at
-			FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?`
+			FROM messages WHERE room_id = ? AND id > ? AND deleted_at IS NULL ORDER BY id ASC LIMIT ?`
 		args = []interface{}{roomID, *afterID, limit + 1}
 		ascOrder = true
 	case beforeID != nil:
 		// 過去ページング: beforeID より古いメッセージを降順で取得して反転
 		query = `SELECT id, room_id, user_id, content, created_at, updated_at
-			FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?`
+			FROM messages WHERE room_id = ? AND id < ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ?`
 		args = []interface{}{roomID, *beforeID, limit + 1}
 		ascOrder = false
 	default:
 		// 初回ロード（未読なし）: 最新メッセージを降順で取得して反転
 		query = `SELECT id, room_id, user_id, content, created_at, updated_at
-			FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?`
+			FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ?`
 		args = []interface{}{roomID, limit + 1}
 		ascOrder = false
 	}
@@ -236,7 +240,7 @@ func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Mes
 	if err != nil {
 		return err
 	}
-	query := "UPDATE messages SET content = ?, updated_at = ? WHERE id = ?"
+	query := "UPDATE messages SET content = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL"
 	_, err = r.DB.ExecContext(ctx, query, content, m.UpdatedAt.Unix(), m.ID)
 	return err
 }
@@ -244,7 +248,7 @@ func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Mes
 func (r *MySQLMessageRepository) CountUnreadMessages(ctx context.Context, roomID, userID int64, afterTimestamp int64) (int, error) {
 	query := `
 		SELECT COUNT(*) FROM messages
-		WHERE room_id = ? AND user_id != ? AND created_at > ?
+		WHERE room_id = ? AND user_id != ? AND created_at > ? AND deleted_at IS NULL
 	`
 	var count int
 	err := r.DB.QueryRowContext(ctx, query, roomID, userID, afterTimestamp).Scan(&count)
@@ -263,6 +267,7 @@ func (r *MySQLMessageRepository) CountUnreadMessagesByRoomIDs(ctx context.Contex
 		JOIN room_users ru ON ru.room_id = m.room_id AND ru.user_id = ?
 		WHERE m.room_id IN (%s)
 		  AND m.user_id != ?
+		  AND m.deleted_at IS NULL
 		  AND (ru.last_read_at IS NULL OR m.created_at > ru.last_read_at)
 		GROUP BY m.room_id
 	`, placeholders)
@@ -298,6 +303,7 @@ func (r *MySQLMessageRepository) CountUnreadMessagesByRoomType(ctx context.Conte
 		JOIN room_users ru ON ru.room_id = m.room_id AND ru.user_id = ?
 		JOIN rooms r ON r.id = m.room_id AND r.type = ?
 		WHERE m.user_id != ?
+		  AND m.deleted_at IS NULL
 		  AND (ru.last_read_at IS NULL OR m.created_at > ru.last_read_at)
 	`
 	var count int
@@ -317,7 +323,7 @@ func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, r
 		INNER JOIN (
 			SELECT room_id, MAX(id) AS max_id
 			FROM messages
-			WHERE room_id IN (%s)
+			WHERE room_id IN (%s) AND deleted_at IS NULL
 			GROUP BY room_id
 		) latest ON m.room_id = latest.room_id AND m.id = latest.max_id
 	`, placeholders)
@@ -371,6 +377,7 @@ func (r *MySQLMessageRepository) CountUnreadMessagesPerMember(ctx context.Contex
 		FROM room_users ru
 		LEFT JOIN messages m ON m.room_id = ru.room_id
 		  AND m.user_id != ru.user_id
+		  AND m.deleted_at IS NULL
 		  AND m.created_at > COALESCE(ru.last_read_at, 0)
 		WHERE ru.room_id = ?
 		  AND ru.user_id != ?

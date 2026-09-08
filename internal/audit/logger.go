@@ -25,6 +25,15 @@ func LogDenied(ctx context.Context, action string, target string, targetID int64
 		Str("reason", reason), ctx).Send()
 }
 
+// LogMessageDeleted records a successful message deletion for later audit review:
+// who deleted it (via WithActor), when (log timestamp), and which message/room.
+func LogMessageDeleted(ctx context.Context, roomID int64, messageID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "message_deleted").
+		Int64("room_id", roomID).
+		Int64("message_id", messageID), ctx).Send()
+}
+
 func LogProbe(ctx context.Context, action string, target string, suppliedID string, reason string) {
 	WithActor(logger.Log.Warn().
 		Str("event", "audit_probe").

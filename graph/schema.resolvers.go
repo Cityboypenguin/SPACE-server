@@ -17,6 +17,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
+	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
@@ -1925,11 +1926,12 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 		}
 	}
 
-	deleted, err := r.DeleteMessageUseCase.Execute(ctx, numericID)
+	deleted, err := r.DeleteMessageUseCase.Execute(ctx, numericID, claims.ID)
 	if err != nil {
 		return false, err
 	}
 	if deleted {
+		audit.LogMessageDeleted(ctx, msg.RoomID, numericID)
 		r.PubSub.Publish(roomID+":message:deleted", &gqlmodel.Message{ID: id})
 	}
 	return deleted, nil
@@ -1937,13 +1939,26 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 
 // UpdateMessage is the resolver for the updateMessage field.
 func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string) (*gqlmodel.Message, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	numericID, err := decodeGraphID(ctx, "message", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid message id")
+	}
+
+	existing, err := r.GetMessageByIDUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get message")
+	}
+	if existing == nil {
+		return nil, fmt.Errorf("message not found")
+	}
+	if existing.UserID != claims.ID && !isAdminRole(claims.Role) {
+		audit.LogDenied(ctx, "update_message", "message", numericID, "not owner")
+		return nil, errors.New("forbidden: can only update your own messages")
 	}
 
 	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content})
@@ -3387,9 +3402,11 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 
 	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
+		// GetRoomUseCase returns "room not found: <id>" for a nonexistent room id;
+		// propagate it as-is so the client's not-found mapping applies (item 28).
+		return nil, err
 	}
-	if room == nil || room.Type != model.RoomTypeCourse {
+	if room.Type != model.RoomTypeCourse {
 		// 授業内チャットは全授業公開のため誰でも閲覧できる。それ以外の room は
 		// 従来通り room_users membership（または管理者）を要求する。
 		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
