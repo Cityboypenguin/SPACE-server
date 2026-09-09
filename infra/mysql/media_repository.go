@@ -22,11 +22,11 @@ func NewMySQLMediaRepository(db *sql.DB) repository.MediaRepository {
 func (r *MySQLMediaRepository) CreateMedia(ctx context.Context, m *model.Media) error {
 	db := extractDB(ctx, r.DB)
 	query := `
-		INSERT INTO media (uploader_user_id, storage_key, content_type, created_at)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO media (uploader_user_id, storage_key, content_type, width, height, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 	result, err := db.ExecContext(ctx, query,
-		m.UploaderUserID, m.StorageKey, m.ContentType, m.CreatedAt.Unix(),
+		m.UploaderUserID, m.StorageKey, m.ContentType, m.Width, m.Height, m.CreatedAt.Unix(),
 	)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (r *MySQLMediaRepository) CreateAnswerMedia(ctx context.Context, answerID, 
 
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {
 	query := `
-		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at
+		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.width, m.height, m.created_at
 		FROM media m
 		JOIN post_media pm ON pm.media_id = m.id
 		WHERE pm.post_id = ?
@@ -81,7 +81,7 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 	for rows.Next() {
 		var m model.Media
 		var createdAt int64
-		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &m.Width, &m.Height, &createdAt); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
@@ -124,7 +124,7 @@ func (r *MySQLMediaRepository) listByParentIDs(ctx context.Context, ids []int64,
 	}
 
 	query := fmt.Sprintf(`
-		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at, jt.%s
+		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.width, m.height, m.created_at, jt.%s
 		FROM media m
 		JOIN %s jt ON jt.media_id = m.id
 		WHERE jt.%s IN (%s)
@@ -140,7 +140,7 @@ func (r *MySQLMediaRepository) listByParentIDs(ctx context.Context, ids []int64,
 	for rows.Next() {
 		var m model.Media
 		var createdAt, parentID int64
-		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &createdAt, &parentID); err != nil {
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &m.Width, &m.Height, &createdAt, &parentID); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)

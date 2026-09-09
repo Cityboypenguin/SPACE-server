@@ -14,6 +14,10 @@ import (
 type MediaInput struct {
 	StorageKey  string
 	ContentType string
+	// 画像の実寸。クライアントの申告値で、表示側のレイアウト確保にのみ使う。
+	// 申告が無い場合は nil。
+	Width  *int
+	Height *int
 }
 
 type SendMessageUseCase interface {
@@ -75,6 +79,8 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 				UploaderUserID: userID,
 				StorageKey:     input.StorageKey,
 				ContentType:    input.ContentType,
+				Width:          input.Width,
+				Height:         input.Height,
 				CreatedAt:      now,
 			}
 			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {

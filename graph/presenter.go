@@ -292,6 +292,8 @@ func toGraphMedia(m *model.Media, url string) *gqlmodel.Media {
 		ID:          encodeGraphID("media", m.ID),
 		URL:         url,
 		ContentType: m.ContentType,
+		Width:       toNullableInt32(m.Width),
+		Height:      toNullableInt32(m.Height),
 		CreatedAt:   m.CreatedAt.Format(timeFormat),
 	}
 }

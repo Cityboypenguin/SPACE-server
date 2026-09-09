@@ -424,3 +424,22 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 
 	return ch, nil
 }
+
+// toNullableInt32 は nil を保ったまま int を GraphQL の Int（*int32）へ変換する。
+func toNullableInt32(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+	converted := int32(*v)
+	return &converted
+}
+
+// toNullableInt は GraphQL の Int（*int32）を nil を保ったまま int へ変換する。
+// 値はレイアウトのヒントとしてのみ使うため、正でない申告は捨てて nil にする。
+func toNullableInt(v *int32) *int {
+	if v == nil || *v <= 0 {
+		return nil
+	}
+	converted := int(*v)
+	return &converted
+}

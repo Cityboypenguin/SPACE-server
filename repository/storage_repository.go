@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -11,4 +12,6 @@ type StorageRepository interface {
 	PresignedPutURL(ctx context.Context, objectKey string, contentType string, expires time.Duration, maxBytes int64) (string, error)
 	PublicURL(objectKey string) string
 	DeleteObject(ctx context.Context, objectKey string) error
+	// GetObject returns a reader for the stored object. The caller must close it.
+	GetObject(ctx context.Context, objectKey string) (io.ReadCloser, error)
 }

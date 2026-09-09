@@ -328,12 +328,16 @@ type Media struct {
 	ID          string `json:"ID"`
 	URL         string `json:"url"`
 	ContentType string `json:"contentType"`
+	Width       *int32 `json:"width,omitempty"`
+	Height      *int32 `json:"height,omitempty"`
 	CreatedAt   string `json:"createdAt"`
 }
 
 type MediaUploadInput struct {
 	ObjectKey   string `json:"objectKey"`
 	ContentType string `json:"contentType"`
+	Width       *int32 `json:"width,omitempty"`
+	Height      *int32 `json:"height,omitempty"`
 }
 
 type Message struct {

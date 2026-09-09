@@ -475,6 +475,8 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
 				StorageKey:  m.ObjectKey,
 				ContentType: m.ContentType,
+				Width:       toNullableInt(m.Width),
+				Height:      toNullableInt(m.Height),
 			})
 		}
 	}
@@ -537,6 +539,8 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
 				StorageKey:  m.ObjectKey,
 				ContentType: m.ContentType,
+				Width:       toNullableInt(m.Width),
+				Height:      toNullableInt(m.Height),
 			})
 		}
 	}
@@ -1069,6 +1073,8 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 			ucMediaInputs = append(ucMediaInputs, questionusecase.MediaInput{
 				StorageKey:  m.ObjectKey,
 				ContentType: m.ContentType,
+				Width:       toNullableInt(m.Width),
+				Height:      toNullableInt(m.Height),
 			})
 		}
 	}
@@ -1129,6 +1135,8 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 			ucMediaInputs = append(ucMediaInputs, answerusecase.MediaInput{
 				StorageKey:  m.ObjectKey,
 				ContentType: m.ContentType,
+				Width:       toNullableInt(m.Width),
+				Height:      toNullableInt(m.Height),
 			})
 		}
 	}
@@ -1834,6 +1842,8 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 			ucMediaInputs = append(ucMediaInputs, messageusecase.MediaInput{
 				StorageKey:  m.ObjectKey,
 				ContentType: m.ContentType,
+				Width:       toNullableInt(m.Width),
+				Height:      toNullableInt(m.Height),
 			})
 		}
 	}

@@ -3,6 +3,7 @@ package miniorepo
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"time"
@@ -99,4 +100,14 @@ func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 
 func (r *MinIOStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	return r.client.RemoveObject(ctx, r.bucket, objectKey, minio.RemoveObjectOptions{})
+}
+
+// GetObject はオブジェクトの読み出しストリームを返す。呼び出し側が Close すること。
+// 画像ヘッダだけを読む用途を想定しており、全体をメモリに載せない。
+func (r *MinIOStorageRepository) GetObject(ctx context.Context, objectKey string) (io.ReadCloser, error) {
+	obj, err := r.client.GetObject(ctx, r.bucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object %q: %w", objectKey, err)
+	}
+	return obj, nil
 }

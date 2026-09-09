@@ -276,8 +276,10 @@ type ComplexityRoot struct {
 	Media struct {
 		ContentType func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
+		Height      func(childComplexity int) int
 		ID          func(childComplexity int) int
 		URL         func(childComplexity int) int
+		Width       func(childComplexity int) int
 	}
 
 	Message struct {
@@ -1984,6 +1986,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Media.CreatedAt(childComplexity), true
+	case "Media.height":
+		if e.ComplexityRoot.Media.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Media.Height(childComplexity), true
 	case "Media.ID":
 		if e.ComplexityRoot.Media.ID == nil {
 			break
@@ -1996,6 +2004,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Media.URL(childComplexity), true
+	case "Media.width":
+		if e.ComplexityRoot.Media.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Media.Width(childComplexity), true
 
 	case "Message.content":
 		if e.ComplexityRoot.Message.Content == nil {
@@ -5644,6 +5658,10 @@ func (ec *executionContext) childFields_Media(ctx context.Context, field graphql
 		return ec.fieldContext_Media_url(ctx, field)
 	case "contentType":
 		return ec.fieldContext_Media_contentType(ctx, field)
+	case "width":
+		return ec.fieldContext_Media_width(ctx, field)
+	case "height":
+		return ec.fieldContext_Media_height(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Media_createdAt(ctx, field)
 	}
@@ -13369,6 +13387,52 @@ func (ec *executionContext) _Media_contentType(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_Media_contentType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Media_width(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_width(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Media_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Media_height(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Media_height(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Media_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Media", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Media_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Media) (ret graphql.Marshaler) {
@@ -27477,7 +27541,7 @@ func (ec *executionContext) unmarshalInputMediaUploadInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"objectKey", "contentType"}
+	fieldsInOrder := [...]string{"objectKey", "contentType", "width", "height"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -27498,6 +27562,20 @@ func (ec *executionContext) unmarshalInputMediaUploadInput(ctx context.Context, 
 				return it, err
 			}
 			it.ContentType = data
+		case "width":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("width"))
+			data, err := ec.unmarshalOInt2ᚖint32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Width = data
+		case "height":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("height"))
+			data, err := ec.unmarshalOInt2ᚖint32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Height = data
 		}
 	}
 	return it, nil
@@ -29788,6 +29866,16 @@ func (ec *executionContext) _Media(ctx context.Context, sel ast.SelectionSet, ob
 		case "contentType":
 			out.Values[i] = ec._Media_contentType(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "width":
+			out.Values[i] = ec._Media_width(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "height":
+			out.Values[i] = ec._Media_height(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "createdAt":

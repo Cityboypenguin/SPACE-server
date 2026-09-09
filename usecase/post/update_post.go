@@ -88,6 +88,8 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 					UploaderUserID: param.UserID,
 					StorageKey:     input.StorageKey,
 					ContentType:    input.ContentType,
+					Width:          input.Width,
+					Height:         input.Height,
 					CreatedAt:      post.UpdatedAt,
 				}
 

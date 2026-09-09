@@ -194,6 +194,10 @@ type Media {
   ID: ID!
   url: String!
   contentType: String!
+  # 画像の実寸。表示側がロード前に領域を確保するために使う。
+  # 寸法を持たないメディアや、埋め戻し前の古いレコードでは null。
+  width: Int
+  height: Int
   createdAt: String!
 }
 
@@ -451,6 +455,10 @@ input CreateInquiryInput {
 input MediaUploadInput {
   objectKey: String!
   contentType: String!
+  # 画像の実寸。クライアントがアップロード時に測って申告する。
+  # レイアウトのヒントとしてのみ使うため、欠けていても null で受け付ける。
+  width: Int
+  height: Int
 }
 
 input CreateAdministratorInput {

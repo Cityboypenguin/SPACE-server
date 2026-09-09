@@ -17,6 +17,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.34
 	github.com/vikstrous/dataloadgen v0.0.10
 	golang.org/x/crypto v0.51.0
+	golang.org/x/image v0.32.0
 	golang.org/x/sync v0.20.0
 )
 
