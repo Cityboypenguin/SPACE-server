@@ -26,15 +26,11 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
-	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
-	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
-	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
-	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
@@ -469,17 +465,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		numericParentID = &parentID
 	}
 
-	var ucMediaInputs []postusecase.MediaInput
-	for _, m := range input.MediaInputs {
-		if m != nil {
-			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
-				StorageKey:  m.ObjectKey,
-				ContentType: m.ContentType,
-				Width:       toNullableInt(m.Width),
-				Height:      toNullableInt(m.Height),
-			})
-		}
-	}
+	ucMediaInputs := toMediaInputs(input.MediaInputs)
 
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
 		UserID:   claims.ID,
@@ -533,17 +519,7 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		deletedMediaIDs = append(deletedMediaIDs, numID)
 	}
 
-	var ucMediaInputs []postusecase.MediaInput
-	for _, m := range input.NewMediaInputs {
-		if m != nil {
-			ucMediaInputs = append(ucMediaInputs, postusecase.MediaInput{
-				StorageKey:  m.ObjectKey,
-				ContentType: m.ContentType,
-				Width:       toNullableInt(m.Width),
-				Height:      toNullableInt(m.Height),
-			})
-		}
-	}
+	ucMediaInputs := toMediaInputs(input.NewMediaInputs)
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
 		PostID:  numericID,
@@ -1067,17 +1043,7 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	var ucMediaInputs []questionusecase.MediaInput
-	for _, m := range mediaInputs {
-		if m != nil {
-			ucMediaInputs = append(ucMediaInputs, questionusecase.MediaInput{
-				StorageKey:  m.ObjectKey,
-				ContentType: m.ContentType,
-				Width:       toNullableInt(m.Width),
-				Height:      toNullableInt(m.Height),
-			})
-		}
-	}
+	ucMediaInputs := toMediaInputs(mediaInputs)
 
 	q, err := r.CreateQuestionUseCase.Execute(ctx, rid, body, ucMediaInputs)
 	if err != nil {
@@ -1129,17 +1095,7 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	var ucMediaInputs []answerusecase.MediaInput
-	for _, m := range mediaInputs {
-		if m != nil {
-			ucMediaInputs = append(ucMediaInputs, answerusecase.MediaInput{
-				StorageKey:  m.ObjectKey,
-				ContentType: m.ContentType,
-				Width:       toNullableInt(m.Width),
-				Height:      toNullableInt(m.Height),
-			})
-		}
-	}
+	ucMediaInputs := toMediaInputs(mediaInputs)
 
 	a, err := r.AnswerQuestionUseCase.Execute(ctx, qid, body, ucMediaInputs)
 	if err != nil {
@@ -1836,17 +1792,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		}
 	}
 
-	var ucMediaInputs []messageusecase.MediaInput
-	for _, m := range mediaInputs {
-		if m != nil {
-			ucMediaInputs = append(ucMediaInputs, messageusecase.MediaInput{
-				StorageKey:  m.ObjectKey,
-				ContentType: m.ContentType,
-				Width:       toNullableInt(m.Width),
-				Height:      toNullableInt(m.Height),
-			})
-		}
-	}
+	ucMediaInputs := toMediaInputs(mediaInputs)
 
 	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs)
 	if err != nil {

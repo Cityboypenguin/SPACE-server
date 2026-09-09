@@ -10,7 +10,7 @@ import (
 )
 
 type UpdatePostUseCase interface {
-	Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []MediaInput, deletedMediaIDs []int64) (*model.Post, error)
+	Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (*model.Post, error)
 }
 
 var _ UpdatePostUseCase = &UpdatePostInteractor{}
@@ -29,7 +29,7 @@ func NewUpdatePostUseCase(postRepo repository.PostRepository, mediaRepo reposito
 	}
 }
 
-func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
+func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
 	if param.Content != nil {
 		if err := validatePostContent(*param.Content); err != nil {
 			return nil, err
@@ -84,14 +84,7 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 			}
 
 			for i, input := range newMediaInputs {
-				media := &model.Media{
-					UploaderUserID: param.UserID,
-					StorageKey:     input.StorageKey,
-					ContentType:    input.ContentType,
-					Width:          input.Width,
-					Height:         input.Height,
-					CreatedAt:      post.UpdatedAt,
-				}
+				media := model.NewMedia(param.UserID, input, post.UpdatedAt)
 
 				if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
 					return err

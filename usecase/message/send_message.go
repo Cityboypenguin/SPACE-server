@@ -11,17 +11,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-type MediaInput struct {
-	StorageKey  string
-	ContentType string
-	// 画像の実寸。クライアントの申告値で、表示側のレイアウト確保にのみ使う。
-	// 申告が無い場合は nil。
-	Width  *int
-	Height *int
-}
-
 type SendMessageUseCase interface {
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []MediaInput) (*model.Message, error)
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput) (*model.Message, error)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -44,7 +35,7 @@ func NewSendMessageUseCase(
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []MediaInput) (*model.Message, error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput) (*model.Message, error) {
 	content = strings.TrimSpace(content)
 	if content == "" && len(mediaInputs) == 0 {
 		return nil, apperr.InvalidInput("content or media is required")
@@ -75,14 +66,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 			return err
 		}
 		for i, input := range mediaInputs {
-			media := &model.Media{
-				UploaderUserID: userID,
-				StorageKey:     input.StorageKey,
-				ContentType:    input.ContentType,
-				Width:          input.Width,
-				Height:         input.Height,
-				CreatedAt:      now,
-			}
+			media := model.NewMedia(userID, input, now)
 			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
 				return err
 			}

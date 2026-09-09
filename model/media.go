@@ -14,3 +14,27 @@ type Media struct {
 	Height    *int
 	CreatedAt time.Time
 }
+
+// MediaInput はアップロード済みオブジェクトへの参照。投稿・メッセージ・質問・回答の
+// いずれの添付でも形は同じなので、ユースケースごとに定義せずここに集約する。
+// Media を新しい属性で拡張するときに触る箇所を1つに保つのが目的。
+type MediaInput struct {
+	StorageKey  string
+	ContentType string
+	// 画像の実寸。クライアントの申告値で、表示側のレイアウト確保にのみ使う。
+	// 申告が無い場合は nil。
+	Width  *int
+	Height *int
+}
+
+// NewMedia は入力から保存用の Media を組み立てる。
+func NewMedia(uploaderUserID int64, input MediaInput, createdAt time.Time) *Media {
+	return &Media{
+		UploaderUserID: uploaderUserID,
+		StorageKey:     input.StorageKey,
+		ContentType:    input.ContentType,
+		Width:          input.Width,
+		Height:         input.Height,
+		CreatedAt:      createdAt,
+	}
+}

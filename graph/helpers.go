@@ -434,12 +434,36 @@ func toNullableInt32(v *int) *int32 {
 	return &converted
 }
 
+// 実在しうる画像の一辺の上限。これを超える申告は誤りか悪意とみなして捨てる。
+// 実用上の最大級（数億画素クラス）でも 1 辺 65535px を超えることはまずない。
+const maxReportedImageDimension = 65535
+
 // toNullableInt は GraphQL の Int（*int32）を nil を保ったまま int へ変換する。
-// 値はレイアウトのヒントとしてのみ使うため、正でない申告は捨てて nil にする。
+// 値はクライアントの自己申告でレイアウトのヒントにしか使わないため、
+// 範囲外の申告は捨てて nil にし、寸法未取得と同じ扱いに落とす。
 func toNullableInt(v *int32) *int {
-	if v == nil || *v <= 0 {
+	if v == nil || *v <= 0 || *v > maxReportedImageDimension {
 		return nil
 	}
 	converted := int(*v)
 	return &converted
+}
+
+// toMediaInputs は GraphQL の添付入力をユースケース層の形へ変換する。
+// 添付を受け取る全ミューテーション（投稿・編集・メッセージ・質問・回答）が同じ
+// 変換をするため、ここに集約して Media の属性追加時に触る箇所を1つに保つ。
+func toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.MediaInput {
+	var result []model.MediaInput
+	for _, m := range inputs {
+		if m == nil {
+			continue
+		}
+		result = append(result, model.MediaInput{
+			StorageKey:  m.ObjectKey,
+			ContentType: m.ContentType,
+			Width:       toNullableInt(m.Width),
+			Height:      toNullableInt(m.Height),
+		})
+	}
+	return result
 }

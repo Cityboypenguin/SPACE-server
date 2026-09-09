@@ -12,17 +12,8 @@ import (
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 )
 
-type MediaInput struct {
-	StorageKey  string
-	ContentType string
-	// 画像の実寸。クライアントの申告値で、表示側のレイアウト確保にのみ使う。
-	// 申告が無い場合は nil。
-	Width  *int
-	Height *int
-}
-
 type CreatePostUseCase interface {
-	Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []MediaInput) (*model.Post, error)
+	Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []model.MediaInput) (*model.Post, error)
 }
 
 var _ CreatePostUseCase = &CreatePostInteractor{}
@@ -48,7 +39,7 @@ func NewCreatePostUseCase(
 	}
 }
 
-func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []MediaInput) (*model.Post, error) {
+func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []model.MediaInput) (*model.Post, error) {
 	if strings.TrimSpace(param.Content) == "" && len(mediaInputs) == 0 {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
@@ -83,14 +74,7 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		}
 
 		for i, input := range mediaInputs {
-			media := &model.Media{
-				UploaderUserID: param.UserID,
-				StorageKey:     input.StorageKey,
-				ContentType:    input.ContentType,
-				Width:          input.Width,
-				Height:         input.Height,
-				CreatedAt:      now,
-			}
+			media := model.NewMedia(param.UserID, input, now)
 			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
 				return err
 			}

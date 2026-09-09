@@ -15,17 +15,8 @@ import (
 
 const MaxMediaCount = 4
 
-type MediaInput struct {
-	StorageKey  string
-	ContentType string
-	// 画像の実寸。クライアントの申告値で、表示側のレイアウト確保にのみ使う。
-	// 申告が無い場合は nil。
-	Width  *int
-	Height *int
-}
-
 type AnswerQuestionUseCase interface {
-	Execute(ctx context.Context, questionID int64, body string, mediaInputs []MediaInput) (*model.Answer, error)
+	Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (*model.Answer, error)
 }
 
 var _ AnswerQuestionUseCase = &AnswerQuestionInteractor{}
@@ -54,7 +45,7 @@ func NewAnswerQuestionUseCase(
 	}
 }
 
-func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int64, body string, mediaInputs []MediaInput) (*model.Answer, error) {
+func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (*model.Answer, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -96,14 +87,7 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 			return err
 		}
 		for i, input := range mediaInputs {
-			media := &model.Media{
-				UploaderUserID: claims.ID,
-				StorageKey:     input.StorageKey,
-				ContentType:    input.ContentType,
-				Width:          input.Width,
-				Height:         input.Height,
-				CreatedAt:      now,
-			}
+			media := model.NewMedia(claims.ID, input, now)
 			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
 				return err
 			}

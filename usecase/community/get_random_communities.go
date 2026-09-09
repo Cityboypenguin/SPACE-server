@@ -8,15 +8,15 @@ import (
 )
 
 type GetRandomCommunitiesUseCase struct {
-    CommunityRepo repository.CommunityRepository
+	CommunityRepo repository.CommunityRepository
 }
 
 func NewGetRandomCommunitiesUseCase(repo repository.CommunityRepository) *GetRandomCommunitiesUseCase {
-    return &GetRandomCommunitiesUseCase{
-        CommunityRepo: repo,
-    }
+	return &GetRandomCommunitiesUseCase{
+		CommunityRepo: repo,
+	}
 }
 
 func (u *GetRandomCommunitiesUseCase) Execute(ctx context.Context, userID int64, limit int) ([]*model.Community, error) {
-    return u.CommunityRepo.FindRandom(ctx, userID, limit)
+	return u.CommunityRepo.FindRandom(ctx, userID, limit)
 }
