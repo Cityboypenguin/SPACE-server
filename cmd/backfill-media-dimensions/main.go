@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -260,7 +261,8 @@ func updateDimensions(ctx context.Context, db *sql.DB, id int64, width, height i
 	return err
 }
 
-// decodeDimensions はオブジェクトの先頭だけを読み、画像の実寸を取り出す。
+// decodeDimensions はオブジェクトの先頭だけを読み、ブラウザが表示するのと同じ向きの
+// 実寸を取り出す。EXIF の回転指定はブラウザが既定で適用するため、ここでも反映させる。
 func decodeDimensions(ctx context.Context, storage repository.StorageRepository, storageKey string) (int, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -271,12 +273,24 @@ func decodeDimensions(ctx context.Context, storage repository.StorageRepository,
 	}
 	defer body.Close()
 
-	cfg, _, err := image.DecodeConfig(io.LimitReader(body, headerReadLimit))
+	// 向きの判定と寸法の取得で同じバイト列を二度読むため、先頭をメモリに載せる。
+	// 読み切れなくても DecodeConfig はヘッダさえあれば成功する。
+	header, err := io.ReadAll(io.LimitReader(body, headerReadLimit))
+	if err != nil {
+		return 0, 0, err
+	}
+
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(header))
 	if err != nil {
 		if errors.Is(err, image.ErrFormat) {
 			return 0, 0, fmt.Errorf("%w: %v", errUnsupportedFormat, err)
 		}
 		return 0, 0, err
 	}
-	return cfg.Width, cfg.Height, nil
+
+	width, height := cfg.Width, cfg.Height
+	if exifOrientationSwapsAxes(jpegExifOrientation(header)) {
+		width, height = height, width
+	}
+	return width, height, nil
 }
