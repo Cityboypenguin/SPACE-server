@@ -251,6 +251,7 @@ func main() {
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
 	reportMediaDimensionsUseCase := mediausecase.NewReportDimensionsUseCase(mediaRepository)
+	listImagesMissingDimensionsUseCase := mediausecase.NewListImagesMissingDimensionsUseCase(mediaRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
 	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
@@ -419,8 +420,9 @@ func main() {
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
 		ListFavoritesUseCase:                   listFavoritesUseCase,
 
-		ListMediaByPostIDUseCase:     listMediaByPostIDUseCase,
-		ReportMediaDimensionsUseCase: reportMediaDimensionsUseCase,
+		ListMediaByPostIDUseCase:           listMediaByPostIDUseCase,
+		ReportMediaDimensionsUseCase:       reportMediaDimensionsUseCase,
+		ListImagesMissingDimensionsUseCase: listImagesMissingDimensionsUseCase,
 
 		MessageRoomUseCases: graph.MessageRoomUseCases{
 			GetMessageByIDUseCase:           getMessageByIDUseCase,

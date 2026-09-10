@@ -4589,6 +4589,25 @@ func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmode
 	return gqlCourse, nil
 }
 
+// AdminListMediaMissingDimensions is the resolver for the adminListMediaMissingDimensions field.
+func (r *queryResolver) AdminListMediaMissingDimensions(ctx context.Context, limit *int32, offset *int32) ([]*gqlmodel.Media, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	lim, off := resolvePagination(limit, offset)
+	items, err := r.ListImagesMissingDimensionsUseCase.Execute(ctx, lim, off)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.Media, 0, len(items))
+	for _, m := range items {
+		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+	}
+	return result, nil
+}
+
 // AdminListCourses is the resolver for the adminListCourses field.
 func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {

@@ -177,3 +177,31 @@ func (r *MySQLMediaRepository) SetMediaDimensionsIfUnset(ctx context.Context, me
 	_, err := db.ExecContext(ctx, query, width, height, mediaID)
 	return err
 }
+
+func (r *MySQLMediaRepository) ListImagesMissingDimensions(ctx context.Context, limit, offset int) ([]*model.Media, error) {
+	query := `
+		SELECT id, uploader_user_id, storage_key, content_type, width, height, created_at
+		FROM media
+		WHERE content_type LIKE 'image/%'
+		  AND (width IS NULL OR height IS NULL)
+		ORDER BY id ASC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := r.DB.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*model.Media
+	for rows.Next() {
+		var m model.Media
+		var createdAt int64
+		if err := rows.Scan(&m.ID, &m.UploaderUserID, &m.StorageKey, &m.ContentType, &m.Width, &m.Height, &createdAt); err != nil {
+			return nil, err
+		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		result = append(result, &m)
+	}
+	return result, rows.Err()
+}

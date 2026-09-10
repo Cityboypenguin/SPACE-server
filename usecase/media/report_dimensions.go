@@ -36,3 +36,21 @@ func (uc *ReportDimensionsInteractor) Execute(ctx context.Context, mediaID int64
 	// 未設定のときだけ記録する。先に入っている値を後から来た観測で塗り替えない。
 	return uc.mediaRepo.SetMediaDimensionsIfUnset(ctx, mediaID, width, height)
 }
+
+// ListImagesMissingDimensionsUseCase は寸法が未取得の画像メディアを列挙する。
+// メンテナンス中に一括で埋めるツールが対象を知るために使う。
+type ListImagesMissingDimensionsUseCase interface {
+	Execute(ctx context.Context, limit, offset int) ([]*model.Media, error)
+}
+
+type ListImagesMissingDimensionsInteractor struct {
+	mediaRepo repository.MediaRepository
+}
+
+func NewListImagesMissingDimensionsUseCase(mediaRepo repository.MediaRepository) ListImagesMissingDimensionsUseCase {
+	return &ListImagesMissingDimensionsInteractor{mediaRepo: mediaRepo}
+}
+
+func (uc *ListImagesMissingDimensionsInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Media, error) {
+	return uc.mediaRepo.ListImagesMissingDimensions(ctx, limit, offset)
+}

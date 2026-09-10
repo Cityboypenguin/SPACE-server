@@ -80,8 +80,9 @@ type Resolver struct {
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
 	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
-	ListMediaByPostIDUseCase     mediausecase.ListMediaByPostIDUseCase
-	ReportMediaDimensionsUseCase mediausecase.ReportDimensionsUseCase
+	ListMediaByPostIDUseCase           mediausecase.ListMediaByPostIDUseCase
+	ReportMediaDimensionsUseCase       mediausecase.ReportDimensionsUseCase
+	ListImagesMissingDimensionsUseCase mediausecase.ListImagesMissingDimensionsUseCase
 
 	MessageRoomUseCases
 	CommunityUseCases

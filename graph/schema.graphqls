@@ -143,6 +143,11 @@ type Query {
   adminCourseImportStatus: CourseImportStatus!
   adminListCourseYears: [Int!]!
   adminGetCourse(id: ID!): Course
+  # 寸法が未取得の画像メディア。メンテナンス中に一括で埋めるツール
+  # (SPACE-client/scripts/fill-media-dimensions.mjs) が対象を列挙するために使う。
+  # 全件が埋まればこのクエリごと不要になる。
+  adminListMediaMissingDimensions(limit: Int = 200, offset: Int = 0): [Media!]!
+
   adminListCourses(
     year: Int
     semester: String
