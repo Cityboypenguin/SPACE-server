@@ -392,6 +392,10 @@ type Mutation {
   setTimetableProfileVisibility(visible: Boolean!): Boolean!
 
   recordSessionData(input: RecordSessionDataInput!): Boolean!
+  # 表示できた画像の実寸を記録する。アップロード時に寸法を申告する仕組みより前の
+  # メディアを埋めるための経路で、すでに寸法があるメディアには効果がない。
+  # 値は表示したブラウザの観測値で、レイアウト確保のヒントにのみ使う。
+  reportMediaDimensions(mediaID: ID!, width: Int!, height: Int!): Boolean!
 }
 
 type Announcement {

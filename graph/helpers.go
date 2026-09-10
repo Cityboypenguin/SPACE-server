@@ -434,15 +434,10 @@ func toNullableInt32(v *int) *int32 {
 	return &converted
 }
 
-// 実在しうる画像の一辺の上限。これを超える申告は誤りか悪意とみなして捨てる。
-// 実用上の最大級（数億画素クラス）でも 1 辺 65535px を超えることはまずない。
-const maxReportedImageDimension = 65535
-
 // toNullableInt は GraphQL の Int（*int32）を nil を保ったまま int へ変換する。
-// 値はクライアントの自己申告でレイアウトのヒントにしか使わないため、
-// 範囲外の申告は捨てて nil にし、寸法未取得と同じ扱いに落とす。
+// 妥当でない申告は捨てて nil にし、寸法未取得と同じ扱いに落とす。
 func toNullableInt(v *int32) *int {
-	if v == nil || *v <= 0 || *v > maxReportedImageDimension {
+	if v == nil || !model.ValidImageDimension(int(*v)) {
 		return nil
 	}
 	converted := int(*v)

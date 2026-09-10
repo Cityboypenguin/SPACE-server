@@ -3,7 +3,6 @@ package azurerepo
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -66,13 +65,4 @@ func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
 func (r *AzureBlobStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := r.client.DeleteBlob(ctx, r.containerName, objectKey, nil)
 	return err
-}
-
-// GetObject はブロブの読み出しストリームを返す。呼び出し側が Close すること。
-func (r *AzureBlobStorageRepository) GetObject(ctx context.Context, objectKey string) (io.ReadCloser, error) {
-	resp, err := r.client.DownloadStream(ctx, r.containerName, objectKey, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download blob %q: %w", objectKey, err)
-	}
-	return resp.Body, nil
 }

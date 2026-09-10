@@ -164,3 +164,16 @@ func (r *MySQLMediaRepository) ListByQuestionIDs(ctx context.Context, questionID
 func (r *MySQLMediaRepository) ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error) {
 	return r.listByParentIDs(ctx, answerIDs, "answer_media", "answer_id")
 }
+
+func (r *MySQLMediaRepository) SetMediaDimensionsIfUnset(ctx context.Context, mediaID int64, width, height int) error {
+	db := extractDB(ctx, r.DB)
+	// 条件を WHERE に置くことで、確認と更新の間に他のリクエストが書き込む余地をなくす。
+	// すでに入っていれば 0 行更新になるだけで、エラーにはしない。
+	query := `
+		UPDATE media
+		SET width = ?, height = ?
+		WHERE id = ? AND width IS NULL AND height IS NULL
+	`
+	_, err := db.ExecContext(ctx, query, width, height, mediaID)
+	return err
+}

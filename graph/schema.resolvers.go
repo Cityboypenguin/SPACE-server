@@ -2446,6 +2446,25 @@ func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel
 	return true, nil
 }
 
+// ReportMediaDimensions is the resolver for the reportMediaDimensions field.
+func (r *mutationResolver) ReportMediaDimensions(ctx context.Context, mediaID string, width int32, height int32) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+	// メディア ID は署名付きの不透明値なので、クエリで受け取った＝閲覧できたメディア
+	// しか指定できない。加えて未設定のときしか書き込まないため、
+	// 誤った観測が入っても影響は 1 枚の表示比率にとどまる。
+	numericID, err := decodeGraphID(ctx, "media", mediaID)
+	if err != nil {
+		return false, err
+	}
+
+	if err := r.ReportMediaDimensionsUseCase.Execute(ctx, numericID, int(width), int(height)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Actor is the resolver for the actor field on Notification.
 func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.User, error) {
 	if obj.Actor == nil {

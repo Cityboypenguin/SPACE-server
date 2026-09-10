@@ -30,7 +30,7 @@ type AnalyticsSummary struct {
 	MessagesToday int
 
 	// エンゲージメント
-	AvgLikesPerPost   float64
+	AvgLikesPerPost    float64
 	AvgCommentsPerPost float64
 
 	// 投稿種別
@@ -47,15 +47,15 @@ type AnalyticsSummary struct {
 	AvgCommunitiesPerUser       float64
 
 	// ソーシャル
-	TotalFollows       int
+	TotalFollows        int
 	AvgFollowersPerUser float64
 	AvgFollowingPerUser float64
 
 	// オンボーディング
-	UsersWithProfile     int
-	UsersWithAvatar      int
-	UsersWithPost        int
-	OnboardingCompleteRate float64
+	UsersWithProfile          int
+	UsersWithAvatar           int
+	UsersWithPost             int
+	OnboardingCompleteRate    float64
 	AvgTimeToFirstPostMinutes float64
 
 	// 通知
@@ -83,10 +83,10 @@ type AnalyticsSummary struct {
 }
 
 type PageViewStat struct {
-	PagePath            string
-	AvgDurationSeconds  float64
-	AvgMaxScrollDepth   float64
-	TotalViews          int
+	PagePath           string
+	AvgDurationSeconds float64
+	AvgMaxScrollDepth  float64
+	TotalViews         int
 }
 
 type CommunityStatItem struct {

@@ -369,6 +369,7 @@ type ComplexityRoot struct {
 		RegisterTimetableEntry            func(childComplexity int, courseID string) int
 		RemoveTimetableEntry              func(childComplexity int, id string) int
 		RemoveUserFromRoom                func(childComplexity int, input model.RemoveUserFromRoomInput) int
+		ReportMediaDimensions             func(childComplexity int, mediaID string, width int32, height int32) int
 		RequestPasswordReset              func(childComplexity int, email string) int
 		ResetPassword                     func(childComplexity int, resetToken string, newPassword string) int
 		SelectBestAnswer                  func(childComplexity int, questionID string, answerID string) int
@@ -868,6 +869,7 @@ type MutationResolver interface {
 	SetThemePreference(ctx context.Context, theme model.ThemePreference) (model.ThemePreference, error)
 	SetTimetableProfileVisibility(ctx context.Context, visible bool) (bool, error)
 	RecordSessionData(ctx context.Context, input model.RecordSessionDataInput) (bool, error)
+	ReportMediaDimensions(ctx context.Context, mediaID string, width int32, height int32) (bool, error)
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
@@ -2808,6 +2810,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveUserFromRoom(childComplexity, args["input"].(model.RemoveUserFromRoomInput)), true
+	case "Mutation.reportMediaDimensions":
+		if e.ComplexityRoot.Mutation.ReportMediaDimensions == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_reportMediaDimensions_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ReportMediaDimensions(childComplexity, args["mediaID"].(string), args["width"].(int32), args["height"].(int32)), true
 	case "Mutation.requestPasswordReset":
 		if e.ComplexityRoot.Mutation.RequestPasswordReset == nil {
 			break
@@ -7369,6 +7382,36 @@ func (ec *executionContext) field_Mutation_removeUserFromRoom_args(ctx context.C
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_reportMediaDimensions_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "mediaID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mediaID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "width",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["width"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "height",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["height"] = arg2
 	return args, nil
 }
 
@@ -18024,6 +18067,50 @@ func (ec *executionContext) fieldContext_Mutation_recordSessionData(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_recordSessionData_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_reportMediaDimensions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_reportMediaDimensions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ReportMediaDimensions(ctx, fc.Args["mediaID"].(string), fc.Args["width"].(int32), fc.Args["height"].(int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_reportMediaDimensions(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_reportMediaDimensions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -30895,6 +30982,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "recordSessionData":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_recordSessionData(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reportMediaDimensions":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_reportMediaDimensions(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

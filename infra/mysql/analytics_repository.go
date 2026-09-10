@@ -449,4 +449,3 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	}
 	return points, nil
 }
-
