@@ -386,7 +386,7 @@ type ComplexityRoot struct {
 		UnlikeAnswer                      func(childComplexity int, id string) int
 		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
 		UpdateAnnouncement                func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
-		UpdateAnswer                      func(childComplexity int, id string, body string) int
+		UpdateAnswer                      func(childComplexity int, id string, body string, deletedMediaIDs []string) int
 		UpdateCommunity                   func(childComplexity int, id string, input model.UpdateCommunityInput) int
 		UpdateCommunityMembers            func(childComplexity int, communityID string, updates []*model.CommunityMemberUpdateInput) int
 		UpdateCurrentSemester             func(childComplexity int, year int32, semester string) int
@@ -395,7 +395,7 @@ type ComplexityRoot struct {
 		UpdateMyProfile                   func(childComplexity int, input model.UpdateMyProfileInput) int
 		UpdatePost                        func(childComplexity int, input model.UpdatePostInput) int
 		UpdateProfile                     func(childComplexity int, input model.UpdateProfileInput) int
-		UpdateQuestion                    func(childComplexity int, id string, body string) int
+		UpdateQuestion                    func(childComplexity int, id string, body string, deletedMediaIDs []string) int
 		UpdateReportStatus                func(childComplexity int, id string, status model.ReportStatus) int
 		UpdateUser                        func(childComplexity int, input model.UpdateUserInput) int
 		VerifyEmailOtp                    func(childComplexity int, email string, otp string) int
@@ -456,6 +456,7 @@ type ComplexityRoot struct {
 		Question            func(childComplexity int) int
 		RoomID              func(childComplexity int) int
 		User                func(childComplexity int) int
+		VoterCount          func(childComplexity int) int
 	}
 
 	PollOption struct {
@@ -813,10 +814,10 @@ type MutationResolver interface {
 	AdminSetUserTimetable(ctx context.Context, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	UpdateCurrentSemester(ctx context.Context, year int32, semester string) (*model.CurrentSemester, error)
 	CreateQuestion(ctx context.Context, roomID string, body string, mediaInputs []*model.MediaUploadInput) (*model.Question, error)
-	UpdateQuestion(ctx context.Context, id string, body string) (*model.Question, error)
+	UpdateQuestion(ctx context.Context, id string, body string, deletedMediaIDs []string) (*model.Question, error)
 	DeleteQuestion(ctx context.Context, id string) (bool, error)
 	AnswerQuestion(ctx context.Context, questionID string, body string, mediaInputs []*model.MediaUploadInput) (*model.Answer, error)
-	UpdateAnswer(ctx context.Context, id string, body string) (*model.Answer, error)
+	UpdateAnswer(ctx context.Context, id string, body string, deletedMediaIDs []string) (*model.Answer, error)
 	DeleteAnswer(ctx context.Context, id string) (bool, error)
 	LikeAnswer(ctx context.Context, id string) (*model.Answer, error)
 	UnlikeAnswer(ctx context.Context, id string) (*model.Answer, error)
@@ -879,6 +880,7 @@ type PollResolver interface {
 	User(ctx context.Context, obj *model.Poll) (*model.User, error)
 
 	Options(ctx context.Context, obj *model.Poll) ([]*model.PollOption, error)
+	VoterCount(ctx context.Context, obj *model.Poll) (int32, error)
 
 	IsMine(ctx context.Context, obj *model.Poll) (bool, error)
 }
@@ -3009,7 +3011,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.UpdateAnswer(childComplexity, args["id"].(string), args["body"].(string)), true
+		return e.ComplexityRoot.Mutation.UpdateAnswer(childComplexity, args["id"].(string), args["body"].(string), args["deletedMediaIDs"].([]string)), true
 	case "Mutation.updateCommunity":
 		if e.ComplexityRoot.Mutation.UpdateCommunity == nil {
 			break
@@ -3108,7 +3110,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.UpdateQuestion(childComplexity, args["id"].(string), args["body"].(string)), true
+		return e.ComplexityRoot.Mutation.UpdateQuestion(childComplexity, args["id"].(string), args["body"].(string), args["deletedMediaIDs"].([]string)), true
 	case "Mutation.updateReportStatus":
 		if e.ComplexityRoot.Mutation.UpdateReportStatus == nil {
 			break
@@ -3392,6 +3394,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Poll.User(childComplexity), true
+	case "Poll.voterCount":
+		if e.ComplexityRoot.Poll.VoterCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Poll.VoterCount(childComplexity), true
 
 	case "PollOption.ID":
 		if e.ComplexityRoot.PollOption.ID == nil {
@@ -5832,6 +5840,8 @@ func (ec *executionContext) childFields_Poll(ctx context.Context, field graphql.
 		return ec.fieldContext_Poll_allowMultipleChoice(ctx, field)
 	case "options":
 		return ec.fieldContext_Poll_options(ctx, field)
+	case "voterCount":
+		return ec.fieldContext_Poll_voterCount(ctx, field)
 	case "deadline":
 		return ec.fieldContext_Poll_deadline(ctx, field)
 	case "createdAt":
@@ -7751,6 +7761,14 @@ func (ec *executionContext) field_Mutation_updateAnswer_args(ctx context.Context
 		return nil, err
 	}
 	args["body"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "deletedMediaIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["deletedMediaIDs"] = arg2
 	return args, nil
 }
 
@@ -7933,6 +7951,14 @@ func (ec *executionContext) field_Mutation_updateQuestion_args(ctx context.Conte
 		return nil, err
 	}
 	args["body"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "deletedMediaIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["deletedMediaIDs"] = arg2
 	return args, nil
 }
 
@@ -15664,7 +15690,7 @@ func (ec *executionContext) _Mutation_updateQuestion(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateQuestion(ctx, fc.Args["id"].(string), fc.Args["body"].(string))
+			return ec.Resolvers.Mutation().UpdateQuestion(ctx, fc.Args["id"].(string), fc.Args["body"].(string), fc.Args["deletedMediaIDs"].([]string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Question) graphql.Marshaler {
@@ -15796,7 +15822,7 @@ func (ec *executionContext) _Mutation_updateAnswer(ctx context.Context, field gr
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateAnswer(ctx, fc.Args["id"].(string), fc.Args["body"].(string))
+			return ec.Resolvers.Mutation().UpdateAnswer(ctx, fc.Args["id"].(string), fc.Args["body"].(string), fc.Args["deletedMediaIDs"].([]string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Answer) graphql.Marshaler {
@@ -19004,6 +19030,29 @@ func (ec *executionContext) fieldContext_Poll_options(_ context.Context, field g
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Poll_voterCount(ctx context.Context, field graphql.CollectedField, obj *model.Poll) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Poll_voterCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Poll().VoterCount(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Poll_voterCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Poll", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Poll_deadline(ctx context.Context, field graphql.CollectedField, obj *model.Poll) (ret graphql.Marshaler) {
@@ -31513,6 +31562,42 @@ func (ec *executionContext) _Poll(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Poll_options(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "voterCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Poll_voterCount(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

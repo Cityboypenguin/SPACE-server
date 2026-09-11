@@ -46,11 +46,15 @@ func authedCtx(userID int64) context.Context {
 	return auth.WithClaims(context.Background(), &auth.Claims{ID: userID})
 }
 
-func TestVotePoll_RejectsEmptySelection(t *testing.T) {
-	uc := NewVotePollUseCase(&fakePollRepoForVote{poll: &model.Poll{ID: 1}}, &fakeRequireWritable{})
+func TestVotePoll_EmptySelectionCancelsVote(t *testing.T) {
+	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5}}
+	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
 
-	if err := uc.Execute(authedCtx(7), 1, nil); err == nil {
-		t.Fatal("expected error when no options are selected")
+	if err := uc.Execute(authedCtx(7), 1, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repo.gotUserID != 7 || len(repo.gotOptionIDs) != 0 {
+		t.Fatalf("ReplaceVotes(user=%d, options=%v), want user=7 with no options", repo.gotUserID, repo.gotOptionIDs)
 	}
 }
 

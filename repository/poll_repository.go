@@ -33,6 +33,9 @@ type PollRepository interface {
 	ListPollsByRoomID(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error)
 	CountUnvotedPollsByRoomID(ctx context.Context, roomID, viewerUserID int64) (int, error)
 	ListOptionsWithResults(ctx context.Context, pollID, viewerUserID int64) ([]*PollOptionResult, error)
+	// CountVoters returns how many distinct users have voted on pollID. A user who
+	// picked several options on a multiple-choice poll is counted once.
+	CountVoters(ctx context.Context, pollID int64) (int, error)
 	// ReplaceVotes atomically clears userID's existing votes on pollID and inserts new
 	// votes for optionIDs (only options that actually belong to pollID are accepted,
 	// enforced at the SQL level). Used for both single- and multiple-choice polls:

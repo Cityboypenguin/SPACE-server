@@ -26,14 +26,12 @@ func NewVotePollUseCase(pollRepo repository.PollRepository, requireWritable cour
 }
 
 // Execute replaces the caller's vote(s) on pollID with optionIDs (I-03: 投票のやり直し
-// を許容する). For single-choice polls, more than one optionID is rejected.
+// を許容する). An empty optionIDs cancels the caller's vote entirely. For
+// single-choice polls, more than one optionID is rejected.
 func (uc *VotePollInteractor) Execute(ctx context.Context, pollID int64, optionIDs []int64) error {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return err
-	}
-	if len(optionIDs) == 0 {
-		return apperr.InvalidInput("選択肢を1つ以上選んでください")
 	}
 
 	p, err := uc.pollRepo.GetPollByID(ctx, pollID)

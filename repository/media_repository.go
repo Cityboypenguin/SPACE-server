@@ -18,6 +18,12 @@ type MediaRepository interface {
 	ListByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error)
 	ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
 	DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error
+	// DeleteQuestionMedia は questionID に添付されている mediaID を削除する（紐付けは
+	// ON DELETE CASCADE で消える）。他の質問・投稿のメディアは対象にしない。
+	DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error
+	// DeleteAnswerMedia は answerID に添付されている mediaID を削除する（紐付けは
+	// ON DELETE CASCADE で消える）。他の回答・投稿のメディアは対象にしない。
+	DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error
 	GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error)
 	// ListImagesMissingDimensions は寸法が未取得の画像メディアを ID 昇順で返す。
 	ListImagesMissingDimensions(ctx context.Context, limit, offset int) ([]*model.Media, error)

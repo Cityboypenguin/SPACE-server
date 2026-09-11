@@ -7,6 +7,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/Cityboypenguin/SPACE-server/usecase/course"
 )
 
 type CancelBestAnswerUseCase interface {
@@ -16,11 +17,12 @@ type CancelBestAnswerUseCase interface {
 var _ CancelBestAnswerUseCase = &CancelBestAnswerInteractor{}
 
 type CancelBestAnswerInteractor struct {
-	questionRepo repository.QuestionRepository
+	questionRepo    repository.QuestionRepository
+	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewCancelBestAnswerUseCase(questionRepo repository.QuestionRepository) CancelBestAnswerUseCase {
-	return &CancelBestAnswerInteractor{questionRepo: questionRepo}
+func NewCancelBestAnswerUseCase(questionRepo repository.QuestionRepository, requireWritable course.RequireWritableCourseRoomUseCase) CancelBestAnswerUseCase {
+	return &CancelBestAnswerInteractor{questionRepo: questionRepo, requireWritable: requireWritable}
 }
 
 // Execute lets the asker undo a previously selected best answer, clearing
@@ -28,6 +30,9 @@ func NewCancelBestAnswerUseCase(questionRepo repository.QuestionRepository) Canc
 func (uc *CancelBestAnswerInteractor) Execute(ctx context.Context, questionID int64) (*model.Question, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireWritableQuestionRoom(ctx, uc.questionRepo, uc.requireWritable, questionID); err != nil {
 		return nil, err
 	}
 

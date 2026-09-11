@@ -29,8 +29,17 @@ func (f *fakeListTimetableRepo) ListByUser(_ context.Context, userID int64, _ in
 	return f.result, nil
 }
 
+type fakeBlockRepo struct {
+	repository.BlockerRepository
+	blocked bool
+}
+
+func (f *fakeBlockRepo) ExistsBlockRelation(_ context.Context, _, _ int64) (bool, error) {
+	return f.blocked, nil
+}
+
 func TestGetUserTimetable_RequiresAuth(t *testing.T) {
-	uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{})
+	uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{}, &fakeBlockRepo{})
 
 	y, s := 2026, "前期"
 	if _, err := uc.Execute(context.Background(), 1, &y, &s); err == nil {
@@ -41,7 +50,7 @@ func TestGetUserTimetable_RequiresAuth(t *testing.T) {
 func TestGetUserTimetable_OwnerSeesOwnHiddenTimetable(t *testing.T) {
 	want := []*repository.TimetableEntryWithCourse{{}}
 	repo := &fakeListTimetableRepo{result: want}
-	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true})
+	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true}, &fakeBlockRepo{})
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 7})
 
 	y, s := 2026, "前期"
@@ -60,7 +69,7 @@ func TestGetUserTimetable_OwnerSeesOwnHiddenTimetable(t *testing.T) {
 func TestGetUserTimetable_AdminSeesHiddenTimetable(t *testing.T) {
 	want := []*repository.TimetableEntryWithCourse{{}}
 	repo := &fakeListTimetableRepo{result: want}
-	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true})
+	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true}, &fakeBlockRepo{blocked: true})
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 99, Role: "admin"})
 
 	y, s := 2026, "前期"
@@ -75,7 +84,7 @@ func TestGetUserTimetable_AdminSeesHiddenTimetable(t *testing.T) {
 
 func TestGetUserTimetable_OtherUserHiddenReturnsEmpty(t *testing.T) {
 	repo := &fakeListTimetableRepo{result: []*repository.TimetableEntryWithCourse{{}}}
-	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true})
+	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "false", found: true}, &fakeBlockRepo{})
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
 
 	y, s := 2026, "前期"
@@ -88,22 +97,39 @@ func TestGetUserTimetable_OtherUserHiddenReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestGetUserTimetable_BlockRelationReturnsEmpty(t *testing.T) {
+	repo := &fakeListTimetableRepo{result: []*repository.TimetableEntryWithCourse{{}}}
+	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: "true", found: true}, &fakeBlockRepo{blocked: true})
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
+
+	y, s := 2026, "前期"
+	got, err := uc.Execute(ctx, 7, &y, &s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got %d entries, want 0 when the viewer and the owner have a block relation", len(got))
+	}
+}
+
 func TestGetUserTimetable_IsProfileVisible(t *testing.T) {
 	cases := []struct {
-		name  string
-		value string
-		found bool
-		want  bool
+		name    string
+		value   string
+		found   bool
+		blocked bool
+		want    bool
 	}{
 		{name: "hidden", value: "false", found: true, want: false},
 		{name: "shown", value: "true", found: true, want: true},
 		{name: "unset defaults to visible", found: false, want: true},
+		{name: "blocked overrides shown", value: "true", found: true, blocked: true, want: false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{value: tc.value, found: tc.found})
-			got, err := uc.IsProfileVisible(context.Background(), 7)
+			uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{value: tc.value, found: tc.found}, &fakeBlockRepo{blocked: tc.blocked})
+			got, err := uc.IsProfileVisible(context.Background(), 1, 7)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -117,7 +143,7 @@ func TestGetUserTimetable_IsProfileVisible(t *testing.T) {
 func TestGetUserTimetable_OtherUserDefaultVisibleReturnsEntries(t *testing.T) {
 	want := []*repository.TimetableEntryWithCourse{{}}
 	repo := &fakeListTimetableRepo{result: want}
-	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{found: false})
+	uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{found: false}, &fakeBlockRepo{})
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
 
 	y, s := 2026, "前期"

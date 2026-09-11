@@ -206,6 +206,8 @@ models:
         resolver: true
       options:
         resolver: true
+      voterCount:
+        resolver: true
       isMine:
         resolver: true
   # The GraphQL spec explicitly states that the Int type is a signed 32-bit

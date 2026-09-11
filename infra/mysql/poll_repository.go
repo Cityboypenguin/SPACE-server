@@ -127,6 +127,20 @@ func (r *MySQLPollRepository) CountUnvotedPollsByRoomID(ctx context.Context, roo
 	return total, nil
 }
 
+func (r *MySQLPollRepository) CountVoters(ctx context.Context, pollID int64) (int, error) {
+	var total int
+	err := r.DB.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT pv.user_id)
+		FROM poll_votes pv
+		JOIN poll_options po ON pv.poll_option_id = po.id
+		WHERE po.poll_id = ?
+	`, pollID).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (r *MySQLPollRepository) ListOptionsWithResults(ctx context.Context, pollID, viewerUserID int64) ([]*repository.PollOptionResult, error) {
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT po.id, po.poll_id, po.label, po.display_order,

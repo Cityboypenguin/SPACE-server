@@ -1056,13 +1056,22 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 }
 
 // UpdateQuestion is the resolver for the updateQuestion field.
-func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body string) (*gqlmodel.Question, error) {
+func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Question, error) {
 	qid, err := decodeGraphID(ctx, "question", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	q, err := r.UpdateQuestionUseCase.Execute(ctx, qid, body)
+	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
+	for _, strID := range deletedMediaIDs {
+		mediaID, err := decodeGraphID(ctx, "media", strID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid media id")
+		}
+		mediaIDs = append(mediaIDs, mediaID)
+	}
+
+	q, err := r.UpdateQuestionUseCase.Execute(ctx, qid, body, mediaIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1108,13 +1117,22 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 }
 
 // UpdateAnswer is the resolver for the updateAnswer field.
-func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body string) (*gqlmodel.Answer, error) {
+func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Answer, error) {
 	aid, err := decodeGraphID(ctx, "answer", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid answer id")
 	}
 
-	aw, err := r.UpdateAnswerUseCase.Execute(ctx, aid, body)
+	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
+	for _, strID := range deletedMediaIDs {
+		mediaID, err := decodeGraphID(ctx, "media", strID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid media id")
+		}
+		mediaIDs = append(mediaIDs, mediaID)
+	}
+
+	aw, err := r.UpdateAnswerUseCase.Execute(ctx, aid, body, mediaIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1916,6 +1934,18 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		audit.LogDenied(ctx, "update_message", "message", numericID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")
 	}
+	// 授業内チャットは送信と同じく、履修をやめた授業・終了した学期では編集させない。
+	if !isAdminRole(claims.Role) {
+		room, err := r.GetRoomUseCase.Execute(ctx, existing.RoomID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get room")
+		}
+		if room != nil && room.Type == model.RoomTypeCourse {
+			if err := r.CheckRoomWritableUseCase.Execute(ctx, existing.RoomID); err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content})
 	if err != nil {
@@ -2529,6 +2559,20 @@ func (r *pollResolver) Options(ctx context.Context, obj *gqlmodel.Poll) ([]*gqlm
 		out = append(out, toGraphPollOption(res))
 	}
 	return out, nil
+}
+
+// VoterCount is the resolver for the voterCount field.
+func (r *pollResolver) VoterCount(ctx context.Context, obj *gqlmodel.Poll) (int32, error) {
+	pid, err := decodeGraphID(ctx, "poll", obj.ID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid poll id")
+	}
+
+	count, err := r.CountPollVotersUseCase.Execute(ctx, pid)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
 }
 
 // IsMine is the resolver for the isMine field.
@@ -4371,7 +4415,7 @@ func (r *queryResolver) UserTimetableProfile(ctx context.Context, userID string,
 
 	visible := true
 	if claims.ID != uID && !authz.IsAdminRole(claims.Role) {
-		visible, err = r.GetUserTimetableUseCase.IsProfileVisible(ctx, uID)
+		visible, err = r.GetUserTimetableUseCase.IsProfileVisible(ctx, claims.ID, uID)
 		if err != nil {
 			return nil, err
 		}

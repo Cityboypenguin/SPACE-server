@@ -283,6 +283,7 @@ type PollUseCases struct {
 	ListPollsUseCase             pollusecase.ListPollsUseCase
 	GetPollByIDUseCase           pollusecase.GetPollByIDUseCase
 	ListPollOptionResultsUseCase pollusecase.ListPollOptionResultsUseCase
+	CountPollVotersUseCase       pollusecase.CountPollVotersUseCase
 }
 
 type NotificationUseCases struct {

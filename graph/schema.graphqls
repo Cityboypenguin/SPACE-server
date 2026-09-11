@@ -321,10 +321,14 @@ type Mutation {
 
   updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
   createQuestion(roomID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Question!
-  updateQuestion(id: ID!, body: String!): Question!
+  # deletedMediaIDs はこの質問に添付済みの写真のうち外すもの。body は写真が1枚以上
+  # 残る場合に限り空にできる（投稿時と同じ条件）。
+  updateQuestion(id: ID!, body: String!, deletedMediaIDs: [ID!]): Question!
   deleteQuestion(id: ID!): Boolean!
   answerQuestion(questionID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Answer!
-  updateAnswer(id: ID!, body: String!): Answer!
+  # deletedMediaIDs はこの回答に添付済みの写真のうち外すもの。body は写真が1枚以上
+  # 残る場合に限り空にできる（投稿時と同じ条件）。
+  updateAnswer(id: ID!, body: String!, deletedMediaIDs: [ID!]): Answer!
   deleteAnswer(id: ID!): Boolean!
   likeAnswer(id: ID!): Answer!
   unlikeAnswer(id: ID!): Answer!
@@ -802,6 +806,9 @@ type Poll {
   question: String!
   allowMultipleChoice: Boolean!
   options: [PollOption!]!
+  # 投票したユーザーの人数。複数選択の投票では options の voteCount の合計が
+  # 人数を上回るため、「N人が回答済み」の表示にはこちらを使う。
+  voterCount: Int!
   deadline: String
   createdAt: String!
   isMine: Boolean!

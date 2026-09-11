@@ -96,6 +96,28 @@ func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, med
 	return err
 }
 
+func (r *MySQLMediaRepository) DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error {
+	db := extractDB(ctx, r.DB)
+	query := `
+		DELETE m FROM media m
+		JOIN question_media qm ON qm.media_id = m.id
+		WHERE qm.question_id = ? AND m.id = ?
+	`
+	_, err := db.ExecContext(ctx, query, questionID, mediaID)
+	return err
+}
+
+func (r *MySQLMediaRepository) DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error {
+	db := extractDB(ctx, r.DB)
+	query := `
+		DELETE m FROM media m
+		JOIN answer_media am ON am.media_id = m.id
+		WHERE am.answer_id = ? AND m.id = ?
+	`
+	_, err := db.ExecContext(ctx, query, answerID, mediaID)
+	return err
+}
+
 func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error) {
 	query := `SELECT MAX(position) FROM post_media WHERE post_id = ?`
 

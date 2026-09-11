@@ -46,6 +46,7 @@ func NewCourseUseCases(
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 	userSettingRepo repository.UserSettingRepository,
 	roomRepo repository.RoomRepository,
+	blockRepo repository.BlockerRepository,
 ) CourseUseCases {
 	return CourseUseCases{
 		SearchCoursesUseCase:                courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
@@ -55,7 +56,7 @@ func NewCourseUseCases(
 		SetTimetableEntryColorUseCase:       timetableusecase.NewSetTimetableEntryColorUseCase(timetableRepo),
 		ListTimetableUseCase:                timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
 		ReplaceTimetableUseCase:             timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
-		GetUserTimetableUseCase:             timetableusecase.NewGetUserTimetableUseCase(timetableRepo, settingRepo, userSettingRepo),
+		GetUserTimetableUseCase:             timetableusecase.NewGetUserTimetableUseCase(timetableRepo, settingRepo, userSettingRepo, blockRepo),
 		AdminRegisterTimetableUseCase:       timetableusecase.NewAdminRegisterTimetableUseCase(timetableRepo),
 		AdminRemoveTimetableUseCase:         timetableusecase.NewAdminRemoveTimetableUseCase(timetableRepo),
 		AdminSetTimetableEntryColorUseCase:  timetableusecase.NewAdminSetTimetableEntryColorUseCase(timetableRepo),
@@ -88,20 +89,20 @@ func NewQuestionUseCases(
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return QuestionUseCases{
 		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(questionRepo),
+		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
-		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(questionRepo, answerRepo),
-		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo),
+		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(questionRepo, answerRepo, requireWritable),
+		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo),
 		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
 		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo),
+		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo),
-		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(answerRepo),
-		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(answerRepo),
+		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
+		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
 	}
 }
 
@@ -121,5 +122,6 @@ func NewPollUseCases(
 		ListPollsUseCase:             pollusecase.NewListPollsUseCase(pollRepo),
 		GetPollByIDUseCase:           pollusecase.NewGetPollByIDUseCase(pollRepo),
 		ListPollOptionResultsUseCase: pollusecase.NewListPollOptionResultsUseCase(pollRepo),
+		CountPollVotersUseCase:       pollusecase.NewCountPollVotersUseCase(pollRepo),
 	}
 }

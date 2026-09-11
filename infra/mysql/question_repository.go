@@ -110,7 +110,8 @@ func (r *MySQLQuestionRepository) UpdateQuestionBody(ctx context.Context, questi
 		return false, fmt.Errorf("encrypt question body: %w", err)
 	}
 
-	result, err := r.DB.ExecContext(ctx,
+	// 写真の削除と同じトランザクションで実行されるため、ctx のトランザクションを使う。
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		`UPDATE questions SET body = ?, updated_at = ? WHERE id = ? AND asker_user_id = ?`,
 		encryptedBody, time.Now().Unix(), questionID, askerUserID,
 	)

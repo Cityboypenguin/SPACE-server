@@ -7,6 +7,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/Cityboypenguin/SPACE-server/usecase/course"
 )
 
 type SelectBestAnswerUseCase interface {
@@ -16,12 +17,13 @@ type SelectBestAnswerUseCase interface {
 var _ SelectBestAnswerUseCase = &SelectBestAnswerInteractor{}
 
 type SelectBestAnswerInteractor struct {
-	questionRepo repository.QuestionRepository
-	answerRepo   repository.AnswerRepository
+	questionRepo    repository.QuestionRepository
+	answerRepo      repository.AnswerRepository
+	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewSelectBestAnswerUseCase(questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository) SelectBestAnswerUseCase {
-	return &SelectBestAnswerInteractor{questionRepo: questionRepo, answerRepo: answerRepo}
+func NewSelectBestAnswerUseCase(questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) SelectBestAnswerUseCase {
+	return &SelectBestAnswerInteractor{questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
 }
 
 // Execute lets the asker mark one of the answers to their question as the best
@@ -38,6 +40,9 @@ func (uc *SelectBestAnswerInteractor) Execute(ctx context.Context, questionID, a
 	}
 	if answer == nil || answer.QuestionID != questionID {
 		return nil, apperr.InvalidInput("指定された回答はこの質問のものではありません")
+	}
+	if err := requireWritableQuestionRoom(ctx, uc.questionRepo, uc.requireWritable, questionID); err != nil {
+		return nil, err
 	}
 
 	ok, err := uc.questionRepo.SetBestAnswer(ctx, questionID, answerID, claims.ID)
