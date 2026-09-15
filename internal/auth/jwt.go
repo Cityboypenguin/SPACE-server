@@ -33,7 +33,7 @@ func tokenExpirationMinutes(envKey string, defaultMinutes int) int {
 	return defaultMinutes
 }
 
-func jwtIssuer() string  { return os.Getenv("JWT_ISSUER") }
+func jwtIssuer() string   { return os.Getenv("JWT_ISSUER") }
 func jwtAudience() string { return os.Getenv("JWT_AUDIENCE") }
 
 func generateTokenWithType(id int64, role string, tokenType string, expirationMinutes int) (string, error) {

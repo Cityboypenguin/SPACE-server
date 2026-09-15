@@ -2336,8 +2336,9 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 	if err != nil {
 		return false, fmt.Errorf("failed to get room")
 	}
+	isCourseRoom := room != nil && room.Type == model.RoomTypeCourse
 	var memberIDs []int64
-	if room == nil || room.Type != model.RoomTypeCourse {
+	if !isCourseRoom {
 		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 		if err != nil {
 			return false, fmt.Errorf("failed to verify room membership")
@@ -2346,7 +2347,12 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 			return false, errors.New("forbidden: not a member of this room")
 		}
 	}
-	if err := r.MarkRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
+	if isCourseRoom {
+		// 授業内チャットは room_users を使わないため、既読位置は匿名IDの行に持つ。
+		if err := r.MarkCourseRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
+			return false, err
+		}
+	} else if err := r.MarkRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
 		return false, err
 	}
 
@@ -2365,11 +2371,15 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 		}
 	}
 
-	nowStr := time.Now().Format(timeFormat)
-	r.PubSub.Publish(roomID+":read_status", &gqlmodel.RoomReadStatusUpdate{
-		UserID:     encodeGraphID("user", claims.ID),
-		LastReadAt: nowStr,
-	})
+	// 既読の配信は相手側の既読表示のためのもの。授業内チャットは匿名なので、
+	// 誰が読んだか(実ユーザーID)をルームの購読者へ配信しない。
+	if !isCourseRoom {
+		nowStr := time.Now().Format(timeFormat)
+		r.PubSub.Publish(roomID+":read_status", &gqlmodel.RoomReadStatusUpdate{
+			UserID:     encodeGraphID("user", claims.ID),
+			LastReadAt: nowStr,
+		})
+	}
 	r.SSEBroker.PublishToUser(claims.ID, "unread_room", map[string]any{
 		"roomID":      roomID,
 		"unreadCount": 0,
@@ -3540,7 +3550,12 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		gqlRoom.IsMessagingDisabled = isBlocked
 	}
 
-	if readStatus, err := r.GetRoomReadStatusUseCase.Execute(ctx, rid, claims.ID); err == nil {
+	readStatusUseCase := r.GetRoomReadStatusUseCase
+	if room != nil && room.Type == model.RoomTypeCourse {
+		// 授業内チャットは room_users を使わないため、既読位置は匿名IDの行から取る。
+		readStatusUseCase = r.GetCourseRoomReadStatusUseCase
+	}
+	if readStatus, err := readStatusUseCase.Execute(ctx, rid, claims.ID); err == nil {
 		if readStatus.LastReadAt != nil {
 			s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
 			gqlRoom.LastReadAt = &s
@@ -4463,6 +4478,23 @@ func (r *queryResolver) CourseYears(ctx context.Context) ([]int32, error) {
 	result := make([]int32, 0, len(years))
 	for _, y := range years {
 		result = append(result, int32(y))
+	}
+	return result, nil
+}
+
+// MyCourseRoomUnreadCounts is the resolver for the myCourseRoomUnreadCounts field.
+func (r *queryResolver) MyCourseRoomUnreadCounts(ctx context.Context) ([]*gqlmodel.CourseRoomUnread, error) {
+	counts, err := r.ListCourseRoomUnreadCountsUseCase.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.CourseRoomUnread, 0, len(counts))
+	for _, c := range counts {
+		result = append(result, &gqlmodel.CourseRoomUnread{
+			RoomID:      encodeGraphID("room", c.RoomID),
+			UnreadCount: int32(c.UnreadCount),
+		})
 	}
 	return result, nil
 }

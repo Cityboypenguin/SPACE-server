@@ -7,6 +7,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
+// CourseRoomUnread pairs a course chat room with the caller's unread count in it.
+type CourseRoomUnread struct {
+	RoomID      int64
+	UnreadCount int
+}
+
 type MessageRepository interface {
 	SaveMessage(ctx context.Context, m *model.Message) error
 	// GetMessageByID returns the message, or nil if it does not exist or has been soft-deleted.
@@ -23,5 +29,10 @@ type MessageRepository interface {
 	CountUnreadMessagesByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int, error)
 	CountUnreadMessagesByRoomType(ctx context.Context, userID int64, roomType string) (int, error)
 	CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
+	// CountUnreadByCourseRooms returns the unread count for every course room in
+	// userID's timetable for the given semester (room_id 昇順). 授業内チャットは
+	// room_users を使わないため、既読位置は room_anonymous_identities から取り、
+	// まだ一度も開いていない授業は時間割に登録した時点を起点に数える。
+	CountUnreadByCourseRooms(ctx context.Context, userID int64, year int, semester string) ([]*CourseRoomUnread, error)
 	GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error)
 }

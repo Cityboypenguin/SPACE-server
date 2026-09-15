@@ -227,6 +227,11 @@ type ComplexityRoot struct {
 		Total func(childComplexity int) int
 	}
 
+	CourseRoomUnread struct {
+		RoomID      func(childComplexity int) int
+		UnreadCount func(childComplexity int) int
+	}
+
 	CurrentSemester struct {
 		Semester func(childComplexity int) int
 		Year     func(childComplexity int) int
@@ -551,6 +556,7 @@ type ComplexityRoot struct {
 		Me                              func(childComplexity int) int
 		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string) int
 		MyCommunities                   func(childComplexity int, limit *int32, offset *int32) int
+		MyCourseRoomUnreadCounts        func(childComplexity int) int
 		MyDMRooms                       func(childComplexity int, limit *int32, offset *int32) int
 		MyFollowers                     func(childComplexity int, limit *int32, offset *int32) int
 		MyNotificationGroups            func(childComplexity int, limit *int32, offset *int32) int
@@ -969,6 +975,7 @@ type QueryResolver interface {
 	UserTimetableProfile(ctx context.Context, userID string, year *int32, semester *string) (*model.UserTimetableProfile, error)
 	CurrentSemester(ctx context.Context) (*model.CurrentSemester, error)
 	CourseYears(ctx context.Context) ([]int32, error)
+	MyCourseRoomUnreadCounts(ctx context.Context) ([]*model.CourseRoomUnread, error)
 	Questions(ctx context.Context, roomID string, limit *int32, offset *int32) (*model.QuestionPage, error)
 	Question(ctx context.Context, id string) (*model.Question, error)
 	Polls(ctx context.Context, roomID string, limit *int32, offset *int32) (*model.PollPage, error)
@@ -1822,6 +1829,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CoursePage.Total(childComplexity), true
+
+	case "CourseRoomUnread.roomID":
+		if e.ComplexityRoot.CourseRoomUnread.RoomID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseRoomUnread.RoomID(childComplexity), true
+	case "CourseRoomUnread.unreadCount":
+		if e.ComplexityRoot.CourseRoomUnread.UnreadCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CourseRoomUnread.UnreadCount(childComplexity), true
 
 	case "CurrentSemester.semester":
 		if e.ComplexityRoot.CurrentSemester.Semester == nil {
@@ -4011,6 +4031,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyCommunities(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.myCourseRoomUnreadCounts":
+		if e.ComplexityRoot.Query.MyCourseRoomUnreadCounts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyCourseRoomUnreadCounts(childComplexity), true
 	case "Query.myDMRooms":
 		if e.ComplexityRoot.Query.MyDMRooms == nil {
 			break
@@ -5590,6 +5616,16 @@ func (ec *executionContext) childFields_CoursePage(ctx context.Context, field gr
 		return ec.fieldContext_CoursePage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CoursePage", field.Name)
+}
+
+func (ec *executionContext) childFields_CourseRoomUnread(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "roomID":
+		return ec.fieldContext_CourseRoomUnread_roomID(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_CourseRoomUnread_unreadCount(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CourseRoomUnread", field.Name)
 }
 
 func (ec *executionContext) childFields_CurrentSemester(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -12811,6 +12847,52 @@ func (ec *executionContext) _CoursePage_total(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_CoursePage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CoursePage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CourseRoomUnread_roomID(ctx context.Context, field graphql.CollectedField, obj *model.CourseRoomUnread) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseRoomUnread_roomID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CourseRoomUnread_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseRoomUnread", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CourseRoomUnread_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.CourseRoomUnread) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CourseRoomUnread_unreadCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnreadCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CourseRoomUnread_unreadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CourseRoomUnread", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _CurrentSemester_year(ctx context.Context, field graphql.CollectedField, obj *model.CurrentSemester) (ret graphql.Marshaler) {
@@ -22928,6 +23010,38 @@ func (ec *executionContext) fieldContext_Query_courseYears(_ context.Context, fi
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _Query_myCourseRoomUnreadCounts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myCourseRoomUnreadCounts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyCourseRoomUnreadCounts(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CourseRoomUnread) graphql.Marshaler {
+			return ec.marshalNCourseRoomUnread2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseRoomUnreadᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myCourseRoomUnreadCounts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CourseRoomUnread(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_questions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29632,6 +29746,50 @@ func (ec *executionContext) _CoursePage(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var courseRoomUnreadImplementors = []string{"CourseRoomUnread"}
+
+func (ec *executionContext) _CourseRoomUnread(ctx context.Context, sel ast.SelectionSet, obj *model.CourseRoomUnread) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, courseRoomUnreadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CourseRoomUnread")
+		case "roomID":
+			out.Values[i] = ec._CourseRoomUnread_roomID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unreadCount":
+			out.Values[i] = ec._CourseRoomUnread_unreadCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var currentSemesterImplementors = []string{"CurrentSemester"}
 
 func (ec *executionContext) _CurrentSemester(ctx context.Context, sel ast.SelectionSet, obj *model.CurrentSemester) graphql.Marshaler {
@@ -33919,6 +34077,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myCourseRoomUnreadCounts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myCourseRoomUnreadCounts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "questions":
 			field := field
 
@@ -36212,6 +36392,32 @@ func (ec *executionContext) marshalNCoursePage2ᚖgithubᚗcomᚋCityboypenguin�
 		return graphql.Null
 	}
 	return ec._CoursePage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCourseRoomUnread2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseRoomUnreadᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CourseRoomUnread) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCourseRoomUnread2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseRoomUnread(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCourseRoomUnread2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseRoomUnread(ctx context.Context, sel ast.SelectionSet, v *model.CourseRoomUnread) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CourseRoomUnread(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCreateAdministratorInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCreateAdministratorInput(ctx context.Context, v any) (model.CreateAdministratorInput, error) {

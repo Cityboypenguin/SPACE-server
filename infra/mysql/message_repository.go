@@ -11,6 +11,7 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/messagecrypto"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLMessageRepository struct {
@@ -309,6 +310,38 @@ func (r *MySQLMessageRepository) CountUnreadMessagesByRoomType(ctx context.Conte
 	var count int
 	err := r.DB.QueryRowContext(ctx, query, userID, roomType, userID).Scan(&count)
 	return count, err
+}
+
+func (r *MySQLMessageRepository) CountUnreadByCourseRooms(ctx context.Context, userID int64, year int, semester string) ([]*repository.CourseRoomUnread, error) {
+	// 「自分の授業」は room_users ではなく時間割から辿る。通年の授業はどちらの学期でも対象。
+	// 既読位置が無い（まだ開いていない）授業は、時間割に登録した時点より後を未読として数える。
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT c.room_id, COUNT(m.id) AS unread_count
+		FROM timetables t
+		JOIN courses c ON c.id = t.course_id
+		LEFT JOIN room_anonymous_identities ra ON ra.room_id = c.room_id AND ra.user_id = t.user_id
+		LEFT JOIN messages m ON m.room_id = c.room_id
+		  AND m.user_id <> t.user_id
+		  AND m.deleted_at IS NULL
+		  AND m.created_at > COALESCE(ra.last_read_at, t.created_at)
+		WHERE t.user_id = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?)
+		GROUP BY c.room_id
+		ORDER BY c.room_id
+	`, userID, year, semester, model.SemesterFull)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*repository.CourseRoomUnread
+	for rows.Next() {
+		var unread repository.CourseRoomUnread
+		if err := rows.Scan(&unread.RoomID, &unread.UnreadCount); err != nil {
+			return nil, err
+		}
+		result = append(result, &unread)
+	}
+	return result, rows.Err()
 }
 
 func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error) {

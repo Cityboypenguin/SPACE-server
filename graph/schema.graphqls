@@ -136,6 +136,9 @@ type Query {
   userTimetableProfile(userID: ID!, year: Int, semester: String): UserTimetableProfile!
   currentSemester: CurrentSemester!
   courseYears: [Int!]!
+  # 現在の学期の時間割に入っている授業内チャットごとの未読件数。まだ一度も開いて
+  # いない授業は、時間割に登録した時点より後を未読として数える。
+  myCourseRoomUnreadCounts: [CourseRoomUnread!]!
   questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
   question(id: ID!): Question
   polls(roomID: ID!, limit: Int = 50, offset: Int = 0): PollPage!
@@ -685,6 +688,11 @@ type TimetableEntry {
   course: Course!
   color: TimetableEntryColor!
   createdAt: String!
+}
+
+type CourseRoomUnread {
+  roomID: ID!
+  unreadCount: Int!
 }
 
 type UserTimetableProfile {

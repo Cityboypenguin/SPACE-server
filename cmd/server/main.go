@@ -271,6 +271,8 @@ func main() {
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
 	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
+	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(roomAnonymousIdentityRepository)
+	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(roomAnonymousIdentityRepository, messageRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
@@ -446,13 +448,15 @@ func main() {
 			ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
 			MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
 			GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
+			MarkCourseRoomAsReadUseCase:     markCourseRoomAsReadUseCase,
+			GetCourseRoomReadStatusUseCase:  getCourseRoomReadStatusUseCase,
 			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
 			GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
 			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
 		},
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
-		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository),
+		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
 		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
 		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 

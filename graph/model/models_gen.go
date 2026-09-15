@@ -209,6 +209,11 @@ type CoursePage struct {
 	Total int32     `json:"total"`
 }
 
+type CourseRoomUnread struct {
+	RoomID      string `json:"roomID"`
+	UnreadCount int32  `json:"unreadCount"`
+}
+
 type CreateAdministratorInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`

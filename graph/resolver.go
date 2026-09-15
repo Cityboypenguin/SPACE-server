@@ -213,6 +213,8 @@ type MessageRoomUseCases struct {
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
 	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
 	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
+	MarkCourseRoomAsReadUseCase     roomusecase.MarkCourseRoomAsReadUseCase
+	GetCourseRoomReadStatusUseCase  roomusecase.GetCourseRoomReadStatusUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
 	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
 	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
@@ -248,6 +250,7 @@ type CourseUseCases struct {
 	GetCurrentSemesterUseCase           semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase        semesterusecase.UpdateCurrentSemesterUseCase
 	CheckRoomWritableUseCase            courseusecase.CheckRoomWritableUseCase
+	ListCourseRoomUnreadCountsUseCase   courseusecase.ListCourseRoomUnreadCountsUseCase
 	GetOrCreateAnonymousIdentityUseCase anonusecase.GetOrCreateAnonymousIdentityUseCase
 	ImportCoursesUseCase                courseusecase.ImportCoursesUseCase
 	ListCoursesUseCase                  courseusecase.ListCoursesUseCase
