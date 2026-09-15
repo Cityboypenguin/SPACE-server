@@ -97,12 +97,12 @@ func NewQuestionUseCases(
 		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(questionRepo, answerRepo, requireWritable),
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
-		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo),
+		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo, requireWritable),
 		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
 		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
 		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
-		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo),
+		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
 		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
 	}
@@ -120,7 +120,7 @@ func NewPollUseCases(
 	return PollUseCases{
 		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable),
 		VotePollUseCase:              pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
-		DeletePollUseCase:            pollusecase.NewDeletePollUseCase(pollRepo),
+		DeletePollUseCase:            pollusecase.NewDeletePollUseCase(pollRepo, requireWritable),
 		ListPollsUseCase:             pollusecase.NewListPollsUseCase(pollRepo),
 		GetPollByIDUseCase:           pollusecase.NewGetPollByIDUseCase(pollRepo),
 		ListPollOptionResultsUseCase: pollusecase.NewListPollOptionResultsUseCase(pollRepo),
