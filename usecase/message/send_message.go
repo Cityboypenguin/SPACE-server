@@ -12,7 +12,9 @@ import (
 )
 
 type SendMessageUseCase interface {
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput) (*model.Message, error)
+	// replyToID を渡すと引用返信になる。返信先は同じルームの未削除メッセージである
+	// 必要があり、そうでなければエラーになる。
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64) (*model.Message, error)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -35,7 +37,7 @@ func NewSendMessageUseCase(
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput) (*model.Message, error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64) (*model.Message, error) {
 	content = strings.TrimSpace(content)
 	if content == "" && len(mediaInputs) == 0 {
 		return nil, apperr.InvalidInput("content or media is required")
@@ -51,11 +53,27 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 		}
 	}
 
+	// 返信先は同じルームの、まだ削除されていないメッセージだけ許す。
+	// （他ルームのメッセージIDを指定して内容を覗き見られるのを防ぐ）
+	if replyToID != nil {
+		parent, err := uc.messageRepo.GetMessageByID(ctx, *replyToID)
+		if err != nil {
+			return nil, err
+		}
+		if parent == nil {
+			return nil, apperr.InvalidInput("返信先のメッセージが見つかりません")
+		}
+		if parent.RoomID != roomID {
+			return nil, apperr.InvalidInput("返信先のメッセージが見つかりません")
+		}
+	}
+
 	now := time.Now()
 	m := &model.Message{}
 	m.CreateMessage(model.CreateMessageParam{
 		RoomID:    roomID,
 		UserID:    userID,
+		ReplyToID: replyToID,
 		Content:   content,
 		CreatedAt: now,
 		UpdatedAt: now,

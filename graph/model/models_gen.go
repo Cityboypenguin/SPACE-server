@@ -356,6 +356,8 @@ type Message struct {
 	CreatedAt string   `json:"createdAt"`
 	UpdatedAt string   `json:"updatedAt"`
 	IsMine    bool     `json:"isMine"`
+	ReplyToID *string  `json:"replyToID,omitempty"`
+	ReplyTo   *Message `json:"replyTo,omitempty"`
 }
 
 type MessagePage struct {
@@ -368,29 +370,31 @@ type Mutation struct {
 }
 
 type Notification struct {
-	ID         string  `json:"ID"`
-	Type       string  `json:"type"`
-	Actor      *User   `json:"actor,omitempty"`
-	TargetType *string `json:"targetType,omitempty"`
-	TargetID   *string `json:"targetID,omitempty"`
-	TargetPost *Post   `json:"targetPost,omitempty"`
-	Message    string  `json:"message"`
-	IsRead     bool    `json:"isRead"`
-	CreatedAt  string  `json:"createdAt"`
+	ID            string   `json:"ID"`
+	Type          string   `json:"type"`
+	Actor         *User    `json:"actor,omitempty"`
+	TargetType    *string  `json:"targetType,omitempty"`
+	TargetID      *string  `json:"targetID,omitempty"`
+	TargetPost    *Post    `json:"targetPost,omitempty"`
+	TargetMessage *Message `json:"targetMessage,omitempty"`
+	Message       string   `json:"message"`
+	IsRead        bool     `json:"isRead"`
+	CreatedAt     string   `json:"createdAt"`
 }
 
 type NotificationGroup struct {
-	Key         string  `json:"key"`
-	Type        string  `json:"type"`
-	Actor       *User   `json:"actor,omitempty"`
-	TargetType  *string `json:"targetType,omitempty"`
-	TargetID    *string `json:"targetID,omitempty"`
-	TargetPost  *Post   `json:"targetPost,omitempty"`
-	Message     string  `json:"message"`
-	CreatedAt   string  `json:"createdAt"`
-	Count       int32   `json:"count"`
-	UnreadCount int32   `json:"unreadCount"`
-	LatestID    string  `json:"latestID"`
+	Key           string   `json:"key"`
+	Type          string   `json:"type"`
+	Actor         *User    `json:"actor,omitempty"`
+	TargetType    *string  `json:"targetType,omitempty"`
+	TargetID      *string  `json:"targetID,omitempty"`
+	TargetPost    *Post    `json:"targetPost,omitempty"`
+	TargetMessage *Message `json:"targetMessage,omitempty"`
+	Message       string   `json:"message"`
+	CreatedAt     string   `json:"createdAt"`
+	Count         int32    `json:"count"`
+	UnreadCount   int32    `json:"unreadCount"`
+	LatestID      string   `json:"latestID"`
 }
 
 type NotificationGroupPage struct {

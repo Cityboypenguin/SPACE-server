@@ -32,6 +32,9 @@ type GetRepliesByPostIDsUseCase interface {
 type GetRepliesByPostIDsIncludeDeletedUseCase interface {
 	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 }
+type GetMessagesByIDsUseCase interface {
+	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
+}
 type GetFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error)
 }
@@ -49,6 +52,8 @@ type Loaders struct {
 	ReplyLoader         *dataloadgen.Loader[int64, []*model.Post]
 	AdminReplyLoader    *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
 	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
+	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
+	MessageLoader *dataloadgen.Loader[int64, *model.Message]
 }
 
 // batchFromMap は「IDのスライスを受け取り map[ID]V を返す関数」を DataLoader が要求する
@@ -82,6 +87,7 @@ func Middleware(
 	getRepliesUseCase GetRepliesByPostIDsUseCase,
 	getAdminRepliesUseCase GetRepliesByPostIDsIncludeDeletedUseCase, // ⭕️ 引数に追加
 	getFavoritesUseCase GetFavoritesByPostIDsUseCase,
+	getMessagesUseCase GetMessagesByIDsUseCase,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +123,7 @@ func Middleware(
 				ReplyLoader:         dataloadgen.NewLoader(batchFromMap(getRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 				AdminReplyLoader:    dataloadgen.NewLoader(batchFromMap(getAdminRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
 				FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(getFavoritesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				MessageLoader:       dataloadgen.NewLoader(batchFromMap(getMessagesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 			}
 
 			ctx = context.WithValue(ctx, loadersKey, loaders)

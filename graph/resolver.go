@@ -195,6 +195,7 @@ type MessageRoomUseCases struct {
 	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
 	SendMessageUseCase              messageusecase.SendMessageUseCase
 	ListMessagesUseCase             messageusecase.ListMessagesUseCase
+	ListMessagesAroundUseCase       messageusecase.ListMessagesAroundUseCase
 	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
 	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
 	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase

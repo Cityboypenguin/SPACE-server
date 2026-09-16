@@ -11,10 +11,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	"github.com/google/uuid"
 )
 
@@ -461,4 +463,80 @@ func toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.MediaInput {
 		})
 	}
 	return result
+}
+
+// publishMessageReplyNotification notifies the author of the message that `reply`
+// quotes. 自分自身への返信、および返信先が見つからない（削除済み）場合は何もしない。
+//
+// 授業内チャットは匿名なので、通知文言にはルーム内の匿名ラベルを入れ、actor_id は
+// あえて保存しない。actor_id を残すと myNotifications(actorID:) や
+// markAllNotificationsAsReadByActor など actor で絞り込むAPIから
+// 「匿名NNN = そのユーザー」を突き合わせられてしまい、匿名性が崩れるため。
+//
+// 遷移先の組み立てにはルームIDと種別が要るが notifications 行は targetType/targetID の
+// 1組しか持てないため、SSE には Extra で roomID/roomType を添える（GraphQL 側は
+// Notification.targetMessage から辿れる）。
+//
+// 通知の失敗はメッセージ送信の成否に影響させない（ログのみ）。
+func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *model.Room, reply *model.Message, actorID int64) {
+	if reply.ReplyToID == nil {
+		return
+	}
+
+	parent, err := r.GetMessageByIDUseCase.Execute(ctx, *reply.ReplyToID)
+	if err != nil || parent == nil {
+		return
+	}
+	if parent.UserID == actorID {
+		return
+	}
+
+	message := "あなたのメッセージに返信がありました"
+	notificationActorID := &actorID
+	if room.Type == model.RoomTypeCourse {
+		identity, err := r.GetOrCreateAnonymousIdentityUseCase.Execute(ctx, room.ID, actorID)
+		if err != nil {
+			logger.Log.Error().Err(err).Msg("failed to resolve anonymous identity for reply notification")
+			return
+		}
+		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", identity.Label)
+		notificationActorID = nil
+	}
+
+	targetType := notificationuc.TargetMessage
+	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
+		UserID:     parent.UserID,
+		Type:       notificationuc.TypeMessageReply,
+		ActorID:    notificationActorID,
+		TargetType: &targetType,
+		TargetID:   &reply.ID,
+		Message:    message,
+		Extra: map[string]any{
+			"roomID":   encodeGraphID("room", room.ID),
+			"roomType": room.Type,
+		},
+	}); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish message reply notification")
+	}
+}
+
+// notificationTargetMessage resolves the Notification/NotificationGroup targetMessage
+// field: the chat message a reply notification points at. 削除済み・対象が
+// メッセージ以外なら nil を返す。
+//
+// 返す Message は messageResolver 経由で解決されるので、授業内チャットなら user
+// フィールドは自動的に匿名表示になる。
+func (r *Resolver) notificationTargetMessage(ctx context.Context, targetType *string, targetID *string) (*gqlmodel.Message, error) {
+	if targetType == nil || *targetType != notificationTargetTypeMessage || targetID == nil {
+		return nil, nil
+	}
+	numericID, err := decodeGraphID(ctx, "message", *targetID)
+	if err != nil {
+		return nil, nil
+	}
+	msg, err := dataloader.For(ctx).MessageLoader.Load(ctx, numericID)
+	if err != nil || msg == nil {
+		return nil, nil
+	}
+	return toGraphMessage(msg), nil
 }

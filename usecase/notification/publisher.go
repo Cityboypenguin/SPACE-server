@@ -19,6 +19,9 @@ const (
 	TypeCommunityRole NotificationType = "community_role"
 	TypeAnnouncement  NotificationType = "announcement"
 	TypeFollow        NotificationType = "follow"
+	// TypeMessageReply はチャット内の引用返信。投稿への返信 (TypeReply) とは
+	// 遷移先が異なる（ルームを開いて該当メッセージへジャンプする）ため別タイプにしている。
+	TypeMessageReply NotificationType = "message_reply"
 )
 
 type TargetType string
@@ -28,6 +31,7 @@ const (
 	TargetRoom         TargetType = "room"
 	TargetCommunity    TargetType = "community"
 	TargetAnnouncement TargetType = "announcement"
+	TargetMessage      TargetType = "message"
 )
 
 type PublishParams struct {
@@ -37,6 +41,10 @@ type PublishParams struct {
 	TargetType *TargetType
 	TargetID   *int64
 	Message    string
+	// Extra はリアルタイム配信のペイロードにだけ載せる追加フィールド。
+	// DB の notifications 行は TargetType/TargetID の1組しか持てないため、
+	// 遷移先の組み立てに足りない情報（返信通知のルームIDなど）をここで補う。
+	Extra map[string]any
 }
 
 // UserEventDelivery はリアルタイムイベントをユーザーへ配信するポート。
@@ -58,6 +66,31 @@ type notificationPublisher struct {
 
 func NewNotificationPublisher(repo repository.NotificationRepository, delivery UserEventDelivery) NotificationPublisher {
 	return &notificationPublisher{repo: repo, delivery: delivery}
+}
+
+// deliveryData builds the realtime payload for one notification, applying the
+// per-notification masking (HideActor) and extra fields from params.
+func deliveryData(n *model.Notification, params PublishParams) map[string]any {
+	data := map[string]any{
+		"id":        opaqueid.Encode("notification", n.ID),
+		"type":      n.Type,
+		"message":   n.Message,
+		"isRead":    false,
+		"createdAt": n.CreatedAt.Format(time.RFC3339),
+	}
+	if n.ActorID != nil {
+		data["actorID"] = opaqueid.Encode("user", *n.ActorID)
+	}
+	if n.TargetType != nil {
+		data["targetType"] = *n.TargetType
+	}
+	if n.TargetID != nil {
+		data["targetID"] = opaqueid.Encode(*n.TargetType, *n.TargetID)
+	}
+	for k, v := range params.Extra {
+		data[k] = v
+	}
+	return data
 }
 
 func (p *notificationPublisher) PublishBatch(ctx context.Context, params []PublishParams) error {
@@ -86,23 +119,7 @@ func (p *notificationPublisher) PublishBatch(ctx context.Context, params []Publi
 	}
 
 	for i, n := range ns {
-		data := map[string]any{
-			"id":        opaqueid.Encode("notification", n.ID),
-			"type":      n.Type,
-			"message":   n.Message,
-			"isRead":    false,
-			"createdAt": n.CreatedAt.Format(time.RFC3339),
-		}
-		if n.ActorID != nil {
-			data["actorID"] = opaqueid.Encode("user", *n.ActorID)
-		}
-		if n.TargetType != nil {
-			data["targetType"] = *n.TargetType
-		}
-		if n.TargetID != nil {
-			data["targetID"] = opaqueid.Encode(*n.TargetType, *n.TargetID)
-		}
-		p.delivery.PublishToUser(params[i].UserID, "notification", data)
+		p.delivery.PublishToUser(params[i].UserID, "notification", deliveryData(n, params[i]))
 	}
 	return nil
 }
@@ -127,23 +144,6 @@ func (p *notificationPublisher) Publish(ctx context.Context, params PublishParam
 		return err
 	}
 
-	data := map[string]any{
-		"id":        opaqueid.Encode("notification", n.ID),
-		"type":      n.Type,
-		"message":   n.Message,
-		"isRead":    false,
-		"createdAt": n.CreatedAt.Format(time.RFC3339),
-	}
-	if n.ActorID != nil {
-		data["actorID"] = opaqueid.Encode("user", *n.ActorID)
-	}
-	if n.TargetType != nil {
-		data["targetType"] = *n.TargetType
-	}
-	if n.TargetID != nil {
-		data["targetID"] = opaqueid.Encode(*n.TargetType, *n.TargetID)
-	}
-
-	p.delivery.PublishToUser(params.UserID, "notification", data)
+	p.delivery.PublishToUser(params.UserID, "notification", deliveryData(n, params))
 	return nil
 }

@@ -274,7 +274,7 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 	if msg == nil {
 		return nil
 	}
-	return &gqlmodel.Message{
+	gql := &gqlmodel.Message{
 		ID:        encodeGraphID("message", msg.ID),
 		RoomID:    encodeGraphID("room", msg.RoomID),
 		UserID:    encodeGraphID("user", msg.UserID),
@@ -282,6 +282,11 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		CreatedAt: msg.CreatedAt.Format(timeFormat),
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
+	if msg.ReplyToID != nil {
+		id := encodeGraphID("message", *msg.ReplyToID)
+		gql.ReplyToID = &id
+	}
+	return gql
 }
 
 func toGraphMedia(m *model.Media, url string) *gqlmodel.Media {
@@ -327,6 +332,7 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 }
 
 const notificationTargetTypePost = "post"
+const notificationTargetTypeMessage = "message"
 
 func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
 	if n == nil {

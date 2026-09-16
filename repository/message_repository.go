@@ -35,4 +35,7 @@ type MessageRepository interface {
 	// まだ一度も開いていない授業は時間割に登録した時点を起点に数える。
 	CountUnreadByCourseRooms(ctx context.Context, userID int64, year int, semester string) ([]*CourseRoomUnread, error)
 	GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error)
+	// GetMessagesByIDs returns the requested messages keyed by ID. IDs that do not
+	// exist or were soft-deleted are simply absent from the map (引用返信の返信先取得用)。
+	GetMessagesByIDs(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
 }

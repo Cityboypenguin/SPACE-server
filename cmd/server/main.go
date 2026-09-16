@@ -249,6 +249,8 @@ func main() {
 	listMediaByAnswerIDsUseCase := mediausecase.NewListMediaByAnswerIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
+	getMessagesByIDsUseCase := messageusecase.NewGetMessagesByIDsUseCase(messageRepository)
+	listMessagesAroundUseCase := messageusecase.NewListMessagesAroundUseCase(messageRepository)
 	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
 	reportMediaDimensionsUseCase := mediausecase.NewReportDimensionsUseCase(mediaRepository)
 	listImagesMissingDimensionsUseCase := mediausecase.NewListImagesMissingDimensionsUseCase(mediaRepository)
@@ -429,6 +431,7 @@ func main() {
 		MessageRoomUseCases: graph.MessageRoomUseCases{
 			GetMessageByIDUseCase:           getMessageByIDUseCase,
 			SendMessageUseCase:              sendMessageUseCase,
+			ListMessagesAroundUseCase:       listMessagesAroundUseCase,
 			ListMessagesUseCase:             listMessagesUseCase,
 			DeleteMessageUseCase:            deleteMessageUseCase,
 			UpdateMessageUseCase:            updateMessageUseCase,
@@ -559,6 +562,7 @@ func main() {
 		getRepliesByPostIDsUseCase,
 		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,
+		getMessagesByIDsUseCase,
 	)))
 
 	// テスト用エンドポイント

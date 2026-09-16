@@ -170,6 +170,8 @@ models:
         resolver: true
       isMine:
         resolver: true
+      replyTo:
+        resolver: true
   Favorite:
     fields:
       user:
@@ -179,6 +181,12 @@ models:
   Notification:
     fields:
       actor:
+        resolver: true
+      targetMessage:
+        resolver: true
+  NotificationGroup:
+    fields:
+      targetMessage:
         resolver: true
   Question:
     fields:

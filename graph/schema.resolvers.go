@@ -191,6 +191,24 @@ func (r *messageResolver) IsMine(ctx context.Context, obj *gqlmodel.Message) (bo
 	return isCallerID(ctx, obj.UserID), nil
 }
 
+// ReplyTo is the resolver for the replyTo field.
+func (r *messageResolver) ReplyTo(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.Message, error) {
+	if obj.ReplyToID == nil {
+		return nil, nil
+	}
+	numericID, err := decodeGraphID(ctx, "message", *obj.ReplyToID)
+	if err != nil {
+		return nil, nil
+	}
+	// 返信先が削除済みなら nil。クライアントは replyToID があるのに replyTo が nil の
+	// ケースを「削除されたメッセージへの返信」として表示する。
+	parent, err := dataloader.For(ctx).MessageLoader.Load(ctx, numericID)
+	if err != nil || parent == nil {
+		return nil, nil
+	}
+	return toGraphMessage(parent), nil
+}
+
 // SendEmailOtp is the resolver for the sendEmailOTP field.
 func (r *mutationResolver) SendEmailOtp(ctx context.Context, email string) (bool, error) {
 	if err := r.SendEmailOTPUseCase.Execute(ctx, email); err != nil {
@@ -1758,7 +1776,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 }
 
 // SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, replyToID *string) (*gqlmodel.Message, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -1810,9 +1828,18 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		}
 	}
 
+	var replyTo *int64
+	if replyToID != nil && *replyToID != "" {
+		decoded, err := decodeGraphID(ctx, "message", *replyToID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid reply target id")
+		}
+		replyTo = &decoded
+	}
+
 	ucMediaInputs := toMediaInputs(mediaInputs)
 
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs)
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs, replyTo)
 	if err != nil {
 		return nil, err
 	}
@@ -1864,6 +1891,11 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
 			}
 		}
+	}
+
+	// 引用返信の通知。DM は全メッセージで既に dm 通知が飛ぶので二重通知を避けて対象外。
+	if replyTo != nil && room != nil && room.Type != model.RoomTypeDM {
+		r.publishMessageReplyNotification(ctx, room, msg, claims.ID)
 	}
 
 	return gqlMsg, nil
@@ -2526,6 +2558,16 @@ func (r *notificationResolver) Actor(ctx context.Context, obj *gqlmodel.Notifica
 		return toGraphDeletedUserWithID(numericID), nil
 	}
 	return toGraphUser(user), nil
+}
+
+// TargetMessage is the resolver for the targetMessage field.
+func (r *notificationResolver) TargetMessage(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.Message, error) {
+	return r.notificationTargetMessage(ctx, obj.TargetType, obj.TargetID)
+}
+
+// TargetMessage is the resolver for the targetMessage field.
+func (r *notificationGroupResolver) TargetMessage(ctx context.Context, obj *gqlmodel.NotificationGroup) (*gqlmodel.Message, error) {
+	return r.notificationTargetMessage(ctx, obj.TargetType, obj.TargetID)
 }
 
 // User is the resolver for the user field.
@@ -3418,7 +3460,7 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 }
 
 // Messages is the resolver for the messages field.
-func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string) (*gqlmodel.MessagePage, error) {
+func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string, around *string) (*gqlmodel.MessagePage, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -3481,9 +3523,22 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 		afterTimeVal = &t
 	}
 
-	msgs, hasMoreBefore, hasMoreAfter, err := r.ListMessagesUseCase.Execute(ctx, rid, l, beforeID, afterID, afterTimeVal)
-	if err != nil {
-		return nil, err
+	var msgs []*model.Message
+	var hasMoreBefore, hasMoreAfter bool
+	if around != nil {
+		aroundID, err := decodeGraphID(ctx, "message", *around)
+		if err != nil {
+			return nil, fmt.Errorf("invalid around id")
+		}
+		msgs, hasMoreBefore, hasMoreAfter, err = r.ListMessagesAroundUseCase.Execute(ctx, rid, aroundID, l)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		msgs, hasMoreBefore, hasMoreAfter, err = r.ListMessagesUseCase.Execute(ctx, rid, l, beforeID, afterID, afterTimeVal)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	items := make([]*gqlmodel.Message, 0, len(msgs))
@@ -5107,6 +5162,11 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Notification returns NotificationResolver implementation.
 func (r *Resolver) Notification() NotificationResolver { return &notificationResolver{r} }
 
+// NotificationGroup returns NotificationGroupResolver implementation.
+func (r *Resolver) NotificationGroup() NotificationGroupResolver {
+	return &notificationGroupResolver{r}
+}
+
 // Poll returns PollResolver implementation.
 func (r *Resolver) Poll() PollResolver { return &pollResolver{r} }
 
@@ -5130,6 +5190,7 @@ type favoriteResolver struct{ *Resolver }
 type messageResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type notificationResolver struct{ *Resolver }
+type notificationGroupResolver struct{ *Resolver }
 type pollResolver struct{ *Resolver }
 type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }

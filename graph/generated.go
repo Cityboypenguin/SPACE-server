@@ -34,6 +34,7 @@ type ResolverRoot interface {
 	Message() MessageResolver
 	Mutation() MutationResolver
 	Notification() NotificationResolver
+	NotificationGroup() NotificationGroupResolver
 	Poll() PollResolver
 	Post() PostResolver
 	Query() QueryResolver
@@ -293,6 +294,8 @@ type ComplexityRoot struct {
 		ID        func(childComplexity int) int
 		IsMine    func(childComplexity int) int
 		Media     func(childComplexity int) int
+		ReplyTo   func(childComplexity int) int
+		ReplyToID func(childComplexity int) int
 		Room      func(childComplexity int) int
 		RoomID    func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
@@ -379,7 +382,7 @@ type ComplexityRoot struct {
 		ResetPassword                     func(childComplexity int, resetToken string, newPassword string) int
 		SelectBestAnswer                  func(childComplexity int, questionID string, answerID string) int
 		SendEmailOtp                      func(childComplexity int, email string) int
-		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput) int
+		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, replyToID *string) int
 		SetAvatar                         func(childComplexity int, objectKey string) int
 		SetMyTimetable                    func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
@@ -409,29 +412,31 @@ type ComplexityRoot struct {
 	}
 
 	Notification struct {
-		Actor      func(childComplexity int) int
-		CreatedAt  func(childComplexity int) int
-		ID         func(childComplexity int) int
-		IsRead     func(childComplexity int) int
-		Message    func(childComplexity int) int
-		TargetID   func(childComplexity int) int
-		TargetPost func(childComplexity int) int
-		TargetType func(childComplexity int) int
-		Type       func(childComplexity int) int
+		Actor         func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		ID            func(childComplexity int) int
+		IsRead        func(childComplexity int) int
+		Message       func(childComplexity int) int
+		TargetID      func(childComplexity int) int
+		TargetMessage func(childComplexity int) int
+		TargetPost    func(childComplexity int) int
+		TargetType    func(childComplexity int) int
+		Type          func(childComplexity int) int
 	}
 
 	NotificationGroup struct {
-		Actor       func(childComplexity int) int
-		Count       func(childComplexity int) int
-		CreatedAt   func(childComplexity int) int
-		Key         func(childComplexity int) int
-		LatestID    func(childComplexity int) int
-		Message     func(childComplexity int) int
-		TargetID    func(childComplexity int) int
-		TargetPost  func(childComplexity int) int
-		TargetType  func(childComplexity int) int
-		Type        func(childComplexity int) int
-		UnreadCount func(childComplexity int) int
+		Actor         func(childComplexity int) int
+		Count         func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		Key           func(childComplexity int) int
+		LatestID      func(childComplexity int) int
+		Message       func(childComplexity int) int
+		TargetID      func(childComplexity int) int
+		TargetMessage func(childComplexity int) int
+		TargetPost    func(childComplexity int) int
+		TargetType    func(childComplexity int) int
+		Type          func(childComplexity int) int
+		UnreadCount   func(childComplexity int) int
 	}
 
 	NotificationGroupPage struct {
@@ -554,7 +559,7 @@ type ComplexityRoot struct {
 		ListFavoriteUsers               func(childComplexity int, limit *int32, offset *int32) int
 		MaintenanceMode                 func(childComplexity int) int
 		Me                              func(childComplexity int) int
-		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string) int
+		Messages                        func(childComplexity int, roomID string, limit *int32, before *string, after *string, afterTime *string, around *string) int
 		MyCommunities                   func(childComplexity int, limit *int32, offset *int32) int
 		MyCourseRoomUnreadCounts        func(childComplexity int) int
 		MyDMRooms                       func(childComplexity int, limit *int32, offset *int32) int
@@ -777,6 +782,8 @@ type MessageResolver interface {
 	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
 
 	IsMine(ctx context.Context, obj *model.Message) (bool, error)
+
+	ReplyTo(ctx context.Context, obj *model.Message) (*model.Message, error)
 }
 type MutationResolver interface {
 	SendEmailOtp(ctx context.Context, email string) (bool, error)
@@ -849,7 +856,7 @@ type MutationResolver interface {
 	SetAvatar(ctx context.Context, objectKey string) (*model.Profile, error)
 	DeleteAvatar(ctx context.Context) (*model.Profile, error)
 	JoinRoom(ctx context.Context, roomID string) (bool, error)
-	SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*model.MediaUploadInput) (*model.Message, error)
+	SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*model.MediaUploadInput, replyToID *string) (*model.Message, error)
 	DeleteMessage(ctx context.Context, roomID string, id string) (bool, error)
 	UpdateMessage(ctx context.Context, roomID string, id string, content string) (*model.Message, error)
 	CreateReport(ctx context.Context, input model.CreateReportInput) (*model.UserReport, error)
@@ -881,6 +888,11 @@ type MutationResolver interface {
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
+
+	TargetMessage(ctx context.Context, obj *model.Notification) (*model.Message, error)
+}
+type NotificationGroupResolver interface {
+	TargetMessage(ctx context.Context, obj *model.NotificationGroup) (*model.Message, error)
 }
 type PollResolver interface {
 	User(ctx context.Context, obj *model.Poll) (*model.User, error)
@@ -932,7 +944,7 @@ type QueryResolver interface {
 	GetFavoriteByID(ctx context.Context, id string) (*model.Favorite, error)
 	MyProfile(ctx context.Context) (*model.Profile, error)
 	GetProfileByUserID(ctx context.Context, userID string) (*model.Profile, error)
-	Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string) (*model.MessagePage, error)
+	Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string, around *string) (*model.MessagePage, error)
 	Room(ctx context.Context, id string) (*model.Room, error)
 	MyDMRooms(ctx context.Context, limit *int32, offset *int32) (*model.RoomPage, error)
 	MyCommunities(ctx context.Context, limit *int32, offset *int32) (*model.CommunityPage, error)
@@ -2067,6 +2079,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.Media(childComplexity), true
+	case "Message.replyTo":
+		if e.ComplexityRoot.Message.ReplyTo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.ReplyTo(childComplexity), true
+	case "Message.replyToID":
+		if e.ComplexityRoot.Message.ReplyToID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.ReplyToID(childComplexity), true
 	case "Message.room":
 		if e.ComplexityRoot.Message.Room == nil {
 			break
@@ -2899,7 +2923,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["mediaInputs"].([]*model.MediaUploadInput)), true
+		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["mediaInputs"].([]*model.MediaUploadInput), args["replyToID"].(*string)), true
 	case "Mutation.setAvatar":
 		if e.ComplexityRoot.Mutation.SetAvatar == nil {
 			break
@@ -3223,6 +3247,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Notification.TargetID(childComplexity), true
+	case "Notification.targetMessage":
+		if e.ComplexityRoot.Notification.TargetMessage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.TargetMessage(childComplexity), true
 	case "Notification.targetPost":
 		if e.ComplexityRoot.Notification.TargetPost == nil {
 			break
@@ -3284,6 +3314,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NotificationGroup.TargetID(childComplexity), true
+	case "NotificationGroup.targetMessage":
+		if e.ComplexityRoot.NotificationGroup.TargetMessage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationGroup.TargetMessage(childComplexity), true
 	case "NotificationGroup.targetPost":
 		if e.ComplexityRoot.NotificationGroup.TargetPost == nil {
 			break
@@ -4019,7 +4055,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string), args["limit"].(*int32), args["before"].(*string), args["after"].(*string), args["afterTime"].(*string)), true
+		return e.ComplexityRoot.Query.Messages(childComplexity, args["roomID"].(string), args["limit"].(*int32), args["before"].(*string), args["after"].(*string), args["afterTime"].(*string), args["around"].(*string)), true
 	case "Query.myCommunities":
 		if e.ComplexityRoot.Query.MyCommunities == nil {
 			break
@@ -5760,6 +5796,10 @@ func (ec *executionContext) childFields_Message(ctx context.Context, field graph
 		return ec.fieldContext_Message_updatedAt(ctx, field)
 	case "isMine":
 		return ec.fieldContext_Message_isMine(ctx, field)
+	case "replyToID":
+		return ec.fieldContext_Message_replyToID(ctx, field)
+	case "replyTo":
+		return ec.fieldContext_Message_replyTo(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Message", field.Name)
 }
@@ -5790,6 +5830,8 @@ func (ec *executionContext) childFields_Notification(ctx context.Context, field 
 		return ec.fieldContext_Notification_targetID(ctx, field)
 	case "targetPost":
 		return ec.fieldContext_Notification_targetPost(ctx, field)
+	case "targetMessage":
+		return ec.fieldContext_Notification_targetMessage(ctx, field)
 	case "message":
 		return ec.fieldContext_Notification_message(ctx, field)
 	case "isRead":
@@ -5814,6 +5856,8 @@ func (ec *executionContext) childFields_NotificationGroup(ctx context.Context, f
 		return ec.fieldContext_NotificationGroup_targetID(ctx, field)
 	case "targetPost":
 		return ec.fieldContext_NotificationGroup_targetPost(ctx, field)
+	case "targetMessage":
+		return ec.fieldContext_NotificationGroup_targetMessage(ctx, field)
 	case "message":
 		return ec.fieldContext_NotificationGroup_message(ctx, field)
 	case "createdAt":
@@ -7573,6 +7617,14 @@ func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context,
 		return nil, err
 	}
 	args["mediaInputs"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "replyToID",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["replyToID"] = arg3
 	return args, nil
 }
 
@@ -8775,6 +8827,14 @@ func (ec *executionContext) field_Query_messages_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["afterTime"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "around",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["around"] = arg5
 	return args, nil
 }
 
@@ -13901,6 +13961,61 @@ func (ec *executionContext) fieldContext_Message_isMine(_ context.Context, field
 	return graphql.NewScalarFieldContext("Message", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Message_replyToID(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_replyToID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplyToID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Message_replyToID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Message_replyTo(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_replyTo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Message().ReplyTo(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
+			return ec.marshalOMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Message_replyTo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Message",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Message(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MessagePage_items(ctx context.Context, field graphql.CollectedField, obj *model.MessagePage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17036,7 +17151,7 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput))
+			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput), fc.Args["replyToID"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
@@ -18416,6 +18531,38 @@ func (ec *executionContext) fieldContext_Notification_targetPost(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Notification_targetMessage(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_targetMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Notification().TargetMessage(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
+			return ec.marshalOMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_targetMessage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Message(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Notification_message(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18636,6 +18783,38 @@ func (ec *executionContext) fieldContext_NotificationGroup_targetPost(_ context.
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Post(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationGroup_targetMessage(ctx context.Context, field graphql.CollectedField, obj *model.NotificationGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationGroup_targetMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.NotificationGroup().TargetMessage(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
+			return ec.marshalOMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationGroup_targetMessage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationGroup",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Message(ctx, field)
 		},
 	}
 	return fc, nil
@@ -21263,7 +21442,7 @@ func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.C
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Messages(ctx, fc.Args["roomID"].(string), fc.Args["limit"].(*int32), fc.Args["before"].(*string), fc.Args["after"].(*string), fc.Args["afterTime"].(*string))
+			return ec.Resolvers.Query().Messages(ctx, fc.Args["roomID"].(string), fc.Args["limit"].(*int32), fc.Args["before"].(*string), fc.Args["after"].(*string), fc.Args["afterTime"].(*string), fc.Args["around"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.MessagePage) graphql.Marshaler {
@@ -30495,6 +30674,47 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "replyToID":
+			out.Values[i] = ec._Message_replyToID(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "replyTo":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_replyTo(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -31374,6 +31594,42 @@ func (ec *executionContext) _Notification(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "targetMessage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Notification_targetMessage(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "message":
 			out.Values[i] = ec._Notification_message(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -31426,57 +31682,93 @@ func (ec *executionContext) _NotificationGroup(ctx context.Context, sel ast.Sele
 		case "key":
 			out.Values[i] = ec._NotificationGroup_key(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "type":
 			out.Values[i] = ec._NotificationGroup_type(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "actor":
 			out.Values[i] = ec._NotificationGroup_actor(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "targetType":
 			out.Values[i] = ec._NotificationGroup_targetType(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "targetID":
 			out.Values[i] = ec._NotificationGroup_targetID(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "targetPost":
 			out.Values[i] = ec._NotificationGroup_targetPost(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "targetMessage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._NotificationGroup_targetMessage(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "message":
 			out.Values[i] = ec._NotificationGroup_message(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdAt":
 			out.Values[i] = ec._NotificationGroup_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "count":
 			out.Values[i] = ec._NotificationGroup_count(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "unreadCount":
 			out.Values[i] = ec._NotificationGroup_unreadCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "latestID":
 			out.Values[i] = ec._NotificationGroup_latestID(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -37916,6 +38208,13 @@ func (ec *executionContext) unmarshalOMediaUploadInput2ᚕᚖgithubᚗcomᚋCity
 		}
 	}
 	return res, nil
+}
+
+func (ec *executionContext) marshalOMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v *model.Message) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Message(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalONotification2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotification(ctx context.Context, sel ast.SelectionSet, v *model.Notification) graphql.Marshaler {

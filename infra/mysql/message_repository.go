@@ -34,11 +34,11 @@ func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Messa
 		return err
 	}
 	query := `
-		INSERT INTO messages (room_id, user_id, content, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO messages (room_id, user_id, content, reply_to_message_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 	result, err := db.ExecContext(ctx, query,
-		m.RoomID, m.UserID, content,
+		m.RoomID, m.UserID, content, m.ReplyToID,
 		m.CreatedAt.Unix(), m.UpdatedAt.Unix(),
 	)
 	if err != nil {
@@ -50,14 +50,14 @@ func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Messa
 
 func (r *MySQLMessageRepository) GetMessageByID(ctx context.Context, id int64) (*model.Message, error) {
 	query := `
-		SELECT id, room_id, user_id, content, created_at, updated_at
+		SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
 		FROM messages WHERE id = ? AND deleted_at IS NULL
 	`
 	row := r.DB.QueryRowContext(ctx, query, id)
 
 	var m model.Message
 	var createdAt, updatedAt int64
-	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt)
+	err := row.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.ReplyToID, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -160,25 +160,25 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 	switch {
 	case afterTime != nil:
 		// 未読起点: afterTime より新しいメッセージを昇順で取得
-		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+		query = `SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
 			FROM messages WHERE room_id = ? AND created_at > ? AND deleted_at IS NULL ORDER BY id ASC LIMIT ?`
 		args = []interface{}{roomID, afterTime.Unix(), limit + 1}
 		ascOrder = true
 	case afterID != nil:
 		// 新着ページング: afterID より新しいメッセージを昇順で取得
-		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+		query = `SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
 			FROM messages WHERE room_id = ? AND id > ? AND deleted_at IS NULL ORDER BY id ASC LIMIT ?`
 		args = []interface{}{roomID, *afterID, limit + 1}
 		ascOrder = true
 	case beforeID != nil:
 		// 過去ページング: beforeID より古いメッセージを降順で取得して反転
-		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+		query = `SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
 			FROM messages WHERE room_id = ? AND id < ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ?`
 		args = []interface{}{roomID, *beforeID, limit + 1}
 		ascOrder = false
 	default:
 		// 初回ロード（未読なし）: 最新メッセージを降順で取得して反転
-		query = `SELECT id, room_id, user_id, content, created_at, updated_at
+		query = `SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
 			FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ?`
 		args = []interface{}{roomID, limit + 1}
 		ascOrder = false
@@ -194,7 +194,7 @@ func (r *MySQLMessageRepository) ListMessagesByRoomID(ctx context.Context, roomI
 	for rows.Next() {
 		var m model.Message
 		var createdAt, updatedAt int64
-		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.ReplyToID, &createdAt, &updatedAt); err != nil {
 			return nil, false, false, err
 		}
 		m.CreatedAt = time.Unix(createdAt, 0)
@@ -383,6 +383,46 @@ func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, r
 			return nil, err
 		}
 		result[m.RoomID] = &m
+	}
+	return result, rows.Err()
+}
+
+// GetMessagesByIDs returns the requested messages keyed by ID, skipping any that
+// do not exist or have been soft-deleted. 引用返信の返信先をまとめて引くために使う。
+func (r *MySQLMessageRepository) GetMessagesByIDs(ctx context.Context, ids []int64) (map[int64]*model.Message, error) {
+	result := make(map[int64]*model.Message)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	query := fmt.Sprintf(`
+		SELECT id, room_id, user_id, content, reply_to_message_id, created_at, updated_at
+		FROM messages
+		WHERE id IN (%s) AND deleted_at IS NULL
+	`, placeholders)
+
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m model.Message
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.ReplyToID, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		m.CreatedAt = time.Unix(createdAt, 0)
+		m.UpdatedAt = time.Unix(updatedAt, 0)
+		if err := r.decryptMessage(&m); err != nil {
+			return nil, err
+		}
+		result[m.ID] = &m
 	}
 	return result, rows.Err()
 }

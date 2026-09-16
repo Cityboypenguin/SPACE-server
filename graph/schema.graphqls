@@ -55,6 +55,9 @@ type Query {
     before: ID
     after: ID
     afterTime: String
+    # 指定メッセージを中心に前後 limit 件ずつ返す（返信通知や引用タップのジャンプ用）。
+    # 他のカーソルより優先される。対象が削除済みなら最新ページを返す。
+    around: ID
   ): MessagePage!
   room(id: ID!): Room
   myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
@@ -368,6 +371,8 @@ type Mutation {
     roomID: ID!
     content: String!
     mediaInputs: [MediaUploadInput!]
+    # 引用返信の返信先メッセージID。同じルームの未削除メッセージのみ指定できる。
+    replyToID: ID
   ): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
   updateMessage(roomID: ID!, id: ID!, content: String!): Message!
@@ -570,6 +575,9 @@ type Message {
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!
+  # 引用返信の返信先。replyToID があるのに replyTo が null なら、返信先は削除済み。
+  replyToID: ID
+  replyTo: Message
 }
 
 type MessagePage {
@@ -893,6 +901,9 @@ type Notification {
   targetType: String
   targetID: ID
   targetPost: Post
+  # targetType が "message" のときの対象メッセージ（返信通知の遷移先）。
+  # 削除済みなら null。
+  targetMessage: Message
   message: String!
   isRead: Boolean!
   createdAt: String!
@@ -906,6 +917,7 @@ type NotificationGroup {
   targetType: String
   targetID: ID
   targetPost: Post
+  targetMessage: Message
   message: String!
   createdAt: String!
   count: Int!
