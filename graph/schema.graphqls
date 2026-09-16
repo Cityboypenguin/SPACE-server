@@ -44,6 +44,15 @@ type Query {
   searchPostsByHashtag(tag: String!): [Post!]!
   popularHashtags: HashtagSuggestionPage!
   suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
+  # メンション (@accountID) のサジェスト。accountID の前方一致で返す。
+  suggestUsers(prefix: String!, limit: Int = 8): [User!]!
+  # コミュニティチャットの "@表示名" メンションでサジェストに出せる相手。
+  # 送信時の検証 (sendMessage の mentionUserIDs) とまったく同じ条件で絞り込むため、
+  # 「候補に出たのに送ると成立しない」というズレが起きない。
+  # 自分自身・凍結ユーザー・ブロック関係にある相手は除外する。
+  # コミュニティ以外のルーム（授業内チャットは匿名、DM は相手が1人）では常に空を返す。
+  # メンバー数が増えたら、このクエリに prefix / limit を足して前方一致に切り替える。
+  mentionCandidates(roomID: ID!): [User!]!
 
   favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
@@ -225,6 +234,8 @@ type Post {
   parent: Post
   replies: [Post!]!
   media: [Media!]!
+  # 本文中のメンション。表示側はここに載っている text を本文と突き合わせて着色・リンク化する。
+  mentions: [Mention!]!
 }
 
 type Favorite {
@@ -371,11 +382,21 @@ type Mutation {
     roomID: ID!
     content: String!
     mediaInputs: [MediaUploadInput!]
+    # メンション先のユーザーID（コミュニティのみ）。サジェストから選んだ相手だけが
+    # メンションとして成立する。サーバー側でルームのメンバーであることと、
+    # 本文に "@表示名" が残っていることを検証してから保存する。
+    mentionUserIDs: [ID!]
     # 引用返信の返信先メッセージID。同じルームの未削除メッセージのみ指定できる。
     replyToID: ID
   ): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
-  updateMessage(roomID: ID!, id: ID!, content: String!): Message!
+  updateMessage(
+    roomID: ID!
+    id: ID!
+    content: String!
+    # メンション先のユーザーID（コミュニティのみ）。sendMessage と同じ検証を行う。
+    mentionUserIDs: [ID!]
+  ): Message!
 
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
@@ -578,6 +599,17 @@ type Message {
   # 引用返信の返信先。replyToID があるのに replyTo が null なら、返信先は削除済み。
   replyToID: ID
   replyTo: Message
+  # 本文中のメンション。コミュニティのみ。
+  mentions: [Mention!]!
+}
+
+# Mention は投稿/メッセージ本文中の1件のメンション。
+# text は本文に書かれた表記のスナップショット（投稿は accountID、コミュニティは表示名）で、
+# user は書き込み時に解決したメンション先。相手が accountID や表示名を変更しても
+# 本文の文字列は変わらないため、着色は text、遷移先は user で行う。
+type Mention {
+  user: User!
+  text: String!
 }
 
 type MessagePage {

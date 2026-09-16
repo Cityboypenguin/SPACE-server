@@ -361,3 +361,74 @@ func (r *MySQLUserRepository) LogActivityDate(ctx context.Context, userID int64,
 	)
 	return err
 }
+
+// GetUsersByAccountIDs は accountID からユーザーをまとめて引く（メンション解決用）。
+// 比較は DB の照合順序（大文字小文字を区別しない）に従うため、
+// 本文に "@Taro" と書かれていても accountID が "taro" のユーザーに解決される。
+// 凍結ユーザーはメンション先にできないため除外する。
+func (r *MySQLUserRepository) GetUsersByAccountIDs(ctx context.Context, accountIDs []string) ([]*model.User, error) {
+	if len(accountIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(accountIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users
+		WHERE account_id IN (%s) AND status = ?`, placeholders)
+
+	args := make([]any, 0, len(accountIDs)+1)
+	for _, accountID := range accountIDs {
+		args = append(args, accountID)
+	}
+	args = append(args, model.UserStatusActive)
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanUsers(rows)
+}
+
+// SuggestUsersByPrefix は accountID が prefix に前方一致するユーザーを返す（メンションのサジェスト用）。
+// 候補の並びは accountID 昇順で安定させる。ブロック関係にある相手は除外する。
+func (r *MySQLUserRepository) SuggestUsersByPrefix(ctx context.Context, prefix string, limit int) ([]*model.User, error) {
+	query := `
+		SELECT id, account_id, name, email, hashed_password, role, status, created_at, updated_at
+		FROM users
+		WHERE account_id LIKE ? ESCAPE '\\' AND status = ?`
+	args := []interface{}{escapeLikePrefix(prefix) + "%", model.UserStatusActive}
+
+	query, args = AppendBlockFilter(ctx, query, args, "id")
+	query += " ORDER BY account_id ASC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanUsers(rows)
+}
+
+// scanUsers は users の全カラムを SELECT した rows を []*model.User に詰め替える。
+func scanUsers(rows *sql.Rows) ([]*model.User, error) {
+	var users []*model.User
+	for rows.Next() {
+		var u model.User
+		var createdAtUnix, updatedAtUnix int64
+		if err := rows.Scan(
+			&u.ID, &u.AccountID, &u.Name, &u.Email, &u.HashedPassword,
+			&u.Role, &u.Status, &createdAtUnix, &updatedAtUnix,
+		); err != nil {
+			return nil, err
+		}
+		u.CreatedAt = time.Unix(createdAtUnix, 0)
+		u.UpdatedAt = time.Unix(updatedAtUnix, 0)
+		users = append(users, &u)
+	}
+	return users, rows.Err()
+}

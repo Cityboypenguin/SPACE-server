@@ -38,4 +38,9 @@ type MessageRepository interface {
 	// GetMessagesByIDs returns the requested messages keyed by ID. IDs that do not
 	// exist or were soft-deleted are simply absent from the map (引用返信の返信先取得用)。
 	GetMessagesByIDs(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
+	// CreateMessageMentions はメッセージに紐づくメンションを一括登録する（重複は無視）。
+	CreateMessageMentions(ctx context.Context, messageID int64, mentions []*model.Mention) error
+	DeleteMessageMentionsByMessageID(ctx context.Context, messageID int64) error
+	// ListMentionsByMessageIDs はメッセージIDごとのメンション一覧を返す（DataLoader 用）。
+	ListMentionsByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Mention, error)
 }

@@ -345,19 +345,25 @@ type MediaUploadInput struct {
 	Height      *int32 `json:"height,omitempty"`
 }
 
+type Mention struct {
+	User *User  `json:"user"`
+	Text string `json:"text"`
+}
+
 type Message struct {
-	ID        string   `json:"ID"`
-	RoomID    string   `json:"roomID"`
-	Room      *Room    `json:"room"`
-	UserID    string   `json:"userID"`
-	User      *User    `json:"user"`
-	Content   string   `json:"content"`
-	Media     []*Media `json:"media"`
-	CreatedAt string   `json:"createdAt"`
-	UpdatedAt string   `json:"updatedAt"`
-	IsMine    bool     `json:"isMine"`
-	ReplyToID *string  `json:"replyToID,omitempty"`
-	ReplyTo   *Message `json:"replyTo,omitempty"`
+	ID        string     `json:"ID"`
+	RoomID    string     `json:"roomID"`
+	Room      *Room      `json:"room"`
+	UserID    string     `json:"userID"`
+	User      *User      `json:"user"`
+	Content   string     `json:"content"`
+	Media     []*Media   `json:"media"`
+	CreatedAt string     `json:"createdAt"`
+	UpdatedAt string     `json:"updatedAt"`
+	IsMine    bool       `json:"isMine"`
+	ReplyToID *string    `json:"replyToID,omitempty"`
+	ReplyTo   *Message   `json:"replyTo,omitempty"`
+	Mentions  []*Mention `json:"mentions"`
 }
 
 type MessagePage struct {
@@ -459,6 +465,7 @@ type Post struct {
 	Parent     *Post       `json:"parent,omitempty"`
 	Replies    []*Post     `json:"replies"`
 	Media      []*Media    `json:"media"`
+	Mentions   []*Mention  `json:"mentions"`
 }
 
 type PostPage struct {

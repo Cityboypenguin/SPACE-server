@@ -33,6 +33,11 @@ type PostRepository interface {
 	ListPopularHashtags(ctx context.Context, limit int) ([]*model.HashtagSuggestion, error)
 	CountDistinctHashtags(ctx context.Context) (int, error)
 	SuggestHashtagsByPrefix(ctx context.Context, prefix string, limit int) ([]*model.HashtagSuggestion, error)
+	// CreatePostMentions は投稿に紐づくメンションを一括登録する（重複は無視）。
+	CreatePostMentions(ctx context.Context, postID int64, mentions []*model.Mention) error
+	DeletePostMentionsByPostID(ctx context.Context, postID int64) error
+	// ListMentionsByPostIDs は投稿IDごとのメンション一覧を返す（DataLoader 用）。
+	ListMentionsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
 }

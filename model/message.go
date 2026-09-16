@@ -11,6 +11,9 @@ type Message struct {
 	// ケース（削除済み）を扱う必要がある。
 	ReplyToID *int64
 	Content   string
+	// Mentions は本文中のメンション。書き込み時に解決したものを保持し、
+	// 読み出し時は必要なときだけ（GraphQL の mentions フィールド解決時に）埋める。
+	Mentions  []*Mention
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time

@@ -22,6 +22,11 @@ const (
 	// TypeMessageReply はチャット内の引用返信。投稿への返信 (TypeReply) とは
 	// 遷移先が異なる（ルームを開いて該当メッセージへジャンプする）ため別タイプにしている。
 	TypeMessageReply NotificationType = "message_reply"
+	// TypeMention は投稿本文での @accountID メンション。遷移先は投稿。
+	TypeMention NotificationType = "mention"
+	// TypeMessageMention はコミュニティチャットでの @表示名 メンション。
+	// 返信と同じく遷移先がルーム内の該当メッセージなので、投稿のメンションとは別タイプにしている。
+	TypeMessageMention NotificationType = "message_mention"
 )
 
 type TargetType string

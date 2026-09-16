@@ -14,7 +14,8 @@ import (
 type SendMessageUseCase interface {
 	// replyToID を渡すと引用返信になる。返信先は同じルームの未削除メッセージである
 	// 必要があり、そうでなければエラーになる。
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64) (*model.Message, error)
+	// mentions は ResolveMentionsUseCase で検証済みのメンション（コミュニティのみ）。
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -37,7 +38,7 @@ func NewSendMessageUseCase(
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64) (*model.Message, error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error) {
 	content = strings.TrimSpace(content)
 	if content == "" && len(mediaInputs) == 0 {
 		return nil, apperr.InvalidInput("content or media is required")
@@ -69,7 +70,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 	}
 
 	now := time.Now()
-	m := &model.Message{}
+	m := &model.Message{Mentions: mentions}
 	m.CreateMessage(model.CreateMessageParam{
 		RoomID:    roomID,
 		UserID:    userID,
@@ -81,6 +82,9 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 
 	if err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
 		if err := uc.messageRepo.SaveMessage(ctx, m); err != nil {
+			return err
+		}
+		if err := uc.messageRepo.CreateMessageMentions(ctx, m.ID, mentions); err != nil {
 			return err
 		}
 		for i, input := range mediaInputs {

@@ -29,6 +29,7 @@ import (
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
+	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
@@ -207,6 +208,20 @@ func (r *messageResolver) ReplyTo(ctx context.Context, obj *gqlmodel.Message) (*
 		return nil, nil
 	}
 	return toGraphMessage(parent), nil
+}
+
+// Mentions is the resolver for the mentions field.
+func (r *messageResolver) Mentions(ctx context.Context, obj *gqlmodel.Message) ([]*gqlmodel.Mention, error) {
+	numericMessageID, err := decodeGraphID(ctx, "message", obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	mentions, err := dataloader.For(ctx).MessageMentionLoader.Load(ctx, numericMessageID)
+	if err != nil {
+		return nil, err
+	}
+	return resolveMentions(ctx, mentions)
 }
 
 // SendEmailOtp is the resolver for the sendEmailOTP field.
@@ -1776,7 +1791,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 }
 
 // SendMessage is the resolver for the sendMessage field.
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, replyToID *string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string) (*gqlmodel.Message, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -1839,7 +1854,13 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 	ucMediaInputs := toMediaInputs(mediaInputs)
 
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs, replyTo)
+	// メンションが成立するルームかどうかの判定はユースケース側にある。
+	mentions, err := r.resolveMessageMentions(ctx, rid, claims.ID, content, mentionUserIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs, replyTo, mentions)
 	if err != nil {
 		return nil, err
 	}
@@ -1894,8 +1915,15 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 	}
 
 	// 引用返信の通知。DM は全メッセージで既に dm 通知が飛ぶので二重通知を避けて対象外。
+	// notifiedByReply には返信通知を送った相手が入り、同じ人をメンションしていても
+	// メンション通知が二重にならないようにする。
+	var notifiedByReply *int64
 	if replyTo != nil && room != nil && room.Type != model.RoomTypeDM {
-		r.publishMessageReplyNotification(ctx, room, msg, claims.ID)
+		notifiedByReply = r.publishMessageReplyNotification(ctx, room, msg, claims.ID)
+	}
+
+	if room != nil {
+		r.publishMentionNotifications(ctx, room, msg, claims.ID, notifiedByReply)
 	}
 
 	return gqlMsg, nil
@@ -1944,7 +1972,7 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 }
 
 // UpdateMessage is the resolver for the updateMessage field.
-func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string, mentionUserIDs []string) (*gqlmodel.Message, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -1966,12 +1994,12 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		audit.LogDenied(ctx, "update_message", "message", numericID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")
 	}
+	room, err := r.GetRoomUseCase.Execute(ctx, existing.RoomID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room")
+	}
 	// 授業内チャットは送信と同じく、履修をやめた授業・終了した学期では編集させない。
 	if !isAdminRole(claims.Role) {
-		room, err := r.GetRoomUseCase.Execute(ctx, existing.RoomID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get room")
-		}
 		if room != nil && room.Type == model.RoomTypeCourse {
 			if err := r.CheckRoomWritableUseCase.Execute(ctx, existing.RoomID); err != nil {
 				return nil, err
@@ -1979,9 +2007,37 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		}
 	}
 
-	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content})
+	// 編集後の本文でメンションを解決し直す。本文から消えたメンションは保存側で消える。
+	mentions, err := r.resolveMessageMentions(ctx, existing.RoomID, existing.UserID, content, mentionUserIDs)
 	if err != nil {
 		return nil, err
+	}
+
+	// 既にメンション済みの相手には再通知しないよう、編集前のメンションを控えておく。
+	alreadyNotified := make(map[int64]struct{})
+	if before, err := r.ListMessageMentionsUseCase.Execute(ctx, []int64{numericID}); err == nil {
+		for _, m := range before[numericID] {
+			alreadyNotified[m.UserID] = struct{}{}
+		}
+	}
+
+	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content}, mentions)
+	if err != nil {
+		return nil, err
+	}
+
+	// 編集で新しく追加されたメンションだけ通知する。
+	added := make([]*model.Mention, 0, len(msg.Mentions))
+	for _, m := range msg.Mentions {
+		if _, ok := alreadyNotified[m.UserID]; ok {
+			continue
+		}
+		added = append(added, m)
+	}
+	if room != nil && len(added) > 0 {
+		notified := *msg
+		notified.Mentions = added
+		r.publishMentionNotifications(ctx, room, &notified, existing.UserID, nil)
 	}
 
 	gqlMsg := toGraphMessage(msg)
@@ -2773,6 +2829,20 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 	return result, nil
 }
 
+// Mentions is the resolver for the mentions field.
+func (r *postResolver) Mentions(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Mention, error) {
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id")
+	}
+
+	mentions, err := dataloader.For(ctx).PostMentionLoader.Load(ctx, numericPostID)
+	if err != nil {
+		return nil, err
+	}
+	return resolveMentions(ctx, mentions)
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
@@ -3374,6 +3444,87 @@ func (r *queryResolver) SuggestHashtags(ctx context.Context, prefix string, limi
 		return nil, err
 	}
 	return toGraphHashtagSuggestions(suggestions), nil
+}
+
+// SuggestUsers is the resolver for the suggestUsers field.
+func (r *queryResolver) SuggestUsers(ctx context.Context, prefix string, limit *int32) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	l := 8
+	if limit != nil {
+		l = int(*limit)
+	}
+
+	users, err := r.SuggestUsersUseCase.Execute(ctx, prefix, l)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*gqlmodel.User, 0, len(users))
+	for _, u := range users {
+		// 自分自身はメンションできないので候補から外す。
+		if u.ID == claims.ID {
+			continue
+		}
+		items = append(items, toGraphUser(u))
+	}
+	return items, nil
+}
+
+// MentionCandidates is the resolver for the mentionCandidates field.
+func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([]*gqlmodel.User, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+
+	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room")
+	}
+	// メンションが成立しないルームでは候補を持たせる意味がないので空を返す。
+	// 判定は送信時の検証と同じ messageusecase.MentionsSupported を使う。
+	if !messageusecase.MentionsSupported(room) {
+		return []*gqlmodel.User{}, nil
+	}
+
+	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify room membership")
+	}
+	if !containsInt64(memberIDs, claims.ID) {
+		return nil, errors.New("forbidden: not a member of this room")
+	}
+
+	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load room members")
+	}
+
+	// 除外条件は送信時の検証 (message.ResolveMentionsUseCase) と揃える。
+	// ここで出した候補がそのまま通るようにするのが、この API を分けている理由。
+	blockedSet, err := r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load block relations")
+	}
+
+	users := usersByRoomID[rid]
+	candidates := make([]*gqlmodel.User, 0, len(users))
+	for _, u := range users {
+		if u.ID == claims.ID || u.Status != model.UserStatusActive || blockedSet[u.ID] {
+			continue
+		}
+		candidates = append(candidates, toGraphUser(u))
+	}
+	return candidates, nil
 }
 
 // Favorites is the resolver for the favorites field.

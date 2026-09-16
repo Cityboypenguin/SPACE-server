@@ -162,6 +162,7 @@ func main() {
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
+	suggestUsersUseCase := userusecase.NewSuggestUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
@@ -180,9 +181,8 @@ func main() {
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
-	// createPostUseCase は通知発行のため notificationPublisher に依存する。
+	// createPostUseCase / updatePostUseCase は通知発行のため notificationPublisher に依存する。
 	// publisher 構築後（下方）に生成する。
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
 	getPostsByIDsUseCase := postusecase.NewGetPostsByIDsUseCase(postRepository)
@@ -256,7 +256,9 @@ func main() {
 	listImagesMissingDimensionsUseCase := mediausecase.NewListImagesMissingDimensionsUseCase(mediaRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
-	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
+	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository, txManager)
+	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
+	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
 	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
@@ -321,7 +323,9 @@ func main() {
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
-	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager, notificationPublisher)
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	listPostMentionsUseCase := postusecase.NewListMentionsByPostIDsUseCase(postRepository)
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
@@ -365,6 +369,7 @@ func main() {
 			GetUserByIDUseCase:            getUserByIDUseCase,
 			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
 			SearchUsersUseCase:            searchUsersUseCase,
+			SuggestUsersUseCase:           suggestUsersUseCase,
 			LoginUserUseCase:              loginUserUseCase,
 			RefreshUserTokenUseCase:       refreshUserTokenUseCase,
 			LogoutUserUseCase:             logoutUserUseCase,
@@ -435,6 +440,8 @@ func main() {
 			ListMessagesUseCase:             listMessagesUseCase,
 			DeleteMessageUseCase:            deleteMessageUseCase,
 			UpdateMessageUseCase:            updateMessageUseCase,
+			ResolveMentionsUseCase:          resolveMessageMentionsUseCase,
+			ListMessageMentionsUseCase:      listMessageMentionsUseCase,
 			GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
 			CreateRoomUseCase:               createRoomUseCase,
 			GetRoomUseCase:                  getRoomUseCase,
@@ -563,6 +570,8 @@ func main() {
 		getRepliesByPostIDsIncludeDeletedUseCase,
 		getFavoritesByPostIDsUseCase,
 		getMessagesByIDsUseCase,
+		listPostMentionsUseCase,
+		listMessageMentionsUseCase,
 	)))
 
 	// テスト用エンドポイント

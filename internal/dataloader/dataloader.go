@@ -38,6 +38,12 @@ type GetMessagesByIDsUseCase interface {
 type GetFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error)
 }
+type ListMentionsByPostIDsUseCase interface {
+	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error)
+}
+type ListMentionsByMessageIDsUseCase interface {
+	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.Mention, error)
+}
 
 type ctxKey string
 
@@ -54,6 +60,10 @@ type Loaders struct {
 	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
 	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
 	MessageLoader *dataloadgen.Loader[int64, *model.Message]
+	// PostMentionLoader / MessageMentionLoader は本文中のメンション用。
+	// 一覧表示で1件ずつ引くと N+1 になるためまとめて解決する。
+	PostMentionLoader    *dataloadgen.Loader[int64, []*model.Mention]
+	MessageMentionLoader *dataloadgen.Loader[int64, []*model.Mention]
 }
 
 // batchFromMap は「IDのスライスを受け取り map[ID]V を返す関数」を DataLoader が要求する
@@ -88,6 +98,8 @@ func Middleware(
 	getAdminRepliesUseCase GetRepliesByPostIDsIncludeDeletedUseCase, // ⭕️ 引数に追加
 	getFavoritesUseCase GetFavoritesByPostIDsUseCase,
 	getMessagesUseCase GetMessagesByIDsUseCase,
+	listPostMentionsUseCase ListMentionsByPostIDsUseCase,
+	listMessageMentionsUseCase ListMentionsByMessageIDsUseCase,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +136,9 @@ func Middleware(
 				AdminReplyLoader:    dataloadgen.NewLoader(batchFromMap(getAdminRepliesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)), // ⭕️ 追加
 				FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(getFavoritesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 				MessageLoader:       dataloadgen.NewLoader(batchFromMap(getMessagesUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+
+				PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(listPostMentionsUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
+				MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(listMessageMentionsUseCase.Execute), dataloadgen.WithWait(10*time.Millisecond)),
 			}
 
 			ctx = context.WithValue(ctx, loadersKey, loaders)

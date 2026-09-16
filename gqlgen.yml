@@ -146,6 +146,8 @@ models:
         resolver: true
   Post:
     fields:
+      mentions:
+        resolver: true
       user:
         resolver: true
       parent:
@@ -160,6 +162,8 @@ models:
         resolver: true
   Message:
     fields:
+      mentions:
+        resolver: true
       userID:
         resolver: true
       user:

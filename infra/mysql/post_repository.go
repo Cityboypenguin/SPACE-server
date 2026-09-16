@@ -1145,3 +1145,75 @@ func (r *MySQLPostRepository) CountNewFeedPosts(ctx context.Context, viewerID in
 	}
 	return count, nil
 }
+
+// CreatePostMentions は投稿に紐づくメンションを一括登録する。
+// 呼び出し側でトランザクションが張られていればそれを利用する。
+// 同じ投稿で同じ相手を指す行は一意制約で弾かれるが、抽出側で重複除去済みのため
+// 実際には発生しない（INSERT IGNORE は競合時の再送を無害にするための保険）。
+func (r *MySQLPostRepository) CreatePostMentions(ctx context.Context, postID int64, mentions []*model.Mention) error {
+	if len(mentions) == 0 {
+		return nil
+	}
+
+	execer := extractDB(ctx, r.DB)
+	now := time.Now().Unix()
+
+	var sb strings.Builder
+	sb.WriteString("INSERT IGNORE INTO post_mentions (post_id, mentioned_user_id, mention_text, created_at) VALUES ")
+	args := make([]interface{}, 0, len(mentions)*4)
+	for i, m := range mentions {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("(?, ?, ?, ?)")
+		args = append(args, postID, m.UserID, m.Text, now)
+	}
+
+	_, err := execer.ExecContext(ctx, sb.String(), args...)
+	return err
+}
+
+// DeletePostMentionsByPostID は投稿に紐づく全メンションを削除する（編集時の再同期用）。
+func (r *MySQLPostRepository) DeletePostMentionsByPostID(ctx context.Context, postID int64) error {
+	execer := extractDB(ctx, r.DB)
+	_, err := execer.ExecContext(ctx, "DELETE FROM post_mentions WHERE post_id = ?", postID)
+	return err
+}
+
+// ListMentionsByPostIDs は投稿IDごとのメンション一覧を返す。
+// 投稿一覧での N+1 を避けるため DataLoader から1クエリでまとめて呼ばれる。
+func (r *MySQLPostRepository) ListMentionsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error) {
+	result := make(map[int64][]*model.Mention, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(postIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT post_id, mentioned_user_id, mention_text
+		FROM post_mentions
+		WHERE post_id IN (%s)
+		ORDER BY id ASC
+	`, placeholders)
+
+	args := make([]interface{}, len(postIDs))
+	for i, id := range postIDs {
+		args[i] = id
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		var m model.Mention
+		if err := rows.Scan(&postID, &m.UserID, &m.Text); err != nil {
+			return nil, err
+		}
+		result[postID] = append(result[postID], &m)
+	}
+	return result, rows.Err()
+}

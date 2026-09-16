@@ -166,6 +166,7 @@ type UserUseCases struct {
 	RequestPasswordResetUseCase   user.RequestPasswordResetUseCase
 	VerifyPasswordResetOTPUseCase user.VerifyPasswordResetOTPUseCase
 	ResetPasswordUseCase          user.ResetPasswordUseCase
+	SuggestUsersUseCase           user.SuggestUsersUseCase
 }
 
 type PostUseCases struct {
@@ -198,6 +199,8 @@ type MessageRoomUseCases struct {
 	ListMessagesAroundUseCase       messageusecase.ListMessagesAroundUseCase
 	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
 	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
+	ResolveMentionsUseCase          messageusecase.ResolveMentionsUseCase
+	ListMessageMentionsUseCase      messageusecase.ListMentionsByMessageIDsUseCase
 	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
 	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase

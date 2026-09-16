@@ -478,17 +478,20 @@ func toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.MediaInput {
 // Notification.targetMessage から辿れる）。
 //
 // 通知の失敗はメッセージ送信の成否に影響させない（ログのみ）。
-func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *model.Room, reply *model.Message, actorID int64) {
+//
+// 戻り値は通知を送った相手のユーザーID（送らなかったときは nil）。
+// 同じ相手をメンションしていたときにメンション通知を二重に送らないために使う。
+func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *model.Room, reply *model.Message, actorID int64) *int64 {
 	if reply.ReplyToID == nil {
-		return
+		return nil
 	}
 
 	parent, err := r.GetMessageByIDUseCase.Execute(ctx, *reply.ReplyToID)
 	if err != nil || parent == nil {
-		return
+		return nil
 	}
 	if parent.UserID == actorID {
-		return
+		return nil
 	}
 
 	message := "あなたのメッセージに返信がありました"
@@ -497,7 +500,7 @@ func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *mo
 		identity, err := r.GetOrCreateAnonymousIdentityUseCase.Execute(ctx, room.ID, actorID)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to resolve anonymous identity for reply notification")
-			return
+			return nil
 		}
 		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", identity.Label)
 		notificationActorID = nil
@@ -517,7 +520,9 @@ func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *mo
 		},
 	}); err != nil {
 		logger.Log.Error().Err(err).Msg("failed to publish message reply notification")
+		return nil
 	}
+	return &parent.UserID
 }
 
 // notificationTargetMessage resolves the Notification/NotificationGroup targetMessage
@@ -539,4 +544,88 @@ func (r *Resolver) notificationTargetMessage(ctx context.Context, targetType *st
 		return nil, nil
 	}
 	return toGraphMessage(msg), nil
+}
+
+// resolveMentions は本文中のメンション（保存済み）を GraphQL の Mention に変換する。
+// メンション先のユーザーは DataLoader 経由でまとめて引く。
+// 退会済みなどでユーザーを引けなかったメンションは黙って落とす
+// （表示側はそのメンションを通常テキストとして描画する）。
+func resolveMentions(ctx context.Context, mentions []*model.Mention) ([]*gqlmodel.Mention, error) {
+	result := make([]*gqlmodel.Mention, 0, len(mentions))
+	for _, m := range mentions {
+		user, err := dataloader.For(ctx).UserLoader.Load(ctx, m.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if user == nil {
+			continue
+		}
+		result = append(result, &gqlmodel.Mention{
+			User: toGraphUser(user),
+			Text: m.Text,
+		})
+	}
+	return result, nil
+}
+
+// publishMentionNotifications はコミュニティチャットでメンションされた各ユーザーへ通知する。
+//
+// skipUserID には引用返信の通知を既に送った相手を渡す。返信と同時にその相手を
+// メンションしても通知が2通にならないようにするため。
+// 遷移先の組み立てにはルームIDと種別が要るが notifications 行は targetType/targetID の
+// 1組しか持てないため、SSE には Extra で roomID/roomType を添える
+// （publishMessageReplyNotification と同じ扱い）。
+// 通知の失敗はメッセージ送信の成否に影響させない（ログのみ）。
+func (r *Resolver) publishMentionNotifications(ctx context.Context, room *model.Room, msg *model.Message, actorID int64, skipUserID *int64) {
+	if len(msg.Mentions) == 0 {
+		return
+	}
+
+	targetType := notificationuc.TargetMessage
+	params := make([]notificationuc.PublishParams, 0, len(msg.Mentions))
+	for _, m := range msg.Mentions {
+		if skipUserID != nil && m.UserID == *skipUserID {
+			continue
+		}
+		params = append(params, notificationuc.PublishParams{
+			UserID:     m.UserID,
+			Type:       notificationuc.TypeMessageMention,
+			ActorID:    &actorID,
+			TargetType: &targetType,
+			TargetID:   &msg.ID,
+			Message:    "コミュニティであなたがメンションされました",
+			Extra: map[string]any{
+				"roomID":   encodeGraphID("room", room.ID),
+				"roomType": room.Type,
+			},
+		})
+	}
+	if len(params) == 0 {
+		return
+	}
+
+	if err := r.NotificationPublisher.PublishBatch(ctx, params); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to publish mention notifications")
+	}
+}
+
+// resolveMessageMentions はクライアントから届いたメンション先IDを検証済みのメンションに変換する。
+//
+// ここが担うのは GraphQL ID のデコードだけ。「どのルームでメンションが成立するか」
+// 「誰をメンションできるか」の判断は messageusecase.ResolveMentionsUseCase 側にある。
+func (r *Resolver) resolveMessageMentions(ctx context.Context, roomID, actorID int64, content string, mentionUserIDs []string) ([]*model.Mention, error) {
+	if len(mentionUserIDs) == 0 {
+		return nil, nil
+	}
+
+	ids := make([]int64, 0, len(mentionUserIDs))
+	for _, encoded := range mentionUserIDs {
+		id, err := decodeGraphID(ctx, "user", encoded)
+		if err != nil {
+			return nil, fmt.Errorf("invalid mention user id")
+		}
+		ids = append(ids, id)
+	}
+
+	return r.ResolveMentionsUseCase.Execute(ctx, roomID, actorID, content, ids)
 }

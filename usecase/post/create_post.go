@@ -21,6 +21,8 @@ var _ CreatePostUseCase = &CreatePostInteractor{}
 type CreatePostInteractor struct {
 	postRepo              repository.PostRepository
 	mediaRepo             repository.MediaRepository
+	userRepo              repository.UserRepository
+	blockerRepo           repository.BlockerRepository
 	txManager             repository.TxManager
 	notificationPublisher notificationuc.NotificationPublisher
 }
@@ -28,12 +30,16 @@ type CreatePostInteractor struct {
 func NewCreatePostUseCase(
 	postRepo repository.PostRepository,
 	mediaRepo repository.MediaRepository,
+	userRepo repository.UserRepository,
+	blockerRepo repository.BlockerRepository,
 	txManager repository.TxManager,
 	notificationPublisher notificationuc.NotificationPublisher,
 ) CreatePostUseCase {
 	return &CreatePostInteractor{
 		postRepo:              postRepo,
 		mediaRepo:             mediaRepo,
+		userRepo:              userRepo,
+		blockerRepo:           blockerRepo,
 		txManager:             txManager,
 		notificationPublisher: notificationPublisher,
 	}
@@ -52,6 +58,14 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		if !strings.HasPrefix(input.StorageKey, prefix) {
 			return nil, fmt.Errorf("invalid media key")
 		}
+	}
+
+	// メンション解決は参照のみなのでトランザクションの外で済ませる。
+	// 失敗した場合はメンション無しとして投稿を続行する（本文はそのまま残る）。
+	mentions, err := ResolveMentions(ctx, uc.userRepo, uc.blockerRepo, param.Content, param.UserID)
+	if err != nil {
+		logger.Log.Error().Err(err).Msg("failed to resolve mentions")
+		mentions = nil
 	}
 
 	post := model.CreatePost(param)
@@ -73,6 +87,12 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 			}
 		}
 
+		if len(mentions) > 0 {
+			if err := uc.postRepo.CreatePostMentions(ctx, post.ID, mentions); err != nil {
+				return err
+			}
+		}
+
 		for i, input := range mediaInputs {
 			media := model.NewMedia(param.UserID, input, now)
 			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
@@ -89,6 +109,9 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 
 	// 返信の場合、親投稿の投稿者へ通知する（自分自身への返信は除く）。
 	// 配信失敗は投稿作成の成否に影響させない。
+	// repliedTo には返信通知を送った相手を控えておき、同じ人を本文でメンションしていても
+	// 通知が二重にならないようにする。
+	var repliedTo *int64
 	if uc.notificationPublisher != nil && param.ParentID != nil {
 		if parent, perr := uc.postRepo.GetPostByID(ctx, *param.ParentID); perr == nil && parent != nil && parent.UserID != param.UserID {
 			targetType := notificationuc.TargetPost
@@ -101,9 +124,13 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 				Message:    "あなたの投稿に返信がありました",
 			}); err != nil {
 				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
+			} else {
+				repliedTo = &parent.UserID
 			}
 		}
 	}
+
+	NotifyMentions(ctx, uc.notificationPublisher, mentions, post.ID, param.UserID, repliedTo)
 
 	return post, nil
 }
