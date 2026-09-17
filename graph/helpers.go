@@ -15,6 +15,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -43,6 +44,33 @@ func logChatLookup(err error, lookup string) *zerolog.Event {
 	return logger.Log.Error().Err(err).
 		Str("component", "chat_resolver").
 		Str("lookup", lookup)
+}
+
+// applyRoomReadStatus は既読状態を GraphQL の Room へ写す。
+//
+// room クエリ・myDMRooms・（将来の一覧）で同じ4項目を並べていたので1箇所にまとめた。
+// 特に lastReadMessageID は、どの経路で取った Room かによって入ったり入らなかったり
+// すると、クライアントの未読ページ取得の起点が ID と時刻で揺れてしまう。
+//
+// helpers.go に置くのは、gqlgen generate がリゾルバファイル内の「リゾルバでない
+// 関数」をコメントアウトしてしまうため（anonymousUserForCourseRoom と同じ理由）。
+func applyRoomReadStatus(gqlRoom *gqlmodel.Room, status *roomusecase.RoomReadStatus) {
+	if gqlRoom == nil || status == nil {
+		return
+	}
+	if status.LastReadAt != nil {
+		s := time.Unix(*status.LastReadAt, 0).Format(timeFormat)
+		gqlRoom.LastReadAt = &s
+	}
+	if status.LastReadMessageID != nil {
+		id := encodeGraphID("message", *status.LastReadMessageID)
+		gqlRoom.LastReadMessageID = &id
+	}
+	gqlRoom.UnreadCount = int32(status.UnreadCount)
+	if status.PartnerLastReadAt != nil {
+		s := time.Unix(*status.PartnerLastReadAt, 0).Format(timeFormat)
+		gqlRoom.PartnerLastReadAt = &s
+	}
 }
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
@@ -302,6 +330,30 @@ func containsInt64(slice []int64, val int64) bool {
 		}
 	}
 	return false
+}
+
+// dmPartnerID は DM のメンバー一覧から「自分ではない相手」を返す。
+// 相手が1人に決まらない（退会して自分しか居ない、データ不整合で複数居る）ときは
+// 0 と false を返す。
+//
+// ルームが DM かどうかは room.Type で判断すること。以前はここが「メンバーが2人なら
+// DM」という人数からの推測で、2人だけのコミュニティまで DM 扱いになっていた
+// （ブロック相手と2人のコミュニティに居ると投稿欄が閉じてしまう）。相手の特定と
+// ルーム種別の判定は別の関心事なので、この関数は種別を見ない。
+func dmPartnerID(users []*model.User, selfID int64) (int64, bool) {
+	var partnerID int64
+	found := 0
+	for _, u := range users {
+		if u.ID == selfID {
+			continue
+		}
+		partnerID = u.ID
+		found++
+	}
+	if found != 1 {
+		return 0, false
+	}
+	return partnerID, true
 }
 
 // reportTargetKind は ReportTargetType を opaqueid のカインド文字列に変換する。

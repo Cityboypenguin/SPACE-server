@@ -45,6 +45,14 @@ type TimetableRepository interface {
 	// their timetable, or nil when it is not registered. 授業内チャットの未読は
 	// 「時間割に登録した時点」を起点に数えるので、その起点を引くために使う。
 	GetRegisteredAt(ctx context.Context, userID, courseID int64) (*int64, error)
+	// ListRegistrantIDsByCourseRoomID は「その授業ルームの更新を知らせるべき利用者」の
+	// IDを返す（授業ルームは room_users を持たないので、履修者は時間割から引く）。
+	//
+	// 未読数の集計とは別物として分けてある。以前は「送信のたびに履修者全員ぶんの
+	// 未読数を数えて配る」ために messages を JOIN する重いクエリを回していたが、
+	// 配信に本当に要るのは「誰に知らせるか」だけで、いくつ未読かは知らせを受けた
+	// 本人が自分のぶんだけ数えれば足りる。だからここは messages を一切見ない。
+	ListRegistrantIDsByCourseRoomID(ctx context.Context, roomID int64) ([]int64, error)
 	// CountByCourseID returns how many users currently have courseID in their
 	// timetable - used by the admin course-deletion flow to warn how many students'
 	// registrations (and course-room history) would be wiped out by the cascade.

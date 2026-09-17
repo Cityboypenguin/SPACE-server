@@ -375,7 +375,7 @@ type ComplexityRoot struct {
 		MarkAllNotificationsAsRead        func(childComplexity int) int
 		MarkAllNotificationsAsReadByActor func(childComplexity int, typeArg string, actorID string) int
 		MarkNotificationAsRead            func(childComplexity int, id string) int
-		MarkRoomAsRead                    func(childComplexity int, roomID string) int
+		MarkRoomAsRead                    func(childComplexity int, roomID string, lastReadMessageID *string) int
 		PromoteToCommunityOwner           func(childComplexity int, communityID string, userID string) int
 		RecordSessionData                 func(childComplexity int, input model.RecordSessionDataInput) int
 		RefreshAdministratorToken         func(childComplexity int, refreshToken string) int
@@ -644,6 +644,7 @@ type ComplexityRoot struct {
 		ID                  func(childComplexity int) int
 		IsMessagingDisabled func(childComplexity int) int
 		LastReadAt          func(childComplexity int) int
+		LastReadMessageID   func(childComplexity int) int
 		Name                func(childComplexity int) int
 		PartnerLastReadAt   func(childComplexity int) int
 		Type                func(childComplexity int) int
@@ -886,7 +887,7 @@ type MutationResolver interface {
 	CreateAnnouncement(ctx context.Context, input model.CreateAnnouncementInput) (*model.Announcement, error)
 	UpdateAnnouncement(ctx context.Context, id string, input model.UpdateAnnouncementInput) (*model.Announcement, error)
 	DeleteAnnouncement(ctx context.Context, id string) (bool, error)
-	MarkRoomAsRead(ctx context.Context, roomID string) (bool, error)
+	MarkRoomAsRead(ctx context.Context, roomID string, lastReadMessageID *string) (bool, error)
 	CreateTermsOfService(ctx context.Context, input model.CreateTermsOfServiceInput) (*model.TermsOfService, error)
 	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
 	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
@@ -2812,7 +2813,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.MarkRoomAsRead(childComplexity, args["roomID"].(string)), true
+		return e.ComplexityRoot.Mutation.MarkRoomAsRead(childComplexity, args["roomID"].(string), args["lastReadMessageID"].(*string)), true
 	case "Mutation.promoteToCommunityOwner":
 		if e.ComplexityRoot.Mutation.PromoteToCommunityOwner == nil {
 			break
@@ -4668,6 +4669,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.LastReadAt(childComplexity), true
+	case "Room.lastReadMessageID":
+		if e.ComplexityRoot.Room.LastReadMessageID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Room.LastReadMessageID(childComplexity), true
 	case "Room.name":
 		if e.ComplexityRoot.Room.Name == nil {
 			break
@@ -6168,6 +6175,8 @@ func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.
 		return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
 	case "lastReadAt":
 		return ec.fieldContext_Room_lastReadAt(ctx, field)
+	case "lastReadMessageID":
+		return ec.fieldContext_Room_lastReadMessageID(ctx, field)
 	case "unreadCount":
 		return ec.fieldContext_Room_unreadCount(ctx, field)
 	case "partnerLastReadAt":
@@ -7453,6 +7462,14 @@ func (ec *executionContext) field_Mutation_markRoomAsRead_args(ctx context.Conte
 		return nil, err
 	}
 	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "lastReadMessageID",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["lastReadMessageID"] = arg1
 	return args, nil
 }
 
@@ -18202,7 +18219,7 @@ func (ec *executionContext) _Mutation_markRoomAsRead(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().MarkRoomAsRead(ctx, fc.Args["roomID"].(string))
+			return ec.Resolvers.Mutation().MarkRoomAsRead(ctx, fc.Args["roomID"].(string), fc.Args["lastReadMessageID"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
@@ -24618,6 +24635,29 @@ func (ec *executionContext) _Room_lastReadAt(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_Room_lastReadAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Room_lastReadMessageID(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Room_lastReadMessageID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastReadMessageID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Room_lastReadMessageID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
 func (ec *executionContext) _Room_unreadCount(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
@@ -35504,6 +35544,11 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "lastReadAt":
 			out.Values[i] = ec._Room_lastReadAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "lastReadMessageID":
+			out.Values[i] = ec._Room_lastReadMessageID(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}

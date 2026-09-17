@@ -42,14 +42,29 @@ type MessagePage struct {
 	HasMoreAfter  bool
 }
 
-// MessageStore はメッセージ1件単位の読み書き（書き込み系の正）。
-type MessageStore interface {
-	SaveMessage(ctx context.Context, m *model.Message) error
+// MessageReader はメッセージ1件単位の読み取り。認可を前提としない
+// （リゾルバや DataLoader から直接使う）ので、どの層へ渡しても構わない。
+type MessageReader interface {
 	// GetMessageByID returns the message, or nil if it does not exist or has been soft-deleted.
 	GetMessageByID(ctx context.Context, id int64) (*model.Message, error)
 	// GetMessagesByIDs returns the requested messages keyed by ID. IDs that do not
 	// exist or were soft-deleted are simply absent from the map (引用返信の返信先取得用)。
 	GetMessagesByIDs(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
+}
+
+// MessageWriter はメッセージ1件単位の書き込み（保存・更新・論理削除）。
+//
+// 読み取り (MessageReader) と分けてあるのは配線の規律を型で表すため。この口を
+// 渡してよい先は composition root (cmd/server/main.go) から
+// usecase/chat.NewMessageWriters だけで、他のユースケースには MessageReader しか
+// 渡さない。認可判定は usecase/chat が持っているので、そこを通らずに書き込める
+// 依存を新しく作らないこと。
+//
+// 何を防げて何を防げないかは usecase/chat/writers.go のコメントに書いてある
+// （型で塞げるのは「依存として受け取れるか」までで、同じパッケージ内や
+// composition root からの直接呼び出しは塞げない）。
+type MessageWriter interface {
+	SaveMessage(ctx context.Context, m *model.Message) error
 	UpdateMessage(ctx context.Context, m *model.Message) error
 	// SoftDeleteMessage marks the message as deleted by deletedBy. It returns false
 	// (with no error) if the message does not exist or was already deleted, so that
@@ -66,11 +81,19 @@ type MessageReadModel interface {
 	ListMessagesByRoomID(ctx context.Context, query MessageQuery) (*MessagePage, error)
 	GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error)
 	// GetLatestMessageID はルームの最新メッセージIDを返す（1件も無ければ nil）。
-	// 既読を打つときの位置をサーバ側で決めるために使う（クライアントから ID を
-	// 受け取る形にすると GraphQL スキーマを変えることになるため）。削除済みも
-	// 含めた最大値を返す: 位置は「ここまでは見た」というしおりで、ソフトデリート
-	// された行を飛ばして小さい値を返すと、その行より後の既読が巻き戻る。
+	// 既読位置を指定しない markRoomAsRead（＝引数を知らない古いクライアント）の
+	// フォールバックに使う。削除済みも含めた最大値を返す: 位置は「ここまでは見た」
+	// というしおりで、ソフトデリートされた行を飛ばして小さい値を返すと、その行より
+	// 後の既読が巻き戻る。
 	GetLatestMessageID(ctx context.Context, roomID int64) (*int64, error)
+	// MessageExistsInRoom は messageID が roomID のメッセージかを返す。
+	// クライアントが指定してきた既読位置の検証に使う（他ルームのIDや存在しないIDで
+	// 既読位置を壊されないため）。
+	//
+	// deleted_at で絞らないのは GetLatestMessageID と同じ理由。表示したあとに
+	// 消されたメッセージのIDで既読を打つのは正常な流れで、そこで弾くと「既読に
+	// できない部屋」ができてしまう。
+	MessageExistsInRoom(ctx context.Context, roomID, messageID int64) (bool, error)
 }
 
 // MessageMentionStore はメッセージに紐づくメンション行の読み書き。
@@ -86,6 +109,14 @@ type MessageMentionStore interface {
 // room_users / course_room_reads 側が持ち、ここでは件数を数えるだけ。
 //
 // どの経路も未読の起点は UnreadOrigin の規則（ID 優先・時刻・フォールバック）に従う。
+//
+// ここにあるのは全て「呼び出し元1人ぶん」を数える経路であり、そう保つこと。
+// 以前は送信のたびにルームの全メンバー・全履修者ぶんの未読数を数えて SSE で配る経路
+// （CountUnreadMessagesPerMember / CountUnreadMessagesPerCourseRegistrant）があったが、
+// 履修者数百人規模の授業では投稿1件ごとにその集計が走るうえ、受け取ったクライアントは
+// どのみち自分ぶんを取り直していた。派生値を全員ぶん計算して配るのはやめ、SSE は
+// 「このルームが更新された」という事実だけを配り、未読数は必要になった利用者が
+// ここを通って自分ぶんだけ取る形にしてある。
 type MessageUnreadCounter interface {
 	// CountUnreadMessages は1ルームぶんを数える。起点は呼び出し側が既読位置から
 	// 組み立てて渡す（既読位置の置き場が room_users / course_room_reads で分かれ、
@@ -93,15 +124,6 @@ type MessageUnreadCounter interface {
 	CountUnreadMessages(ctx context.Context, roomID, userID int64, origin UnreadOrigin) (int, error)
 	CountUnreadMessagesByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int, error)
 	CountUnreadMessagesByRoomType(ctx context.Context, userID int64, roomType string) (int, error)
-	// CountUnreadMessagesPerMember は room_users のメンバーごとの未読数（送信者は除く）。
-	// 授業ルームは room_users を使わないので、この経路では一件も返らない
-	// （授業ルームは CountUnreadMessagesPerCourseRegistrant を使うこと）。
-	CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
-	// CountUnreadMessagesPerCourseRegistrant は授業ルームの未読数を
-	// 「その授業を時間割に登録している利用者」ごとに返す（excludeUserID＝送信者は除く）。
-	// 未読SSEの宛先を作るための経路で、宛先の母集団が room_users ではなく timetables に
-	// なる点だけが CountUnreadMessagesPerMember と違う。N+1 を避けるため1クエリで返す。
-	CountUnreadMessagesPerCourseRegistrant(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
 	// CountUnreadByCourseRooms returns the unread count for every course room in
 	// userID's timetable for the given semester (room_id 昇順). 授業内チャットは
 	// room_users を使わないため、既読位置は course_room_reads から取り、
@@ -109,10 +131,13 @@ type MessageUnreadCounter interface {
 	CountUnreadByCourseRooms(ctx context.Context, userID int64, year int, semester string) ([]*CourseRoomUnread, error)
 }
 
-// MessageRepository は上の4つの合成。DI 配線（main.go）が1つの実装を渡せば
-// 済むように残してあるだけで、各 usecase は自分が使う狭い口だけに依存すること。
+// MessageRepository は上の口の合成。DI 配線（main.go）が1つの実装を渡せば済むように
+// 残してあるだけで、各 usecase は自分が使う狭い口だけに依存すること。
+// 特に、これを引数の型に取る層を新しく増やさないこと: 合成の口を受け取った時点で
+// 書き込み (MessageWriter) も一緒に手に入ってしまい、読み書きを分けた意味が消える。
 type MessageRepository interface {
-	MessageStore
+	MessageReader
+	MessageWriter
 	MessageReadModel
 	MessageMentionStore
 	MessageUnreadCounter

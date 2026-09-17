@@ -540,6 +540,7 @@ type Room struct {
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
+	LastReadMessageID   *string `json:"lastReadMessageID,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`
 	PartnerLastReadAt   *string `json:"partnerLastReadAt,omitempty"`
 }

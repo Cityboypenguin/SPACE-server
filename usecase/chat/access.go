@@ -165,8 +165,9 @@ func (p *accessPolicy) EnsureWriteAccess(ctx context.Context, roomID int64) (*mo
 // writeAccess は書き込み判定の結果。
 type writeAccess struct {
 	Room *model.Room
-	// MemberIDs は非授業ルームのメンバー。判定のついでに引いた結果を、送信後の
-	// DM 通知でもう一度引き直さずに済むよう持ち回す。授業ルームでは nil。
+	// MemberIDs は非授業ルームのメンバー。判定のついでに引いた結果を、送信後の配信
+	// （room_changed の宛先・DM 通知）でもう一度引き直さずに済むよう持ち回す。
+	// 授業ルームでは nil。
 	MemberIDs []int64
 }
 
@@ -174,7 +175,7 @@ type writeAccess struct {
 //
 //   - 授業内チャット: room_users を使わず、現在の学期と一致するか（アーカイブ
 //     されていないか）と時間割に登録済みかを CheckRoomWritableUseCase が見る。
-//   - それ以外: membership が必須。2人のルーム（DM）はブロック関係があれば拒否。
+//   - それ以外: membership が必須。DM だけはブロック関係があれば拒否。
 func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error) {
 	room, err := p.deps.GetRoom.Execute(ctx, roomID)
 	if err != nil {
@@ -200,22 +201,26 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	if len(memberIDs) == 2 {
-		var partnerID int64
-		for _, id := range memberIDs {
-			if id != claims.ID {
-				partnerID = id
-				break
+	// ブロックで送信を止めるのは DM だけ。以前はここが「メンバーが2人なら DM」と
+	// 人数から推測していたが、model.RoomTypeDM という型がある以上その推測は要らず、
+	// たまたま2人しか居ないコミュニティでも DM と見なされてしまう。コミュニティは
+	// 参加者同士にブロック関係があっても場そのものは使えるのが正しい（ブロックは
+	// 1対1の会話を止める機能であって、共同の場から締め出す機能ではない）ので、
+	// 人数ではなくルーム種別で判定する。
+	if room.Type == model.RoomTypeDM {
+		if partnerID, ok := soleOtherMember(memberIDs, claims.ID); ok {
+			isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, claims.ID, partnerID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check block status")
+			}
+			if isBlocked {
+				return nil, errors.New("ブロック設定によりメッセージを送信できません")
 			}
 		}
-
-		isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, claims.ID, partnerID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check block status")
-		}
-		if isBlocked {
-			return nil, errors.New("ブロック設定によりメッセージを送信できません")
-		}
+		// 相手が1人に決まらない DM（相手が退会して room_users の行が消え、自分しか
+		// 残っていない等）はブロック判定を飛ばす。ブロック関係は「相手が誰か」が
+		// 決まらないと引けず、ここで拒否側に倒すと「ブロックしていないのに送れない」
+		// 説明のつかない状態になるため。送り先が居ないだけなので、通しても害はない。
 	}
 
 	return &writeAccess{Room: room, MemberIDs: memberIDs}, nil

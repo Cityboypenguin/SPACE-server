@@ -25,9 +25,13 @@ type RoomUserRepository interface {
 	// GetLastRead returns nil when userID has never read the room.
 	GetLastRead(ctx context.Context, roomID, userID int64) (*ReadPosition, error)
 	GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error)
-	// GetLastReadAtByRoomIDs は既読時刻だけをまとめて返す（表示用）。未読数は
-	// CountUnreadMessagesByRoomIDs が SQL 側で既読位置を見て数えるので、
-	// ここでメッセージIDまで持ち帰る必要は無い。
-	GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*int64, error)
+	// GetLastReadByRoomIDs は既読位置（メッセージID・時刻）をまとめて返す。
+	// 一度も読んでいないルームはキーごと欠ける。
+	//
+	// 未読数の計算には使わない（CountUnreadMessagesByRoomIDs が SQL 側で既読位置を
+	// 見て数える）。それでもメッセージIDまで持ち帰るのは、一覧に並ぶ Room が
+	// GraphQL の lastReadMessageID を返すため。1件取得（GetLastRead）と一覧とで
+	// 片方だけ null になると、どちらの経路で開いたかで未読ページの起点が変わる。
+	GetLastReadByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*ReadPosition, error)
 	GetMembersLastReadAtByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]map[int64]*int64, error)
 }

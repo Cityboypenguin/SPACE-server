@@ -9,7 +9,11 @@
 -- 表示用に残してある。秒解像度の時刻を位置に使うと、既読更新と新着が同じ秒に起きた
 -- ときに「既読にした後に保存されたメッセージ」が created_at > last_read_at を満たさず
 -- 未読から漏れる（同じ秒の中での前後関係は時刻からは分からない）。AUTO_INCREMENT の
--- ID なら保存順に単調増加するので、この取りこぼしが原理的に起きない。
+-- ID なら単調増加するので、同じ秒に並んだ行にも必ず前後がつきこの取りこぼしが消える。
+--
+-- ただし AUTO_INCREMENT が保証するのは採番順であってコミット順ではなく、先に採番した
+-- トランザクションが後からコミットするとその行が既読位置の後ろに置き去りになる競合窓が
+-- 残る。条件と影響範囲は repository/read_position.go のコメントに1箇所だけ書いてある。
 CREATE TABLE IF NOT EXISTS course_room_reads (
     id                   BIGINT NOT NULL AUTO_INCREMENT,
     room_id              BIGINT NOT NULL,

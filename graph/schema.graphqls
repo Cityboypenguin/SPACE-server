@@ -418,7 +418,13 @@ type Mutation {
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
   updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
   deleteAnnouncement(id: ID!): Boolean!
-  markRoomAsRead(roomID: ID!): Boolean!
+  # lastReadMessageID には「画面に実際に出したうちの最後のメッセージID」を渡す。
+  # 省略した場合は従来どおりサーバが受信時点の最新メッセージを既読位置にする
+  # （引数を知らない古いクライアントのための互換動作）。ただしその経路では、
+  # 画面に出ていない新着まで既読になる取りこぼしが起きうる。
+  # 他のルームのIDや存在しないIDを渡すと INVALID_INPUT で拒否する。
+  # 既読位置は前にしか進まないので、古いIDを渡しても巻き戻らない。
+  markRoomAsRead(roomID: ID!, lastReadMessageID: ID): Boolean!
 
   createTermsOfService(input: CreateTermsOfServiceInput!): TermsOfService!
   consentToTerms(termsID: ID!): Boolean!
@@ -574,6 +580,14 @@ type Room {
   updatedAt: String!
   isMessagingDisabled: Boolean!
   lastReadAt: String
+  # 自分がこのルームをどこまで読んだかを表すメッセージID。まだ一度も読んでいない
+  # （または列が追加される前から既読位置を時刻でしか持っていない）なら null。
+  #
+  # unreadCount と同じ起点なので、未読ページの取得は messages(after:) にこの値を
+  # 渡すこと。lastReadAt（秒解像度）を afterTime に渡すと、既読を打った秒と同じ秒に
+  # 届いたメッセージが「未読件数には入るのにページには出てこない」という食い違いを
+  # 起こす。null のときだけ従来どおり afterTime へフォールバックする。
+  lastReadMessageID: ID
   unreadCount: Int!
   partnerLastReadAt: String
 }

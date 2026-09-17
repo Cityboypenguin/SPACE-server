@@ -21,21 +21,23 @@ type UpdateMessageUseCase interface {
 var _ UpdateMessageUseCase = &UpdateMessageInteractor{}
 
 type UpdateMessageInteractor struct {
-	store        repository.MessageStore
+	reader       repository.MessageReader
+	writer       repository.MessageWriter
 	mentionStore repository.MessageMentionStore
 	txManager    repository.TxManager
 }
 
 func NewUpdateMessageUseCase(
-	store repository.MessageStore,
+	reader repository.MessageReader,
+	writer repository.MessageWriter,
 	mentionStore repository.MessageMentionStore,
 	txManager repository.TxManager,
 ) UpdateMessageUseCase {
-	return &UpdateMessageInteractor{store: store, mentionStore: mentionStore, txManager: txManager}
+	return &UpdateMessageInteractor{reader: reader, writer: writer, mentionStore: mentionStore, txManager: txManager}
 }
 
 func (uc *UpdateMessageInteractor) Execute(ctx context.Context, messageID int64, updateParam model.UpdateMessageParam, mentions []*model.Mention) (*model.Message, error) {
-	message, err := uc.store.GetMessageByID(ctx, messageID)
+	message, err := uc.reader.GetMessageByID(ctx, messageID)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +55,7 @@ func (uc *UpdateMessageInteractor) Execute(ctx context.Context, messageID int64,
 	message.Mentions = mentions
 
 	if err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
-		if err := uc.store.UpdateMessage(ctx, message); err != nil {
+		if err := uc.writer.UpdateMessage(ctx, message); err != nil {
 			return err
 		}
 		// 本文が変わらない編集ではメンションに触らない。

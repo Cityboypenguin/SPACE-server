@@ -20,13 +20,13 @@ type DeleteMessageUseCase interface {
 var _ DeleteMessageUseCase = &DeleteMessageInteractor{}
 
 type DeleteMessageInteractor struct {
-	store repository.MessageStore
+	writer repository.MessageWriter
 }
 
-func NewDeleteMessageUseCase(store repository.MessageStore) DeleteMessageUseCase {
-	return &DeleteMessageInteractor{store: store}
+func NewDeleteMessageUseCase(writer repository.MessageWriter) DeleteMessageUseCase {
+	return &DeleteMessageInteractor{writer: writer}
 }
 
 func (uc *DeleteMessageInteractor) Execute(ctx context.Context, messageID int64, deletedBy int64) (bool, error) {
-	return uc.store.SoftDeleteMessage(ctx, messageID, deletedBy)
+	return uc.writer.SoftDeleteMessage(ctx, messageID, deletedBy)
 }

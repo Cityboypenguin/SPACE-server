@@ -2255,9 +2255,15 @@ func (r *mutationResolver) DeleteAnnouncement(ctx context.Context, id string) (b
 // MarkRoomAsRead is the resolver for the markRoomAsRead field.
 //
 // 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
-// 切り分けと、既読にしたあとの配信（相手側の既読表示・DM 通知の既読化・未読SSE）は
-// ChatReads 側にある。
-func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (bool, error) {
+// 切り分けと、既読にしたあとの配信（相手側の既読表示・DM 通知の既読化・本人への
+// room_changed）は ChatReads 側にある。
+//
+// lastReadMessageID は任意。渡ってきたときは不透明IDを数値へ戻すところまでがここの
+// 仕事で、「本当にこのルームのメッセージか」の検証は既読位置を決める
+// roomusecase.resolveReadMessageID が持つ（保存する値を決める場所と検証する場所を
+// 離すと、新しい呼び出し元が増えたときに検証だけ抜ける）。
+// 省略時（古いクライアント）はサーバ側が最新メッセージを既読位置にする。
+func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string, lastReadMessageID *string) (bool, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
@@ -2265,7 +2271,15 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 	if err != nil {
 		return false, fmt.Errorf("invalid room id")
 	}
-	if err := r.ChatReads.MarkAsRead(ctx, rid); err != nil {
+	var messageID *int64
+	if lastReadMessageID != nil {
+		id, err := decodeGraphID(ctx, "message", *lastReadMessageID)
+		if err != nil {
+			return false, fmt.Errorf("invalid last read message id")
+		}
+		messageID = &id
+	}
+	if err := r.ChatReads.MarkAsRead(ctx, rid, messageID); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -3529,27 +3543,25 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	gqlRoom := toGraphRoom(room)
 	gqlRoom.User = members
 
+	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor のブロック判定と
+	// 同じ規則に揃える（画面の状態と実際の送信可否が食い違わないようにするため）。
+	// 相手が1人に決まらない DM ではブロックを引けないので、向こうと同じく判定しない。
 	gqlRoom.IsMessagingDisabled = false
-	if len(users) == 2 {
-		var partnerID int64
-		for _, u := range users {
-			if u.ID != claims.ID {
-				partnerID = u.ID
-				break
+	if room.Type == model.RoomTypeDM {
+		partnerID, ok := dmPartnerID(users, claims.ID)
+		if ok {
+			// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
+			// 実際に送ろうとすれば AccessPolicy 側のブロック判定で弾かれるので通ることは
+			// ないが、入力欄の状態だけが食い違うので失敗は残す。
+			isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+			if err != nil {
+				logChatLookup(err, chatLookupBlockRelation).
+					Int64("room_id", rid).
+					Int64("partner_id", partnerID).
+					Msg("failed to check the block relation; leaving messaging enabled")
 			}
+			gqlRoom.IsMessagingDisabled = isBlocked
 		}
-
-		// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
-		// 実際に送ろうとすれば AccessPolicy 側のブロック判定で弾かれるので通ることは
-		// ないが、入力欄の状態だけが食い違うので失敗は残す。
-		isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
-		if err != nil {
-			logChatLookup(err, chatLookupBlockRelation).
-				Int64("room_id", rid).
-				Int64("partner_id", partnerID).
-				Msg("failed to check the block relation; leaving messaging enabled")
-		}
-		gqlRoom.IsMessagingDisabled = isBlocked
 	}
 
 	// 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
@@ -3569,15 +3581,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 			Int64("user_id", claims.ID).
 			Msg("failed to load read status; returning the room without it")
 	} else {
-		if readStatus.LastReadAt != nil {
-			s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
-			gqlRoom.LastReadAt = &s
-		}
-		gqlRoom.UnreadCount = int32(readStatus.UnreadCount)
-		if readStatus.PartnerLastReadAt != nil {
-			s := time.Unix(*readStatus.PartnerLastReadAt, 0).Format(timeFormat)
-			gqlRoom.PartnerLastReadAt = &s
-		}
+		applyRoomReadStatus(gqlRoom, readStatus)
 	}
 
 	return gqlRoom, nil
@@ -3618,7 +3622,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	// 既読の取得に失敗しても一覧は返す（未読バッジは一覧の付帯情報で、そのために
 	// DM 一覧ごと落とさない）。ただし画面上は「未読0」と区別がつかないので、
 	// room リゾルバと同じく必ずログに残す。
-	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeDM)
 	if err != nil {
 		logChatLookup(err, chatLookupReadStatusBatch).
 			Int64("user_id", claims.ID).
@@ -3639,13 +3643,9 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
 		members := make([]*gqlmodel.User, 0, len(users))
-		var partnerID int64
 		hasOnlyCurrentUser := len(users) == 1 && users[0].ID == claims.ID
 		for _, u := range users {
 			members = append(members, toGraphUser(u))
-			if u.ID != claims.ID {
-				partnerID = u.ID
-			}
 		}
 		if hasOnlyCurrentUser {
 			members = []*gqlmodel.User{toGraphDeletedUser(), members[0]}
@@ -3653,23 +3653,18 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 
 		gqlRoom := toGraphRoom(room)
 		gqlRoom.User = members
-		gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser || (len(users) == 2 && partnerID != 0 && blockedSet[partnerID])
+		// 相手が退会済み（自分しか居ない）なら送信不可。それ以外は相手が1人に決まる
+		// DM のときだけブロックを見る。ここは myDMRooms なので room.Type は DM のはず
+		// だが、人数から DM を推測しないという規則を一覧側でも崩さないために明示する。
+		partnerID, hasPartner := dmPartnerID(users, claims.ID)
+		gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser ||
+			(room.Type == model.RoomTypeDM && hasPartner && blockedSet[partnerID])
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
 			gqlRoom.Content = &lastMsg.Content
 		}
 
-		if readStatus := readStatusMap[room.ID]; readStatus != nil {
-			if readStatus.LastReadAt != nil {
-				s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
-				gqlRoom.LastReadAt = &s
-			}
-			gqlRoom.UnreadCount = int32(readStatus.UnreadCount)
-			if readStatus.PartnerLastReadAt != nil {
-				s := time.Unix(*readStatus.PartnerLastReadAt, 0).Format(timeFormat)
-				gqlRoom.PartnerLastReadAt = &s
-			}
-		}
+		applyRoomReadStatus(gqlRoom, readStatusMap[room.ID])
 
 		result = append(result, gqlRoom)
 	}
@@ -3694,7 +3689,8 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 	}
 
 	// DM 一覧と同じ流儀。未読もプレビューも取れなくても一覧は返し、失敗はログに残す。
-	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	// コミュニティなので partnerLastReadAt は返らない（RoomReadStatus のコメント参照）。
+	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeCommunity)
 	if err != nil {
 		logChatLookup(err, chatLookupReadStatusBatch).
 			Int64("user_id", claims.ID).

@@ -222,6 +222,24 @@ func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, r
 	return result, rows.Err()
 }
 
+// MessageExistsInRoom は messageID が roomID のメッセージかを返す。
+//
+// クライアントが markRoomAsRead に渡してきた既読位置の検証用。他ルームのIDや
+// 存在しないIDをそのまま書き込むと、そのルームの未読が丸ごと消える（大きいIDの場合）
+// といった壊し方ができてしまう。
+//
+// GetLatestMessageID と同じく deleted_at では絞らない。画面に出したあとに消された
+// メッセージのIDが渡ってくるのは正常な流れで、ここで弾くと既読が打てなくなる。
+func (r *MySQLMessageRepository) MessageExistsInRoom(ctx context.Context, roomID, messageID int64) (bool, error) {
+	var exists bool
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM messages WHERE id = ? AND room_id = ?)`, messageID, roomID,
+	).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 // GetLatestMessageID はルームの最新メッセージIDを返す（1件も無ければ nil）。
 //
 // deleted_at IS NULL で絞らないのは意図的。返り値は既読位置（しおり）として

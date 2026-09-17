@@ -150,7 +150,9 @@ func mustExec(t *testing.T, db *sql.DB, query string, args ...interface{}) {
 //
 // 秒の解像度で created_at > last_read_at を見ていた頃は、既読を打った後に保存された
 // メッセージでも「同じ秒」なら未読にならず、二度と未読へ戻らなかった。既読位置を
-// メッセージIDにしたので、保存順（AUTO_INCREMENT）で正しく後ろだと判定される。
+// メッセージIDにしたので、採番順（AUTO_INCREMENT）で正しく後ろだと判定される。
+// ここで確かめているのは「同じ秒」の取りこぼしが消えたことだけで、採番順とコミット順の
+// ずれによる競合は別（未解決。repository/read_position.go のコメント参照）。
 func TestUnreadCount_SameSecondReadAndNewMessage(t *testing.T) {
 	db, cleanup := unreadTestDB(t)
 	defer cleanup()
@@ -227,21 +229,6 @@ func TestUnreadCount_SameSecondReadAndNewMessage(t *testing.T) {
 		t.Fatalf("course list badge = %+v, want 1 unread in one room", courseRooms)
 	}
 
-	// 未読SSEの宛先（メンバーごと / 履修者ごと）でも同じこと。
-	perMember, err := repo.CountUnreadMessagesPerMember(ctx, dmRoomID, partner)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if perMember[me] != 1 {
-		t.Fatalf("per-member unread = %v, want 1 for the reader", perMember)
-	}
-	perRegistrant, err := repo.CountUnreadMessagesPerCourseRegistrant(ctx, courseRoomID, partner)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if perRegistrant[me] != 1 {
-		t.Fatalf("per-registrant unread = %v, want 1 for the reader", perRegistrant)
-	}
 }
 
 // last_read_message_id が NULL のとき（列を足す前からある既読行）は last_read_at 起点。
@@ -358,63 +345,59 @@ func TestUnreadCount_NeverReadFallbacks(t *testing.T) {
 	if len(courseRooms) != 1 || courseRooms[0].UnreadCount != 1 {
 		t.Fatalf("course list badge = %+v, want 1 unread", courseRooms)
 	}
-	perRegistrant, err := repo.CountUnreadMessagesPerCourseRegistrant(ctx, courseRoomID, partner)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if perRegistrant[me] != 1 {
-		t.Fatalf("per-registrant unread = %v, want 1 (一覧・部屋内と同じ起点)", perRegistrant)
-	}
 }
 
-// 授業ルームの未読SSEの宛先は履修者であって room_users ではないこと。
-// room_users を起点に数えていたため、履修者には未読の更新が一切届いていなかった。
-func TestCountUnreadMessagesPerCourseRegistrant_TargetsRegistrantsNotRoomUsers(t *testing.T) {
+// 授業ルームの更新通知の宛先は履修者（timetables）であって room_users ではないこと。
+//
+// 未読数は数えない。ここが返すのは「誰に知らせるか」だけで、いくつ未読かは
+// 知らせを受けた本人が自分ぶんだけ数える（CountUnreadByCourseRooms）。
+// 投稿者の除外は配信側（graph/chat_events.go）の担当なので、ここには居る。
+func TestListRegistrantIDsByCourseRoomID_TargetsRegistrantsNotRoomUsers(t *testing.T) {
 	db, cleanup := unreadTestDB(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	repo := &MySQLMessageRepository{DB: db}
+	repo := &MySQLTimetableRepository{DB: db}
 
 	const (
 		courseRoomID int64 = 1
+		otherRoomID  int64 = 2
 		sender       int64 = 10
 		registrant   int64 = 11
 		roomUserOnly int64 = 12
+		otherCourse  int64 = 13
 	)
 	const now int64 = 1700000000
 
-	mustExec(t, db, `INSERT INTO rooms (id, type) VALUES (?, 'course')`, courseRoomID)
-	mustExec(t, db, `INSERT INTO courses (id, room_id, year, semester) VALUES (1, ?, 2026, '前期')`, courseRoomID)
-	mustExec(t, db, `INSERT INTO timetables (user_id, course_id, created_at) VALUES (?, 1, ?), (?, 1, ?)`,
-		sender, now-100, registrant, now-100)
+	mustExec(t, db, `INSERT INTO rooms (id, type) VALUES (?, 'course'), (?, 'course')`, courseRoomID, otherRoomID)
+	mustExec(t, db, `INSERT INTO courses (id, room_id, year, semester) VALUES (1, ?, 2026, '前期'), (2, ?, 2026, '前期')`,
+		courseRoomID, otherRoomID)
+	mustExec(t, db, `INSERT INTO timetables (user_id, course_id, created_at) VALUES (?, 1, ?), (?, 1, ?), (?, 2, ?)`,
+		sender, now-100, registrant, now-100, otherCourse, now-100)
 	// 授業ルームは room_users を使わない設計だが、万一行があっても宛先にはしない。
 	mustExec(t, db, `INSERT INTO room_users (room_id, user_id) VALUES (?, ?)`, courseRoomID, roomUserOnly)
-
+	// 未読の有無で宛先が変わらないこと（messages を見ないクエリであることの裏取り）。
 	insertMessage(t, db, courseRoomID, sender, now)
 
-	counts, err := repo.CountUnreadMessagesPerCourseRegistrant(ctx, courseRoomID, sender)
+	ids, err := repo.ListRegistrantIDsByCourseRoomID(ctx, courseRoomID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, ok := counts[sender]; ok {
-		t.Fatalf("counts = %v, want the sender to be excluded", counts)
+	got := map[int64]bool{}
+	for _, id := range ids {
+		got[id] = true
 	}
-	if _, ok := counts[roomUserOnly]; ok {
-		t.Fatalf("counts = %v, want room_users rows to be ignored for course rooms", counts)
+	if !got[sender] || !got[registrant] {
+		t.Fatalf("ids = %v, want every registrant of the room (投稿者の除外は配信側の担当)", ids)
 	}
-	if len(counts) != 1 || counts[registrant] != 1 {
-		t.Fatalf("counts = %v, want exactly the other registrant with 1 unread", counts)
+	if got[roomUserOnly] {
+		t.Fatalf("ids = %v, want room_users rows to be ignored for course rooms", ids)
 	}
-
-	// 従来の room_users 起点の経路では、授業ルームの宛先は1人も出てこない
-	// （これが「履修者に未読のリアルタイム更新が届かない」原因だった）。
-	perMember, err := repo.CountUnreadMessagesPerMember(ctx, courseRoomID, sender)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if got[otherCourse] {
+		t.Fatalf("ids = %v, want registrants of other courses to be excluded", ids)
 	}
-	if _, ok := perMember[registrant]; ok {
-		t.Fatal("room_users 起点の経路で履修者が引けてしまっている（前提が変わっている）")
+	if len(ids) != 2 {
+		t.Fatalf("ids = %v, want exactly the two registrants", ids)
 	}
 }
 
@@ -499,5 +482,158 @@ func TestGetLatestMessageID_IncludesSoftDeleted(t *testing.T) {
 	}
 	if id == nil || *id != deletedID {
 		t.Fatalf("latest id = %v, want %d even though it is soft-deleted", id, deletedID)
+	}
+}
+
+// 069 のバックフィルが期待どおり効くこと（db/migrations/069_... の SQL をそのまま流す）。
+//
+// 068 で列を足しただけの行（last_read_message_id が NULL）は、次に既読を打つまで
+// last_read_at（秒）を起点に数え続ける＝既読と同じ秒の新着を取りこぼす旧挙動が残る。
+// 069 はその行を「created_at <= last_read_at を満たす最大の message id」で埋める。
+//
+// ここで確かめたいのは2つ:
+//   - 埋まるべき行だけが埋まること（未読の行・既に ID を持つ行・メッセージが1件も
+//     無いルームには触らない）
+//   - 埋めても未読数が変わらないこと。移行前の判定は created_at > last_read_at で、
+//     既読時刻と同じ秒のメッセージは未読ではなかった。<= で埋めるとその行までが
+//     既読位置に入るので、移行後も未読にならない。バッジの数字が動かないことが
+//     「安全な移行」の定義なので、前後の count を突き合わせる。
+func TestBackfillLastReadMessageID_Migration069(t *testing.T) {
+	db, cleanup := unreadTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := &MySQLMessageRepository{DB: db}
+	roomRepo := &MySQLRoomUserRepository{DB: db}
+
+	const (
+		roomID      int64 = 1
+		emptyRoomID int64 = 2
+		me          int64 = 10
+		partner     int64 = 11
+		neverRead   int64 = 12
+		alreadyID   int64 = 13
+	)
+	const readAt int64 = 1700000200
+
+	mustExec(t, db, `INSERT INTO rooms (id, type) VALUES (?, 'dm'), (?, 'dm')`, roomID, emptyRoomID)
+
+	// 既読時刻より前・ちょうど同じ秒・後、の3本。同じ秒の行が既読側に倒れるかが肝。
+	insertMessage(t, db, roomID, partner, readAt-100)
+	sameSecondID := insertMessage(t, db, roomID, partner, readAt)
+	insertMessage(t, db, roomID, partner, readAt+100)
+
+	mustExec(t, db, `INSERT INTO room_users (room_id, user_id, last_read_at, last_read_message_id) VALUES
+		(?, ?, ?, NULL),
+		(?, ?, NULL, NULL),
+		(?, ?, ?, 1),
+		(?, ?, ?, NULL)`,
+		roomID, me, readAt,
+		roomID, neverRead,
+		roomID, alreadyID, readAt+100,
+		emptyRoomID, me, readAt,
+	)
+
+	// 移行前の未読数（last_read_at 起点のフォールバック経路）を控えておく。
+	before, err := roomRepo.GetLastRead(ctx, roomID, me)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if before.LastReadMessageID != nil {
+		t.Fatalf("precondition broken: the row already has a message id (%v)", before.LastReadMessageID)
+	}
+	beforeCount, err := repo.CountUnreadMessages(ctx, roomID, me, repository.NewUnreadOrigin(before, nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	migration, err := os.ReadFile("../../db/migrations/069_backfill_last_read_message_id_on_room_users.up.sql")
+	if err != nil {
+		t.Fatalf("failed to read the migration: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, string(migration)); err != nil {
+		t.Fatalf("failed to run the backfill migration: %v", err)
+	}
+
+	after, err := roomRepo.GetLastRead(ctx, roomID, me)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if after.LastReadMessageID == nil || *after.LastReadMessageID != sameSecondID {
+		t.Fatalf("backfilled position = %v, want the same-second message %d", after.LastReadMessageID, sameSecondID)
+	}
+
+	afterCount, err := repo.CountUnreadMessages(ctx, roomID, me, repository.NewUnreadOrigin(after, nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if afterCount != beforeCount {
+		t.Fatalf("unread count changed by the migration: %d -> %d (移行で未読が増減してはいけない)", beforeCount, afterCount)
+	}
+	if afterCount != 1 {
+		t.Fatalf("unread = %d, want 1 (既読時刻より後の1件だけ)", afterCount)
+	}
+
+	// 一度も読んでいない行には触らない（起点が無いのが正しい状態）。
+	if pos, err := roomRepo.GetLastRead(ctx, roomID, neverRead); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} else if pos != nil && pos.LastReadMessageID != nil {
+		t.Fatalf("never-read row was backfilled to %v, want NULL", pos.LastReadMessageID)
+	}
+
+	// 既に ID を持つ行は進めない（既読位置が勝手に動かない）。
+	if pos, err := roomRepo.GetLastRead(ctx, roomID, alreadyID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} else if pos.LastReadMessageID == nil || *pos.LastReadMessageID != 1 {
+		t.Fatalf("existing position = %v, want it left at 1", pos.LastReadMessageID)
+	}
+
+	// メッセージが1件も無いルームは MAX(id) が NULL。NULL のままで、
+	// 次に届いたメッセージは last_read_at 起点で正しく未読になる。
+	if pos, err := roomRepo.GetLastRead(ctx, emptyRoomID, me); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} else if pos.LastReadMessageID != nil {
+		t.Fatalf("empty room position = %v, want NULL", pos.LastReadMessageID)
+	}
+}
+
+// クライアントが申告してきた既読位置の検証（他ルームのIDを弾く）。
+//
+// 未読判定は m.id > last_read_message_id という単純比較で、そのIDがどのルームの
+// ものかは見ていない。だから「他ルームの大きいID」を1回書き込めるだけで、その
+// ルームの未読を丸ごと消せてしまう。検証は SQL 1文なので、ここで実際に流して
+// room_id の絞り込みが効いていることを確かめる。
+func TestMessageExistsInRoom_ScopesToTheRoomAndIncludesSoftDeleted(t *testing.T) {
+	db, cleanup := unreadTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := &MySQLMessageRepository{DB: db}
+	const roomID, otherRoomID, userID int64 = 1, 2, 10
+
+	mine := insertMessage(t, db, roomID, userID, 1700000000)
+	theirs := insertMessage(t, db, otherRoomID, userID, 1700000001)
+	deleted := insertMessage(t, db, roomID, userID, 1700000002)
+	mustExec(t, db, `UPDATE messages SET deleted_at = ? WHERE id = ?`, 1700000003, deleted)
+
+	for _, tc := range []struct {
+		name      string
+		messageID int64
+		want      bool
+	}{
+		{"このルームのメッセージ", mine, true},
+		{"他ルームのメッセージ", theirs, false},
+		{"存在しないID", theirs + 1000, false},
+		// 画面に出したあとに消されたメッセージのIDで既読を打つのは正常な流れ。
+		// ここで弾くと「既読にできない部屋」ができる。
+		{"論理削除済みのメッセージ", deleted, true},
+	} {
+		got, err := repo.MessageExistsInRoom(ctx, roomID, tc.messageID)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: MessageExistsInRoom(room=%d, message=%d) = %v, want %v", tc.name, roomID, tc.messageID, got, tc.want)
+		}
 	}
 }

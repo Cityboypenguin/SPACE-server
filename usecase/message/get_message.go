@@ -14,10 +14,10 @@ type GetMessageByIDUseCase interface {
 var _ GetMessageByIDUseCase = &GetMessageByIDInteractor{}
 
 type GetMessageByIDInteractor struct {
-	store repository.MessageStore
+	store repository.MessageReader
 }
 
-func NewGetMessageByIDUseCase(store repository.MessageStore) GetMessageByIDUseCase {
+func NewGetMessageByIDUseCase(store repository.MessageReader) GetMessageByIDUseCase {
 	return &GetMessageByIDInteractor{store: store}
 }
 

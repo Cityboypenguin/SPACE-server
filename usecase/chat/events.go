@@ -28,9 +28,10 @@ import (
 //
 // 実際に落ちたとき何が起きるか:
 //   - メッセージ自体は保存済みで消えない。再読み込みや一覧の取得では必ず出る。
-//   - 出ないのは購読中の画面へのリアルタイム反映（messageAdded など）、未読バッジの
-//     SSE、通知（DM / 引用返信 / メンション）。通知は再送されないので、その1件は
-//     利用者に届かないまま終わる。
+//   - 出ないのは購読中の画面へのリアルタイム反映（messageAdded など）、一覧を更新
+//     させる room_changed の SSE、通知（DM / 引用返信 / メンション）。通知は再送されない
+//     ので、その1件は利用者に届かないまま終わる。room_changed が落ちても未読数そのものは
+//     壊れない（数えるのは受け取った側で、次に一覧を開けば正しい値になる）。
 //   - 既読の同期が落ちた場合は、ベルの数字が実際の未読数とずれたまま残りうる。
 //
 // # 気づくための手がかり
@@ -41,7 +42,7 @@ import (
 //	level=error component=chat_event_publisher delivery=<経路名> room_id=... message_id=...
 //
 // の形で出す。component=chat_event_publisher で絞れば取りこぼし全体が、
-// delivery= でどの経路（unread_room_broadcast / dm_notification /
+// delivery= でどの経路（room_changed_broadcast / dm_notification /
 // message_reply_notification / mention_notification など）が落ちたかが分かる。
 // 監視を足すならこのログの件数を見ること。
 //
@@ -61,8 +62,9 @@ type MessageSentEvent struct {
 	Room    *model.Room
 	Message *model.Message
 	ActorID int64
-	// MemberIDs は非授業ルームのメンバー。DM 通知の宛先に使う。
-	// 授業ルームは room_users を使わないため nil。
+	// MemberIDs は非授業ルームのメンバー。room_changed の宛先と DM 通知の宛先に使う。
+	// 授業ルームは room_users を使わないため nil（授業ルームの宛先は履修者なので、
+	// 配信側が時間割から引き直す。graph/chat_events.go の roomChangedRecipients 参照）。
 	MemberIDs []int64
 	// HasMedia は添付があったか。本文が空のときのプレビュー代替文言に使う。
 	HasMedia bool

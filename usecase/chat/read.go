@@ -15,7 +15,10 @@ import (
 // 既読位置の置き場はルーム種別で分かれる（授業内チャットは course_room_reads、
 // それ以外は room_users）ので、その振り分けをここ1箇所に閉じ込める。
 type ReadReceiptService interface {
-	MarkAsRead(ctx context.Context, roomID int64) error
+	// MarkAsRead の lastReadMessageID は「クライアントが実際に画面へ出した最後の
+	// メッセージID」。nil なら従来どおりサーバが最新メッセージを既読位置にする
+	// （古いクライアント互換。roomusecase.resolveReadMessageID のコメント参照）。
+	MarkAsRead(ctx context.Context, roomID int64, lastReadMessageID *int64) error
 	// GetReadStatus は閲覧権限を確かめたうえで既読位置と未読件数を返す。
 	GetReadStatus(ctx context.Context, roomID int64) (*roomusecase.RoomReadStatus, error)
 	// ReadStatusOfAuthorizedRoom は EnsureReadAccess 済みのルームについて同じものを返す
@@ -58,9 +61,9 @@ func NewReadReceiptService(deps ReadReceiptDeps) ReadReceiptService {
 // MarkAsRead は roomID を呼び出し元の既読にする。
 //
 // 既読位置の置き場はルーム種別で分かれる。授業内チャットは room_users を使わない
-// ので course_room_reads に、それ以外は room_users に持つ。どちらも「そのルームの
-// 最新メッセージID」を既読位置として保存する（時刻ではなく ID を使う理由は
-// repository.ReadPosition を参照）。
+// ので course_room_reads に、それ以外は room_users に持つ。どちらも既読位置は
+// メッセージID（時刻ではなく ID を使う理由は repository.ReadPosition を参照）で、
+// 保存するIDの決め方と検証は roomusecase.resolveReadMessageID に集約してある。
 //
 // ここで AccessPolicy.EnsureReadAccess を使わないのは意図的で、既読は「読めるか」
 // ではなく「自分の既読位置を持てるか」の話。EnsureReadAccess は管理者に非メンバーの
@@ -71,7 +74,7 @@ func NewReadReceiptService(deps ReadReceiptDeps) ReadReceiptService {
 //   - 非授業ルームでは membership ⊆ 閲覧可なので、EnsureReadAccess より緩く
 //     なることはない（＝閲覧できない部屋を既読にはできない）。
 //   - 授業ルームは EnsureReadAccess も「認証済みなら誰でも」なので同じ。
-func (s *readReceiptService) MarkAsRead(ctx context.Context, roomID int64) error {
+func (s *readReceiptService) MarkAsRead(ctx context.Context, roomID int64, lastReadMessageID *int64) error {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return err
@@ -84,7 +87,7 @@ func (s *readReceiptService) MarkAsRead(ctx context.Context, roomID int64) error
 
 	var memberIDs []int64
 	if room.Type == model.RoomTypeCourse {
-		if err := s.deps.MarkCourseRoomAsRead.Execute(ctx, roomID, claims.ID); err != nil {
+		if err := s.deps.MarkCourseRoomAsRead.Execute(ctx, roomID, claims.ID, lastReadMessageID); err != nil {
 			return err
 		}
 	} else {
@@ -95,7 +98,7 @@ func (s *readReceiptService) MarkAsRead(ctx context.Context, roomID int64) error
 		if !containsInt64(memberIDs, claims.ID) {
 			return errors.New("forbidden: not a member of this room")
 		}
-		if err := s.deps.MarkRoomAsRead.Execute(ctx, roomID, claims.ID); err != nil {
+		if err := s.deps.MarkRoomAsRead.Execute(ctx, roomID, claims.ID, lastReadMessageID); err != nil {
 			return err
 		}
 	}
@@ -142,10 +145,14 @@ func (s *readReceiptService) ReadStatusOfAuthorizedRoom(ctx context.Context, roo
 }
 
 // readStatus は既読位置の置き場を選ぶだけの内部処理（権限判定は呼び出し側で済ませる）。
-// 授業内チャットは匿名なので、他人の既読位置（PartnerLastReadAt）は常に nil。
+//
+// どちらの経路も「相手の既読位置（PartnerLastReadAt）が入るのは DM だけ」で揃えて
+// ある。授業内チャットは匿名なので常に nil（GetCourseRoomReadStatusUseCase）、
+// コミュニティは相手が1人に決まらないので nil（GetRoomReadStatusUseCase が room.Type
+// で判定する）。理由は roomusecase.RoomReadStatus のコメントに1箇所だけ書いてある。
 func (s *readReceiptService) readStatus(ctx context.Context, room *model.Room, userID int64) (*roomusecase.RoomReadStatus, error) {
 	if room.Type == model.RoomTypeCourse {
 		return s.deps.GetCourseRoomReadStatus.Execute(ctx, room.ID, userID)
 	}
-	return s.deps.GetRoomReadStatus.Execute(ctx, room.ID, userID)
+	return s.deps.GetRoomReadStatus.Execute(ctx, room, userID)
 }

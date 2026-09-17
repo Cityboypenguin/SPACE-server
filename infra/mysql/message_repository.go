@@ -15,7 +15,7 @@ import (
 
 // メッセージ周りの実装は関心ごとに分けてある（合成インターフェースを満たすのは
 // 同じ struct のまま。暗号鍵を持つ口を増やしたくないため実体は1つ）:
-//   - message_store.go        … 1件単位の読み書き（MessageStore）
+//   - message_store.go        … 1件単位の読み書き（MessageReader / MessageWriter）
 //   - message_read_model.go   … 一覧取得（MessageReadModel）
 //   - message_mention_store.go… メンション行（MessageMentionStore）
 //   - message_unread_counter.go … 未読集計（MessageUnreadCounter）

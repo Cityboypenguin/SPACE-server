@@ -58,9 +58,17 @@ func (f *fakeCheckRoomWritable) Execute(_ context.Context, _ int64) error {
 	return f.err
 }
 
-type fakeCheckBlockRelation struct{ blocked bool }
+type fakeCheckBlockRelation struct {
+	blocked bool
+	// calls / partnerID は「誰を相手にブロックを見に行ったか」。ブロック判定を
+	// 走らせてよいのは DM だけなので、呼ばれていないことも確かめる必要がある。
+	calls     int
+	partnerID int64
+}
 
-func (f *fakeCheckBlockRelation) Execute(_ context.Context, _, _ int64) (bool, error) {
+func (f *fakeCheckBlockRelation) Execute(_ context.Context, _, partnerID int64) (bool, error) {
+	f.calls++
+	f.partnerID = partnerID
 	return f.blocked, nil
 }
 
@@ -177,8 +185,9 @@ func (f *fakeAnonIdentity) Execute(_ context.Context, roomID, userID int64) (*mo
 	return &model.RoomAnonymousIdentity{ID: 1, RoomID: roomID, UserID: userID, Label: "匿名001"}, nil
 }
 
-// fakeReadStatus は既読位置の取得（room_users 経路 / course_room_reads 経路）の代役。
-// どちらが呼ばれたかで「ルーム種別で置き場を選べているか」を確かめる。
+// fakeReadStatus は授業ルームの既読位置取得（course_room_reads 経路）の代役。
+// room_users 経路（fakeRoomReadStatus）とどちらが呼ばれたかで、
+// 「ルーム種別で置き場を選べているか」を確かめる。
 type fakeReadStatus struct {
 	calls  int
 	roomID int64
@@ -191,14 +200,33 @@ func (f *fakeReadStatus) Execute(_ context.Context, roomID, _ int64) (*roomuseca
 	return f.status, nil
 }
 
+// fakeRoomReadStatus は room_users 経路の代役。ルームIDではなくルームそのものを
+// 控える: 相手の既読位置を返してよいか（DM か）の判定に種別が要るので、サービスが
+// ID だけでなく room を渡していることもここで担保する。
+type fakeRoomReadStatus struct {
+	calls  int
+	room   *model.Room
+	status *roomusecase.RoomReadStatus
+}
+
+func (f *fakeRoomReadStatus) Execute(_ context.Context, room *model.Room, _ int64) (*roomusecase.RoomReadStatus, error) {
+	f.calls++
+	f.room = room
+	return f.status, nil
+}
+
 type fakeMarkRead struct {
 	calls  int
 	roomID int64
+	// messageID はクライアントが指定してきた既読位置（未指定なら nil）。
+	// サービス層がそのまま素通しすることを確かめるために覚えておく。
+	messageID *int64
 }
 
-func (f *fakeMarkRead) Execute(_ context.Context, roomID, _ int64) error {
+func (f *fakeMarkRead) Execute(_ context.Context, roomID, _ int64, lastReadMessageID *int64) error {
 	f.calls++
 	f.roomID = roomID
+	f.messageID = lastReadMessageID
 	return nil
 }
 
@@ -241,7 +269,7 @@ type harness struct {
 	reads    ReadReceiptService
 
 	members       *fakeMembers
-	readStatus    *fakeReadStatus
+	readStatus    *fakeRoomReadStatus
 	courseRead    *fakeReadStatus
 	markRead      *fakeMarkRead
 	markCourse    *fakeMarkRead
@@ -256,6 +284,7 @@ type harness struct {
 	listMessages  *fakeListMessages
 	listAround    *fakeListMessagesAround
 	events        *fakeEvents
+	blockRelation *fakeCheckBlockRelation
 }
 
 // rebuild は deps を差し替えたあとにサービスを組み直す。
@@ -277,7 +306,7 @@ func newHarness() *harness {
 	}
 	h := &harness{
 		members:       &fakeMembers{byRoom: members},
-		readStatus:    &fakeReadStatus{status: &roomusecase.RoomReadStatus{UnreadCount: 3}},
+		readStatus:    &fakeRoomReadStatus{status: &roomusecase.RoomReadStatus{UnreadCount: 3}},
 		courseRead:    &fakeReadStatus{status: &roomusecase.RoomReadStatus{UnreadCount: 7}},
 		markRead:      &fakeMarkRead{},
 		markCourse:    &fakeMarkRead{},
@@ -292,13 +321,14 @@ func newHarness() *harness {
 		listMessages:  &fakeListMessages{},
 		listAround:    &fakeListMessagesAround{},
 		events:        &fakeEvents{},
+		blockRelation: &fakeCheckBlockRelation{},
 	}
 	getRoom := &fakeGetRoom{rooms: rooms}
 	h.accessDeps = AccessPolicyDeps{
 		GetRoom:            getRoom,
 		GetRoomMemberIDs:   h.members,
 		CheckRoomWritable:  h.checkWritable,
-		CheckBlockRelation: &fakeCheckBlockRelation{},
+		CheckBlockRelation: h.blockRelation,
 	}
 	h.commandDeps = MessageCommandDeps{
 		GetRoom:         getRoom,
@@ -836,8 +866,8 @@ func TestGetReadStatus_MemberIsAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("members must be able to read their own read status, got: %v", err)
 	}
-	if status.UnreadCount != 3 || h.readStatus.roomID != communityRoomID {
-		t.Fatalf("status = %+v (room %d), want the room_users 経路", status, h.readStatus.roomID)
+	if status.UnreadCount != 3 || h.readStatus.room == nil || h.readStatus.room.ID != communityRoomID {
+		t.Fatalf("status = %+v (room %+v), want the room_users 経路", status, h.readStatus.room)
 	}
 }
 
@@ -886,14 +916,14 @@ func TestReadStatusOfAuthorizedRoom_DoesNotRecheckMembership(t *testing.T) {
 func TestMarkAsRead_RequiresMembershipEvenForAdmins(t *testing.T) {
 	h := newHarness()
 
-	if err := h.reads.MarkAsRead(ctxAsAdmin(99), communityRoomID); err == nil {
+	if err := h.reads.MarkAsRead(ctxAsAdmin(99), communityRoomID, nil); err == nil {
 		t.Fatal("expected an admin without a room_users row to be rejected")
 	}
 	if h.markRead.calls != 0 {
 		t.Fatalf("read position was written %d times for a non-member, want 0", h.markRead.calls)
 	}
 
-	if err := h.reads.MarkAsRead(ctxAsUser(10), communityRoomID); err != nil {
+	if err := h.reads.MarkAsRead(ctxAsUser(10), communityRoomID, nil); err != nil {
 		t.Fatalf("members must be able to mark a room as read, got: %v", err)
 	}
 	if h.markRead.calls != 1 || h.markRead.roomID != communityRoomID {
@@ -905,10 +935,92 @@ func TestMarkAsRead_RequiresMembershipEvenForAdmins(t *testing.T) {
 func TestMarkAsRead_CourseRoomUsesCourseStore(t *testing.T) {
 	h := newHarness()
 
-	if err := h.reads.MarkAsRead(ctxAsUser(99), courseRoomID); err != nil {
+	if err := h.reads.MarkAsRead(ctxAsUser(99), courseRoomID, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if h.markCourse.calls != 1 || h.markRead.calls != 0 {
 		t.Fatalf("course store calls = %d, room_users calls = %d, want 1 and 0", h.markCourse.calls, h.markRead.calls)
+	}
+}
+
+// --- ブロックと書き込み権限 -------------------------------------------------
+
+// ブロックで送信を止めるのは DM だけ。メンバーが2人しか居ないコミュニティを
+// 人数から DM と推測していたころは、片方をブロックしただけでそのコミュニティに
+// 投稿できなくなっていた。
+func TestEnsureWriteAccess_BlockDoesNotSilenceATwoMemberCommunity(t *testing.T) {
+	h := newHarness()
+	h.blockRelation.blocked = true
+
+	// harness のコミュニティはメンバー2人（10, 11）。
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("a two-member community must stay writable even with a block relation, got: %v", err)
+	}
+	if h.blockRelation.calls != 0 {
+		t.Errorf("block relation was checked %d times in a community, want 0", h.blockRelation.calls)
+	}
+}
+
+// DM は従来どおりブロックで拒否する。
+func TestEnsureWriteAccess_BlockRejectsInDM(t *testing.T) {
+	h := newHarness()
+	h.blockRelation.blocked = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err == nil {
+		t.Fatal("expected a DM with a block relation to reject writes")
+	}
+	if h.blockRelation.partnerID != 11 {
+		t.Errorf("block relation was checked against %d, want the DM partner 11", h.blockRelation.partnerID)
+	}
+}
+
+// ブロックしていない DM は通る（ブロック判定そのものは走る）。
+func TestEnsureWriteAccess_DMWithoutBlockIsAllowed(t *testing.T) {
+	h := newHarness()
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err != nil {
+		t.Fatalf("a DM without a block relation must be writable, got: %v", err)
+	}
+	if h.blockRelation.calls != 1 {
+		t.Errorf("block relation checks = %d, want 1 in a DM", h.blockRelation.calls)
+	}
+}
+
+// 相手が退会して room_users の行が消えた DM は相手が決まらない。ブロック関係を
+// 引きようが無いので判定を飛ばし、拒否もしない（送り先が居ないだけで、ここで
+// 「ブロックされています」と言うのは嘘になる）。
+func TestEnsureWriteAccess_DMWithoutAPartnerSkipsTheBlockCheck(t *testing.T) {
+	h := newHarness()
+	h.blockRelation.blocked = true
+	h.members.byRoom[dmRoomID] = []int64{10}
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err != nil {
+		t.Fatalf("a DM whose partner is gone must not be rejected as blocked, got: %v", err)
+	}
+	if h.blockRelation.calls != 0 {
+		t.Errorf("block relation was checked %d times without a partner, want 0", h.blockRelation.calls)
+	}
+}
+
+// クライアントが申告した既読位置は、置き場の振り分け（授業 / それ以外）を通っても
+// 変質せずに既読ユースケースへ届く。ここで落とすと「画面に出した位置」ではなく
+// サーバ側の最新メッセージが既読になり、新着が未読から漏れる。
+// 位置が妥当か（そのルームのメッセージか）の検証は roomusecase 側の責務。
+func TestMarkAsRead_PassesTheClientsReadPositionThrough(t *testing.T) {
+	h := newHarness()
+	position := int64(100)
+
+	if err := h.reads.MarkAsRead(ctxAsUser(10), communityRoomID, &position); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.markRead.messageID == nil || *h.markRead.messageID != position {
+		t.Fatalf("read position handed to the use case = %v, want %d", h.markRead.messageID, position)
+	}
+
+	if err := h.reads.MarkAsRead(ctxAsUser(99), courseRoomID, &position); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.markCourse.messageID == nil || *h.markCourse.messageID != position {
+		t.Fatalf("read position handed to the course use case = %v, want %d", h.markCourse.messageID, position)
 	}
 }

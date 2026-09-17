@@ -11,7 +11,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-// repository.MessageStore の実装。メッセージ1件単位の読み書きを担う。
+// repository.MessageReader / repository.MessageWriter の実装。
+// メッセージ1件単位の読み書きを担う。
 
 func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Message) error {
 	db := extractDB(ctx, r.DB)

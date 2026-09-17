@@ -60,3 +60,26 @@ func containsInt64(values []int64, target int64) bool {
 	}
 	return false
 }
+
+// soleOtherMember は memberIDs の中の「selfID 以外がちょうど1人」のときだけ、
+// その1人と true を返す。DM の相手を決めるためのもの。
+//
+// 「自分以外の最初の1人」ではなく「ちょうど1人」を条件にしているのは、相手が
+// 決まらない状態（相手の退会で room_users の行が消えて0人、データ不整合で2人以上）を
+// 呼び出し側が明示的に扱えるようにするため。ここで先頭を拾って返すと、相手が特定
+// できていないのに特定できたことにして判定を進めてしまう。
+func soleOtherMember(memberIDs []int64, selfID int64) (int64, bool) {
+	var partnerID int64
+	found := 0
+	for _, id := range memberIDs {
+		if id == selfID {
+			continue
+		}
+		partnerID = id
+		found++
+	}
+	if found != 1 {
+		return 0, false
+	}
+	return partnerID, true
+}

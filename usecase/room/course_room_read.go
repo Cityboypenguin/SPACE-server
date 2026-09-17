@@ -17,7 +17,9 @@ import (
 // 「時間割に登録した時刻」を起点にする。
 
 type MarkCourseRoomAsReadUseCase interface {
-	Execute(ctx context.Context, roomID, userID int64) error
+	// lastReadMessageID の扱い（検証・nil のときの互換動作）は通常ルームと同じ。
+	// 判断は resolveReadMessageID に1箇所だけ置いてある。
+	Execute(ctx context.Context, roomID, userID int64, lastReadMessageID *int64) error
 }
 
 type markCourseRoomAsReadUseCase struct {
@@ -29,12 +31,12 @@ func NewMarkCourseRoomAsReadUseCase(readRepo repository.CourseRoomReadRepository
 	return &markCourseRoomAsReadUseCase{readRepo: readRepo, messageReader: messageReader}
 }
 
-func (uc *markCourseRoomAsReadUseCase) Execute(ctx context.Context, roomID, userID int64) error {
-	lastReadMessageID, err := resolveReadMessageID(ctx, uc.messageReader, roomID)
+func (uc *markCourseRoomAsReadUseCase) Execute(ctx context.Context, roomID, userID int64, lastReadMessageID *int64) error {
+	resolved, err := resolveReadMessageID(ctx, uc.messageReader, roomID, lastReadMessageID)
 	if err != nil {
 		return err
 	}
-	return uc.readRepo.UpsertLastRead(ctx, roomID, userID, lastReadMessageID, time.Now().Unix())
+	return uc.readRepo.UpsertLastRead(ctx, roomID, userID, resolved, time.Now().Unix())
 }
 
 type GetCourseRoomReadStatusUseCase interface {
@@ -67,9 +69,8 @@ func NewGetCourseRoomReadStatusUseCase(
 // positions are never exposed.
 //
 // 未読の起点は repository.UnreadOrigin の規則どおり「既読メッセージID → 既読時刻 →
-// 時間割に登録した時刻」。授業一覧のバッジ（CountUnreadByCourseRooms）・未読SSE
-// （CountUnreadMessagesPerCourseRegistrant）と同じ規則なので、一覧と部屋内と
-// リアルタイム更新で数が食い違わない。まだ一度も開いていない授業で
+// 時間割に登録した時刻」。授業一覧のバッジ（CountUnreadByCourseRooms）と同じ規則なので、
+// 一覧と部屋内で数が食い違わない。まだ一度も開いていない授業で
 // 「登録前の過去ログ全部」が未読にならないようにするのが登録時刻起点の狙い。
 //
 // 時間割に登録していない（読むだけの）ユーザーには起点が無いので、従来どおり
@@ -97,11 +98,16 @@ func (uc *getCourseRoomReadStatusUseCase) Execute(ctx context.Context, roomID, u
 		return nil, err
 	}
 
-	var lastReadAt *int64
+	var lastReadAt, lastReadMessageID *int64
 	if position != nil {
 		lastReadAt = position.LastReadAt
+		lastReadMessageID = position.LastReadMessageID
 	}
-	return &RoomReadStatus{LastReadAt: lastReadAt, UnreadCount: unreadCount}, nil
+	return &RoomReadStatus{
+		LastReadAt:        lastReadAt,
+		LastReadMessageID: lastReadMessageID,
+		UnreadCount:       unreadCount,
+	}, nil
 }
 
 // registeredAt は roomID の授業を userID が時間割に登録した時刻を返す。

@@ -18,14 +18,14 @@ type ListMessagesAroundUseCase interface {
 
 var _ ListMessagesAroundUseCase = &ListMessagesAroundInteractor{}
 
-// 前後を別々に引くため、1件取得(MessageStore)と一覧(MessageReadModel)の
+// 前後を別々に引くため、1件取得(MessageReader)と一覧(MessageReadModel)の
 // 両方が要る。合成インターフェースには依存せず、必要な2つだけを受け取る。
 type ListMessagesAroundInteractor struct {
-	store     repository.MessageStore
+	store     repository.MessageReader
 	readModel repository.MessageReadModel
 }
 
-func NewListMessagesAroundUseCase(store repository.MessageStore, readModel repository.MessageReadModel) ListMessagesAroundUseCase {
+func NewListMessagesAroundUseCase(store repository.MessageReader, readModel repository.MessageReadModel) ListMessagesAroundUseCase {
 	return &ListMessagesAroundInteractor{store: store, readModel: readModel}
 }
 

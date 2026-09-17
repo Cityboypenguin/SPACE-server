@@ -37,16 +37,32 @@ func (f *fakeMessageRepoForUnread) CountUnreadMessages(_ context.Context, _, _ i
 	return f.count, nil
 }
 
-// fakeMessageReaderForRead は既読位置として保存される「ルームの最新メッセージID」を返す。
+// fakeMessageReaderForRead は既読位置の解決に使う読み取り口。
+// latestID は「引数なしで既読を打ったとき」に採られるルームの最新メッセージID、
+// messagesInRoom は「クライアントが指定してきたIDがこのルームのものか」の検証結果。
 type fakeMessageReaderForRead struct {
 	repository.MessageReadModel
 	latestID *int64
 	gotRoom  int64
+	// latestCalls は最新IDを引きに行った回数。クライアントがIDを指定したときに
+	// このクエリが走らない（余計な1クエリを増やさない）ことの確認に使う。
+	latestCalls int
+	// messagesInRoom はこのルームに存在するメッセージID。nil なら何を渡しても不在。
+	messagesInRoom map[int64]bool
+	// existsCalls は検証クエリが走った回数。
+	existsCalls int
 }
 
 func (f *fakeMessageReaderForRead) GetLatestMessageID(_ context.Context, roomID int64) (*int64, error) {
+	f.latestCalls++
 	f.gotRoom = roomID
 	return f.latestID, nil
+}
+
+func (f *fakeMessageReaderForRead) MessageExistsInRoom(_ context.Context, roomID, messageID int64) (bool, error) {
+	f.existsCalls++
+	f.gotRoom = roomID
+	return f.messagesInRoom[messageID], nil
 }
 
 type fakeCourseRepoForUnread struct {
@@ -83,14 +99,14 @@ func newCourseRoomReadStatusUseCase(
 	)
 }
 
-// 既読位置は「そのルームの最新メッセージID」をサーバ側で解決して保存する。
-// クライアントから ID を受け取る形にすると GraphQL スキーマの変更が要るため。
+// 既読位置を指定しないで既読を打つと（＝引数を知らない古いクライアント）、従来どおり
+// 「そのルームの最新メッセージID」をサーバ側で解決して保存する。
 func TestMarkCourseRoomAsRead_RecordsLatestMessageIDAsReadPosition(t *testing.T) {
 	repo := &fakeCourseRoomReadRepo{}
 	reader := &fakeMessageReaderForRead{latestID: int64Ptr(42)}
 	uc := NewMarkCourseRoomAsReadUseCase(repo, reader)
 
-	if err := uc.Execute(context.Background(), 5, 7); err != nil {
+	if err := uc.Execute(context.Background(), 5, 7, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if repo.upsertedRoomID != 5 || repo.upsertedUserID != 7 || repo.upsertedReadAt == 0 {
@@ -110,7 +126,7 @@ func TestMarkCourseRoomAsRead_EmptyRoomStoresNoMessageID(t *testing.T) {
 	repo := &fakeCourseRoomReadRepo{}
 	uc := NewMarkCourseRoomAsReadUseCase(repo, &fakeMessageReaderForRead{})
 
-	if err := uc.Execute(context.Background(), 5, 7); err != nil {
+	if err := uc.Execute(context.Background(), 5, 7, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if repo.upsertedMessageID != nil {

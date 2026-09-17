@@ -220,11 +220,7 @@ type MessageRoomUseCases struct {
 	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
-	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
-	// GetCourseRoomUnreadCountsUseCase は授業ルーム専用の未読SSE宛先（履修者）。
-	// room_users を使わない授業ルームでは GetMembersUnreadCountsUseCase が使えない。
-	GetCourseRoomUnreadCountsUseCase roomusecase.GetCourseRoomUnreadCountsUseCase
-	CountUnreadByRoomTypeUseCase     roomusecase.CountUnreadByRoomTypeUseCase
+	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
 }
 
 // ChatUseCases はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。

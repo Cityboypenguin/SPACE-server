@@ -311,6 +311,42 @@ func (r *MySQLTimetableRepository) GetRegisteredAt(ctx context.Context, userID, 
 	return &createdAt, nil
 }
 
+// ListRegistrantIDsByCourseRoomID は授業ルームの更新を知らせる宛先（履修者のID）を返す。
+//
+// messages も course_room_reads も JOIN しない。ここが返すのは「誰に知らせるか」
+// だけで、未読がいくつかは知らせを受けた本人が自分のぶんだけ数える
+// （myCourseRoomUnreadCounts / CountUnreadByCourseRooms）。
+//
+// 以前はここで履修者ごとの未読数まで数えていた（CountUnreadMessagesPerCourseRegistrant）。
+// 送信1件ごとに履修者×メッセージを JOIN・GROUP BY することになり、履修者数百人規模の
+// 授業では投稿のたびにその集計が走る。誰も見ていないバッジのために全員ぶんを数えるのは
+// 割に合わないので、集計そのものをやめて宛先の列挙だけを残した。
+//
+// 同じ利用者が同じ授業を二重に登録することは無い（timetables は user_id と
+// スロットで一意）ので DISTINCT は付けていない。
+func (r *MySQLTimetableRepository) ListRegistrantIDsByCourseRoomID(ctx context.Context, roomID int64) ([]int64, error) {
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT t.user_id
+		FROM timetables t
+		JOIN courses c ON c.id = t.course_id
+		WHERE c.room_id = ?
+	`, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (r *MySQLTimetableRepository) CountByCourseID(ctx context.Context, courseID int64) (int, error) {
 	var count int
 	err := r.DB.QueryRowContext(ctx,

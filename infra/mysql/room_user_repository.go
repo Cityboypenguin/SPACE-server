@@ -314,13 +314,16 @@ func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, room
 	return result, rows.Err()
 }
 
-func (r *MySQLRoomUserRepository) GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*int64, error) {
+// GetLastReadByRoomIDs は一覧表示用に既読位置をまとめて引く。
+// 1件取得（GetLastRead）と同じく、行はあるが両方 NULL＝一度も既読を打っていない
+// ルームは「既読位置なし」としてキーごと落とす。
+func (r *MySQLRoomUserRepository) GetLastReadByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*repository.ReadPosition, error) {
 	if len(roomIDs) == 0 {
-		return map[int64]*int64{}, nil
+		return map[int64]*repository.ReadPosition{}, nil
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
 	query := fmt.Sprintf(
-		"SELECT room_id, last_read_at FROM room_users WHERE user_id = ? AND room_id IN (%s)",
+		"SELECT room_id, last_read_message_id, last_read_at FROM room_users WHERE user_id = ? AND room_id IN (%s)",
 		placeholders,
 	)
 	args := make([]interface{}, 0, 1+len(roomIDs))
@@ -334,18 +337,19 @@ func (r *MySQLRoomUserRepository) GetLastReadAtByRoomIDs(ctx context.Context, us
 	}
 	defer rows.Close()
 
-	result := make(map[int64]*int64)
+	result := make(map[int64]*repository.ReadPosition)
 	for rows.Next() {
 		var roomID int64
-		var readAt sql.NullInt64
-		if err := rows.Scan(&roomID, &readAt); err != nil {
+		var messageID, readAt sql.NullInt64
+		if err := rows.Scan(&roomID, &messageID, &readAt); err != nil {
 			return nil, err
 		}
-		if readAt.Valid {
-			v := readAt.Int64
-			result[roomID] = &v
-		} else {
-			result[roomID] = nil
+		if !messageID.Valid && !readAt.Valid {
+			continue
+		}
+		result[roomID] = &repository.ReadPosition{
+			LastReadMessageID: nullInt64Ptr(messageID),
+			LastReadAt:        nullInt64Ptr(readAt),
 		}
 	}
 	return result, rows.Err()
