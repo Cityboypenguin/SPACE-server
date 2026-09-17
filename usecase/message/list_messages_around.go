@@ -13,40 +13,57 @@ import (
 // 中心メッセージが削除済み・別ルームの場合は最新ページを返す（呼び出し側は
 // ジャンプ先が見つからないだけで、通常どおりルームを開ける）。
 type ListMessagesAroundUseCase interface {
-	Execute(ctx context.Context, roomID int64, aroundID int64, limit int) ([]*model.Message, bool, bool, error)
+	Execute(ctx context.Context, roomID int64, aroundID int64, limit int) (*repository.MessagePage, error)
 }
 
 var _ ListMessagesAroundUseCase = &ListMessagesAroundInteractor{}
 
+// 前後を別々に引くため、1件取得(MessageStore)と一覧(MessageReadModel)の
+// 両方が要る。合成インターフェースには依存せず、必要な2つだけを受け取る。
 type ListMessagesAroundInteractor struct {
-	messageRepo repository.MessageRepository
+	store     repository.MessageStore
+	readModel repository.MessageReadModel
 }
 
-func NewListMessagesAroundUseCase(messageRepo repository.MessageRepository) ListMessagesAroundUseCase {
-	return &ListMessagesAroundInteractor{messageRepo: messageRepo}
+func NewListMessagesAroundUseCase(store repository.MessageStore, readModel repository.MessageReadModel) ListMessagesAroundUseCase {
+	return &ListMessagesAroundInteractor{store: store, readModel: readModel}
 }
 
-func (uc *ListMessagesAroundInteractor) Execute(ctx context.Context, roomID int64, aroundID int64, limit int) ([]*model.Message, bool, bool, error) {
-	center, err := uc.messageRepo.GetMessageByID(ctx, aroundID)
+func (uc *ListMessagesAroundInteractor) Execute(ctx context.Context, roomID int64, aroundID int64, limit int) (*repository.MessagePage, error) {
+	center, err := uc.store.GetMessageByID(ctx, aroundID)
 	if err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
-	if center == nil || center.RoomID != roomID {
-		return uc.messageRepo.ListMessagesByRoomID(ctx, roomID, limit, nil, nil, nil)
+	if center == nil || !center.IsInRoom(roomID) {
+		return uc.readModel.ListMessagesByRoomID(ctx, repository.MessageQuery{RoomID: roomID, Limit: limit})
 	}
 
-	older, hasMoreBefore, _, err := uc.messageRepo.ListMessagesByRoomID(ctx, roomID, limit, &aroundID, nil, nil)
+	older, err := uc.readModel.ListMessagesByRoomID(ctx, repository.MessageQuery{
+		RoomID: roomID,
+		Limit:  limit,
+		Cursor: repository.MessageCursor{BeforeID: &aroundID},
+	})
 	if err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
-	newer, _, hasMoreAfter, err := uc.messageRepo.ListMessagesByRoomID(ctx, roomID, limit, nil, &aroundID, nil)
+	newer, err := uc.readModel.ListMessagesByRoomID(ctx, repository.MessageQuery{
+		RoomID: roomID,
+		Limit:  limit,
+		Cursor: repository.MessageCursor{AfterID: &aroundID},
+	})
 	if err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
 
-	messages := make([]*model.Message, 0, len(older)+1+len(newer))
-	messages = append(messages, older...)
+	messages := make([]*model.Message, 0, len(older.Items)+1+len(newer.Items))
+	messages = append(messages, older.Items...)
 	messages = append(messages, center)
-	messages = append(messages, newer...)
-	return messages, hasMoreBefore, hasMoreAfter, nil
+	messages = append(messages, newer.Items...)
+	// 前半ページの「さらに古い側」と後半ページの「さらに新しい側」を合わせたものが、
+	// 中心を挟んだこのページ全体の前後の有無になる。
+	return &repository.MessagePage{
+		Items:         messages,
+		HasMoreBefore: older.HasMoreBefore,
+		HasMoreAfter:  newer.HasMoreAfter,
+	}, nil
 }

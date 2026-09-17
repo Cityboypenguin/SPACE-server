@@ -41,7 +41,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
+	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
+	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -133,6 +136,7 @@ func main() {
 	})
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
 	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
+	courseRoomReadRepository := mysql.NewMySQLCourseRoomReadRepository(database)
 	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to initialize question repository")
@@ -250,13 +254,15 @@ func main() {
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
 	getMessagesByIDsUseCase := messageusecase.NewGetMessagesByIDsUseCase(messageRepository)
-	listMessagesAroundUseCase := messageusecase.NewListMessagesAroundUseCase(messageRepository)
-	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
+	// messageRepository は MessageStore / MessageReadModel / MessageMentionStore /
+	// MessageUnreadCounter の合成実装。各ユースケースには必要な口だけを渡す。
+	listMessagesAroundUseCase := messageusecase.NewListMessagesAroundUseCase(messageRepository, messageRepository)
+	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, messageRepository, mediaRepository, txManager)
 	reportMediaDimensionsUseCase := mediausecase.NewReportDimensionsUseCase(mediaRepository)
 	listImagesMissingDimensionsUseCase := mediausecase.NewListImagesMissingDimensionsUseCase(mediaRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
 	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
-	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository, txManager)
+	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository, messageRepository, txManager)
 	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
 	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
@@ -275,8 +281,11 @@ func main() {
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
 	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
-	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(roomAnonymousIdentityRepository)
-	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(roomAnonymousIdentityRepository, messageRepository)
+	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(courseRoomReadRepository)
+	// 授業ルームの学期・履修判定。チャットサービスが送信・編集・削除で使う。
+	checkRoomWritableUseCase := courseusecase.NewCheckRoomWritableUseCase(courseRepository, systemSettingRepository, timetableRepository)
+	getOrCreateAnonymousIdentityUseCase := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
+	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(courseRoomReadRepository, messageRepository, courseRepository, timetableRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
@@ -435,13 +444,6 @@ func main() {
 
 		MessageRoomUseCases: graph.MessageRoomUseCases{
 			GetMessageByIDUseCase:           getMessageByIDUseCase,
-			SendMessageUseCase:              sendMessageUseCase,
-			ListMessagesAroundUseCase:       listMessagesAroundUseCase,
-			ListMessagesUseCase:             listMessagesUseCase,
-			DeleteMessageUseCase:            deleteMessageUseCase,
-			UpdateMessageUseCase:            updateMessageUseCase,
-			ResolveMentionsUseCase:          resolveMessageMentionsUseCase,
-			ListMessageMentionsUseCase:      listMessageMentionsUseCase,
 			GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
 			CreateRoomUseCase:               createRoomUseCase,
 			GetRoomUseCase:                  getRoomUseCase,
@@ -456,10 +458,6 @@ func main() {
 			GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
 			SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
 			ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
-			MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
-			GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
-			MarkCourseRoomAsReadUseCase:     markCourseRoomAsReadUseCase,
-			GetCourseRoomReadStatusUseCase:  getCourseRoomReadStatusUseCase,
 			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
 			GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
 			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
@@ -467,8 +465,8 @@ func main() {
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
 		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
-		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository),
+		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
@@ -531,6 +529,31 @@ func main() {
 
 		CourseImportTracker: courseImportTracker,
 	}
+
+	// チャットサービスの配信・通知アダプタ (graph.NewChatEventPublisher) は resolver が
+	// 持つ PubSub / SSE / 通知ユースケースを使うため、resolver を組み立てたあとに
+	// サービスを作って差し込む（相互参照を配線の順序で解いている）。
+	resolver.ChatService = chatusecase.NewService(chatusecase.Deps{
+		GetRoom:                      getRoomUseCase,
+		GetRoomMemberIDs:             getUserIDsByRoomIDUseCase,
+		GetRoomUserRole:              getRoomUserRoleUseCase,
+		CheckRoomWritable:            checkRoomWritableUseCase,
+		CheckBlockRelation:           checkBlockRelationUseCase,
+		GetMessage:                   getMessageByIDUseCase,
+		SendMessage:                  sendMessageUseCase,
+		UpdateMessage:                updateMessageUseCase,
+		DeleteMessage:                deleteMessageUseCase,
+		ListMessages:                 listMessagesUseCase,
+		ListMessagesAround:           listMessagesAroundUseCase,
+		ResolveMentions:              resolveMessageMentionsUseCase,
+		ListMentions:                 listMessageMentionsUseCase,
+		GetOrCreateAnonymousIdentity: getOrCreateAnonymousIdentityUseCase,
+		MarkRoomAsRead:               markRoomAsReadUseCase,
+		MarkCourseRoomAsRead:         markCourseRoomAsReadUseCase,
+		GetRoomReadStatus:            getRoomReadStatusUseCase,
+		GetCourseRoomReadStatus:      getCourseRoomReadStatusUseCase,
+		Events:                       graph.NewChatEventPublisher(resolver),
+	})
 
 	// middleware
 	e.Use(middleware.RequestLogger())

@@ -13,6 +13,7 @@ import (
 	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
+	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
@@ -83,6 +84,12 @@ type Resolver struct {
 	ListMediaByPostIDUseCase           mediausecase.ListMediaByPostIDUseCase
 	ReportMediaDimensionsUseCase       mediausecase.ReportDimensionsUseCase
 	ListImagesMissingDimensionsUseCase mediausecase.ListImagesMissingDimensionsUseCase
+
+	// ChatService はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
+	// 権限判定・メンション解決・匿名IDの採番・通知はここに集約してあり、リゾルバは
+	// GraphQL ID のデコードと GraphQL 型への変換だけを行う。
+	// 配線の都合上 resolver を組み立てたあとに差し込む（cmd/server/main.go 参照）。
+	ChatService chatusecase.Service
 
 	MessageRoomUseCases
 	CommunityUseCases
@@ -192,15 +199,14 @@ type PostUseCases struct {
 	GetFollowersTopLevelPostsByUserIDUseCase post.GetFollowersTopLevelPostsByUserIDUseCase
 }
 
+// MessageRoomUseCases はルーム/メッセージ系のうち、リゾルバが直接使ってよいもの。
+//
+// メッセージの送信・編集・削除・一覧、メンション解決、既読の記録は
+// Resolver.ChatService 経由でしか呼べないよう、ここには置いていない。
+// 置いてしまうと membership・学期/履修・ブロックの判定を飛ばして
+// 保存処理を直接叩ける口がリゾルバに復活してしまうため。
 type MessageRoomUseCases struct {
 	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
-	SendMessageUseCase              messageusecase.SendMessageUseCase
-	ListMessagesUseCase             messageusecase.ListMessagesUseCase
-	ListMessagesAroundUseCase       messageusecase.ListMessagesAroundUseCase
-	DeleteMessageUseCase            messageusecase.DeleteMessageUseCase
-	UpdateMessageUseCase            messageusecase.UpdateMessageUseCase
-	ResolveMentionsUseCase          messageusecase.ResolveMentionsUseCase
-	ListMessageMentionsUseCase      messageusecase.ListMentionsByMessageIDsUseCase
 	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
 	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
@@ -215,10 +221,6 @@ type MessageRoomUseCases struct {
 	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
 	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	MarkRoomAsReadUseCase           roomusecase.MarkRoomAsReadUseCase
-	GetRoomReadStatusUseCase        roomusecase.GetRoomReadStatusUseCase
-	MarkCourseRoomAsReadUseCase     roomusecase.MarkCourseRoomAsReadUseCase
-	GetCourseRoomReadStatusUseCase  roomusecase.GetCourseRoomReadStatusUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
 	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
 	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
@@ -239,30 +241,30 @@ type CommunityUseCases struct {
 }
 
 type CourseUseCases struct {
-	SearchCoursesUseCase                courseusecase.SearchCoursesUseCase
-	GetCourseByIDUseCase                courseusecase.GetCourseByIDUseCase
-	RegisterTimetableUseCase            timetableusecase.RegisterTimetableUseCase
-	RemoveTimetableUseCase              timetableusecase.RemoveTimetableUseCase
-	SetTimetableEntryColorUseCase       timetableusecase.SetTimetableEntryColorUseCase
-	ListTimetableUseCase                timetableusecase.ListTimetableUseCase
-	ReplaceTimetableUseCase             timetableusecase.ReplaceTimetableUseCase
-	GetUserTimetableUseCase             timetableusecase.GetUserTimetableUseCase
-	AdminRegisterTimetableUseCase       timetableusecase.AdminRegisterTimetableUseCase
-	AdminRemoveTimetableUseCase         timetableusecase.AdminRemoveTimetableUseCase
-	AdminSetTimetableEntryColorUseCase  timetableusecase.AdminSetTimetableEntryColorUseCase
-	AdminReplaceTimetableUseCase        timetableusecase.AdminReplaceTimetableUseCase
-	GetCurrentSemesterUseCase           semesterusecase.GetCurrentSemesterUseCase
-	UpdateCurrentSemesterUseCase        semesterusecase.UpdateCurrentSemesterUseCase
-	CheckRoomWritableUseCase            courseusecase.CheckRoomWritableUseCase
-	ListCourseRoomUnreadCountsUseCase   courseusecase.ListCourseRoomUnreadCountsUseCase
-	GetOrCreateAnonymousIdentityUseCase anonusecase.GetOrCreateAnonymousIdentityUseCase
-	ImportCoursesUseCase                courseusecase.ImportCoursesUseCase
-	ListCoursesUseCase                  courseusecase.ListCoursesUseCase
-	ListCourseYearsUseCase              courseusecase.ListCourseYearsUseCase
-	ListDedupKeysByYearUseCase          courseusecase.ListDedupKeysByYearUseCase
-	AdminCreateCourseUseCase            courseusecase.AdminCreateCourseUseCase
-	AdminDeleteCourseUseCase            courseusecase.AdminDeleteCourseUseCase
-	GetCourseRegisteredCountUseCase     courseusecase.GetCourseRegisteredCountUseCase
+	SearchCoursesUseCase               courseusecase.SearchCoursesUseCase
+	GetCourseByIDUseCase               courseusecase.GetCourseByIDUseCase
+	RegisterTimetableUseCase           timetableusecase.RegisterTimetableUseCase
+	RemoveTimetableUseCase             timetableusecase.RemoveTimetableUseCase
+	SetTimetableEntryColorUseCase      timetableusecase.SetTimetableEntryColorUseCase
+	ListTimetableUseCase               timetableusecase.ListTimetableUseCase
+	ReplaceTimetableUseCase            timetableusecase.ReplaceTimetableUseCase
+	GetUserTimetableUseCase            timetableusecase.GetUserTimetableUseCase
+	AdminRegisterTimetableUseCase      timetableusecase.AdminRegisterTimetableUseCase
+	AdminRemoveTimetableUseCase        timetableusecase.AdminRemoveTimetableUseCase
+	AdminSetTimetableEntryColorUseCase timetableusecase.AdminSetTimetableEntryColorUseCase
+	AdminReplaceTimetableUseCase       timetableusecase.AdminReplaceTimetableUseCase
+	GetCurrentSemesterUseCase          semesterusecase.GetCurrentSemesterUseCase
+	UpdateCurrentSemesterUseCase       semesterusecase.UpdateCurrentSemesterUseCase
+	ListCourseRoomUnreadCountsUseCase  courseusecase.ListCourseRoomUnreadCountsUseCase
+	// GetAnonymousIdentityUseCase は採番しない読み取り専用の口。表示側はこちらを使う。
+	GetAnonymousIdentityUseCase     anonusecase.GetAnonymousIdentityUseCase
+	ImportCoursesUseCase            courseusecase.ImportCoursesUseCase
+	ListCoursesUseCase              courseusecase.ListCoursesUseCase
+	ListCourseYearsUseCase          courseusecase.ListCourseYearsUseCase
+	ListDedupKeysByYearUseCase      courseusecase.ListDedupKeysByYearUseCase
+	AdminCreateCourseUseCase        courseusecase.AdminCreateCourseUseCase
+	AdminDeleteCourseUseCase        courseusecase.AdminDeleteCourseUseCase
+	GetCourseRegisteredCountUseCase courseusecase.GetCourseRegisteredCountUseCase
 }
 
 type QuestionUseCases struct {

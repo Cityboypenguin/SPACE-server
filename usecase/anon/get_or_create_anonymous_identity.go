@@ -9,6 +9,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
+// GetOrCreateAnonymousIdentityUseCase は匿名ID（匿名NNN）を確定させる口。
+//
+// 呼んでよいのは授業ルームへの書き込み経路だけ（usecase/chat のメッセージ送信、
+// 質問・回答・投票の作成）。番号は「そのルームで初めて投稿した順」に振られる、
+// という仕様をそれで担保している。表示側は採番しない
+// GetAnonymousIdentityUseCase を使うこと。
 type GetOrCreateAnonymousIdentityUseCase interface {
 	Execute(ctx context.Context, roomID, userID int64) (*model.RoomAnonymousIdentity, error)
 }

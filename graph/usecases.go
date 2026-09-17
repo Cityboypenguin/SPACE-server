@@ -47,33 +47,34 @@ func NewCourseUseCases(
 	userSettingRepo repository.UserSettingRepository,
 	roomRepo repository.RoomRepository,
 	blockRepo repository.BlockerRepository,
-	messageRepo repository.MessageRepository,
+	// 授業一覧の未読バッジしか使わないので、合成インターフェースではなく
+	// 未読集計の口だけを受け取る。
+	unreadCounter repository.MessageUnreadCounter,
 ) CourseUseCases {
 	return CourseUseCases{
-		SearchCoursesUseCase:                courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
-		GetCourseByIDUseCase:                courseusecase.NewGetCourseByIDUseCase(courseRepo),
-		RegisterTimetableUseCase:            timetableusecase.NewRegisterTimetableUseCase(timetableRepo),
-		RemoveTimetableUseCase:              timetableusecase.NewRemoveTimetableUseCase(timetableRepo),
-		SetTimetableEntryColorUseCase:       timetableusecase.NewSetTimetableEntryColorUseCase(timetableRepo),
-		ListTimetableUseCase:                timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
-		ReplaceTimetableUseCase:             timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
-		GetUserTimetableUseCase:             timetableusecase.NewGetUserTimetableUseCase(timetableRepo, settingRepo, userSettingRepo, blockRepo),
-		AdminRegisterTimetableUseCase:       timetableusecase.NewAdminRegisterTimetableUseCase(timetableRepo),
-		AdminRemoveTimetableUseCase:         timetableusecase.NewAdminRemoveTimetableUseCase(timetableRepo),
-		AdminSetTimetableEntryColorUseCase:  timetableusecase.NewAdminSetTimetableEntryColorUseCase(timetableRepo),
-		AdminReplaceTimetableUseCase:        timetableusecase.NewAdminReplaceTimetableUseCase(timetableRepo),
-		GetCurrentSemesterUseCase:           semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
-		UpdateCurrentSemesterUseCase:        semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
-		CheckRoomWritableUseCase:            courseusecase.NewCheckRoomWritableUseCase(courseRepo, settingRepo, timetableRepo),
-		ListCourseRoomUnreadCountsUseCase:   courseusecase.NewListCourseRoomUnreadCountsUseCase(messageRepo, settingRepo),
-		GetOrCreateAnonymousIdentityUseCase: anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo),
-		ImportCoursesUseCase:                courseusecase.NewImportCoursesUseCase(courseRepo),
-		ListCoursesUseCase:                  courseusecase.NewListCoursesUseCase(courseRepo),
-		ListCourseYearsUseCase:              courseusecase.NewListCourseYearsUseCase(courseRepo),
-		ListDedupKeysByYearUseCase:          courseusecase.NewListDedupKeysByYearUseCase(courseRepo),
-		AdminCreateCourseUseCase:            courseusecase.NewAdminCreateCourseUseCase(courseRepo),
-		AdminDeleteCourseUseCase:            courseusecase.NewAdminDeleteCourseUseCase(courseRepo, roomRepo),
-		GetCourseRegisteredCountUseCase:     courseusecase.NewGetCourseRegisteredCountUseCase(timetableRepo),
+		SearchCoursesUseCase:               courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
+		GetCourseByIDUseCase:               courseusecase.NewGetCourseByIDUseCase(courseRepo),
+		RegisterTimetableUseCase:           timetableusecase.NewRegisterTimetableUseCase(timetableRepo),
+		RemoveTimetableUseCase:             timetableusecase.NewRemoveTimetableUseCase(timetableRepo),
+		SetTimetableEntryColorUseCase:      timetableusecase.NewSetTimetableEntryColorUseCase(timetableRepo),
+		ListTimetableUseCase:               timetableusecase.NewListTimetableUseCase(timetableRepo, settingRepo),
+		ReplaceTimetableUseCase:            timetableusecase.NewReplaceTimetableUseCase(timetableRepo),
+		GetUserTimetableUseCase:            timetableusecase.NewGetUserTimetableUseCase(timetableRepo, settingRepo, userSettingRepo, blockRepo),
+		AdminRegisterTimetableUseCase:      timetableusecase.NewAdminRegisterTimetableUseCase(timetableRepo),
+		AdminRemoveTimetableUseCase:        timetableusecase.NewAdminRemoveTimetableUseCase(timetableRepo),
+		AdminSetTimetableEntryColorUseCase: timetableusecase.NewAdminSetTimetableEntryColorUseCase(timetableRepo),
+		AdminReplaceTimetableUseCase:       timetableusecase.NewAdminReplaceTimetableUseCase(timetableRepo),
+		GetCurrentSemesterUseCase:          semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
+		UpdateCurrentSemesterUseCase:       semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
+		ListCourseRoomUnreadCountsUseCase:  courseusecase.NewListCourseRoomUnreadCountsUseCase(unreadCounter, settingRepo),
+		GetAnonymousIdentityUseCase:        anonusecase.NewGetAnonymousIdentityUseCase(anonIdentityRepo),
+		ImportCoursesUseCase:               courseusecase.NewImportCoursesUseCase(courseRepo),
+		ListCoursesUseCase:                 courseusecase.NewListCoursesUseCase(courseRepo),
+		ListCourseYearsUseCase:             courseusecase.NewListCourseYearsUseCase(courseRepo),
+		ListDedupKeysByYearUseCase:         courseusecase.NewListDedupKeysByYearUseCase(courseRepo),
+		AdminCreateCourseUseCase:           courseusecase.NewAdminCreateCourseUseCase(courseRepo),
+		AdminDeleteCourseUseCase:           courseusecase.NewAdminDeleteCourseUseCase(courseRepo, roomRepo),
+		GetCourseRegisteredCountUseCase:    courseusecase.NewGetCourseRegisteredCountUseCase(timetableRepo),
 	}
 }
 
@@ -87,10 +88,13 @@ func NewQuestionUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
+	// 匿名ID(匿名NNN)は投稿時に確定させるので、質問・回答の作成にも採番の口が要る。
+	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 ) QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
+	anonIdentity := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)
 	return QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable, anonIdentity),
 		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
@@ -98,7 +102,7 @@ func NewQuestionUseCases(
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
 		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
 		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
 		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
@@ -115,10 +119,12 @@ func NewPollUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
+	// 匿名ID(匿名NNN)は投稿時に確定させるので、投票の作成にも採番の口が要る。
+	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 ) PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return PollUseCases{
-		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable),
+		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
 		VotePollUseCase:              pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
 		DeletePollUseCase:            pollusecase.NewDeletePollUseCase(pollRepo, requireWritable),
 		ListPollsUseCase:             pollusecase.NewListPollsUseCase(pollRepo),

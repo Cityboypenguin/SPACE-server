@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -35,62 +34,68 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 	return r.StorageRepository.PublicURL(c.AvatarMedia.StorageKey)
 }
 
-// anonymousIdentityForCourseRoom returns the author's per-room anonymous identity
+// anonymousUserForCourseRoom returns the synthetic User to display for authorUserID
 // when roomID is a course-type room (F-05), or nil for every other room type so the
-// caller falls back to showing the real user. Used by the message/question/answer
+// caller falls back to showing the real user. Used by the message/question/answer/poll
 // user field resolvers. This lives in helpers.go (not schema.resolvers.go) because
 // gqlgen comments out any function in the resolver file that isn't a recognized
 // resolver stub on every `gqlgen generate` run.
-func (r *Resolver) anonymousIdentityForCourseRoom(ctx context.Context, roomID string, authorUserID int64) (*model.RoomAnonymousIdentity, error) {
+//
+// 表示は読み取りだけで完結させる。匿名IDの採番は投稿時（usecase/chat・質問・
+// 回答・投票の作成時）に済ませてあるので、ここでは Get しか呼ばない。以前は
+// 表示時に GetOrCreate を呼んでいて、読むだけのクエリが DB に書き込む副作用を
+// 持っていた。
+//
+// 行が引けなかった場合でも実名にはフォールバックせず、番号なしの「匿名」を返す
+// （理由は anonymousPlaceholderUser のコメント）。
+func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string, authorUserID int64) *gqlmodel.User {
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
-		return nil, nil
+		return nil
 	}
 
 	room, err := r.GetRoomUseCase.Execute(ctx, rid)
 	if err != nil || room == nil || room.Type != model.RoomTypeCourse {
-		return nil, nil
+		return nil
 	}
 
-	return r.GetOrCreateAnonymousIdentityUseCase.Execute(ctx, rid, authorUserID)
+	identity, err := r.GetAnonymousIdentityUseCase.Execute(ctx, rid, authorUserID)
+	if err != nil {
+		logger.Log.Error().Err(err).Msg("failed to load anonymous identity for course room")
+		return anonymousPlaceholderUser()
+	}
+	if identity == nil {
+		return anonymousPlaceholderUser()
+	}
+	return toGraphAnonymousUser(identity)
 }
 
-// requireRoomReadAccess verifies the caller may read roomID: course rooms are open to
-// any authenticated user (F-04 "全授業公開"), other room types require room_users
-// membership. Used by the question/answer/poll resolvers and subscriptions added in
-// Phase 4/5, which are new code paths (unlike the message paths in schema.resolvers.go,
-// which keep their own inline checks to avoid changing existing DM/community behavior).
-func (r *Resolver) requireRoomReadAccess(ctx context.Context, claims *auth.Claims, roomID int64) (*model.Room, error) {
-	room, err := r.GetRoomUseCase.Execute(ctx, roomID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
-	}
-	if room != nil && room.Type == model.RoomTypeCourse {
-		return room, nil
-	}
-
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, roomID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return nil, errors.New("forbidden: not a member of this room")
-	}
-	return room, nil
+// requireRoomReadAccess verifies the caller may read roomID.
+//
+// 判定の実体は ChatService.EnsureReadAccess にあり、ここはそれを呼ぶだけの薄い
+// ラッパ。以前は「授業は全員閲覧可、それ以外は room_users」の判定が messages
+// クエリ・room クエリ・この関数・messageSubscription・roomReadStatusUpdated へ
+// 写経されていて、管理者の扱いだけ食い違っていた（負債は解消済み）。
+// 質問・回答・投票のクエリ／サブスクリプションも、メッセージ系と同じこの1本を通る。
+//
+// 逆に「閲覧できるか」ではない判定（メンション候補・ルームへの招待や削除・
+// コミュニティ権限・既読位置の書き込み）はここへ寄せていない。規則が違うものを
+// 同じ関数にまとめると、片方を緩めたときにもう片方まで緩む事故が起きるため。
+func (r *Resolver) requireRoomReadAccess(ctx context.Context, roomID int64) (*model.Room, error) {
+	return r.ChatService.EnsureReadAccess(ctx, roomID)
 }
 
 // questionSubscription handles the auth/access guard and PubSub fan-out for
 // room-scoped question subscriptions (added, updated), mirroring messageSubscription.
 func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID, topic string) (<-chan *gqlmodel.Question, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
 
@@ -123,8 +128,7 @@ func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID,
 // question-scoped answer subscriptions (added, updated, deleted), mirroring
 // questionSubscription.
 func (r *subscriptionResolver) answerSubscription(ctx context.Context, questionID, topic string) (<-chan *gqlmodel.Answer, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 	qid, err := decodeGraphID(ctx, "question", questionID)
@@ -138,7 +142,7 @@ func (r *subscriptionResolver) answerSubscription(ctx context.Context, questionI
 	if q == nil {
 		return nil, fmt.Errorf("question not found")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, q.RoomID); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, q.RoomID); err != nil {
 		return nil, err
 	}
 
@@ -383,19 +387,9 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
-	}
-	if room == nil || room.Type != model.RoomTypeCourse {
-		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify room membership")
-		}
-		if !containsInt64(memberIDs, claims.ID) {
-			return nil, errors.New("forbidden: not a member of this room")
-		}
+	// 閲覧権限は messages クエリと同じ1本（ChatService.EnsureReadAccess）を通す。
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
+		return nil, err
 	}
 
 	logger.Log.Info().Str("room_id", roomID).Int64("user_id", claims.ID).Str("topic", topic).Msg("subscription start")
@@ -497,12 +491,16 @@ func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *mo
 	message := "あなたのメッセージに返信がありました"
 	notificationActorID := &actorID
 	if room.Type == model.RoomTypeCourse {
-		identity, err := r.GetOrCreateAnonymousIdentityUseCase.Execute(ctx, room.ID, actorID)
+		// 匿名IDは投稿時に確定済みなので、ここは採番せず読むだけ。行が引けなくても
+		// 実名を出すわけにはいかないので、番号なしの「匿名」で通知する。
+		label := anonymousPlaceholderLabel
+		identity, err := r.GetAnonymousIdentityUseCase.Execute(ctx, room.ID, actorID)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to resolve anonymous identity for reply notification")
-			return nil
+		} else if identity != nil {
+			label = identity.Label
 		}
-		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", identity.Label)
+		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", label)
 		notificationActorID = nil
 	}
 
@@ -609,11 +607,15 @@ func (r *Resolver) publishMentionNotifications(ctx context.Context, room *model.
 	}
 }
 
-// resolveMessageMentions はクライアントから届いたメンション先IDを検証済みのメンションに変換する。
+// decodeMentionUserIDs はクライアントから届いたメンション先の GraphQL ID を
+// 数値IDへ変換する。
 //
-// ここが担うのは GraphQL ID のデコードだけ。「どのルームでメンションが成立するか」
-// 「誰をメンションできるか」の判断は messageusecase.ResolveMentionsUseCase 側にある。
-func (r *Resolver) resolveMessageMentions(ctx context.Context, roomID, actorID int64, content string, mentionUserIDs []string) ([]*model.Mention, error) {
+// リゾルバが担うのはこのデコードだけ。「どのルームでメンションが成立するか」
+// （messageusecase.MentionsSupported: コミュニティのみ）「誰をメンションできるか」の
+// 判断は全て messageusecase.ResolveMentionsUseCase 側にあり、それを呼ぶのは
+// ChatService だけ。リゾルバから直接呼ぶ経路を残さないことで、別経路から
+// 授業内チャットに実名メンションが通ることを防いでいる。
+func decodeMentionUserIDs(ctx context.Context, mentionUserIDs []string) ([]int64, error) {
 	if len(mentionUserIDs) == 0 {
 		return nil, nil
 	}
@@ -626,6 +628,5 @@ func (r *Resolver) resolveMessageMentions(ctx context.Context, roomID, actorID i
 		}
 		ids = append(ids, id)
 	}
-
-	return r.ResolveMentionsUseCase.Execute(ctx, roomID, actorID, content, ids)
+	return ids, nil
 }

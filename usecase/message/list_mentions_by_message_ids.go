@@ -16,13 +16,13 @@ type ListMentionsByMessageIDsUseCase interface {
 var _ ListMentionsByMessageIDsUseCase = &ListMentionsByMessageIDsInteractor{}
 
 type ListMentionsByMessageIDsInteractor struct {
-	messageRepo repository.MessageRepository
+	mentionStore repository.MessageMentionStore
 }
 
-func NewListMentionsByMessageIDsUseCase(messageRepo repository.MessageRepository) ListMentionsByMessageIDsUseCase {
-	return &ListMentionsByMessageIDsInteractor{messageRepo: messageRepo}
+func NewListMentionsByMessageIDsUseCase(mentionStore repository.MessageMentionStore) ListMentionsByMessageIDsUseCase {
+	return &ListMentionsByMessageIDsInteractor{mentionStore: mentionStore}
 }
 
 func (uc *ListMentionsByMessageIDsInteractor) Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.Mention, error) {
-	return uc.messageRepo.ListMentionsByMessageIDs(ctx, messageIDs)
+	return uc.mentionStore.ListMentionsByMessageIDs(ctx, messageIDs)
 }

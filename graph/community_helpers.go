@@ -66,6 +66,8 @@ func (r *mutationResolver) countCommunityOwners(ctx context.Context, roomID int6
 	return count, nil
 }
 
+// hydrateCommunityMembership はコミュニティの表示用に人数と自分の所属フラグを埋める。
+// room_users を引いているが閲覧可否の判定ではないので、EnsureReadAccess とは無関係。
 func (r *Resolver) hydrateCommunityMembership(ctx context.Context, community *gqlmodel.Community, roomID int64, viewerUserID *int64) error {
 	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, roomID)
 	if err != nil {

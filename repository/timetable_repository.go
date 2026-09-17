@@ -41,6 +41,10 @@ type TimetableRepository interface {
 	// gate course-chat writes (message/question/answer/poll) to students who have
 	// actually registered for the course, not just any authenticated user.
 	IsRegistered(ctx context.Context, userID, courseID int64) (bool, error)
+	// GetRegisteredAt returns the unix time at which userID registered courseID in
+	// their timetable, or nil when it is not registered. 授業内チャットの未読は
+	// 「時間割に登録した時点」を起点に数えるので、その起点を引くために使う。
+	GetRegisteredAt(ctx context.Context, userID, courseID int64) (*int64, error)
 	// CountByCourseID returns how many users currently have courseID in their
 	// timetable - used by the admin course-deletion flow to warn how many students'
 	// registrations (and course-room history) would be wiped out by the cascade.

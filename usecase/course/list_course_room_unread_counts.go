@@ -15,12 +15,12 @@ type ListCourseRoomUnreadCountsUseCase interface {
 var _ ListCourseRoomUnreadCountsUseCase = &ListCourseRoomUnreadCountsInteractor{}
 
 type ListCourseRoomUnreadCountsInteractor struct {
-	messageRepo repository.MessageRepository
-	settingRepo repository.SystemSettingRepository
+	unreadCounter repository.MessageUnreadCounter
+	settingRepo   repository.SystemSettingRepository
 }
 
-func NewListCourseRoomUnreadCountsUseCase(messageRepo repository.MessageRepository, settingRepo repository.SystemSettingRepository) ListCourseRoomUnreadCountsUseCase {
-	return &ListCourseRoomUnreadCountsInteractor{messageRepo: messageRepo, settingRepo: settingRepo}
+func NewListCourseRoomUnreadCountsUseCase(unreadCounter repository.MessageUnreadCounter, settingRepo repository.SystemSettingRepository) ListCourseRoomUnreadCountsUseCase {
+	return &ListCourseRoomUnreadCountsInteractor{unreadCounter: unreadCounter, settingRepo: settingRepo}
 }
 
 // Execute returns the caller's unread count for each course chat in their timetable
@@ -37,5 +37,5 @@ func (uc *ListCourseRoomUnreadCountsInteractor) Execute(ctx context.Context) ([]
 		return nil, err
 	}
 
-	return uc.messageRepo.CountUnreadByCourseRooms(ctx, claims.ID, year, semesterName)
+	return uc.unreadCounter.CountUnreadByCourseRooms(ctx, claims.ID, year, semesterName)
 }

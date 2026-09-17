@@ -10,6 +10,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
 )
 
@@ -26,6 +27,7 @@ type CreateQuestionInteractor struct {
 	mediaRepo       repository.MediaRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
+	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
 }
 
 func NewCreateQuestionUseCase(
@@ -33,12 +35,14 @@ func NewCreateQuestionUseCase(
 	mediaRepo repository.MediaRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
 ) CreateQuestionUseCase {
 	return &CreateQuestionInteractor{
 		questionRepo:    questionRepo,
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
+		anonIdentity:    anonIdentity,
 	}
 }
 
@@ -60,6 +64,15 @@ func (uc *CreateQuestionInteractor) Execute(ctx context.Context, roomID int64, b
 		}
 	}
 	if _, err := uc.requireWritable.Execute(ctx, roomID); err != nil {
+		return nil, err
+	}
+
+	// 匿名ID(匿名NNN)は投稿時に確定させる。質問箱は授業内チャット専用なので、
+	// メッセージ送信（usecase/chat）と同じ扱いにして「番号は初投稿順」という
+	// 仕様を全ての投稿経路で守る。表示側は採番しない（読むだけ）。
+	// 採番は GET_LOCK を使う別接続の処理でトランザクションに参加しないため、
+	// 保存トランザクションの外で先に済ませる。
+	if _, err := uc.anonIdentity.Execute(ctx, roomID, claims.ID); err != nil {
 		return nil, err
 	}
 

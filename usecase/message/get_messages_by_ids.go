@@ -17,13 +17,13 @@ type GetMessagesByIDsUseCase interface {
 var _ GetMessagesByIDsUseCase = &GetMessagesByIDsInteractor{}
 
 type GetMessagesByIDsInteractor struct {
-	messageRepo repository.MessageRepository
+	store repository.MessageStore
 }
 
-func NewGetMessagesByIDsUseCase(messageRepo repository.MessageRepository) GetMessagesByIDsUseCase {
-	return &GetMessagesByIDsInteractor{messageRepo: messageRepo}
+func NewGetMessagesByIDsUseCase(store repository.MessageStore) GetMessagesByIDsUseCase {
+	return &GetMessagesByIDsInteractor{store: store}
 }
 
 func (uc *GetMessagesByIDsInteractor) Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error) {
-	return uc.messageRepo.GetMessagesByIDs(ctx, ids)
+	return uc.store.GetMessagesByIDs(ctx, ids)
 }

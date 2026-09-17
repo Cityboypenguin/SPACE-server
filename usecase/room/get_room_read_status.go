@@ -17,12 +17,12 @@ type GetRoomReadStatusUseCase interface {
 }
 
 type getRoomReadStatusUseCase struct {
-	roomUserRepo repository.RoomUserRepository
-	messageRepo  repository.MessageRepository
+	roomUserRepo  repository.RoomUserRepository
+	unreadCounter repository.MessageUnreadCounter
 }
 
-func NewGetRoomReadStatusUseCase(roomUserRepo repository.RoomUserRepository, messageRepo repository.MessageRepository) GetRoomReadStatusUseCase {
-	return &getRoomReadStatusUseCase{roomUserRepo: roomUserRepo, messageRepo: messageRepo}
+func NewGetRoomReadStatusUseCase(roomUserRepo repository.RoomUserRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusUseCase {
+	return &getRoomReadStatusUseCase{roomUserRepo: roomUserRepo, unreadCounter: unreadCounter}
 }
 
 func (uc *getRoomReadStatusUseCase) Execute(ctx context.Context, roomID, userID int64) (*RoomReadStatus, error) {
@@ -35,7 +35,7 @@ func (uc *getRoomReadStatusUseCase) Execute(ctx context.Context, roomID, userID 
 	if myLastReadAt != nil {
 		afterTimestamp = *myLastReadAt
 	}
-	unreadCount, err := uc.messageRepo.CountUnreadMessages(ctx, roomID, userID, afterTimestamp)
+	unreadCount, err := uc.unreadCounter.CountUnreadMessages(ctx, roomID, userID, afterTimestamp)
 	if err != nil {
 		return nil, err
 	}

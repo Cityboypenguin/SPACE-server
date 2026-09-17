@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -289,6 +290,25 @@ func (r *MySQLTimetableRepository) IsRegistered(ctx context.Context, userID, cou
 		return false, err
 	}
 	return true, nil
+}
+
+// GetRegisteredAt returns the registration time (timetables.created_at) for
+// (userID, courseID), or nil when the course is not in the user's timetable.
+// 未読の起点に使うので、登録し直し（Upsert）で行が作り直されたときは
+// その新しい時刻が起点になる。
+func (r *MySQLTimetableRepository) GetRegisteredAt(ctx context.Context, userID, courseID int64) (*int64, error) {
+	var createdAt int64
+	err := r.DB.QueryRowContext(ctx,
+		`SELECT created_at FROM timetables WHERE user_id = ? AND course_id = ?`,
+		userID, courseID,
+	).Scan(&createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &createdAt, nil
 }
 
 func (r *MySQLTimetableRepository) CountByCourseID(ctx context.Context, courseID int64) (int, error) {

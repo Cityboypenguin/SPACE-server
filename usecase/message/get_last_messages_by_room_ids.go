@@ -14,13 +14,13 @@ type GetLastMessagesByRoomIDsUseCase interface {
 var _ GetLastMessagesByRoomIDsUseCase = &GetLastMessagesByRoomIDsInteractor{}
 
 type GetLastMessagesByRoomIDsInteractor struct {
-	messageRepo repository.MessageRepository
+	readModel repository.MessageReadModel
 }
 
-func NewGetLastMessagesByRoomIDsUseCase(messageRepo repository.MessageRepository) GetLastMessagesByRoomIDsUseCase {
-	return &GetLastMessagesByRoomIDsInteractor{messageRepo: messageRepo}
+func NewGetLastMessagesByRoomIDsUseCase(readModel repository.MessageReadModel) GetLastMessagesByRoomIDsUseCase {
+	return &GetLastMessagesByRoomIDsInteractor{readModel: readModel}
 }
 
 func (uc *GetLastMessagesByRoomIDsInteractor) Execute(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error) {
-	return uc.messageRepo.GetLastMessagesByRoomIDs(ctx, roomIDs)
+	return uc.readModel.GetLastMessagesByRoomIDs(ctx, roomIDs)
 }

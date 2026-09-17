@@ -10,6 +10,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
 )
 
@@ -27,6 +28,7 @@ type AnswerQuestionInteractor struct {
 	mediaRepo       repository.MediaRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
+	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
 }
 
 func NewAnswerQuestionUseCase(
@@ -35,6 +37,7 @@ func NewAnswerQuestionUseCase(
 	mediaRepo repository.MediaRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
 ) AnswerQuestionUseCase {
 	return &AnswerQuestionInteractor{
 		questionRepo:    questionRepo,
@@ -42,6 +45,7 @@ func NewAnswerQuestionUseCase(
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
+		anonIdentity:    anonIdentity,
 	}
 }
 
@@ -71,6 +75,12 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 		return nil, apperr.NotFound("質問が見つかりません")
 	}
 	if _, err := uc.requireWritable.Execute(ctx, q.RoomID); err != nil {
+		return nil, err
+	}
+
+	// 匿名ID(匿名NNN)は投稿時に確定させる（質問・投票・メッセージと同じ扱い）。
+	// 詳細は usecase/chat の ensureAnonymousIdentity のコメントを参照。
+	if _, err := uc.anonIdentity.Execute(ctx, q.RoomID, claims.ID); err != nil {
 		return nil, err
 	}
 

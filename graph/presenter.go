@@ -187,6 +187,28 @@ func toGraphAnonymousUser(identity *model.RoomAnonymousIdentity) *gqlmodel.User 
 	}
 }
 
+// anonymousPlaceholderLabel は匿名IDの行が見つからないときに使う、番号なしの
+// 匿名ラベル。実名の代わりに出す安全側の表示名。
+const anonymousPlaceholderLabel = "匿名"
+
+// anonymousPlaceholderUser は授業ルームなのに匿名IDの行が見つからないときの表示。
+//
+// ここで実名（実ユーザー）にフォールバックしてはいけない。授業内チャットは
+// 匿名が前提なので、行が引けなかっただけで実名が出てしまうと匿名性が壊れる。
+// 番号を持たない「匿名」ラベルに退化させるのが安全側の倒し方。
+// 通常は投稿時に必ず採番される（usecase/chat の ensureAnonymousIdentity）ので、
+// ここに来るのは採番前の古いデータか、採番に失敗した投稿だけ。
+func anonymousPlaceholderUser() *gqlmodel.User {
+	return &gqlmodel.User{
+		ID:        encodeGraphID("anon", 0),
+		AccountID: "",
+		Name:      anonymousPlaceholderLabel,
+		Email:     "",
+		Role:      "",
+		Status:    "",
+	}
+}
+
 // toGraphQuestion sets User/BestAnswer as ID-only placeholders (matching the
 // toGraphPost pattern): the questionResolver.User/BestAnswer field resolvers read
 // obj.User.ID / obj.BestAnswer.ID to know what to fetch (and, for User, whether to

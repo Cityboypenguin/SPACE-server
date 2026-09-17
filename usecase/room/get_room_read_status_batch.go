@@ -11,12 +11,12 @@ type GetRoomReadStatusBatchUseCase interface {
 }
 
 type getRoomReadStatusBatchUseCase struct {
-	roomUserRepo repository.RoomUserRepository
-	messageRepo  repository.MessageRepository
+	roomUserRepo  repository.RoomUserRepository
+	unreadCounter repository.MessageUnreadCounter
 }
 
-func NewGetRoomReadStatusBatchUseCase(roomUserRepo repository.RoomUserRepository, messageRepo repository.MessageRepository) GetRoomReadStatusBatchUseCase {
-	return &getRoomReadStatusBatchUseCase{roomUserRepo: roomUserRepo, messageRepo: messageRepo}
+func NewGetRoomReadStatusBatchUseCase(roomUserRepo repository.RoomUserRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusBatchUseCase {
+	return &getRoomReadStatusBatchUseCase{roomUserRepo: roomUserRepo, unreadCounter: unreadCounter}
 }
 
 func (uc *getRoomReadStatusBatchUseCase) Execute(ctx context.Context, roomIDs []int64, userID int64) (map[int64]*RoomReadStatus, error) {
@@ -29,7 +29,7 @@ func (uc *getRoomReadStatusBatchUseCase) Execute(ctx context.Context, roomIDs []
 		return nil, err
 	}
 
-	unreadCountMap, err := uc.messageRepo.CountUnreadMessagesByRoomIDs(ctx, userID, roomIDs)
+	unreadCountMap, err := uc.unreadCounter.CountUnreadMessagesByRoomIDs(ctx, userID, roomIDs)
 	if err != nil {
 		return nil, err
 	}

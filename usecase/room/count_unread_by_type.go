@@ -13,13 +13,13 @@ type CountUnreadByRoomTypeUseCase interface {
 var _ CountUnreadByRoomTypeUseCase = &countUnreadByRoomTypeInteractor{}
 
 type countUnreadByRoomTypeInteractor struct {
-	messageRepo repository.MessageRepository
+	unreadCounter repository.MessageUnreadCounter
 }
 
-func NewCountUnreadByRoomTypeUseCase(messageRepo repository.MessageRepository) CountUnreadByRoomTypeUseCase {
-	return &countUnreadByRoomTypeInteractor{messageRepo: messageRepo}
+func NewCountUnreadByRoomTypeUseCase(unreadCounter repository.MessageUnreadCounter) CountUnreadByRoomTypeUseCase {
+	return &countUnreadByRoomTypeInteractor{unreadCounter: unreadCounter}
 }
 
 func (uc *countUnreadByRoomTypeInteractor) Execute(ctx context.Context, userID int64, roomType string) (int, error) {
-	return uc.messageRepo.CountUnreadMessagesByRoomType(ctx, userID, roomType)
+	return uc.unreadCounter.CountUnreadMessagesByRoomType(ctx, userID, roomType)
 }

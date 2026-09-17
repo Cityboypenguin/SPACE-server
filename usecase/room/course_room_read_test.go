@@ -4,27 +4,28 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-type fakeIdentityRepo struct {
-	repository.RoomAnonymousIdentityRepository
+type fakeCourseRoomReadRepo struct {
+	repository.CourseRoomReadRepository
 	lastReadAt *int64
 
 	upsertedRoomID, upsertedUserID, upsertedReadAt int64
 }
 
-func (f *fakeIdentityRepo) UpsertLastReadAt(_ context.Context, roomID, userID, readAt int64) error {
+func (f *fakeCourseRoomReadRepo) UpsertLastReadAt(_ context.Context, roomID, userID, readAt int64) error {
 	f.upsertedRoomID, f.upsertedUserID, f.upsertedReadAt = roomID, userID, readAt
 	return nil
 }
 
-func (f *fakeIdentityRepo) GetLastReadAt(_ context.Context, _, _ int64) (*int64, error) {
+func (f *fakeCourseRoomReadRepo) GetLastReadAt(_ context.Context, _, _ int64) (*int64, error) {
 	return f.lastReadAt, nil
 }
 
 type fakeMessageRepoForUnread struct {
-	repository.MessageRepository
+	repository.MessageUnreadCounter
 	gotAfter int64
 	count    int
 }
@@ -34,8 +35,40 @@ func (f *fakeMessageRepoForUnread) CountUnreadMessages(_ context.Context, _, _ i
 	return f.count, nil
 }
 
+type fakeCourseRepoForUnread struct {
+	repository.CourseRepository
+	course *model.Course
+}
+
+func (f *fakeCourseRepoForUnread) GetCourseByRoomID(_ context.Context, _ int64) (*model.Course, error) {
+	return f.course, nil
+}
+
+type fakeTimetableRepoForUnread struct {
+	repository.TimetableRepository
+	registeredAt *int64
+}
+
+func (f *fakeTimetableRepoForUnread) GetRegisteredAt(_ context.Context, _, _ int64) (*int64, error) {
+	return f.registeredAt, nil
+}
+
+// newCourseRoomReadStatusUseCase は「room 3 は course 9 のチャット」という前提で組む。
+func newCourseRoomReadStatusUseCase(
+	readRepo *fakeCourseRoomReadRepo,
+	messageRepo *fakeMessageRepoForUnread,
+	registeredAt *int64,
+) GetCourseRoomReadStatusUseCase {
+	return NewGetCourseRoomReadStatusUseCase(
+		readRepo,
+		messageRepo,
+		&fakeCourseRepoForUnread{course: &model.Course{ID: 9, RoomID: 3}},
+		&fakeTimetableRepoForUnread{registeredAt: registeredAt},
+	)
+}
+
 func TestMarkCourseRoomAsRead_RecordsReadPosition(t *testing.T) {
-	repo := &fakeIdentityRepo{}
+	repo := &fakeCourseRoomReadRepo{}
 	uc := NewMarkCourseRoomAsReadUseCase(repo)
 
 	if err := uc.Execute(context.Background(), 5, 7); err != nil {
@@ -49,13 +82,15 @@ func TestMarkCourseRoomAsRead_RecordsReadPosition(t *testing.T) {
 
 func TestGetCourseRoomReadStatus_CountsMessagesAfterReadPosition(t *testing.T) {
 	readAt := int64(1700000000)
+	registeredAt := int64(1600000000)
 	messageRepo := &fakeMessageRepoForUnread{count: 3}
-	uc := NewGetCourseRoomReadStatusUseCase(&fakeIdentityRepo{lastReadAt: &readAt}, messageRepo)
+	uc := newCourseRoomReadStatusUseCase(&fakeCourseRoomReadRepo{lastReadAt: &readAt}, messageRepo, &registeredAt)
 
-	status, err := uc.Execute(context.Background(), 5, 7)
+	status, err := uc.Execute(context.Background(), 3, 7)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// 既読位置があるときは、時間割の登録時刻ではなくそちらが起点。
 	if messageRepo.gotAfter != readAt {
 		t.Fatalf("CountUnreadMessages after = %d, want %d", messageRepo.gotAfter, readAt)
 	}
@@ -67,11 +102,33 @@ func TestGetCourseRoomReadStatus_CountsMessagesAfterReadPosition(t *testing.T) {
 	}
 }
 
-func TestGetCourseRoomReadStatus_NeverRead(t *testing.T) {
-	messageRepo := &fakeMessageRepoForUnread{count: 10}
-	uc := NewGetCourseRoomReadStatusUseCase(&fakeIdentityRepo{}, messageRepo)
+// まだ一度も開いていない授業は、授業一覧のバッジ（CountUnreadByCourseRooms の
+// COALESCE(last_read_at, timetables.created_at)）と同じく時間割の登録時刻を起点にする。
+// 一覧と部屋内で未読数が食い違わないことがこのテストの主眼。
+func TestGetCourseRoomReadStatus_NeverReadUsesTimetableRegistrationAsOrigin(t *testing.T) {
+	registeredAt := int64(1600000000)
+	messageRepo := &fakeMessageRepoForUnread{count: 2}
+	uc := newCourseRoomReadStatusUseCase(&fakeCourseRoomReadRepo{}, messageRepo, &registeredAt)
 
-	status, err := uc.Execute(context.Background(), 5, 7)
+	status, err := uc.Execute(context.Background(), 3, 7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if messageRepo.gotAfter != registeredAt {
+		t.Fatalf("CountUnreadMessages after = %d, want timetable registration %d", messageRepo.gotAfter, registeredAt)
+	}
+	if status.LastReadAt != nil || status.UnreadCount != 2 {
+		t.Fatalf("status = %+v, want no read position and unread=2", status)
+	}
+}
+
+// 時間割に登録していない（読むだけの）ユーザーには起点が無いので全件カウント。
+// この場合は授業一覧のバッジにも出てこないため、食い違いは起きない。
+func TestGetCourseRoomReadStatus_NeverReadAndNotRegistered(t *testing.T) {
+	messageRepo := &fakeMessageRepoForUnread{count: 10}
+	uc := newCourseRoomReadStatusUseCase(&fakeCourseRoomReadRepo{}, messageRepo, nil)
+
+	status, err := uc.Execute(context.Background(), 3, 7)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

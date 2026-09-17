@@ -13,11 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
-	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
@@ -26,6 +24,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -49,8 +48,8 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 	if err == nil {
 		if q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid); err == nil && q != nil {
 			roomIDStr := encodeGraphID("room", q.RoomID)
-			if identity, err := r.anonymousIdentityForCourseRoom(ctx, roomIDStr, numericUserID); err == nil && identity != nil {
-				return toGraphAnonymousUser(identity), nil
+			if anon := r.anonymousUserForCourseRoom(ctx, roomIDStr, numericUserID); anon != nil {
+				return anon, nil
 			}
 		}
 	}
@@ -137,12 +136,8 @@ func (r *messageResolver) UserID(ctx context.Context, obj *gqlmodel.Message) (st
 		return "", nil
 	}
 
-	identity, err := r.anonymousIdentityForCourseRoom(ctx, obj.RoomID, numericID)
-	if err != nil {
-		return "", err
-	}
-	if identity != nil {
-		return encodeGraphID("anon", identity.ID), nil
+	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
+		return anon.ID, nil
 	}
 
 	return obj.UserID, nil
@@ -155,12 +150,8 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 		return nil, nil
 	}
 
-	identity, err := r.anonymousIdentityForCourseRoom(ctx, obj.RoomID, numericID)
-	if err != nil {
-		return nil, err
-	}
-	if identity != nil {
-		return toGraphAnonymousUser(identity), nil
+	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
+		return anon, nil
 	}
 
 	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericID)
@@ -768,6 +759,8 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 		return true, nil
 	}
 
+	// これは閲覧判定ではなく「他人を招待できるか」の書き込み系の判定なので、
+	// EnsureReadAccess（授業ルームは全員可）には寄せない。
 	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify room membership")
@@ -849,6 +842,7 @@ func (r *mutationResolver) DeleteRoom(ctx context.Context, roomID string) (bool,
 		return false, errors.New("forbidden: only DM rooms can be deleted")
 	}
 
+	// これは閲覧判定ではなく DM 削除（書き込み系）の判定なので統一しない。
 	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify room membership")
@@ -1791,56 +1785,18 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 }
 
 // SendMessage is the resolver for the sendMessage field.
+//
+// 権限判定（授業の学期・履修 / membership / ブロック）、メンションの検証、
+// 保存後の配信・通知は全て ChatService 側にある。ここは GraphQL ID のデコードと
+// GraphQL 型への変換だけを行う。
 func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string) (*gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
-	}
-
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
-	}
-
-	var memberIDs []int64
-	if room != nil && room.Type == model.RoomTypeCourse {
-		// 授業内チャットは room_users membership を使わず、現在の学期と一致するか
-		// （アーカイブされていないか）と、時間割に登録済みかを CheckRoomWritableUseCase 側で見る。
-		if err := r.CheckRoomWritableUseCase.Execute(ctx, rid); err != nil {
-			return nil, err
-		}
-	} else {
-		var err error
-		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify room membership")
-		}
-		if !containsInt64(memberIDs, claims.ID) {
-			return nil, errors.New("forbidden: not a member of this room")
-		}
-
-		if room != nil && len(memberIDs) == 2 {
-			var partnerID int64
-			for _, id := range memberIDs {
-				if id != claims.ID {
-					partnerID = id
-					break
-				}
-			}
-
-			isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check block status")
-			}
-			if isBlocked {
-				return nil, errors.New("ブロック設定によりメッセージを送信できません")
-			}
-		}
 	}
 
 	var replyTo *int64
@@ -1852,197 +1808,74 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		replyTo = &decoded
 	}
 
-	ucMediaInputs := toMediaInputs(mediaInputs)
-
-	// メンションが成立するルームかどうかの判定はユースケース側にある。
-	mentions, err := r.resolveMessageMentions(ctx, rid, claims.ID, content, mentionUserIDs)
+	mentionIDs, err := decodeMentionUserIDs(ctx, mentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	msg, err := r.SendMessageUseCase.Execute(ctx, rid, claims.ID, content, ucMediaInputs, replyTo, mentions)
+	msg, err := r.ChatService.SendMessage(ctx, chatusecase.SendMessageInput{
+		RoomID:         rid,
+		Content:        content,
+		MediaInputs:    toMediaInputs(mediaInputs),
+		MentionUserIDs: mentionIDs,
+		ReplyToID:      replyTo,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	gqlMsg := toGraphMessage(msg)
-	r.PubSub.Publish(roomID+":message:added", gqlMsg)
-
-	// 一覧画面のプレビュー・通知文言に使う要約テキスト（画像/ファイルのみの場合は代替文言）
-	previewMessage := msg.Content
-	if previewMessage == "" {
-		if len(ucMediaInputs) > 0 {
-			previewMessage = "[画像/ファイルを送信しました]"
-		} else {
-			previewMessage = "新しいメッセージが届きました"
-		}
-	} else {
-		const maxPreviewRunes = 50
-		if runes := []rune(previewMessage); utf8.RuneCountInString(previewMessage) > maxPreviewRunes {
-			previewMessage = string(runes[:maxPreviewRunes]) + "…"
-		}
-	}
-
-	// 各メンバーの未読カウント・最新メッセージプレビューをリアルタイム通知
-	if unreadCounts, err := r.GetMembersUnreadCountsUseCase.Execute(ctx, rid, claims.ID); err == nil {
-		for memberID, count := range unreadCounts {
-			r.SSEBroker.PublishToUser(memberID, "unread_room", map[string]any{
-				"roomID":      roomID,
-				"unreadCount": count,
-				"lastMessage": previewMessage,
-			})
-		}
-	}
-
-	// DM ルームの場合、相手に通知を送る
-	if room != nil && room.Type == model.RoomTypeDM {
-		targetType := notificationuc.TargetRoom
-		for _, memberID := range memberIDs {
-			if memberID == claims.ID {
-				continue
-			}
-			if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-				UserID:     memberID,
-				Type:       notificationuc.TypeDM,
-				ActorID:    &claims.ID,
-				TargetType: &targetType,
-				TargetID:   &rid,
-				Message:    previewMessage,
-			}); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to publish dm notification")
-			}
-		}
-	}
-
-	// 引用返信の通知。DM は全メッセージで既に dm 通知が飛ぶので二重通知を避けて対象外。
-	// notifiedByReply には返信通知を送った相手が入り、同じ人をメンションしていても
-	// メンション通知が二重にならないようにする。
-	var notifiedByReply *int64
-	if replyTo != nil && room != nil && room.Type != model.RoomTypeDM {
-		notifiedByReply = r.publishMessageReplyNotification(ctx, room, msg, claims.ID)
-	}
-
-	if room != nil {
-		r.publishMentionNotifications(ctx, room, msg, claims.ID, notifiedByReply)
-	}
-
-	return gqlMsg, nil
+	return toGraphMessage(msg), nil
 }
 
 // DeleteMessage is the resolver for the deleteMessage field.
 func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id string) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
 
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return false, fmt.Errorf("invalid room id")
+	}
 	numericID, err := decodeGraphID(ctx, "message", id)
 	if err != nil {
 		return false, fmt.Errorf("invalid message id")
 	}
 
-	msg, err := r.GetMessageByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return false, fmt.Errorf("failed to get message")
-	}
-	if msg == nil {
-		return false, fmt.Errorf("message not found")
-	}
-
-	if msg.UserID != claims.ID && !isAdminRole(claims.Role) {
-		room, err := r.GetRoomUseCase.Execute(ctx, msg.RoomID)
-		if err != nil || room == nil || room.Type != model.RoomTypeCommunity {
-			return false, errors.New("forbidden: can only delete your own messages")
-		}
-		role, err := r.GetRoomUserRoleUseCase.Execute(ctx, msg.RoomID, claims.ID)
-		if err != nil || role != model.RoomUserRoleOwner {
-			return false, errors.New("forbidden: can only delete your own messages")
-		}
-	}
-
-	deleted, err := r.DeleteMessageUseCase.Execute(ctx, numericID, claims.ID)
-	if err != nil {
-		return false, err
-	}
-	if deleted {
-		audit.LogMessageDeleted(ctx, msg.RoomID, numericID)
-		r.PubSub.Publish(roomID+":message:deleted", &gqlmodel.Message{ID: id})
-	}
-	return deleted, nil
+	return r.ChatService.DeleteMessage(ctx, chatusecase.DeleteMessageInput{RoomID: rid, MessageID: numericID})
 }
 
 // UpdateMessage is the resolver for the updateMessage field.
 func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id string, content string, mentionUserIDs []string) (*gqlmodel.Message, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
 	numericID, err := decodeGraphID(ctx, "message", id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid message id")
 	}
 
-	existing, err := r.GetMessageByIDUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get message")
-	}
-	if existing == nil {
-		return nil, fmt.Errorf("message not found")
-	}
-	if existing.UserID != claims.ID && !isAdminRole(claims.Role) {
-		audit.LogDenied(ctx, "update_message", "message", numericID, "not owner")
-		return nil, errors.New("forbidden: can only update your own messages")
-	}
-	room, err := r.GetRoomUseCase.Execute(ctx, existing.RoomID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
-	}
-	// 授業内チャットは送信と同じく、履修をやめた授業・終了した学期では編集させない。
-	if !isAdminRole(claims.Role) {
-		if room != nil && room.Type == model.RoomTypeCourse {
-			if err := r.CheckRoomWritableUseCase.Execute(ctx, existing.RoomID); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// 編集後の本文でメンションを解決し直す。本文から消えたメンションは保存側で消える。
-	mentions, err := r.resolveMessageMentions(ctx, existing.RoomID, existing.UserID, content, mentionUserIDs)
+	mentionIDs, err := decodeMentionUserIDs(ctx, mentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	// 既にメンション済みの相手には再通知しないよう、編集前のメンションを控えておく。
-	alreadyNotified := make(map[int64]struct{})
-	if before, err := r.ListMessageMentionsUseCase.Execute(ctx, []int64{numericID}); err == nil {
-		for _, m := range before[numericID] {
-			alreadyNotified[m.UserID] = struct{}{}
-		}
-	}
-
-	msg, err := r.UpdateMessageUseCase.Execute(ctx, numericID, model.UpdateMessageParam{Content: &content}, mentions)
+	msg, err := r.ChatService.UpdateMessage(ctx, chatusecase.UpdateMessageInput{
+		RoomID:         rid,
+		MessageID:      numericID,
+		Content:        content,
+		MentionUserIDs: mentionIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// 編集で新しく追加されたメンションだけ通知する。
-	added := make([]*model.Mention, 0, len(msg.Mentions))
-	for _, m := range msg.Mentions {
-		if _, ok := alreadyNotified[m.UserID]; ok {
-			continue
-		}
-		added = append(added, m)
-	}
-	if room != nil && len(added) > 0 {
-		notified := *msg
-		notified.Mentions = added
-		r.publishMentionNotifications(ctx, room, &notified, existing.UserID, nil)
-	}
-
-	gqlMsg := toGraphMessage(msg)
-	r.PubSub.Publish(roomID+":message:updated", gqlMsg)
-	return gqlMsg, nil
+	return toGraphMessage(msg), nil
 }
 
 // CreateReport is the resolver for the createReport field.
@@ -2411,67 +2244,21 @@ func (r *mutationResolver) DeleteAnnouncement(ctx context.Context, id string) (b
 }
 
 // MarkRoomAsRead is the resolver for the markRoomAsRead field.
+//
+// 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
+// 切り分けと、既読にしたあとの配信（相手側の既読表示・DM 通知の既読化・未読SSE）は
+// ChatService 側にある。
 func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return false, fmt.Errorf("invalid room id")
 	}
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get room")
-	}
-	isCourseRoom := room != nil && room.Type == model.RoomTypeCourse
-	var memberIDs []int64
-	if !isCourseRoom {
-		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return false, fmt.Errorf("failed to verify room membership")
-		}
-		if !containsInt64(memberIDs, claims.ID) {
-			return false, errors.New("forbidden: not a member of this room")
-		}
-	}
-	if isCourseRoom {
-		// 授業内チャットは room_users を使わないため、既読位置は匿名IDの行に持つ。
-		if err := r.MarkCourseRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
-			return false, err
-		}
-	} else if err := r.MarkRoomAsReadUseCase.Execute(ctx, rid, claims.ID); err != nil {
+	if err := r.ChatService.MarkAsRead(ctx, rid); err != nil {
 		return false, err
 	}
-
-	// DM ルームを既読にした際は、相手からの DM 通知も既読にする
-	if room != nil && room.Type == model.RoomTypeDM {
-		for _, memberID := range memberIDs {
-			if memberID == claims.ID {
-				continue
-			}
-			if err := r.MarkAllAsReadByActorUseCase.Execute(ctx, claims.ID, string(notificationuc.TypeDM), memberID); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to mark dm notifications as read")
-			}
-		}
-		if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
-			r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
-		}
-	}
-
-	// 既読の配信は相手側の既読表示のためのもの。授業内チャットは匿名なので、
-	// 誰が読んだか(実ユーザーID)をルームの購読者へ配信しない。
-	if !isCourseRoom {
-		nowStr := time.Now().Format(timeFormat)
-		r.PubSub.Publish(roomID+":read_status", &gqlmodel.RoomReadStatusUpdate{
-			UserID:     encodeGraphID("user", claims.ID),
-			LastReadAt: nowStr,
-		})
-	}
-	r.SSEBroker.PublishToUser(claims.ID, "unread_room", map[string]any{
-		"roomID":      roomID,
-		"unreadCount": 0,
-	})
 	return true, nil
 }
 
@@ -2633,8 +2420,7 @@ func (r *pollResolver) User(ctx context.Context, obj *gqlmodel.Poll) (*gqlmodel.
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if identity, err := r.anonymousIdentityForCourseRoom(ctx, obj.RoomID, numericUserID); err == nil && identity != nil {
-		anon := toGraphAnonymousUser(identity)
+	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
 		// 投票の「先生からの投票」表示のため、匿名化しつつも role だけは実ユーザーのものを
 		// 引き継ぐ(name/avatarUrl/ID等は匿名IDのまま個人を特定できないようにする)。
 		if u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID); err == nil && u != nil {
@@ -3496,6 +3282,8 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([
 		return []*gqlmodel.User{}, nil
 	}
 
+	// これは閲覧判定ではなく「メンション候補を引けるのはメンバーだけ」という別規則。
+	// EnsureReadAccess は非メンバーの管理者にも閲覧を許すので、そこには寄せない。
 	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
@@ -3611,33 +3399,18 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 }
 
 // Messages is the resolver for the messages field.
+//
+// 閲覧権限（授業は全員閲覧可、それ以外は room_users）の判定は
+// ChatService.EnsureReadAccess にあり、messageAdded などのサブスクリプションと
+// 同じ1本を通る。ここはカーソルのデコードと GraphQL 型への変換だけ。
 func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string, around *string) (*gqlmodel.MessagePage, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
-	}
-
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		// GetRoomUseCase returns "room not found: <id>" for a nonexistent room id;
-		// propagate it as-is so the client's not-found mapping applies (item 28).
-		return nil, err
-	}
-	if room.Type != model.RoomTypeCourse {
-		// 授業内チャットは全授業公開のため誰でも閲覧できる。それ以外の room は
-		// 従来通り room_users membership（または管理者）を要求する。
-		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify room membership")
-		}
-		if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
-			return nil, errors.New("forbidden: not a member of this room")
-		}
 	}
 
 	l := 50
@@ -3674,33 +3447,36 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 		afterTimeVal = &t
 	}
 
-	var msgs []*model.Message
-	var hasMoreBefore, hasMoreAfter bool
+	var aroundID *int64
 	if around != nil {
-		aroundID, err := decodeGraphID(ctx, "message", *around)
+		id, err := decodeGraphID(ctx, "message", *around)
 		if err != nil {
 			return nil, fmt.Errorf("invalid around id")
 		}
-		msgs, hasMoreBefore, hasMoreAfter, err = r.ListMessagesAroundUseCase.Execute(ctx, rid, aroundID, l)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		msgs, hasMoreBefore, hasMoreAfter, err = r.ListMessagesUseCase.Execute(ctx, rid, l, beforeID, afterID, afterTimeVal)
-		if err != nil {
-			return nil, err
-		}
+		aroundID = &id
 	}
 
-	items := make([]*gqlmodel.Message, 0, len(msgs))
-	for _, msg := range msgs {
+	page, err := r.ChatService.ListMessages(ctx, chatusecase.ListMessagesInput{
+		RoomID:   rid,
+		Limit:    l,
+		Cursor:   repository.MessageCursor{BeforeID: beforeID, AfterID: afterID, AfterTime: afterTimeVal},
+		AroundID: aroundID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*gqlmodel.Message, 0, len(page.Items))
+	for _, msg := range page.Items {
 		items = append(items, toGraphMessage(msg))
 	}
-	return &gqlmodel.MessagePage{Items: items, HasMoreBefore: hasMoreBefore, HasMoreAfter: hasMoreAfter}, nil
+	return &gqlmodel.MessagePage{Items: items, HasMoreBefore: page.HasMoreBefore, HasMoreAfter: page.HasMoreAfter}, nil
 }
 
 // Room is the resolver for the room field.
 func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, error) {
+	// 認証は requireRoomReadAccess（ChatService.EnsureReadAccess）側でも行われるが、
+	// この後のブロック判定で claims.ID が要るので claims も受け取っておく。
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -3710,22 +3486,15 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
+
+	// 閲覧可否の判定は messages クエリや各サブスクリプションと同じ
+	// ChatService.EnsureReadAccess に揃える（ルームを返すので GetRoomUseCase は不要）。
+	// 以前ここだけは「管理者なら DM でも閲覧可」という独自分岐を持っていたが、同じ
+	// 部屋に対して room は取れるのに messages は取れないという食い違いが出るため、
+	// EnsureReadAccess 側の規則（DM は管理者でも membership 必須）へ寄せた。
+	room, err := r.requireRoomReadAccess(ctx, rid)
 	if err != nil {
 		return nil, err
-	}
-
-	var memberIDs []int64
-	if room == nil || room.Type != model.RoomTypeCourse {
-		// 授業内チャットは全授業公開のため誰でも閲覧できる。それ以外の room は
-		// 従来通り room_users membership（または管理者）を要求する。
-		memberIDs, err = r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify room membership")
-		}
-		if !isAdminRole(claims.Role) && !containsInt64(memberIDs, claims.ID) {
-			return nil, errors.New("forbidden: not a member of this room")
-		}
 	}
 
 	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
@@ -3756,12 +3525,9 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		gqlRoom.IsMessagingDisabled = isBlocked
 	}
 
-	readStatusUseCase := r.GetRoomReadStatusUseCase
-	if room != nil && room.Type == model.RoomTypeCourse {
-		// 授業内チャットは room_users を使わないため、既読位置は匿名IDの行から取る。
-		readStatusUseCase = r.GetCourseRoomReadStatusUseCase
-	}
-	if readStatus, err := readStatusUseCase.Execute(ctx, rid, claims.ID); err == nil {
+	// 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
+	// 切り分けは ChatService 側にある。
+	if readStatus, err := r.ChatService.GetReadStatus(ctx, rid); err == nil {
 		if readStatus.LastReadAt != nil {
 			s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
 			gqlRoom.LastReadAt = &s
@@ -4707,8 +4473,7 @@ func (r *queryResolver) MyCourseRoomUnreadCounts(ctx context.Context) ([]*gqlmod
 
 // Questions is the resolver for the questions field.
 func (r *queryResolver) Questions(ctx context.Context, roomID string, limit *int32, offset *int32) (*gqlmodel.QuestionPage, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -4716,7 +4481,7 @@ func (r *queryResolver) Questions(ctx context.Context, roomID string, limit *int
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
 
@@ -4742,8 +4507,7 @@ func (r *queryResolver) Questions(ctx context.Context, roomID string, limit *int
 
 // Question is the resolver for the question field.
 func (r *queryResolver) Question(ctx context.Context, id string) (*gqlmodel.Question, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -4756,7 +4520,7 @@ func (r *queryResolver) Question(ctx context.Context, id string) (*gqlmodel.Ques
 	if err != nil || q == nil {
 		return nil, err
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, q.RoomID); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, q.RoomID); err != nil {
 		return nil, err
 	}
 
@@ -4765,8 +4529,7 @@ func (r *queryResolver) Question(ctx context.Context, id string) (*gqlmodel.Ques
 
 // Polls is the resolver for the polls field.
 func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, offset *int32) (*gqlmodel.PollPage, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -4774,7 +4537,7 @@ func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
 
@@ -4800,8 +4563,7 @@ func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, 
 
 // Poll is the resolver for the poll field.
 func (r *queryResolver) Poll(ctx context.Context, id string) (*gqlmodel.Poll, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
@@ -4814,7 +4576,7 @@ func (r *queryResolver) Poll(ctx context.Context, id string) (*gqlmodel.Poll, er
 	if err != nil || p == nil {
 		return nil, err
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, p.RoomID); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, p.RoomID); err != nil {
 		return nil, err
 	}
 
@@ -4946,8 +4708,8 @@ func (r *questionResolver) User(ctx context.Context, obj *gqlmodel.Question) (*g
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if identity, err := r.anonymousIdentityForCourseRoom(ctx, obj.RoomID, numericUserID); err == nil && identity != nil {
-		return toGraphAnonymousUser(identity), nil
+	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
+		return anon, nil
 	}
 
 	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
@@ -5050,18 +4812,10 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get room")
-	}
-	if room == nil || room.Type != model.RoomTypeCourse {
-		memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify room membership")
-		}
-		if !containsInt64(memberIDs, claims.ID) {
-			return nil, errors.New("forbidden: not a member of this room")
-		}
+	// 既読状況の購読もメッセージ本体と同じ閲覧可否で守る。判定は
+	// ChatService.EnsureReadAccess の1本だけ（以前はここに同じ分岐を写経していた）。
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
+		return nil, err
 	}
 
 	currentUserGraphID := encodeGraphID("user", claims.ID)
@@ -5126,15 +4880,15 @@ func (r *subscriptionResolver) AnswerDeleted(ctx context.Context, questionID str
 
 // PollAdded is the resolver for the pollAdded field.
 func (r *subscriptionResolver) PollAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Poll, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
 
@@ -5166,10 +4920,10 @@ func (r *subscriptionResolver) PollAdded(ctx context.Context, roomID string) (<-
 
 // PollUpdated is the resolver for the pollUpdated field.
 func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (<-chan *gqlmodel.Poll, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+
 	pid, err := decodeGraphID(ctx, "poll", pollID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid poll id")
@@ -5181,7 +4935,7 @@ func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (
 	if p == nil {
 		return nil, fmt.Errorf("poll not found")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, p.RoomID); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, p.RoomID); err != nil {
 		return nil, err
 	}
 
@@ -5213,15 +4967,15 @@ func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (
 
 // PollDeleted is the resolver for the pollDeleted field.
 func (r *subscriptionResolver) PollDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Poll, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	if _, err := r.requireRoomReadAccess(ctx, claims, rid); err != nil {
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
 
