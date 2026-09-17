@@ -8,7 +8,55 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/usecase/block"
+	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
+
+// AccessPolicy はチャットの権限判定。閲覧・書き込み・編集削除の可否をここだけで決める。
+//
+// 送信・編集・削除・一覧・既読の各サービスはこれを依存として受け取る。判定の実体が
+// 1つであることが要で、サービスごとに同じ判定を書き直すと必ずどこかで食い違う
+// （統合前は実際にそうなっていた。各メソッドのコメント参照）。
+//
+// 非公開メソッドを混ぜてあるのは、実装を chat パッケージの外へ出せなくするため。
+// 「判定つきの入口」を外から差し替えられると、この型が権限判定の単一の出どころで
+// あるという前提が崩れる。
+type AccessPolicy interface {
+	// EnsureReadAccess は roomID を閲覧してよいかを判定し、ルームを返す。
+	// メッセージだけでなく質問・回答・投票のクエリ／サブスクリプションも
+	// この1つを通す（判定の重複を無くすため）。
+	EnsureReadAccess(ctx context.Context, roomID int64) (*model.Room, error)
+	// EnsureWriteAccess は roomID へ書き込んでよいかを判定し、ルームを返す。
+	EnsureWriteAccess(ctx context.Context, roomID int64) (*model.Room, error)
+
+	// ensureWriteAccessFor は書き込み判定の本体。判定のついでに引いたメンバー一覧を
+	// 送信サービスへ持ち回すため、EnsureWriteAccess とは別に用意している。
+	ensureWriteAccessFor(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error)
+	// ensureMutateAccess は既存メッセージの編集・削除を許してよいルームかの判定。
+	ensureMutateAccess(ctx context.Context, claims *auth.Claims, room *model.Room) error
+}
+
+// AccessPolicyDeps は権限判定に要るものだけ。ルーム・メンバー・授業の学期履修・
+// ブロック関係の4つで判定は閉じている。
+type AccessPolicyDeps struct {
+	GetRoom          roomusecase.GetRoomUseCase
+	GetRoomMemberIDs roomusecase.GetUserIDsByRoomIDUseCase
+
+	// CheckRoomWritable は授業ルームの学期・履修判定（非授業ルームは素通し）。
+	CheckRoomWritable  courseusecase.CheckRoomWritableUseCase
+	CheckBlockRelation block.CheckBlockRelationUseCase
+}
+
+var _ AccessPolicy = &accessPolicy{}
+
+type accessPolicy struct {
+	deps AccessPolicyDeps
+}
+
+func NewAccessPolicy(deps AccessPolicyDeps) AccessPolicy {
+	return &accessPolicy{deps: deps}
+}
 
 // EnsureReadAccess は roomID を閲覧してよいかを判定する。
 //
@@ -24,13 +72,13 @@ import (
 // 無かった以上ここで広げる理由が無く、通報対応は通報時のスナップショットで
 // 足りるため、管理者でも membership を要求する（統合前の messages クエリより
 // 厳しくなるのはこの1点だけ）。
-func (s *service) EnsureReadAccess(ctx context.Context, roomID int64) (*model.Room, error) {
+func (p *accessPolicy) EnsureReadAccess(ctx context.Context, roomID int64) (*model.Room, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	room, err := s.deps.GetRoom.Execute(ctx, roomID)
+	room, err := p.deps.GetRoom.Execute(ctx, roomID)
 	if err != nil {
 		// GetRoomUseCase は存在しないルームに "room not found: <id>" を返す。
 		// クライアントの not-found 判定がそのまま効くよう、包まずに返す。
@@ -40,27 +88,74 @@ func (s *service) EnsureReadAccess(ctx context.Context, roomID int64) (*model.Ro
 		return room, nil
 	}
 
-	memberIDs, err := s.deps.GetRoomMemberIDs.Execute(ctx, roomID)
+	if err := p.ensureRoomParticipation(ctx, claims, room); err != nil {
+		return nil, err
+	}
+	return room, nil
+}
+
+// ensureRoomParticipation は非授業ルームの「その部屋に関わってよい人か」の判定。
+//
+// 閲覧（EnsureReadAccess）と既存メッセージの編集・削除（ensureMutateAccess）で
+// 同じ関数を使う。別々に書くと「閲覧は禁じているのに編集はできる」という食い違いが
+// 生まれ、実際そうなっていた（退出後も自分のメッセージを編集・削除できた）。
+//
+// 管理者の DM 除外はここ1箇所で守る。非参加の DM は管理者でも読めず、書き換えも
+// 削除もできない。法務上の要件なので、呼び出し側の都合で緩めないこと。
+func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth.Claims, room *model.Room) error {
+	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, room.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify room membership")
+		return fmt.Errorf("failed to verify room membership")
 	}
 	if containsInt64(memberIDs, claims.ID) {
-		return room, nil
+		return nil
 	}
 	if room.Type != model.RoomTypeDM && authz.IsAdminRole(claims.Role) {
-		return room, nil
+		return nil
 	}
-	return nil, errors.New("forbidden: not a member of this room")
+	return errors.New("forbidden: not a member of this room")
+}
+
+// ensureMutateAccess は「既にあるメッセージを、いま、このルームで操作してよいか」の判定。
+//
+// 所有権（本人か／管理者か／コミュニティのオーナーか）とは別の軸で、編集・削除は
+// 両方を通って初めて許される。所有権しか見ていなかったため、コミュニティを退出・
+// キックされた利用者が既知の message ID で編集・削除を続けられていた。
+//
+// 経路ごとにどの判定が効くか:
+//
+//	ルーム種別   | 一般利用者                        | 管理者
+//	------------|----------------------------------|------------------------------
+//	授業        | CheckRoomWritable（現学期＋履修）  | 素通し（通報対応のため従来どおり）
+//	コミュニティ | membership 必須                   | 非メンバーでも可
+//	DM          | membership 必須                   | membership 必須（非参加のDMは不可）
+//
+// 授業ルームで membership を見ないのは、授業内チャットが room_users を使わない
+// 設計（誰でも閲覧でき匿名で表示する）だから。代わりに「現学期かつ履修中か」を
+// CheckRoomWritable が見る。送信時 (ensureWriteAccessFor) と同じ判定なので、
+// 送れる状態でなければ直せもしない、で揃う。
+//
+// 送信 (ensureWriteAccessFor) と違ってブロック判定は入れない。ブロックは「相手に
+// 新しく話しかけさせない」ための設定であって、既に送ってしまった自分の発言を消す
+// 手段まで奪う理由が無いため。
+func (p *accessPolicy) ensureMutateAccess(ctx context.Context, claims *auth.Claims, room *model.Room) error {
+	if room.Type == model.RoomTypeCourse {
+		if authz.IsAdminRole(claims.Role) {
+			return nil
+		}
+		return p.deps.CheckRoomWritable.Execute(ctx, room.ID)
+	}
+	return p.ensureRoomParticipation(ctx, claims, room)
 }
 
 // EnsureWriteAccess は roomID へ書き込んでよいかを判定する。
-// 判定の中身は ensureWriteAccess と同じで、こちらはルームだけを返す薄い口。
-func (s *service) EnsureWriteAccess(ctx context.Context, roomID int64) (*model.Room, error) {
+// 判定の中身は ensureWriteAccessFor と同じで、こちらはルームだけを返す薄い口。
+func (p *accessPolicy) EnsureWriteAccess(ctx context.Context, roomID int64) (*model.Room, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	access, err := s.ensureWriteAccess(ctx, claims, roomID)
+	access, err := p.ensureWriteAccessFor(ctx, claims, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,25 +170,29 @@ type writeAccess struct {
 	MemberIDs []int64
 }
 
-// ensureWriteAccess は書き込み権限の唯一の判定。
+// ensureWriteAccessFor は書き込み権限の唯一の判定。
 //
 //   - 授業内チャット: room_users を使わず、現在の学期と一致するか（アーカイブ
 //     されていないか）と時間割に登録済みかを CheckRoomWritableUseCase が見る。
 //   - それ以外: membership が必須。2人のルーム（DM）はブロック関係があれば拒否。
-func (s *service) ensureWriteAccess(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error) {
-	room, err := s.deps.GetRoom.Execute(ctx, roomID)
+func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error) {
+	room, err := p.deps.GetRoom.Execute(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room")
 	}
 
 	if room.Type == model.RoomTypeCourse {
-		if err := s.deps.CheckRoomWritable.Execute(ctx, roomID); err != nil {
+		if err := p.deps.CheckRoomWritable.Execute(ctx, roomID); err != nil {
 			return nil, err
 		}
 		return &writeAccess{Room: room}, nil
 	}
 
-	memberIDs, err := s.deps.GetRoomMemberIDs.Execute(ctx, roomID)
+	// ここは ensureRoomParticipation を使わない。新規送信だけは管理者にも
+	// membership を要求する（非メンバーのコミュニティへ管理者名義で書き込む機能は
+	// 元から無く、閲覧・モデレーションのために広げた管理者権限を「発言」まで
+	// 広げる理由が無いため）。閲覧・編集・削除とは意図的に別の規則。
+	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -110,7 +209,7 @@ func (s *service) ensureWriteAccess(ctx context.Context, claims *auth.Claims, ro
 			}
 		}
 
-		isBlocked, err := s.deps.CheckBlockRelation.Execute(ctx, claims.ID, partnerID)
+		isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, claims.ID, partnerID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check block status")
 		}
@@ -120,23 +219,4 @@ func (s *service) ensureWriteAccess(ctx context.Context, claims *auth.Claims, ro
 	}
 
 	return &writeAccess{Room: room, MemberIDs: memberIDs}, nil
-}
-
-// ensureAnonymousIdentity は授業ルームへの書き込み時に匿名ID（匿名NNN）を確定させる。
-//
-// 以前は表示時（messageResolver.User など）に採番していたため、(a) 読むだけの
-// クエリが DB に行を作る副作用を持ち、(b) 番号が「そのルームで初めて投稿した順」
-// ではなく「初めて誰かの画面に出た順」になりえた。投稿時に採番すれば番号は
-// 投稿順に固定され、表示側は読み取りだけで済む。
-//
-// 保存トランザクションの外で呼んでいるのは、採番が MySQL の名前付きロック
-// (GET_LOCK) を使う別接続の処理で、トランザクションに参加しないため。保存が
-// 失敗しても残るのは「まだ投稿していない人の番号」だけで、その人が次に投稿した
-// ときに同じ行が再利用されるので実害はない。
-func (s *service) ensureAnonymousIdentity(ctx context.Context, room *model.Room, userID int64) error {
-	if room == nil || room.Type != model.RoomTypeCourse {
-		return nil
-	}
-	_, err := s.deps.GetOrCreateAnonymousIdentity.Execute(ctx, room.ID, userID)
-	return err
 }

@@ -1,4 +1,4 @@
-package message
+package messagestore
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 // UpdateMessageUseCase はメッセージ1件の「保存処理」（本文とメンションの貼り直し）。
 //
 // 編集してよいか（本人か、授業ルームなら学期・履修が生きているか）の判定は
-// usecase/chat の ChatService が持つ。必ずサービス経由で呼ぶこと。
+// usecase/chat の編集サービスが持ち、ここには無い（パッケージのコメント参照）。
 type UpdateMessageUseCase interface {
 	// mentions は ResolveMentionsUseCase で検証済みのメンション。
 	// 本文を書き換えるときはメンションも貼り直す（本文から消えたメンションは行ごと消える）。

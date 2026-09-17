@@ -241,29 +241,52 @@ func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userI
 	return &room, nil
 }
 
-func (r *MySQLRoomUserRepository) UpdateLastReadAt(ctx context.Context, roomID, userID int64, readAt int64) error {
-	query := "UPDATE room_users SET last_read_at = ? WHERE room_id = ? AND user_id = ?"
-	_, err := r.DB.ExecContext(ctx, query, readAt, roomID, userID)
+// UpdateLastRead は既読位置（メッセージID）と既読時刻をまとめて進める。
+// 時刻の列を残すのは GraphQL の roomReadStatus.lastReadAt が表示に使っているため
+// （API 契約は変えない）。未読判定に使うのはメッセージIDの方。
+//
+// どちらも GREATEST で進める方向にしか動かさない。既読は複数端末から打たれるので、
+// 先に進んでいる位置を後から来た小さい値で巻き戻すと未読が復活してしまう。
+func (r *MySQLRoomUserRepository) UpdateLastRead(ctx context.Context, roomID, userID int64, lastReadMessageID *int64, readAt int64) error {
+	query := fmt.Sprintf(`
+		UPDATE room_users
+		SET last_read_message_id = %s,
+		    last_read_at = GREATEST(COALESCE(last_read_at, 0), ?)
+		WHERE room_id = ? AND user_id = ?
+	`, advanceLastReadMessageIDSQL("last_read_message_id"))
+	_, err := r.DB.ExecContext(ctx, query, lastReadMessageID, readAt, roomID, userID)
 	return err
 }
 
-func (r *MySQLRoomUserRepository) GetLastReadAt(ctx context.Context, roomID, userID int64) (*int64, error) {
-	var readAt sql.NullInt64
+func (r *MySQLRoomUserRepository) GetLastRead(ctx context.Context, roomID, userID int64) (*repository.ReadPosition, error) {
+	var messageID, readAt sql.NullInt64
 	err := r.DB.QueryRowContext(ctx,
-		"SELECT last_read_at FROM room_users WHERE room_id = ? AND user_id = ?",
+		"SELECT last_read_message_id, last_read_at FROM room_users WHERE room_id = ? AND user_id = ?",
 		roomID, userID,
-	).Scan(&readAt)
+	).Scan(&messageID, &readAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if !readAt.Valid {
+	// 行はあるが一度も既読を打っていない（両方 NULL）場合は「既読位置なし」を返す。
+	if !messageID.Valid && !readAt.Valid {
 		return nil, nil
 	}
-	v := readAt.Int64
-	return &v, nil
+	return &repository.ReadPosition{
+		LastReadMessageID: nullInt64Ptr(messageID),
+		LastReadAt:        nullInt64Ptr(readAt),
+	}, nil
+}
+
+// nullInt64Ptr は NULL 可能な列を *int64 に移す小物。
+func nullInt64Ptr(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
 }
 
 func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error) {

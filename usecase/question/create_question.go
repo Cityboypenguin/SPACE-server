@@ -70,8 +70,7 @@ func (uc *CreateQuestionInteractor) Execute(ctx context.Context, roomID int64, b
 	// 匿名ID(匿名NNN)は投稿時に確定させる。質問箱は授業内チャット専用なので、
 	// メッセージ送信（usecase/chat）と同じ扱いにして「番号は初投稿順」という
 	// 仕様を全ての投稿経路で守る。表示側は採番しない（読むだけ）。
-	// 採番は GET_LOCK を使う別接続の処理でトランザクションに参加しないため、
-	// 保存トランザクションの外で先に済ませる。
+	// 詳細は usecase/chat の ensureAnonymousIdentity のコメントを参照。
 	if _, err := uc.anonIdentity.Execute(ctx, roomID, claims.ID); err != nil {
 		return nil, err
 	}

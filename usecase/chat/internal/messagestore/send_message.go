@@ -1,4 +1,23 @@
-package message
+// Package messagestore はチャットメッセージの「保存処理」（送信・編集・削除）。
+//
+// なぜ usecase/chat/internal/ に置いているか:
+//
+// これらは認可を一切持たない。授業ルームの学期・履修、room_users の membership、
+// DM のブロック判定、所有権、匿名IDの採番は全て usecase/chat 側の判定で、ここを
+// 直接呼べばそれらが丸ごとバイパスされる。以前は usecase/message にあり
+// 「サービス経由で呼ぶこと」という doc コメントだけが歯止めだったので、別の
+// リゾルバやバッチが素直に呼んでしまえば認可なしで書き込めてしまった。
+//
+// Go の internal パッケージ規則により、ここを import できるのは
+// usecase/chat/... 配下だけになる。つまり「認可判定を通ってから保存する」という
+// 順序を、コメントではなくコンパイラが担保する。
+//
+// 読み取り系（GetMessageByID・一覧取得・メンション取得など）は認可を前提としない
+// ／リゾルバや DataLoader から直接使うため、usecase/message に公開のまま残してある。
+//
+// 保存処理を新しく足すときもここへ置くこと。外から呼びたくなったら、それは
+// usecase/chat に認可付きの入口を足すべきサイン。
+package messagestore
 
 import (
 	"context"
@@ -13,10 +32,10 @@ import (
 
 // SendMessageUseCase はメッセージ1件の「保存処理」。
 //
-// 権限判定はここには無い。授業ルームの学期・履修、room_users の membership、
-// DM のブロック判定、匿名IDの採番は全て usecase/chat の ChatService が持つので、
-// このユースケースは必ずサービス経由で呼ぶこと（直接呼ぶとそれらが丸ごと
-// 飛ばされる）。
+// 権限判定はここには無い（授業ルームの学期・履修、room_users の membership、
+// DM のブロック判定、匿名IDの採番は usecase/chat の送信サービスが持つ）。
+// このパッケージが internal に居るおかげで、認可を通さずここへ辿り着く経路は
+// コンパイル時に塞がれている。
 type SendMessageUseCase interface {
 	// replyToID を渡すと引用返信になる。返信先は同じルームの未削除メッセージである
 	// 必要があり、そうでなければエラーになる。

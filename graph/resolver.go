@@ -85,11 +85,7 @@ type Resolver struct {
 	ReportMediaDimensionsUseCase       mediausecase.ReportDimensionsUseCase
 	ListImagesMissingDimensionsUseCase mediausecase.ListImagesMissingDimensionsUseCase
 
-	// ChatService はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
-	// 権限判定・メンション解決・匿名IDの採番・通知はここに集約してあり、リゾルバは
-	// GraphQL ID のデコードと GraphQL 型への変換だけを行う。
-	// 配線の都合上 resolver を組み立てたあとに差し込む（cmd/server/main.go 参照）。
-	ChatService chatusecase.Service
+	ChatUseCases
 
 	MessageRoomUseCases
 	CommunityUseCases
@@ -202,9 +198,11 @@ type PostUseCases struct {
 // MessageRoomUseCases はルーム/メッセージ系のうち、リゾルバが直接使ってよいもの。
 //
 // メッセージの送信・編集・削除・一覧、メンション解決、既読の記録は
-// Resolver.ChatService 経由でしか呼べないよう、ここには置いていない。
+// ChatUseCases 経由でしか呼べないよう、ここには置いていない。
 // 置いてしまうと membership・学期/履修・ブロックの判定を飛ばして
 // 保存処理を直接叩ける口がリゾルバに復活してしまうため。
+// なお保存処理そのものは usecase/chat/internal/messagestore に移したので、
+// ここへ書き戻そうとしてもコンパイルが通らない。
 type MessageRoomUseCases struct {
 	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
 	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
@@ -223,7 +221,28 @@ type MessageRoomUseCases struct {
 	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
 	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
 	GetMembersUnreadCountsUseCase   roomusecase.GetMembersUnreadCountsUseCase
-	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
+	// GetCourseRoomUnreadCountsUseCase は授業ルーム専用の未読SSE宛先（履修者）。
+	// room_users を使わない授業ルームでは GetMembersUnreadCountsUseCase が使えない。
+	GetCourseRoomUnreadCountsUseCase roomusecase.GetCourseRoomUnreadCountsUseCase
+	CountUnreadByRoomTypeUseCase     roomusecase.CountUnreadByRoomTypeUseCase
+}
+
+// ChatUseCases はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
+//
+// 権限判定・メンション解決・匿名IDの採番・保存・通知は全て usecase/chat 側にあり、
+// リゾルバは GraphQL ID のデコードと GraphQL 型への変換だけを行う。
+//
+// 全部入りのサービス1つではなく責務ごとに4つ持つ。1つにまとめると、そのサービスが
+// 再び20個近い依存を抱える形へ戻ってしまうため（usecase/chat のパッケージコメント
+// 参照）。埋め込みにしてあるので呼び出し側は r.ChatCommands.SendMessage(...) の
+// ように書ける。
+type ChatUseCases struct {
+	// ChatAccess は閲覧・書き込みの権限判定。他の3つもこれを共有しているので、
+	// 「リゾルバで判定して、サービスでも判定して」が二重にならない。
+	ChatAccess   chatusecase.AccessPolicy
+	ChatCommands chatusecase.MessageCommandService
+	ChatQueries  chatusecase.MessageQueryService
+	ChatReads    chatusecase.ReadReceiptService
 }
 
 type CommunityUseCases struct {

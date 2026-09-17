@@ -44,9 +44,18 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
+	// 回答は質問を経由しないとルームが分からないので、匿名表示の判定に質問を引く。
+	// 引けないと授業ルームでも実名で出てしまうため、失敗は必ず残す
+	// （ID のデコード失敗は audit.LogProbe が既に記録している）。
 	qid, err := decodeGraphID(ctx, "question", obj.QuestionID)
 	if err == nil {
-		if q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid); err == nil && q != nil {
+		q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid)
+		if err != nil {
+			logChatLookup(err, chatLookupQuestionRoom).
+				Int64("question_id", qid).
+				Int64("author_user_id", numericUserID).
+				Msg("failed to load the question; falling back to showing the real user")
+		} else if q != nil {
 			roomIDStr := encodeGraphID("room", q.RoomID)
 			if anon := r.anonymousUserForCourseRoom(ctx, roomIDStr, numericUserID); anon != nil {
 				return anon, nil
@@ -1787,7 +1796,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 // SendMessage is the resolver for the sendMessage field.
 //
 // 権限判定（授業の学期・履修 / membership / ブロック）、メンションの検証、
-// 保存後の配信・通知は全て ChatService 側にある。ここは GraphQL ID のデコードと
+// 保存後の配信・通知は全て ChatCommands 側にある。ここは GraphQL ID のデコードと
 // GraphQL 型への変換だけを行う。
 func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string) (*gqlmodel.Message, error) {
 	if _, err := requireAuth(ctx); err != nil {
@@ -1813,7 +1822,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, err
 	}
 
-	msg, err := r.ChatService.SendMessage(ctx, chatusecase.SendMessageInput{
+	msg, err := r.ChatCommands.SendMessage(ctx, chatusecase.SendMessageInput{
 		RoomID:         rid,
 		Content:        content,
 		MediaInputs:    toMediaInputs(mediaInputs),
@@ -1842,7 +1851,7 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 		return false, fmt.Errorf("invalid message id")
 	}
 
-	return r.ChatService.DeleteMessage(ctx, chatusecase.DeleteMessageInput{RoomID: rid, MessageID: numericID})
+	return r.ChatCommands.DeleteMessage(ctx, chatusecase.DeleteMessageInput{RoomID: rid, MessageID: numericID})
 }
 
 // UpdateMessage is the resolver for the updateMessage field.
@@ -1865,7 +1874,7 @@ func (r *mutationResolver) UpdateMessage(ctx context.Context, roomID string, id 
 		return nil, err
 	}
 
-	msg, err := r.ChatService.UpdateMessage(ctx, chatusecase.UpdateMessageInput{
+	msg, err := r.ChatCommands.UpdateMessage(ctx, chatusecase.UpdateMessageInput{
 		RoomID:         rid,
 		MessageID:      numericID,
 		Content:        content,
@@ -2247,7 +2256,7 @@ func (r *mutationResolver) DeleteAnnouncement(ctx context.Context, id string) (b
 //
 // 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
 // 切り分けと、既読にしたあとの配信（相手側の既読表示・DM 通知の既読化・未読SSE）は
-// ChatService 側にある。
+// ChatReads 側にある。
 func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (bool, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return false, err
@@ -2256,7 +2265,7 @@ func (r *mutationResolver) MarkRoomAsRead(ctx context.Context, roomID string) (b
 	if err != nil {
 		return false, fmt.Errorf("invalid room id")
 	}
-	if err := r.ChatService.MarkAsRead(ctx, rid); err != nil {
+	if err := r.ChatReads.MarkAsRead(ctx, rid); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -2423,7 +2432,16 @@ func (r *pollResolver) User(ctx context.Context, obj *gqlmodel.Poll) (*gqlmodel.
 	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
 		// 投票の「先生からの投票」表示のため、匿名化しつつも role だけは実ユーザーのものを
 		// 引き継ぐ(name/avatarUrl/ID等は匿名IDのまま個人を特定できないようにする)。
-		if u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID); err == nil && u != nil {
+		//
+		// 引けなくても匿名表示のまま返す（role が既定値になるだけで匿名性は壊れない）。
+		// ただし「先生からの投票」バッジが黙って消えるのは気づきにくいのでログに残す。
+		u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
+		if err != nil {
+			logChatLookup(err, chatLookupPollAuthorRole).
+				Str("poll_id", obj.ID).
+				Int64("author_user_id", numericUserID).
+				Msg("failed to load the poll author; the role badge falls back to the default")
+		} else if u != nil {
 			anon.Role = u.Role
 		}
 		return anon, nil
@@ -3401,7 +3419,7 @@ func (r *queryResolver) GetProfileByUserID(ctx context.Context, userID string) (
 // Messages is the resolver for the messages field.
 //
 // 閲覧権限（授業は全員閲覧可、それ以外は room_users）の判定は
-// ChatService.EnsureReadAccess にあり、messageAdded などのサブスクリプションと
+// ChatAccess.EnsureReadAccess にあり、messageAdded などのサブスクリプションと
 // 同じ1本を通る。ここはカーソルのデコードと GraphQL 型への変換だけ。
 func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int32, before *string, after *string, afterTime *string, around *string) (*gqlmodel.MessagePage, error) {
 	if _, err := requireAuth(ctx); err != nil {
@@ -3456,7 +3474,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 		aroundID = &id
 	}
 
-	page, err := r.ChatService.ListMessages(ctx, chatusecase.ListMessagesInput{
+	page, err := r.ChatQueries.ListMessages(ctx, chatusecase.ListMessagesInput{
 		RoomID:   rid,
 		Limit:    l,
 		Cursor:   repository.MessageCursor{BeforeID: beforeID, AfterID: afterID, AfterTime: afterTimeVal},
@@ -3475,7 +3493,7 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 
 // Room is the resolver for the room field.
 func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, error) {
-	// 認証は requireRoomReadAccess（ChatService.EnsureReadAccess）側でも行われるが、
+	// 認証は requireRoomReadAccess（ChatAccess.EnsureReadAccess）側でも行われるが、
 	// この後のブロック判定で claims.ID が要るので claims も受け取っておく。
 	claims, err := requireAuth(ctx)
 	if err != nil {
@@ -3488,7 +3506,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	}
 
 	// 閲覧可否の判定は messages クエリや各サブスクリプションと同じ
-	// ChatService.EnsureReadAccess に揃える（ルームを返すので GetRoomUseCase は不要）。
+	// ChatAccess.EnsureReadAccess に揃える（ルームを返すので GetRoomUseCase は不要）。
 	// 以前ここだけは「管理者なら DM でも閲覧可」という独自分岐を持っていたが、同じ
 	// 部屋に対して room は取れるのに messages は取れないという食い違いが出るため、
 	// EnsureReadAccess 側の規則（DM は管理者でも membership 必須）へ寄せた。
@@ -3521,13 +3539,36 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 			}
 		}
 
-		isBlocked, _ := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
+		// 実際に送ろうとすれば AccessPolicy 側のブロック判定で弾かれるので通ることは
+		// ないが、入力欄の状態だけが食い違うので失敗は残す。
+		isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, partnerID)
+		if err != nil {
+			logChatLookup(err, chatLookupBlockRelation).
+				Int64("room_id", rid).
+				Int64("partner_id", partnerID).
+				Msg("failed to check the block relation; leaving messaging enabled")
+		}
 		gqlRoom.IsMessagingDisabled = isBlocked
 	}
 
 	// 既読位置の置き場（授業内チャットは course_room_reads、それ以外は room_users）の
-	// 切り分けは ChatService 側にある。
-	if readStatus, err := r.ChatService.GetReadStatus(ctx, rid); err == nil {
+	// 切り分けは ChatReads 側にある。
+	//
+	// 既読の取得に失敗してもルーム自体は返す。既読はルーム画面の付帯情報で、
+	// ここで room ごと失敗させるとチャットが開けなくなる（本体より軽い情報のために
+	// 本体を落とさない）。ただし画面上は「未読0・未読み」と区別がつかないので、
+	// 黙って落とさず必ずログに残す。DB 障害が正常表示に化けて気づけない、という
+	// 状態を作らないため。
+	// 閲覧権限は requireRoomReadAccess で判定済みなので、その room をそのまま渡す
+	// 口を使う（GetReadStatus を呼ぶとルームと membership の取得がもう一度走る）。
+	readStatus, err := r.ChatReads.ReadStatusOfAuthorizedRoom(ctx, room)
+	if err != nil {
+		logChatLookup(err, chatLookupReadStatus).
+			Int64("room_id", rid).
+			Int64("user_id", claims.ID).
+			Msg("failed to load read status; returning the room without it")
+	} else {
 		if readStatus.LastReadAt != nil {
 			s := time.Unix(*readStatus.LastReadAt, 0).Format(timeFormat)
 			gqlRoom.LastReadAt = &s
@@ -3565,11 +3606,34 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		return nil, fmt.Errorf("failed to load room members")
 	}
 
-	blockedSet, _ := r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
+	// ブロック一覧が引けないと、ブロック相手の DM が「ブロックなし」の見た目で並ぶ。
+	// 一覧ごと落とすほどではないので続けるが、黙って落とすと気づけないので残す。
+	blockedSet, err := r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
+	if err != nil {
+		logChatLookup(err, chatLookupBlockedUserIDs).
+			Int64("user_id", claims.ID).
+			Msg("failed to load blocked user ids; returning the DM rooms without block marks")
+	}
 
-	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	// 既読の取得に失敗しても一覧は返す（未読バッジは一覧の付帯情報で、そのために
+	// DM 一覧ごと落とさない）。ただし画面上は「未読0」と区別がつかないので、
+	// room リゾルバと同じく必ずログに残す。
+	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	if err != nil {
+		logChatLookup(err, chatLookupReadStatusBatch).
+			Int64("user_id", claims.ID).
+			Int("rooms", len(roomIDs)).
+			Msg("failed to load read statuses; returning the DM rooms without unread counts")
+	}
 
-	lastMessageMap, _ := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+	// 最新メッセージ（一覧のプレビュー）も同じ扱い。取れなければ空欄で出す。
+	lastMessageMap, err := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+	if err != nil {
+		logChatLookup(err, chatLookupLastMessages).
+			Int64("user_id", claims.ID).
+			Int("rooms", len(roomIDs)).
+			Msg("failed to load last messages; returning the DM rooms without previews")
+	}
 
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
@@ -3629,8 +3693,21 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 		roomIDs = append(roomIDs, c.RoomID)
 	}
 
-	readStatusMap, _ := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
-	lastMessageMap, _ := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+	// DM 一覧と同じ流儀。未読もプレビューも取れなくても一覧は返し、失敗はログに残す。
+	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID)
+	if err != nil {
+		logChatLookup(err, chatLookupReadStatusBatch).
+			Int64("user_id", claims.ID).
+			Int("rooms", len(roomIDs)).
+			Msg("failed to load read statuses; returning the communities without unread counts")
+	}
+	lastMessageMap, err := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+	if err != nil {
+		logChatLookup(err, chatLookupLastMessages).
+			Int64("user_id", claims.ID).
+			Int("rooms", len(roomIDs)).
+			Msg("failed to load last messages; returning the communities without previews")
+	}
 
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
@@ -4813,7 +4890,7 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 	}
 
 	// 既読状況の購読もメッセージ本体と同じ閲覧可否で守る。判定は
-	// ChatService.EnsureReadAccess の1本だけ（以前はここに同じ分岐を写経していた）。
+	// ChatAccess.EnsureReadAccess の1本だけ（以前はここに同じ分岐を写経していた）。
 	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}

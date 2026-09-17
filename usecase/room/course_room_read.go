@@ -11,21 +11,30 @@ import (
 // 既読位置は course_room_reads（匿名ID room_anonymous_identities とは別表）に
 // 持つ。MarkRoomAsReadUseCase / GetRoomReadStatusUseCase
 // ではなくこちらを使う。
+//
+// 置き場が違うだけで、未読の数え方（repository.UnreadOrigin の規則）は通常ルームと
+// 共通。違うのはフォールバックだけで、授業ルームは既読位置がまったく無いとき
+// 「時間割に登録した時刻」を起点にする。
 
 type MarkCourseRoomAsReadUseCase interface {
 	Execute(ctx context.Context, roomID, userID int64) error
 }
 
 type markCourseRoomAsReadUseCase struct {
-	readRepo repository.CourseRoomReadRepository
+	readRepo      repository.CourseRoomReadRepository
+	messageReader repository.MessageReadModel
 }
 
-func NewMarkCourseRoomAsReadUseCase(readRepo repository.CourseRoomReadRepository) MarkCourseRoomAsReadUseCase {
-	return &markCourseRoomAsReadUseCase{readRepo: readRepo}
+func NewMarkCourseRoomAsReadUseCase(readRepo repository.CourseRoomReadRepository, messageReader repository.MessageReadModel) MarkCourseRoomAsReadUseCase {
+	return &markCourseRoomAsReadUseCase{readRepo: readRepo, messageReader: messageReader}
 }
 
 func (uc *markCourseRoomAsReadUseCase) Execute(ctx context.Context, roomID, userID int64) error {
-	return uc.readRepo.UpsertLastReadAt(ctx, roomID, userID, time.Now().Unix())
+	lastReadMessageID, err := resolveReadMessageID(ctx, uc.messageReader, roomID)
+	if err != nil {
+		return err
+	}
+	return uc.readRepo.UpsertLastRead(ctx, roomID, userID, lastReadMessageID, time.Now().Unix())
 }
 
 type GetCourseRoomReadStatusUseCase interface {
@@ -57,38 +66,41 @@ func NewGetCourseRoomReadStatusUseCase(
 // PartnerLastReadAt is always nil: course chats are anonymous, so other users' read
 // positions are never exposed.
 //
-// 未読の起点は COALESCE(既読位置, 時間割に登録した時刻)。授業一覧のバッジ
-// （CountUnreadByCourseRooms）と同じ起点に揃えてあるので、一覧と部屋内で数が
-// 食い違わない。まだ一度も開いていない授業で「登録前の過去ログ全部」が未読に
-// ならないようにするのが登録時刻起点の狙い。
+// 未読の起点は repository.UnreadOrigin の規則どおり「既読メッセージID → 既読時刻 →
+// 時間割に登録した時刻」。授業一覧のバッジ（CountUnreadByCourseRooms）・未読SSE
+// （CountUnreadMessagesPerCourseRegistrant）と同じ規則なので、一覧と部屋内と
+// リアルタイム更新で数が食い違わない。まだ一度も開いていない授業で
+// 「登録前の過去ログ全部」が未読にならないようにするのが登録時刻起点の狙い。
 //
 // 時間割に登録していない（読むだけの）ユーザーには起点が無いので、従来どおり
 // 他人のメッセージを全件数える。そもそも一覧のバッジにも出てこないため、
 // 一覧との食い違いは起きない。
 func (uc *getCourseRoomReadStatusUseCase) Execute(ctx context.Context, roomID, userID int64) (*RoomReadStatus, error) {
-	lastReadAt, err := uc.readRepo.GetLastReadAt(ctx, roomID, userID)
+	position, err := uc.readRepo.GetLastRead(ctx, roomID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var afterTimestamp int64
-	if lastReadAt != nil {
-		afterTimestamp = *lastReadAt
-	} else {
-		registeredAt, err := uc.registeredAt(ctx, roomID, userID)
+	// フォールバックの時間割登録時刻は、既読位置がまったく無いときにしか使わない。
+	// 毎回引くと授業を開くたびに無駄な2クエリ（courses + timetables）が増えるので、
+	// 必要になったときだけ引く。
+	var fallbackAt *int64
+	if position == nil {
+		fallbackAt, err = uc.registeredAt(ctx, roomID, userID)
 		if err != nil {
 			return nil, err
 		}
-		if registeredAt != nil {
-			afterTimestamp = *registeredAt
-		}
 	}
 
-	unreadCount, err := uc.unreadCounter.CountUnreadMessages(ctx, roomID, userID, afterTimestamp)
+	unreadCount, err := uc.unreadCounter.CountUnreadMessages(ctx, roomID, userID, repository.NewUnreadOrigin(position, fallbackAt))
 	if err != nil {
 		return nil, err
 	}
 
+	var lastReadAt *int64
+	if position != nil {
+		lastReadAt = position.LastReadAt
+	}
 	return &RoomReadStatus{LastReadAt: lastReadAt, UnreadCount: unreadCount}, nil
 }
 

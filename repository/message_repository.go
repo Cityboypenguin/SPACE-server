@@ -65,6 +65,12 @@ type MessageReadModel interface {
 	// （usecase/message/list_messages.go）に書いてある。
 	ListMessagesByRoomID(ctx context.Context, query MessageQuery) (*MessagePage, error)
 	GetLastMessagesByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.Message, error)
+	// GetLatestMessageID はルームの最新メッセージIDを返す（1件も無ければ nil）。
+	// 既読を打つときの位置をサーバ側で決めるために使う（クライアントから ID を
+	// 受け取る形にすると GraphQL スキーマを変えることになるため）。削除済みも
+	// 含めた最大値を返す: 位置は「ここまでは見た」というしおりで、ソフトデリート
+	// された行を飛ばして小さい値を返すと、その行より後の既読が巻き戻る。
+	GetLatestMessageID(ctx context.Context, roomID int64) (*int64, error)
 }
 
 // MessageMentionStore はメッセージに紐づくメンション行の読み書き。
@@ -78,11 +84,24 @@ type MessageMentionStore interface {
 
 // MessageUnreadCounter は未読バッジのための集計。既読位置そのものは
 // room_users / course_room_reads 側が持ち、ここでは件数を数えるだけ。
+//
+// どの経路も未読の起点は UnreadOrigin の規則（ID 優先・時刻・フォールバック）に従う。
 type MessageUnreadCounter interface {
-	CountUnreadMessages(ctx context.Context, roomID, userID int64, afterTimestamp int64) (int, error)
+	// CountUnreadMessages は1ルームぶんを数える。起点は呼び出し側が既読位置から
+	// 組み立てて渡す（既読位置の置き場が room_users / course_room_reads で分かれ、
+	// 授業ルームだけフォールバックが時間割の登録時刻になるため）。
+	CountUnreadMessages(ctx context.Context, roomID, userID int64, origin UnreadOrigin) (int, error)
 	CountUnreadMessagesByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int, error)
 	CountUnreadMessagesByRoomType(ctx context.Context, userID int64, roomType string) (int, error)
+	// CountUnreadMessagesPerMember は room_users のメンバーごとの未読数（送信者は除く）。
+	// 授業ルームは room_users を使わないので、この経路では一件も返らない
+	// （授業ルームは CountUnreadMessagesPerCourseRegistrant を使うこと）。
 	CountUnreadMessagesPerMember(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
+	// CountUnreadMessagesPerCourseRegistrant は授業ルームの未読数を
+	// 「その授業を時間割に登録している利用者」ごとに返す（excludeUserID＝送信者は除く）。
+	// 未読SSEの宛先を作るための経路で、宛先の母集団が room_users ではなく timetables に
+	// なる点だけが CountUnreadMessagesPerMember と違う。N+1 を避けるため1クエリで返す。
+	CountUnreadMessagesPerCourseRegistrant(ctx context.Context, roomID int64, excludeUserID int64) (map[int64]int, error)
 	// CountUnreadByCourseRooms returns the unread count for every course room in
 	// userID's timetable for the given semester (room_id 昇順). 授業内チャットは
 	// room_users を使わないため、既読位置は course_room_reads から取り、

@@ -25,19 +25,25 @@ func NewGetRoomReadStatusUseCase(roomUserRepo repository.RoomUserRepository, unr
 	return &getRoomReadStatusUseCase{roomUserRepo: roomUserRepo, unreadCounter: unreadCounter}
 }
 
+// Execute は DM・コミュニティの既読位置と未読数を返す。
+//
+// 未読の起点は repository.UnreadOrigin の規則どおり「既読メッセージID → 既読時刻 →
+// 全件」。通常ルームにはフォールバックの時刻が無い（＝まだ一度も読んでいなければ
+// 他人のメッセージは全部未読）ので、NewUnreadOrigin には nil を渡す。
 func (uc *getRoomReadStatusUseCase) Execute(ctx context.Context, roomID, userID int64) (*RoomReadStatus, error) {
-	myLastReadAt, err := uc.roomUserRepo.GetLastReadAt(ctx, roomID, userID)
+	position, err := uc.roomUserRepo.GetLastRead(ctx, roomID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var afterTimestamp int64
-	if myLastReadAt != nil {
-		afterTimestamp = *myLastReadAt
-	}
-	unreadCount, err := uc.unreadCounter.CountUnreadMessages(ctx, roomID, userID, afterTimestamp)
+	unreadCount, err := uc.unreadCounter.CountUnreadMessages(ctx, roomID, userID, repository.NewUnreadOrigin(position, nil))
 	if err != nil {
 		return nil, err
+	}
+
+	var myLastReadAt *int64
+	if position != nil {
+		myLastReadAt = position.LastReadAt
 	}
 
 	membersLastReadAt, err := uc.roomUserRepo.GetMembersLastReadAt(ctx, roomID)

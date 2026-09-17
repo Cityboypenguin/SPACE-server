@@ -221,3 +221,23 @@ func (r *MySQLMessageRepository) GetLastMessagesByRoomIDs(ctx context.Context, r
 	}
 	return result, rows.Err()
 }
+
+// GetLatestMessageID はルームの最新メッセージIDを返す（1件も無ければ nil）。
+//
+// deleted_at IS NULL で絞らないのは意図的。返り値は既読位置（しおり）として
+// 保存するもので、末尾のメッセージがソフトデリート済みだという理由で1つ手前の ID を
+// 返すと、その削除済みメッセージより後に来た行が既読位置の後ろに残り、既読にした
+// はずのものが未読へ戻る。
+func (r *MySQLMessageRepository) GetLatestMessageID(ctx context.Context, roomID int64) (*int64, error) {
+	var latestID sql.NullInt64
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT MAX(id) FROM messages WHERE room_id = ?`, roomID,
+	).Scan(&latestID); err != nil {
+		return nil, err
+	}
+	if !latestID.Valid {
+		return nil, nil
+	}
+	id := latestID.Int64
+	return &id, nil
+}

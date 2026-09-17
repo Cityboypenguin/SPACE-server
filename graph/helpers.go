@@ -15,9 +15,35 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
+
+// チャット表示まわりで「取れなくても画面は返す」取得の失敗ログに使う lookup 名。
+// 配信側の chatDelivery* と同じく、grep する側が経路で絞れるよう1箇所に集める。
+const (
+	chatLookupCourseRoom      = "course_room_lookup"
+	chatLookupAnonymousLabel  = "anonymous_label_lookup"
+	chatLookupQuestionRoom    = "question_room_lookup"
+	chatLookupPollAuthorRole  = "poll_author_role_lookup"
+	chatLookupBlockRelation   = "block_relation_lookup"
+	chatLookupBlockedUserIDs  = "blocked_user_ids_lookup"
+	chatLookupLastMessages    = "last_messages_lookup"
+	chatLookupReadStatus      = "read_status_lookup"
+	chatLookupReadStatusBatch = "read_status_batch_lookup"
+)
+
+// logChatLookup はリゾルバ側のベストエフォートな取得失敗を、必ず同じ形で残す。
+//
+// 配信側の logChatDelivery（graph/chat_events.go）と対になる口。どちらも
+// 「失敗しても処理は続ける」場所なので、黙って落とすと DB 障害が
+// 「未読0」「実名表示」といった正常に見える表示へ化けて誰も気づけない。
+// 呼び出し側は room_id / message_id など後から追える情報を足してから Msg すること。
+func logChatLookup(err error, lookup string) *zerolog.Event {
+	return logger.Log.Error().Err(err).
+		Str("component", "chat_resolver").
+		Str("lookup", lookup)
+}
 
 func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	if p == nil || p.AvatarMedia == nil {
@@ -55,13 +81,26 @@ func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string
 	}
 
 	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil || room == nil || room.Type != model.RoomTypeCourse {
+	if err != nil {
+		// ルーム種別が引けないと「授業ルームではない」と同じ扱いになり、匿名の
+		// はずの投稿者が実名で出る。表示を落とすほどではないので nil を返して
+		// 従来どおり続けるが、匿名性に関わる失敗なので黙って捨てない。
+		logChatLookup(err, chatLookupCourseRoom).
+			Int64("room_id", rid).
+			Int64("author_user_id", authorUserID).
+			Msg("failed to load the room; falling back to showing the real user")
+		return nil
+	}
+	if room == nil || room.Type != model.RoomTypeCourse {
 		return nil
 	}
 
 	identity, err := r.GetAnonymousIdentityUseCase.Execute(ctx, rid, authorUserID)
 	if err != nil {
-		logger.Log.Error().Err(err).Msg("failed to load anonymous identity for course room")
+		logChatLookup(err, chatLookupAnonymousLabel).
+			Int64("room_id", rid).
+			Int64("author_user_id", authorUserID).
+			Msg("failed to load anonymous identity for course room")
 		return anonymousPlaceholderUser()
 	}
 	if identity == nil {
@@ -72,7 +111,7 @@ func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string
 
 // requireRoomReadAccess verifies the caller may read roomID.
 //
-// 判定の実体は ChatService.EnsureReadAccess にあり、ここはそれを呼ぶだけの薄い
+// 判定の実体は ChatAccess.EnsureReadAccess にあり、ここはそれを呼ぶだけの薄い
 // ラッパ。以前は「授業は全員閲覧可、それ以外は room_users」の判定が messages
 // クエリ・room クエリ・この関数・messageSubscription・roomReadStatusUpdated へ
 // 写経されていて、管理者の扱いだけ食い違っていた（負債は解消済み）。
@@ -82,7 +121,7 @@ func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string
 // コミュニティ権限・既読位置の書き込み）はここへ寄せていない。規則が違うものを
 // 同じ関数にまとめると、片方を緩めたときにもう片方まで緩む事故が起きるため。
 func (r *Resolver) requireRoomReadAccess(ctx context.Context, roomID int64) (*model.Room, error) {
-	return r.ChatService.EnsureReadAccess(ctx, roomID)
+	return r.ChatAccess.EnsureReadAccess(ctx, roomID)
 }
 
 // questionSubscription handles the auth/access guard and PubSub fan-out for
@@ -387,7 +426,7 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid room id")
 	}
-	// 閲覧権限は messages クエリと同じ1本（ChatService.EnsureReadAccess）を通す。
+	// 閲覧権限は messages クエリと同じ1本（ChatAccess.EnsureReadAccess）を通す。
 	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
 		return nil, err
 	}
@@ -459,70 +498,6 @@ func toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.MediaInput {
 	return result
 }
 
-// publishMessageReplyNotification notifies the author of the message that `reply`
-// quotes. 自分自身への返信、および返信先が見つからない（削除済み）場合は何もしない。
-//
-// 授業内チャットは匿名なので、通知文言にはルーム内の匿名ラベルを入れ、actor_id は
-// あえて保存しない。actor_id を残すと myNotifications(actorID:) や
-// markAllNotificationsAsReadByActor など actor で絞り込むAPIから
-// 「匿名NNN = そのユーザー」を突き合わせられてしまい、匿名性が崩れるため。
-//
-// 遷移先の組み立てにはルームIDと種別が要るが notifications 行は targetType/targetID の
-// 1組しか持てないため、SSE には Extra で roomID/roomType を添える（GraphQL 側は
-// Notification.targetMessage から辿れる）。
-//
-// 通知の失敗はメッセージ送信の成否に影響させない（ログのみ）。
-//
-// 戻り値は通知を送った相手のユーザーID（送らなかったときは nil）。
-// 同じ相手をメンションしていたときにメンション通知を二重に送らないために使う。
-func (r *Resolver) publishMessageReplyNotification(ctx context.Context, room *model.Room, reply *model.Message, actorID int64) *int64 {
-	if reply.ReplyToID == nil {
-		return nil
-	}
-
-	parent, err := r.GetMessageByIDUseCase.Execute(ctx, *reply.ReplyToID)
-	if err != nil || parent == nil {
-		return nil
-	}
-	if parent.UserID == actorID {
-		return nil
-	}
-
-	message := "あなたのメッセージに返信がありました"
-	notificationActorID := &actorID
-	if room.Type == model.RoomTypeCourse {
-		// 匿名IDは投稿時に確定済みなので、ここは採番せず読むだけ。行が引けなくても
-		// 実名を出すわけにはいかないので、番号なしの「匿名」で通知する。
-		label := anonymousPlaceholderLabel
-		identity, err := r.GetAnonymousIdentityUseCase.Execute(ctx, room.ID, actorID)
-		if err != nil {
-			logger.Log.Error().Err(err).Msg("failed to resolve anonymous identity for reply notification")
-		} else if identity != nil {
-			label = identity.Label
-		}
-		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", label)
-		notificationActorID = nil
-	}
-
-	targetType := notificationuc.TargetMessage
-	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-		UserID:     parent.UserID,
-		Type:       notificationuc.TypeMessageReply,
-		ActorID:    notificationActorID,
-		TargetType: &targetType,
-		TargetID:   &reply.ID,
-		Message:    message,
-		Extra: map[string]any{
-			"roomID":   encodeGraphID("room", room.ID),
-			"roomType": room.Type,
-		},
-	}); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to publish message reply notification")
-		return nil
-	}
-	return &parent.UserID
-}
-
 // notificationTargetMessage resolves the Notification/NotificationGroup targetMessage
 // field: the chat message a reply notification points at. 削除済み・対象が
 // メッセージ以外なら nil を返す。
@@ -566,54 +541,13 @@ func resolveMentions(ctx context.Context, mentions []*model.Mention) ([]*gqlmode
 	return result, nil
 }
 
-// publishMentionNotifications はコミュニティチャットでメンションされた各ユーザーへ通知する。
-//
-// skipUserID には引用返信の通知を既に送った相手を渡す。返信と同時にその相手を
-// メンションしても通知が2通にならないようにするため。
-// 遷移先の組み立てにはルームIDと種別が要るが notifications 行は targetType/targetID の
-// 1組しか持てないため、SSE には Extra で roomID/roomType を添える
-// （publishMessageReplyNotification と同じ扱い）。
-// 通知の失敗はメッセージ送信の成否に影響させない（ログのみ）。
-func (r *Resolver) publishMentionNotifications(ctx context.Context, room *model.Room, msg *model.Message, actorID int64, skipUserID *int64) {
-	if len(msg.Mentions) == 0 {
-		return
-	}
-
-	targetType := notificationuc.TargetMessage
-	params := make([]notificationuc.PublishParams, 0, len(msg.Mentions))
-	for _, m := range msg.Mentions {
-		if skipUserID != nil && m.UserID == *skipUserID {
-			continue
-		}
-		params = append(params, notificationuc.PublishParams{
-			UserID:     m.UserID,
-			Type:       notificationuc.TypeMessageMention,
-			ActorID:    &actorID,
-			TargetType: &targetType,
-			TargetID:   &msg.ID,
-			Message:    "コミュニティであなたがメンションされました",
-			Extra: map[string]any{
-				"roomID":   encodeGraphID("room", room.ID),
-				"roomType": room.Type,
-			},
-		})
-	}
-	if len(params) == 0 {
-		return
-	}
-
-	if err := r.NotificationPublisher.PublishBatch(ctx, params); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to publish mention notifications")
-	}
-}
-
 // decodeMentionUserIDs はクライアントから届いたメンション先の GraphQL ID を
 // 数値IDへ変換する。
 //
 // リゾルバが担うのはこのデコードだけ。「どのルームでメンションが成立するか」
 // （messageusecase.MentionsSupported: コミュニティのみ）「誰をメンションできるか」の
 // 判断は全て messageusecase.ResolveMentionsUseCase 側にあり、それを呼ぶのは
-// ChatService だけ。リゾルバから直接呼ぶ経路を残さないことで、別経路から
+// ChatCommands だけ。リゾルバから直接呼ぶ経路を残さないことで、別経路から
 // 授業内チャットに実名メンションが通ることを防いでいる。
 func decodeMentionUserIDs(ctx context.Context, mentionUserIDs []string) ([]int64, error) {
 	if len(mentionUserIDs) == 0 {

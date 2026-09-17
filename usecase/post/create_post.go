@@ -113,7 +113,17 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 	// 通知が二重にならないようにする。
 	var repliedTo *int64
 	if uc.notificationPublisher != nil && param.ParentID != nil {
-		if parent, perr := uc.postRepo.GetPostByID(ctx, *param.ParentID); perr == nil && parent != nil && parent.UserID != param.UserID {
+		parent, perr := uc.postRepo.GetPostByID(ctx, *param.ParentID)
+		if perr != nil {
+			// 親投稿が引けないと通知先が決まらないので諦める（投稿自体は成立済み）。
+			// 削除済みで nil が返るのは正常系なので、error のときだけ残す。
+			logger.Log.Error().Err(perr).
+				Str("component", "post").
+				Int64("post_id", post.ID).
+				Int64("parent_post_id", *param.ParentID).
+				Msg("failed to load the parent post; skipping the reply notification")
+		}
+		if perr == nil && parent != nil && parent.UserID != param.UserID {
 			targetType := notificationuc.TargetPost
 			if err := uc.notificationPublisher.Publish(ctx, notificationuc.PublishParams{
 				UserID:     parent.UserID,
@@ -123,7 +133,11 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 				TargetID:   param.ParentID,
 				Message:    "あなたの投稿に返信がありました",
 			}); err != nil {
-				logger.Log.Error().Err(err).Msg("failed to publish reply notification")
+				logger.Log.Error().Err(err).
+					Str("component", "post").
+					Int64("post_id", post.ID).
+					Int64("recipient_id", parent.UserID).
+					Msg("failed to publish reply notification")
 			} else {
 				repliedTo = &parent.UserID
 			}
