@@ -31,14 +31,22 @@ func (ps *PubSub) Unsubscribe(topic string, ch chan interface{}) {
 	subs := ps.subs[topic]
 	for i, s := range subs {
 		if s == ch {
-			ps.subs[topic] = append(subs[:i], subs[i+1:]...)
-			logger.Log.Debug().Str("topic", topic).Int("subscribers", len(ps.subs[topic])).Msg("pubsub unsubscribe")
+			remaining := append(subs[:i], subs[i+1:]...)
+			// 最後の購読者が抜けたらトピックごと消す。以前は削除した直後に return
+			// していたため関数末尾の delete に到達せず、空スライスが map に残り続けた。
+			// トピック名はルームID・メッセージID・質問IDごとに作られるので、
+			// 見た誰かぶんのキーが永久に積み上がる（プロセスが生きている限り解放
+			// されない）。同じロックの中で消すので、Publish 側から中途半端な状態は
+			// 見えない。
+			if len(remaining) == 0 {
+				delete(ps.subs, topic)
+			} else {
+				ps.subs[topic] = remaining
+			}
+			logger.Log.Debug().Str("topic", topic).Int("subscribers", len(remaining)).Msg("pubsub unsubscribe")
 			close(ch)
 			return
 		}
-	}
-	if len(ps.subs[topic]) == 0 {
-		delete(ps.subs, topic)
 	}
 }
 

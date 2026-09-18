@@ -16,11 +16,58 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/vektah/gqlparser/v2/ast"
 )
+
+// updateCommunityMembers applies the membership change atomically and only then
+// emits the corresponding notifications. Notification delivery is best effort,
+// matching the behavior of the former single-member mutations.
+func (r *Resolver) updateCommunityMembers(ctx context.Context, communityID int64, updates []communityusecase.MemberUpdate) error {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return err
+	}
+	if err := r.UpdateCommunityMembersUseCase.Execute(ctx, communityID, updates); err != nil {
+		return err
+	}
+
+	targetType := notificationuc.TargetCommunity
+	params := make([]notificationuc.PublishParams, 0, len(updates))
+	for _, update := range updates {
+		param := notificationuc.PublishParams{
+			UserID:     update.UserID,
+			TargetType: &targetType,
+			TargetID:   &communityID,
+		}
+		switch update.Action {
+		case communityusecase.MemberActionPromote:
+			param.Type = notificationuc.TypeCommunityRole
+			param.Message = "コミュニティのオーナーに昇格しました"
+		case communityusecase.MemberActionDemote:
+			param.Type = notificationuc.TypeCommunityRole
+			param.Message = "コミュニティのオーナーから降格されました"
+		case communityusecase.MemberActionKick:
+			param.Type = notificationuc.TypeCommunityKick
+			param.ActorID = &claims.ID
+			param.Message = "コミュニティからキックされました"
+		default:
+			continue
+		}
+		params = append(params, param)
+	}
+
+	if err := r.NotificationPublisher.PublishBatch(ctx, params); err != nil {
+		logger.Log.Error().Err(err).
+			Int64("community_id", communityID).
+			Msg("failed to publish community member update notifications")
+	}
+	return nil
+}
 
 // チャット表示まわりで「取れなくても画面は返す」取得の失敗ログに使う lookup 名。
 // 配信側の chatDelivery* と同じく、grep する側が経路で絞れるよう1箇所に集める。
@@ -322,7 +369,47 @@ const (
 	// maxMessagePageSize はチャット履歴だけの上限。1画面に載る件数が一覧系より
 	// 多いのでここだけ緩い。クランプの実装は resolveLimit に揃えてある。
 	maxMessagePageSize = 200
+	// unpagedCollectionCap は「まだページングを持たないコレクション」の安全弁。
+	//
+	// 返信一覧・コミュニティメンバー・Favorite/Block の一覧・管理者の規約一覧は、
+	// もともと引数を1つも取らず**該当する全行**を返していた。行数を決めるのが
+	// データの育ち方だけなので、投稿が伸びた・コミュニティが大きくなった日に
+	// 1回のクエリが重くなる（しかも重くなるまで誰も気づけない）。
+	//
+	// これらには limit/offset を任意引数として足したが、**既定値は入れていない**。
+	// 既定値を入れると「今まで全件返っていたものが黙って切れる」ため、引数を送って
+	// いない既存のクライアントの見え方が変わってしまう。代わりに、引数が無いときは
+	// この値で頭打ちにする。
+	//
+	// 500 なのは「実データがここに届かない」かつ「届いても1クエリとして耐えられる」
+	// の両方を満たす所。いま最大のコミュニティでも2桁、返信が3桁に乗る投稿も無い
+	// ので、これが効くのは想定外に育ったときだけ。つまり見え方は変わらないまま、
+	// 青天井だけが無くなる。
+	//
+	// ここに当たるようになったら、それはもうページングを入れるべき合図。上限を
+	// 上げるのではなく、クライアント側の読み込み UI ごと limit/offset へ移すこと。
+	unpagedCollectionCap = 500
 )
+
+// resolveUnpagedWindow は「ページングを後付けしたコレクション」の窓を決める。
+//
+// limit を送っていなければ unpagedCollectionCap（＝実質これまでどおり全件）、
+// 送っていれば他の一覧と同じく maxPageSize で頭打ち。offset の負数丸めも共通。
+//
+// 既定値をスキーマに書かずにここで面倒を見ているのは、スキーマに既定値を書くと
+// 引数を送っていないクライアントまで切れてしまうため（unpagedCollectionCap の
+// コメント参照）。
+func resolveUnpagedWindow(limit *int32, offset *int32) repository.PageQuery {
+	o := 0
+	if offset != nil && *offset > 0 {
+		o = int(*offset)
+	}
+	l := unpagedCollectionCap
+	if limit != nil && *limit > 0 {
+		l = resolveLimit(limit, defaultPageSize, maxPageSize)
+	}
+	return repository.PageQuery{Limit: l, Offset: o}
+}
 
 // resolveLimit は limit を「未指定・0以下なら fallback、上限超なら upper」に正規化する。
 // *int32 をそのまま int にして渡すと、負数（SQL エラー）も過大値（全件走査）も

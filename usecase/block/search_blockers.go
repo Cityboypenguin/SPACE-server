@@ -8,7 +8,7 @@ import (
 )
 
 type SearchBlockersUseCase interface {
-	Execute(ctx context.Context, userID int64, keyword string) ([]*model.Blocker, error)
+	Execute(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.Blocker, error)
 }
 
 var _ SearchBlockersUseCase = &searchBlockersInteractor{}
@@ -23,6 +23,6 @@ func NewSearchBlockersUseCase(blockRepo repository.BlockerRepository) SearchBloc
 	}
 }
 
-func (uc *searchBlockersInteractor) Execute(ctx context.Context, userID int64, keyword string) ([]*model.Blocker, error) {
-	return uc.blockRepo.SearchBlockers(ctx, userID, keyword)
+func (uc *searchBlockersInteractor) Execute(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.Blocker, error) {
+	return uc.blockRepo.SearchBlockers(ctx, userID, keyword, q)
 }

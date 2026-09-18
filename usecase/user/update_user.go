@@ -10,7 +10,7 @@ import (
 )
 
 type UpdateUserUseCase interface {
-	Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.User, error)
+	Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.UserAccount, error)
 }
 
 var _ UpdateUserUseCase = &UpdateUserInteractor{}
@@ -25,7 +25,7 @@ func NewUpdateUserUseCase(userRepo repository.UserRepository) UpdateUserUseCase 
 	}
 }
 
-func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.User, error) {
+func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.UserAccount, error) {
 	// このユースケースはパスワードを変えられる（param.Password）ので、
 	// 現在パスワードの照合と保存の両方でハッシュが要る。
 	user, err := uc.userRepo.GetCredentialsByID(ctx, id)
@@ -55,7 +55,9 @@ func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param mod
 		return nil, err
 	}
 
-	// 返すのは公開情報だけ（リゾルバは toGraphUser に渡すだけ）。
-	publicUser := user.User
-	return &publicUser, nil
+	// 返すのはパスワードハッシュを外した本人ぶん（リゾルバは toGraphUserAccount に渡す）。
+	// 呼び出し元は本人（updateUser）か管理者（adminUpdateUser）に限られるので、
+	// 連絡先を含めてよい。ハッシュだけは絶対に外に出さないので、ここで切り落とす。
+	account := user.UserAccount
+	return &account, nil
 }

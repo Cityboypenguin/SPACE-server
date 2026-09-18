@@ -21,7 +21,8 @@ import (
 type noCredentialsUserRepo struct {
 	t *testing.T
 
-	user *model.User
+	user    *model.User
+	account *model.UserAccount
 
 	getByIDCalls int
 	updateCalls  int
@@ -71,12 +72,29 @@ func (r *noCredentialsUserRepo) FindByEmail(context.Context, string) (*model.Use
 	return r.user, nil
 }
 
-func (r *noCredentialsUserRepo) ListUsers(context.Context, repository.PageQuery) ([]*model.User, int, error) {
+func (r *noCredentialsUserRepo) SearchUsersByKeyword(context.Context, string, repository.PageQuery) ([]*model.User, int, error) {
 	return []*model.User{r.user}, 1, nil
 }
 
-func (r *noCredentialsUserRepo) SearchUsersByKeyword(context.Context, string, repository.PageQuery) ([]*model.User, int, error) {
-	return []*model.User{r.user}, 1, nil
+// --- 本人・管理者向け ---
+//
+// 連絡先は返すがハッシュは読まないので、表示系の見張り（fail）には掛けない。
+// 「この口を呼んだら落ちる」対象はあくまで認証情報の3つ。
+
+func (r *noCredentialsUserRepo) GetUserAccountByID(context.Context, int64) (*model.UserAccount, error) {
+	return r.account, nil
+}
+
+func (r *noCredentialsUserRepo) GetUserAccountsByIDs(context.Context, []int64) ([]*model.UserAccount, error) {
+	return []*model.UserAccount{r.account}, nil
+}
+
+func (r *noCredentialsUserRepo) ListUserAccounts(context.Context, repository.PageQuery) ([]*model.UserAccount, int, error) {
+	return []*model.UserAccount{r.account}, 1, nil
+}
+
+func (r *noCredentialsUserRepo) SearchUserAccountsByKeyword(context.Context, string, repository.PageQuery) ([]*model.UserAccount, int, error) {
+	return []*model.UserAccount{r.account}, 1, nil
 }
 
 func (r *noCredentialsUserRepo) GetUsersByAccountIDs(context.Context, []string) ([]*model.User, error) {
@@ -90,6 +108,7 @@ func (r *noCredentialsUserRepo) SuggestUsersByPrefix(context.Context, string, in
 func (r *noCredentialsUserRepo) DeleteUser(context.Context, int64) (bool, error)        { return true, nil }
 func (r *noCredentialsUserRepo) UpdateLastActiveAt(context.Context, int64, int64) error { return nil }
 func (r *noCredentialsUserRepo) LogActivityDate(context.Context, int64, string) error   { return nil }
+func (r *noCredentialsUserRepo) LogActivityHour(context.Context, int64, string) error   { return nil }
 
 var _ repository.UserRepository = &noCredentialsUserRepo{}
 
@@ -99,9 +118,11 @@ func adminCtx() context.Context {
 
 func TestDisplayPathsNeverReadCredentials(t *testing.T) {
 	newRepo := func(t *testing.T) *noCredentialsUserRepo {
+		u := model.User{ID: 42, AccountID: "taro", Name: "太郎", Role: "user", Status: model.UserStatusActive}
 		return &noCredentialsUserRepo{
-			t:    t,
-			user: &model.User{ID: 42, AccountID: "taro", Name: "太郎", Email: "e@x", Role: "user", Status: model.UserStatusActive},
+			t:       t,
+			user:    &u,
+			account: &model.UserAccount{User: u, Email: "e@x"},
 		}
 	}
 
@@ -112,7 +133,7 @@ func TestDisplayPathsNeverReadCredentials(t *testing.T) {
 		}
 	})
 
-	t.Run("ユーザー一覧", func(t *testing.T) {
+	t.Run("ユーザー一覧（管理者向け。連絡先は返すがハッシュは読まない）", func(t *testing.T) {
 		repo := newRepo(t)
 		if _, _, err := NewListUsersUseCase(repo).Execute(adminCtx(), repository.PageQuery{Limit: 20, WithTotal: true}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -164,6 +185,33 @@ func TestUpdateProfileRejectsPasswordChange(t *testing.T) {
 	pw := "newpassword"
 	if err := u.UpdateProfile(model.UpdateUserParam{Password: &pw}); err == nil {
 		t.Fatal("UpdateProfile がパスワード変更を受け入れてしまった")
+	}
+}
+
+// (A) の回帰。連絡先を持たない model.User の更新口にメールアドレスを渡すと、
+// 黙って捨てられずエラーになる。捨てられると「変更したのに変わっていない」という
+// 気づけない壊れ方になる（パスワードのときと同じ理屈）。
+func TestUpdateProfileRejectsEmailChange(t *testing.T) {
+	u := &model.User{ID: 1, AccountID: "taro", Name: "太郎"}
+	email := "new@example.com"
+	if err := u.UpdateProfile(model.UpdateUserParam{Email: &email}); err == nil {
+		t.Fatal("User.UpdateProfile がメールアドレス変更を受け入れてしまった")
+	}
+}
+
+// 連絡先を持つ UserAccount 側は、これまでどおりメールアドレスを更新できる
+// （分離で機能が落ちていないこと）。
+func TestUserAccountUpdateProfileAppliesEmail(t *testing.T) {
+	a := &model.UserAccount{
+		User:  model.User{ID: 1, AccountID: "taro", Name: "太郎"},
+		Email: "old@example.com",
+	}
+	email := "new@example.com"
+	if err := a.UpdateProfile(model.UpdateUserParam{Email: &email}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Email != email {
+		t.Fatalf("Email = %q, want %q", a.Email, email)
 	}
 }
 

@@ -14,7 +14,9 @@ import (
 type LoginUserResult struct {
 	AccessToken  string
 	RefreshToken string
-	User         *model.User
+	// User はログインした本人。自分のメールアドレスは自分に見せてよいので
+	// 連絡先を含む UserAccount（GraphQL の UserAuthPayload.user に対応）。
+	User *model.UserAccount
 }
 
 type LoginUserUseCase interface {
@@ -59,7 +61,8 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, err
 	}
 
-	// 呼び出し元（リゾルバ）へ返すのは公開情報だけ。ハッシュはこの関数の外へ出さない。
-	publicUser := user.User
-	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: &publicUser}, nil
+	// 呼び出し元（リゾルバ）へ返すのはハッシュを外した本人ぶん。
+	// ハッシュはこの関数の外へ出さない。
+	account := user.UserAccount
+	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: &account}, nil
 }

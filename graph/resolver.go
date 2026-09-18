@@ -172,15 +172,21 @@ type Resolver struct {
 }
 
 type UserUseCases struct {
-	GetUserByIDUseCase            user.GetUserByIDUseCase
-	GetUsersByIDsUseCase          user.GetUsersByIDsUseCase
-	CreateUserUseCase             user.CreateUserUseCase
-	SendEmailOTPUseCase           user.SendEmailOTPUseCase
-	VerifyEmailOTPUseCase         user.VerifyEmailOTPUseCase
-	ListUsersUseCase              user.ListUsersUseCase
-	DeleteUserUseCase             user.DeleteUserUseCase
-	UpdateUserUseCase             user.UpdateUserUseCase
-	SearchUsersUseCase            user.SearchUsersUseCase
+	GetUserByIDUseCase   user.GetUserByIDUseCase
+	GetUsersByIDsUseCase user.GetUsersByIDsUseCase
+	// 連絡先まで返す取得。本人（me）と管理者（getUserByID）だけが辿れる口で使う。
+	// 表示のために引くだけなら GetUserByIDUseCase。
+	GetUserAccountByIDUseCase   user.GetUserAccountByIDUseCase
+	GetUserAccountsByIDsUseCase user.GetUserAccountsByIDsUseCase
+	CreateUserUseCase           user.CreateUserUseCase
+	SendEmailOTPUseCase         user.SendEmailOTPUseCase
+	VerifyEmailOTPUseCase       user.VerifyEmailOTPUseCase
+	ListUsersUseCase            user.ListUsersUseCase
+	DeleteUserUseCase           user.DeleteUserUseCase
+	UpdateUserUseCase           user.UpdateUserUseCase
+	SearchUsersUseCase          user.SearchUsersUseCase
+	// 管理画面のユーザー検索（連絡先を含む）。一般ユーザー向けは SearchUsersUseCase。
+	SearchUserAccountsUseCase     user.SearchUserAccountsUseCase
 	LoginUserUseCase              user.LoginUserUseCase
 	RefreshUserTokenUseCase       user.RefreshUserTokenUseCase
 	LogoutUserUseCase             user.LogoutUserUseCase
@@ -226,25 +232,25 @@ type PostUseCases struct {
 type MessageRoomUseCases struct {
 	GetMessageByIDUseCase           messageusecase.GetMessageByIDUseCase
 	GetLastMessagesByRoomIDsUseCase messageusecase.GetLastMessagesByRoomIDsUseCase
-	CreateRoomUseCase               roomusecase.CreateRoomUseCase
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
 	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
+	SearchRoomUsersUseCase          roomusecase.SearchRoomUsersUseCase
 	// コミュニティ一覧の memberCount / isMember を一覧ぶん1クエリで出す口
 	// （以前は1件ごとに GetUserIDsByRoomID を呼んでいた）。
-	CountUsersByRoomIDsUseCase      roomusecase.CountUsersByRoomIDsUseCase
-	ListJoinedRoomIDsUseCase        roomusecase.ListJoinedRoomIDsUseCase
-	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
-	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
-	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
-	RemoveUserFromRoomUseCase       roomusecase.RemoveUserFromRoomUseCase
-	DeleteRoomUseCase               roomusecase.DeleteRoomUseCase
-	JoinRoomUseCase                 roomusecase.JoinRoomUseCase
-	GetRoomUserRoleUseCase          roomusecase.GetRoomUserRoleUseCase
-	SetRoomUserRoleUseCase          roomusecase.SetRoomUserRoleUseCase
-	ListRoomMembersWithRolesUseCase roomusecase.ListRoomMembersWithRolesUseCase
-	GetRoomReadStatusBatchUseCase   roomusecase.GetRoomReadStatusBatchUseCase
-	CountUnreadByRoomTypeUseCase    roomusecase.CountUnreadByRoomTypeUseCase
+	CountUsersByRoomIDsUseCase          roomusecase.CountUsersByRoomIDsUseCase
+	ListJoinedRoomIDsUseCase            roomusecase.ListJoinedRoomIDsUseCase
+	ListMyDMRoomsUseCase                roomusecase.ListMyDMRoomsUseCase
+	GetOrCreateDMRoomUseCase            roomusecase.GetOrCreateDMRoomUseCase
+	RemoveUserFromRoomUseCase           roomusecase.RemoveUserFromRoomUseCase
+	DeleteRoomUseCase                   roomusecase.DeleteRoomUseCase
+	JoinRoomUseCase                     roomusecase.JoinRoomUseCase
+	GetRoomUserRoleUseCase              roomusecase.GetRoomUserRoleUseCase
+	SetRoomUserRoleUseCase              roomusecase.SetRoomUserRoleUseCase
+	ListRoomMembersWithRolesUseCase     roomusecase.ListRoomMembersWithRolesUseCase
+	ListRoomMembersWithRolesPageUseCase roomusecase.ListRoomMembersWithRolesPageUseCase
+	GetRoomReadStatusBatchUseCase       roomusecase.GetRoomReadStatusBatchUseCase
+	CountUnreadByRoomTypeUseCase        roomusecase.CountUnreadByRoomTypeUseCase
 }
 
 // ChatUseCases はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
@@ -342,4 +348,7 @@ type NotificationUseCases struct {
 	DeleteNotificationsUseCase            notificationuc.DeleteNotificationsUseCase
 	DeleteReadNotificationsUseCase        notificationuc.DeleteReadNotificationsUseCase
 	DeleteReadNotificationsByActorUseCase notificationuc.DeleteReadNotificationsByActorUseCase
+	// SSE(/events) 接続用の使い捨てチケットを発行する。通知の配信経路に属するので
+	// ここに置いている（internal/sse.NewHandler のコメント参照）。
+	IssueStreamTicketUseCase notificationuc.IssueStreamTicketUseCase
 }

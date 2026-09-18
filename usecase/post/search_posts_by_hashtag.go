@@ -9,7 +9,7 @@ import (
 )
 
 type SearchPostsByHashtagUseCase interface {
-	Execute(ctx context.Context, tag string) ([]*model.Post, error)
+	Execute(ctx context.Context, tag string, q repository.PageQuery) ([]*model.Post, error)
 }
 
 var _ SearchPostsByHashtagUseCase = &SearchPostsByHashtagInteractor{}
@@ -24,14 +24,14 @@ func NewSearchPostsByHashtagUseCase(postRepo repository.PostRepository) SearchPo
 	}
 }
 
-func (uc *SearchPostsByHashtagInteractor) Execute(ctx context.Context, tag string) ([]*model.Post, error) {
+func (uc *SearchPostsByHashtagInteractor) Execute(ctx context.Context, tag string, q repository.PageQuery) ([]*model.Post, error) {
 	// 先頭の "# " マーカーが付いていても受け付けられるように取り除く。
 	tag = strings.TrimSpace(strings.TrimPrefix(tag, "#"))
 	if tag == "" {
 		return []*model.Post{}, nil
 	}
 
-	posts, err := uc.postRepo.SearchPostsByHashtag(ctx, tag)
+	posts, err := uc.postRepo.SearchPostsByHashtag(ctx, tag, q)
 	if err != nil {
 		return nil, err
 	}

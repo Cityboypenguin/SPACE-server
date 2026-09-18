@@ -12,13 +12,23 @@ import (
 
 // AppendBlockFilter は、対象のユーザーカラムにブロック除外 (NOT IN) 条件を安全に追加します。
 // ※注意: baseQuery は WHERE 句の途中（ORDER BY や LIMIT の前）である必要があります。
-func AppendBlockFilter(ctx context.Context, baseQuery string, args []interface{}, userColumn string) (string, []interface{}) {
+//
+// ブロック一覧をこのリクエストで取得できていない場合はエラーを返す。呼び出し側は
+// そのまま返して失敗させること。以前はこの関数が必ず成功する形だったため、
+// ミドルウェアが一覧を読めなかったリクエストでは除外条件が丸ごと付かず、
+// 本来見えないはずの投稿・ユーザーが黙って出ていた（フェイルオープン）。
+// エラーを返す形にしてあるのは、新しい一覧クエリを足した人が取りこぼせないようにするため
+// （戻り値を無視するとコンパイルが通らない）。
+func AppendBlockFilter(ctx context.Context, baseQuery string, args []interface{}, userColumn string) (string, []interface{}, error) {
 	// 1. Contextからブロックリストを取得（ミドルウェアがセットしたもの）
-	blockedIDs := middleware.GetBlockListFromContext(ctx)
+	blockedIDs, err := middleware.BlockListFromContext(ctx)
+	if err != nil {
+		return "", nil, err
+	}
 
 	// ブロック対象がいない場合は、元のクエリと引数をそのまま返す
 	if len(blockedIDs) == 0 {
-		return baseQuery, args
+		return baseQuery, args, nil
 	}
 
 	// 2. プレースホルダー（?, ?, ...）と引数の追加
@@ -32,7 +42,7 @@ func AppendBlockFilter(ctx context.Context, baseQuery string, args []interface{}
 	// 例: " AND user_id NOT IN (?, ?)"
 	query := fmt.Sprintf("%s AND %s NOT IN (%s)", baseQuery, userColumn, strings.Join(placeholders, ","))
 
-	return query, args
+	return query, args, nil
 }
 
 // countForPage は「total を数えるかどうか」の分岐を1箇所に閉じ込める。

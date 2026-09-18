@@ -217,3 +217,110 @@ func TestPublishNotificationsChangedToUser_SendsAFactWithoutNumbers(t *testing.T
 		t.Fatal("the fact-only event must not be kept in the replay history")
 	}
 }
+
+// イベントIDはユーザーごとの連番であること。
+//
+// 以前は全ユーザー共通の連番だったので、他人宛の配信が挟まるたびに自分宛のID列が
+// 飛んだ。受け手は Last-Event-ID しか持てないため、欠番を「取りこぼし」と区別できない。
+func TestPublishToUser_EventIDsAreSequentialPerUser(t *testing.T) {
+	b := NewBroker()
+
+	c1, _, _ := b.Subscribe(1, -1)
+	c2, _, _ := b.Subscribe(2, -1)
+
+	// 交互に配る。共通カウンタなら 1 の列は 1,3,5、2 の列は 2,4,6 になる。
+	for i := 0; i < 3; i++ {
+		b.PublishToUser(1, "notification", map[string]any{"n": i})
+		b.PublishToUser(2, "notification", map[string]any{"n": i})
+	}
+
+	for _, tc := range []struct {
+		userID int64
+		c      *Client
+	}{{1, c1}, {2, c2}} {
+		for want := 1; want <= 3; want++ {
+			ev, ok := tryRecv(tc.c)
+			if !ok {
+				t.Fatalf("user %d: expected event %d", tc.userID, want)
+			}
+			if ev.ID != want {
+				t.Fatalf("user %d: event id = %d, want %d (IDs must not skip because of other users' events)",
+					tc.userID, ev.ID, want)
+			}
+		}
+	}
+}
+
+// 他人宛の配信が挟まっても、自分のリプレイ範囲が変わらないこと。
+// 共通カウンタのころは「履歴の最古IDが lastEventID+1 より大きい」という
+// 取りこぼし判定が、他人宛に消費された欠番だけで誤爆していた。
+func TestSubscribe_ReplayUnaffectedByOtherUsersEvents(t *testing.T) {
+	b := NewBroker()
+
+	c1, _, _ := b.Subscribe(1, -1)
+	b.PublishToUser(1, "notification", map[string]any{"n": 1})
+	ev1, ok := tryRecv(c1)
+	if !ok {
+		t.Fatal("expected to receive event 1 while connected")
+	}
+	if ev1.ID != 1 {
+		t.Fatalf("first event id = %d, want 1", ev1.ID)
+	}
+	b.Unsubscribe(1, c1)
+
+	// 切断中、大量に他人宛の配信が走る。
+	for i := 0; i < 50; i++ {
+		b.PublishToUser(int64(100+i), "notification", map[string]any{"i": i})
+	}
+	// 自分宛は2件だけ。
+	b.PublishToUser(1, "notification", map[string]any{"n": 2})
+	b.PublishToUser(1, "notification", map[string]any{"n": 3})
+
+	_, missed, err := b.Subscribe(1, ev1.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(missed) != 2 {
+		t.Fatalf("expected exactly the 2 events addressed to this user, got %d: %+v", len(missed), missed)
+	}
+	if missed[0].ID != 2 || missed[1].ID != 3 {
+		t.Fatalf("replayed ids = %d,%d, want 2,3", missed[0].ID, missed[1].ID)
+	}
+	if missed[0].Data["n"] != 2 || missed[1].Data["n"] != 3 {
+		t.Fatalf("unexpected replay contents: %+v", missed)
+	}
+}
+
+// 履歴が TTL で掃除された後に再接続しても、採番が 1 からやり直されるだけで
+// 落ちないこと（リプレイできるものは無い＝missed は空）。
+func TestSubscribe_AfterHistorySweep_RestartsNumbering(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	b := newTestBroker(&now)
+
+	c1, _, _ := b.Subscribe(1, -1)
+	b.PublishToUser(1, "notification", map[string]any{"n": 1})
+	ev1, _ := tryRecv(c1)
+	b.Unsubscribe(1, c1)
+
+	now = now.Add(historyTTL + time.Minute)
+	b.PublishToUser(999, "notification", map[string]any{"sweep": true}) // 掃除のきっかけ
+	if historyLen(b) != 1 {
+		t.Fatalf("expected the stale history to be released, got %d users", historyLen(b))
+	}
+
+	c2, missed, err := b.Subscribe(1, ev1.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(missed) != 0 {
+		t.Fatalf("nothing can be replayed once the history is gone, got %+v", missed)
+	}
+	b.PublishToUser(1, "notification", map[string]any{"n": 2})
+	ev2, ok := tryRecv(c2)
+	if !ok {
+		t.Fatal("expected the new event")
+	}
+	if ev2.ID != 1 {
+		t.Fatalf("event id = %d, want 1 (numbering restarts with the history)", ev2.ID)
+	}
+}

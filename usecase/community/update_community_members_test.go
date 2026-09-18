@@ -2,6 +2,7 @@ package community
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
@@ -14,7 +15,7 @@ import (
 type countingRoomUserRepo struct {
 	repository.RoomUserRepository
 
-	members []*model.RoomMember
+	roles map[int64]string
 
 	roleCalls   int
 	removeCalls int
@@ -22,8 +23,12 @@ type countingRoomUserRepo struct {
 	removed     []int64
 }
 
-func (r *countingRoomUserRepo) ListRoomMembersWithRoles(context.Context, int64) ([]*model.RoomMember, error) {
-	return r.members, nil
+func (r *countingRoomUserRepo) LockRoomMemberRolesForUpdate(context.Context, int64) (map[int64]string, error) {
+	roles := make(map[int64]string, len(r.roles))
+	for id, role := range r.roles {
+		roles[id] = role
+	}
+	return roles, nil
 }
 
 func (r *countingRoomUserRepo) SetRoomUserRoles(_ context.Context, _ int64, userIDs []int64, role string) error {
@@ -32,12 +37,18 @@ func (r *countingRoomUserRepo) SetRoomUserRoles(_ context.Context, _ int64, user
 		r.roleSets = map[string][]int64{}
 	}
 	r.roleSets[role] = append(r.roleSets[role], userIDs...)
+	for _, id := range userIDs {
+		r.roles[id] = role
+	}
 	return nil
 }
 
 func (r *countingRoomUserRepo) RemoveUsersFromRoom(_ context.Context, _ int64, userIDs []int64) error {
 	r.removeCalls++
 	r.removed = append(r.removed, userIDs...)
+	for _, id := range userIDs {
+		delete(r.roles, id)
+	}
 	return nil
 }
 
@@ -56,23 +67,29 @@ func (inlineTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context)
 	return fn(ctx)
 }
 
-func memberWithRole(id int64, role string) *model.RoomMember {
-	return &model.RoomMember{User: &model.User{ID: id}, Role: role}
+type serialTxManager struct {
+	mu sync.Mutex
+}
+
+func (m *serialTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return fn(ctx)
 }
 
 // メンバー編集は人数ぶんではなく「操作の種類ぶん」しか DB を叩かない。
 // 以前は updates を1件ずつ回していたので、10人チェックすれば10往復していた。
 func TestUpdateCommunityMembers_GroupsWritesByAction(t *testing.T) {
-	members := []*model.RoomMember{
-		memberWithRole(1, model.RoomUserRoleOwner),
-		memberWithRole(2, model.RoomUserRoleMember),
-		memberWithRole(3, model.RoomUserRoleMember),
-		memberWithRole(4, model.RoomUserRoleOwner),
-		memberWithRole(5, model.RoomUserRoleOwner),
-		memberWithRole(6, model.RoomUserRoleMember),
-		memberWithRole(7, model.RoomUserRoleMember),
+	roles := map[int64]string{
+		1: model.RoomUserRoleOwner,
+		2: model.RoomUserRoleMember,
+		3: model.RoomUserRoleMember,
+		4: model.RoomUserRoleOwner,
+		5: model.RoomUserRoleOwner,
+		6: model.RoomUserRoleMember,
+		7: model.RoomUserRoleMember,
 	}
-	roomUsers := &countingRoomUserRepo{members: members}
+	roomUsers := &countingRoomUserRepo{roles: roles}
 	uc := NewUpdateCommunityMembersUseCase(
 		&stubCommunityRepo{community: &model.Community{ID: 10, RoomID: 20}},
 		roomUsers,
@@ -107,9 +124,9 @@ func TestUpdateCommunityMembers_GroupsWritesByAction(t *testing.T) {
 
 // 操作が1種類しか無いときは、その1本だけが出る（要らない往復を作らない）。
 func TestUpdateCommunityMembers_SkipsUnusedActions(t *testing.T) {
-	roomUsers := &countingRoomUserRepo{members: []*model.RoomMember{
-		memberWithRole(1, model.RoomUserRoleOwner),
-		memberWithRole(2, model.RoomUserRoleMember),
+	roomUsers := &countingRoomUserRepo{roles: map[int64]string{
+		1: model.RoomUserRoleOwner,
+		2: model.RoomUserRoleMember,
 	}}
 	uc := NewUpdateCommunityMembersUseCase(
 		&stubCommunityRepo{community: &model.Community{ID: 10, RoomID: 20}},
@@ -131,9 +148,9 @@ func TestUpdateCommunityMembers_SkipsUnusedActions(t *testing.T) {
 
 // 最後のオーナーが居なくなる編集は、DB へ1本も出さずに弾かれる（従来どおり）。
 func TestUpdateCommunityMembers_StillRejectsLosingTheLastOwner(t *testing.T) {
-	roomUsers := &countingRoomUserRepo{members: []*model.RoomMember{
-		memberWithRole(1, model.RoomUserRoleOwner),
-		memberWithRole(2, model.RoomUserRoleMember),
+	roomUsers := &countingRoomUserRepo{roles: map[int64]string{
+		1: model.RoomUserRoleOwner,
+		2: model.RoomUserRoleMember,
 	}}
 	uc := NewUpdateCommunityMembersUseCase(
 		&stubCommunityRepo{community: &model.Community{ID: 10, RoomID: 20}},
@@ -147,6 +164,50 @@ func TestUpdateCommunityMembers_StillRejectsLosingTheLastOwner(t *testing.T) {
 	}
 	if roomUsers.roleCalls != 0 || roomUsers.removeCalls != 0 {
 		t.Fatalf("a rejected update must not write: %d role updates, %d removals", roomUsers.roleCalls, roomUsers.removeCalls)
+	}
+}
+
+func TestUpdateCommunityMembers_ConcurrentDemotionsKeepAnOwner(t *testing.T) {
+	roomUsers := &countingRoomUserRepo{roles: map[int64]string{
+		1: model.RoomUserRoleOwner,
+		2: model.RoomUserRoleOwner,
+	}}
+	txManager := &serialTxManager{}
+	uc := NewUpdateCommunityMembersUseCase(
+		&stubCommunityRepo{community: &model.Community{ID: 10, RoomID: 20}},
+		roomUsers,
+		txManager,
+	)
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 99, Role: "admin"})
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, userID := range []int64{1, 2} {
+		go func(id int64) {
+			<-start
+			results <- uc.Execute(ctx, 10, []MemberUpdate{{UserID: id, Action: MemberActionDemote}})
+		}(userID)
+	}
+	close(start)
+
+	successes := 0
+	for range 2 {
+		if err := <-results; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful demotions = %d, want 1", successes)
+	}
+
+	owners := 0
+	for _, role := range roomUsers.roles {
+		if role == model.RoomUserRoleOwner {
+			owners++
+		}
+	}
+	if owners != 1 {
+		t.Fatalf("owners after concurrent demotions = %d, want 1", owners)
 	}
 }
 

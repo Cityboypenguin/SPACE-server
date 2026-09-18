@@ -8,7 +8,7 @@ import (
 )
 
 type GetBlockersByUserIDUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.Blocker, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, error)
 }
 
 var _ GetBlockersByUserIDUseCase = &getBlockersByUserIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetBlockersByUserIDUseCase(blockRepo repository.BlockerRepository) GetBl
 	}
 }
 
-func (uc *getBlockersByUserIDInteractor) Execute(ctx context.Context, userID int64) ([]*model.Blocker, error) {
-	return uc.blockRepo.GetBlockersByUserID(ctx, userID)
+func (uc *getBlockersByUserIDInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, error) {
+	return uc.blockRepo.GetBlockersByUserID(ctx, userID, q)
 }

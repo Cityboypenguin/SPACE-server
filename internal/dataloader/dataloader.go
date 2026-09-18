@@ -30,12 +30,12 @@ type ListMediaByAnswerIDsUseCase interface {
 	Execute(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
 }
 type GetRepliesByPostIDsUseCase interface {
-	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
+	Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error)
 }
 
 // ⭕️ 追加：管理者用リプライ取得UseCase
 type GetRepliesByPostIDsIncludeDeletedUseCase interface {
-	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
+	Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error)
 }
 type GetMessagesByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
@@ -88,14 +88,19 @@ type AnswerPageKey struct {
 	Page repository.PageQuery
 }
 
+type ReplyPageKey struct {
+	PostID int64
+	Page   repository.PageQuery
+}
+
 type Loaders struct {
 	UserLoader          *dataloadgen.Loader[int64, *model.User]
 	MediaLoader         *dataloadgen.Loader[int64, []*model.Media]
 	MessageMediaLoader  *dataloadgen.Loader[int64, []*model.Media]
 	QuestionMediaLoader *dataloadgen.Loader[int64, []*model.Media]
 	AnswerMediaLoader   *dataloadgen.Loader[int64, []*model.Media]
-	ReplyLoader         *dataloadgen.Loader[int64, []*model.Post]
-	AdminReplyLoader    *dataloadgen.Loader[int64, []*model.Post] // ⭕️ 追加
+	ReplyLoader         *dataloadgen.Loader[ReplyPageKey, []*model.Post]
+	AdminReplyLoader    *dataloadgen.Loader[ReplyPageKey, []*model.Post]
 	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
 	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
 	MessageLoader *dataloadgen.Loader[int64, *model.Message]
@@ -230,6 +235,38 @@ func batchAnswerPages(
 	}
 }
 
+func batchReplyPages(
+	fetch func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error),
+) func(context.Context, []ReplyPageKey) ([][]*model.Post, []error) {
+	return func(ctx context.Context, keys []ReplyPageKey) ([][]*model.Post, []error) {
+		errs := make([]error, len(keys))
+		grouped := make(map[repository.PageQuery][]int64)
+		for _, key := range keys {
+			grouped[key.Page] = append(grouped[key.Page], key.PostID)
+		}
+
+		pages := make(map[ReplyPageKey][]*model.Post, len(keys))
+		for page, postIDs := range grouped {
+			items, err := fetch(ctx, postIDs, page)
+			if err != nil {
+				for i := range errs {
+					errs[i] = err
+				}
+				return make([][]*model.Post, len(keys)), errs
+			}
+			for postID, replies := range items {
+				pages[ReplyPageKey{PostID: postID, Page: page}] = replies
+			}
+		}
+
+		result := make([][]*model.Post, len(keys))
+		for i, key := range keys {
+			result[i] = pages[key]
+		}
+		return result, errs
+	}
+}
+
 // UseCases は Middleware が必要とするバッチ取得の口をまとめたもの。
 //
 // 引数を1つずつ並べる形はやめてある。ローダーが増えるほど並びが長くなるうえ、
@@ -262,31 +299,63 @@ type UseCases struct {
 // リゾルバは並行に走るので、この窓の間に集まったキーが1クエリにまとまる。
 const batchWait = 10 * time.Millisecond
 
+// maxBatchKeys は1バッチに載せるキー数の上限。
+//
+// 以前は無制限（dataloadgen の既定）だった。キーはそのまま IN 句のプレースホルダに
+// なるので、上限が無いと1クエリのプレースホルダ数＝集まったキー数になる。MySQL の
+// プリペアドステートメントは 65535 個までしかパラメータを持てず、しかも IN 句には
+// ブロック除外リスト（AppendBlockFilter）や閲覧者IDなどが同じクエリに相乗りする。
+// 「キーが集まりすぎた1回」だけが Prepared statement contains too many placeholders
+// で落ちる、という再現しにくい壊れ方をする。
+//
+// 値は 1000。根拠は2つ:
+//   - プレースホルダ上限（65535）に対して十分な余裕を取る。相乗りする条件が
+//     数千個あっても届かない。バルク INSERT 側の maxBulkInsertParams（60000）が
+//     「上限ぎりぎりまで詰める」側なのに対し、こちらは1クエリが返す行数も
+//     抑えたいので桁を落としてある。
+//   - 画面から来るキー数はページングで頭打ち（maxPageSize=100、チャットでも 200）
+//     なので、まともな応答では分割は起きない。効くのは「投稿100件×返信×メンション」
+//     のように積が膨らんだときだけで、そこでは分割したほうが1クエリあたりの
+//     行数も抑えられる。
+//
+// 上限に当たったバッチはその場で発火し、残りは次のバッチへ回る（dataloadgen の
+// WithBatchCapacity）。キーが落ちることはないので、呼び出し側から見た結果は同じ。
+const maxBatchKeys = 1000
+
+// loaderOptions は全ローダー共通の設定。
+//
+// ローダーごとに列挙すると、新しいローダーを足した人が上限だけ付け忘れる
+// （そのローダーだけ無制限に戻る）ので、1箇所に束ねて全員が同じものを使う。
+var loaderOptions = []dataloadgen.Option{
+	dataloadgen.WithWait(batchWait),
+	dataloadgen.WithBatchCapacity(maxBatchKeys),
+}
+
 // New builds a fresh set of loaders. リクエストごとに作り直すこと。
 // DataLoader のキャッシュはリクエスト内でだけ正しい（作り置きすると古い値を返す）。
 func New(uc UseCases) *Loaders {
 	return &Loaders{
-		UserLoader:          dataloadgen.NewLoader(batchFromSlice(uc.GetUsersByIDs.Execute, func(u *model.User) int64 { return u.ID }), dataloadgen.WithWait(batchWait)),
-		MediaLoader:         dataloadgen.NewLoader(batchFromMap(uc.ListMediaByPostIDs.Execute), dataloadgen.WithWait(batchWait)),
-		MessageMediaLoader:  dataloadgen.NewLoader(batchFromMap(uc.ListMediaByMessageIDs.Execute), dataloadgen.WithWait(batchWait)),
-		QuestionMediaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMediaByQuestionIDs.Execute), dataloadgen.WithWait(batchWait)),
-		AnswerMediaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListMediaByAnswerIDs.Execute), dataloadgen.WithWait(batchWait)),
-		ReplyLoader:         dataloadgen.NewLoader(batchFromMap(uc.GetRepliesByPostIDs.Execute), dataloadgen.WithWait(batchWait)),
-		AdminReplyLoader:    dataloadgen.NewLoader(batchFromMap(uc.GetRepliesByPostIDsIncludeDel.Execute), dataloadgen.WithWait(batchWait)), // ⭕️ 追加
-		FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(uc.GetFavoritesByPostIDs.Execute), dataloadgen.WithWait(batchWait)),
-		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), dataloadgen.WithWait(batchWait)),
+		UserLoader:          dataloadgen.NewLoader(batchFromSlice(uc.GetUsersByIDs.Execute, func(u *model.User) int64 { return u.ID }), loaderOptions...),
+		MediaLoader:         dataloadgen.NewLoader(batchFromMap(uc.ListMediaByPostIDs.Execute), loaderOptions...),
+		MessageMediaLoader:  dataloadgen.NewLoader(batchFromMap(uc.ListMediaByMessageIDs.Execute), loaderOptions...),
+		QuestionMediaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMediaByQuestionIDs.Execute), loaderOptions...),
+		AnswerMediaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListMediaByAnswerIDs.Execute), loaderOptions...),
+		ReplyLoader:         dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDs.Execute), loaderOptions...),
+		AdminReplyLoader:    dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDsIncludeDel.Execute), loaderOptions...),
+		FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(uc.GetFavoritesByPostIDs.Execute), loaderOptions...),
+		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),
 
-		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), dataloadgen.WithWait(batchWait)),
-		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), dataloadgen.WithWait(batchWait)),
+		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
+		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), loaderOptions...),
 
-		PostLoader:              dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), dataloadgen.WithWait(batchWait)),
-		RoomLoader:              dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), dataloadgen.WithWait(batchWait)),
-		QuestionLoader:          dataloadgen.NewLoader(batchFromMap(uc.GetQuestionsByIDs.Execute), dataloadgen.WithWait(batchWait)),
-		AnswerLoader:            dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), dataloadgen.WithWait(batchWait)),
-		AnswerPageLoader:        dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), dataloadgen.WithWait(batchWait)),
-		PollOptionLoader:        dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), dataloadgen.WithWait(batchWait)),
-		PollVoterCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), dataloadgen.WithWait(batchWait)),
-		AnonymousIdentityLoader: dataloadgen.NewLoader(batchFromMap(uc.GetAnonymousIdentities.Execute), dataloadgen.WithWait(batchWait)),
+		PostLoader:              dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), loaderOptions...),
+		RoomLoader:              dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), loaderOptions...),
+		QuestionLoader:          dataloadgen.NewLoader(batchFromMap(uc.GetQuestionsByIDs.Execute), loaderOptions...),
+		AnswerLoader:            dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
+		AnswerPageLoader:        dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
+		PollOptionLoader:        dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
+		PollVoterCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
+		AnonymousIdentityLoader: dataloadgen.NewLoader(batchFromMap(uc.GetAnonymousIdentities.Execute), loaderOptions...),
 	}
 }
 

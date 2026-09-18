@@ -61,26 +61,7 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 		return fmt.Errorf("community not found")
 	}
 
-	if !authz.IsAdminRole(claims.Role) {
-		callerRole, err := uc.roomUserRepo.GetRoomUserRole(ctx, c.RoomID, claims.ID)
-		if err != nil {
-			return err
-		}
-		if callerRole != model.RoomUserRoleOwner {
-			return errors.New("forbidden: only community owners or administrators can update members")
-		}
-	}
-
 	if err := uc.validateNoDuplicates(updates); err != nil {
-		return err
-	}
-
-	members, err := uc.roomUserRepo.ListRoomMembersWithRoles(ctx, c.RoomID)
-	if err != nil {
-		return err
-	}
-
-	if err := uc.validateAndSimulate(members, updates); err != nil {
 		return err
 	}
 
@@ -94,6 +75,24 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 	promote, demote, kick := groupByAction(updates)
 
 	return uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
+		roles, err := uc.roomUserRepo.LockRoomMemberRolesForUpdate(ctx, c.RoomID)
+		if err != nil {
+			return err
+		}
+		if !authz.IsAdminRole(claims.Role) && roles[claims.ID] != model.RoomUserRoleOwner {
+			return errors.New("forbidden: only community owners or administrators can update members")
+		}
+		if !authz.IsAdminRole(claims.Role) {
+			for _, update := range updates {
+				if update.UserID == claims.ID && update.Action == MemberActionKick {
+					return errors.New("cannot kick yourself; use leave instead")
+				}
+			}
+		}
+		if err := uc.validateAndSimulate(roles, updates); err != nil {
+			return err
+		}
+
 		if len(promote) > 0 {
 			if err := uc.roomUserRepo.SetRoomUserRoles(ctx, c.RoomID, promote, model.RoomUserRoleOwner); err != nil {
 				return err
@@ -143,12 +142,7 @@ func (uc *UpdateCommunityMembersInteractor) validateNoDuplicates(updates []Membe
 
 // validateAndSimulate checks all target users are members and that the resulting
 // state still has at least one owner.
-func (uc *UpdateCommunityMembersInteractor) validateAndSimulate(members []*model.RoomMember, updates []MemberUpdate) error {
-	roleMap := make(map[int64]string, len(members))
-	for _, m := range members {
-		roleMap[m.User.ID] = m.Role
-	}
-
+func (uc *UpdateCommunityMembersInteractor) validateAndSimulate(roleMap map[int64]string, updates []MemberUpdate) error {
 	updateMap := make(map[int64]MemberAction, len(updates))
 	for _, u := range updates {
 		if _, isMember := roleMap[u.UserID]; !isMember {

@@ -14,12 +14,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// (28) の要。表示系の SELECT に hashed_password が紛れ込んでいないことを、
+// 表示系の SELECT に hashed_password も email も紛れ込んでいないことを、
 // 列リストの定数そのもので固定する。
 //
-// 型（model.User がハッシュを持てない）でも守っているが、型だけでは「読むだけ
-// 読んで捨てる」SELECT を止められない。秘密を DB から引いてくること自体を
-// 止めたいので、列リストを定数にしてここで見張る。
+// 型（model.User がどちらも持てない）でも守っているが、型だけでは「読むだけ
+// 読んで捨てる」SELECT を止められない。秘密と個人情報を DB から引いてくること
+// 自体を止めたいので、列リストを定数にしてここで見張る。
 func TestUserColumnProjectionsSeparateCredentials(t *testing.T) {
 	if strings.Contains(userPublicColumns, "hashed_password") {
 		t.Errorf("userPublicColumns に hashed_password が入っている: %s", userPublicColumns)
@@ -33,11 +33,48 @@ func TestUserColumnProjectionsSeparateCredentials(t *testing.T) {
 
 	// 公開情報の列の並びは scanUser / scanUsers / room_users の JOIN が共有して
 	// いるので、数がずれたら実行時の列数不一致になる。
-	if got, want := len(strings.Split(userPublicColumns, ",")), 8; got != want {
+	if got, want := len(strings.Split(userPublicColumns, ",")), 7; got != want {
 		t.Errorf("userPublicColumns の列数 = %d, want %d", got, want)
 	}
-	if got, want := len(strings.Split(roomMemberUserColumns, ",")), 8; got != want {
+	if got, want := len(strings.Split(roomMemberUserColumns, ",")), 7; got != want {
 		t.Errorf("roomMemberUserColumns の列数 = %d, want %d", got, want)
+	}
+}
+
+// (A) の要。表示系の SELECT が他人のメールアドレスを引かないことを列リストで固定する。
+//
+// 以前は userPublicColumns に email があり、投稿の作者・ルームのメンバー・検索結果を
+// 引くたびに他人の連絡先が DB から持ち上がっていた（そして GraphQL の User.email が
+// 非 null の公開フィールドだったので、実際に外へ出てもいた）。
+// hashed_password と同じ扱いにして、要らない経路ではそもそも引かない。
+func TestUserColumnProjectionsSeparateEmail(t *testing.T) {
+	if strings.Contains(userPublicColumns, "email") {
+		t.Errorf("userPublicColumns に email が入っている（表示系が他人の連絡先を引いてしまう）: %s", userPublicColumns)
+	}
+	if strings.Contains(roomMemberUserColumns, "email") {
+		t.Errorf("roomMemberUserColumns に email が入っている（メンバー一覧が他人の連絡先を引いてしまう）: %s", roomMemberUserColumns)
+	}
+	if !strings.Contains(userAccountColumns, "email") {
+		t.Errorf("userAccountColumns に email が無い（本人・管理者向けの取得が成り立たない）: %s", userAccountColumns)
+	}
+	if !strings.Contains(userCredentialColumns, "email") {
+		t.Errorf("userCredentialColumns に email が無い（ログインの照合が成り立たない）: %s", userCredentialColumns)
+	}
+
+	// 3段の列リストは上に1列ずつ足しただけの関係。scanUserAccount /
+	// scanUserCredentials は公開列の並びをそのまま流用して末尾を読み足すので、
+	// この関係が崩れると Scan の順番がずれる（コンパイルでは止まらない）。
+	if got, want := len(strings.Split(userAccountColumns, ",")), 8; got != want {
+		t.Errorf("userAccountColumns の列数 = %d, want %d", got, want)
+	}
+	if got, want := len(strings.Split(userCredentialColumns, ",")), 9; got != want {
+		t.Errorf("userCredentialColumns の列数 = %d, want %d", got, want)
+	}
+	if !strings.HasPrefix(userAccountColumns, userPublicColumns) {
+		t.Errorf("userAccountColumns が userPublicColumns で始まっていない: %s", userAccountColumns)
+	}
+	if !strings.HasPrefix(userCredentialColumns, userAccountColumns) {
+		t.Errorf("userCredentialColumns が userAccountColumns で始まっていない: %s", userCredentialColumns)
 	}
 }
 
@@ -147,12 +184,14 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 
 	const hash = "$2a$10$abcdefghijklmnopqrstuv"
 	creds := &model.UserCredentials{
-		User: model.User{
-			AccountID: "taro",
-			Name:      "太郎",
-			Email:     "taro@example.com",
-			Role:      "user",
-			Status:    model.UserStatusActive,
+		UserAccount: model.UserAccount{
+			User: model.User{
+				AccountID: "taro",
+				Name:      "太郎",
+				Role:      "user",
+				Status:    model.UserStatusActive,
+			},
+			Email: "taro@example.com",
 		},
 		HashedPassword: hash,
 	}
@@ -182,8 +221,8 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 		if u, err := userRepo.FindByEmail(ctx, "taro@example.com"); err != nil || u == nil {
 			t.Fatalf("FindByEmail = %+v, %v", u, err)
 		}
-		if us, total, err := userRepo.ListUsers(ctx, repository.PageQuery{Limit: 10, WithTotal: true}); err != nil || len(us) != 1 || total != 1 {
-			t.Fatalf("ListUsers = %d/%d, %v", len(us), total, err)
+		if us, total, err := userRepo.ListUserAccounts(ctx, repository.PageQuery{Limit: 10, WithTotal: true}); err != nil || len(us) != 1 || total != 1 {
+			t.Fatalf("ListUserAccounts = %d/%d, %v", len(us), total, err)
 		}
 		if us, _, err := userRepo.SearchUsersByKeyword(ctx, "太郎", repository.PageQuery{Limit: 10}); err != nil || len(us) != 1 {
 			t.Fatalf("SearchUsersByKeyword = %d, %v", len(us), err)
@@ -199,6 +238,50 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 		}
 		if members, err := roomUserRepo.ListRoomMembersWithRoles(ctx, 1); err != nil || len(members) != 1 {
 			t.Fatalf("ListRoomMembersWithRoles = %d, %v", len(members), err)
+		}
+	})
+
+	// 本人・管理者向けの口だけが連絡先を返す。列を分けた以上、
+	// 「公開側は空」「アカウント側は入っている」の両方を実際の SELECT で確かめる。
+	t.Run("公開情報の取得は連絡先を返さない", func(t *testing.T) {
+		// model.User は Email フィールドを持たないので「値が空か」では確かめられない
+		// （持てないことは型が保証している）。ここで見張るのは、公開列で SELECT した
+		// 行がちゃんと読めること＝列と Scan の数がずれていないことのほう。
+		// 連絡先が出ないことそのものは TestUserColumnProjectionsSeparateEmail が列で固定する。
+		u, err := userRepo.GetUserByID(ctx, creds.ID)
+		if err != nil || u == nil {
+			t.Fatalf("GetUserByID = %+v, %v", u, err)
+		}
+		if u.AccountID != "taro" || u.Name != "太郎" {
+			t.Fatalf("公開情報が読めていない: %+v", u)
+		}
+	})
+
+	t.Run("本人・管理者向けの取得は連絡先を返す", func(t *testing.T) {
+		a, err := userRepo.GetUserAccountByID(ctx, creds.ID)
+		if err != nil || a == nil {
+			t.Fatalf("GetUserAccountByID = %+v, %v", a, err)
+		}
+		if a.Email != "taro@example.com" {
+			t.Errorf("GetUserAccountByID の Email = %q, want %q", a.Email, "taro@example.com")
+		}
+		if a.AccountID != "taro" {
+			t.Errorf("GetUserAccountByID の AccountID = %q, want taro（Scan の並びがずれている）", a.AccountID)
+		}
+
+		as, err := userRepo.GetUserAccountsByIDs(ctx, []int64{creds.ID})
+		if err != nil || len(as) != 1 || as[0].Email != "taro@example.com" {
+			t.Fatalf("GetUserAccountsByIDs = %+v, %v", as, err)
+		}
+
+		list, _, err := userRepo.ListUserAccounts(ctx, repository.PageQuery{Limit: 10})
+		if err != nil || len(list) != 1 || list[0].Email != "taro@example.com" {
+			t.Fatalf("ListUserAccounts = %+v, %v", list, err)
+		}
+
+		found, _, err := userRepo.SearchUserAccountsByKeyword(ctx, "太郎", repository.PageQuery{Limit: 10})
+		if err != nil || len(found) != 1 || found[0].Email != "taro@example.com" {
+			t.Fatalf("SearchUserAccountsByKeyword = %+v, %v", found, err)
 		}
 	})
 
@@ -236,6 +319,11 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 		}
 		if after.HashedPassword != hash {
 			t.Fatalf("公開列の更新でハッシュが壊れた: %q (want %q)", after.HashedPassword, hash)
+		}
+		// email も同じ理屈で壊れてはいけない。model.User は Email を持たないので、
+		// UpdateUser が email も SET していたら空文字で潰れる。
+		if after.Email != "taro@example.com" {
+			t.Fatalf("公開列の更新で連絡先が壊れた: %q (want %q)", after.Email, "taro@example.com")
 		}
 		if after.Status != model.UserStatusFrozen {
 			t.Errorf("status = %q, want frozen", after.Status)

@@ -86,7 +86,10 @@ func (r *MySQLAdministratorRepository) DeleteAdministrator(ctx context.Context, 
 		DELETE FROM administrators
 		WHERE id = ?
 	`
-	result, err := r.db.ExecContext(ctx, query, id)
+	// extractDB を通すのは、呼び出し側が「最後の1人か」を数えたトランザクションと
+	// 同じトランザクションでこの DELETE を走らせる必要があるため。r.db を直に
+	// 使っていた頃は、数えるのとの間に別の削除が割り込めた。
+	result, err := extractDB(ctx, r.db).ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
 	}
@@ -100,7 +103,23 @@ func (r *MySQLAdministratorRepository) DeleteAdministrator(ctx context.Context, 
 
 func (r *MySQLAdministratorRepository) CountAdministrators(ctx context.Context) (int, error) {
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM administrators`).Scan(&total); err != nil {
+	if err := extractDB(ctx, r.db).QueryRowContext(ctx, `SELECT COUNT(*) FROM administrators`).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *MySQLAdministratorRepository) CountAdministratorsForUpdate(ctx context.Context) (int, error) {
+	// FOR UPDATE は走査した管理者の行すべてに排他ロックを掛ける。管理者は数人
+	// なのでテーブル全体をロックしているのと変わらないが、「削除の直前に数える」
+	// という用途しか無いので費用は問題にならない。
+	//
+	// これが無いと、管理者が2人のときに2つの削除が同時に来た場合、両方が
+	// COUNT=2 を読んでから両方が DELETE を実行でき、管理者が0人になる。
+	// 片方がこのロックを待たされることで、後から来た側は相手のコミット後の
+	// COUNT=1 を読み、「最後の管理者は削除できません」で弾かれる。
+	var total int
+	if err := extractDB(ctx, r.db).QueryRowContext(ctx, `SELECT COUNT(*) FROM administrators FOR UPDATE`).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil

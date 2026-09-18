@@ -2,6 +2,8 @@ package graph
 
 import (
 	"context"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -148,4 +150,73 @@ func TestSubscribeTopic_ClosesAndUnsubscribesOnContextDone(t *testing.T) {
 
 	// 購読が外れていれば、以降の配信は誰にも届かない（ここで panic しないことも含む）。
 	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m3"})
+}
+
+// countingSource は Unsubscribe が呼ばれたかを観測するための購読元。
+// *pubsub.PubSub でも「購読が外れたか」は間接的にしか見えないので、
+// 転送ループの後始末だけを直接確かめたいときはこちらを使う。
+type countingSource struct {
+	ch          chan interface{}
+	unsubscribe chan struct{} // Unsubscribe で1度だけ閉じる
+	once        sync.Once
+}
+
+func newCountingSource() *countingSource {
+	return &countingSource{
+		ch:          make(chan interface{}, 64),
+		unsubscribe: make(chan struct{}),
+	}
+}
+
+func (s *countingSource) Subscribe(string) chan interface{} { return s.ch }
+
+func (s *countingSource) Unsubscribe(string, chan interface{}) {
+	s.once.Do(func() { close(s.unsubscribe) })
+}
+
+// 読み手が居ないまま送信で詰まっていても、ctx のキャンセルで転送 goroutine が
+// 終わり、購読が外れ、出力チャンネルが閉じること。
+//
+// out はバッファ1なので、2件流すと2件目の送信でブロックする。以前はその送信が
+// キャンセル不可で、この状況（クライアントが読まずに切断）だと goroutine と購読が
+// 永久に残っていた。
+func TestSubscribeTopic_UnsubscribesWhenSendBlocksAndContextIsCanceled(t *testing.T) {
+	src := newCountingSource()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	out := subscribeTopic[*gqlmodel.Message](ctx, src, "room-1:message:added", subscriptionScope{UserID: 1})
+
+	// 1件目は out のバッファへ入り、2件目の送信でループが止まる。
+	src.ch <- &gqlmodel.Message{ID: "m1"}
+	src.ch <- &gqlmodel.Message{ID: "m2"}
+
+	// 送信待ちに入るまで待つ（バッファが埋まる＝1件目が out に入っている）。
+	deadline := time.After(2 * time.Second)
+	for len(out) == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("forwarding loop never filled the output buffer")
+		default:
+		}
+		runtime.Gosched()
+	}
+
+	cancel()
+
+	select {
+	case <-src.unsubscribe:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Unsubscribe was not called after cancellation while the send was blocked")
+	}
+
+	// バッファに残った1件を読み切ると、閉じられていることも確かめられる。
+	<-out
+	select {
+	case _, ok := <-out:
+		if ok {
+			t.Fatal("expected the subscription channel to be closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscription channel was not closed after cancellation")
+	}
 }

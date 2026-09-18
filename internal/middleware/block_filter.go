@@ -3,13 +3,33 @@ package middleware
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/labstack/echo/v4"
 )
 
 type blockListKey struct{}
+
+// blockList はリクエスト1本ぶんのブロック一覧と、「そもそも読めたか」を持つ。
+//
+// err を別に持つのが要点。以前は取得できたIDだけを Context に入れていたので、
+// 「ブロック相手が1人も居ない」と「DBエラーで読めなかった」が後段から同じに
+// 見えていた。ブロックは「見たくない相手が見えない」ための機能なので、
+// 読めなかったときに素通しするのは機能の否定にあたる（フェイルオープン）。
+type blockList struct {
+	ids []int64
+	err error
+}
+
+// ErrBlockListUnavailable は、このリクエストのブロック一覧を取得できなかったこと。
+//
+// ブロック除外を含むクエリは、これを見たら結果を返さずに失敗する（後段で
+// 素通しさせないため）。呼び出し側が種類で分岐できるよう、文字列一致ではなく
+// この値を errors.Is で見られる形にしてある。
+var ErrBlockListUnavailable = errors.New("block list is unavailable for this request")
 
 // BlockFilter は、ログインユーザーのブロック/被ブロックID一覧を取得しContextに付与するEchoミドルウェアです
 func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
@@ -21,13 +41,21 @@ func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
 			if claims, ok := auth.ClaimsFromContext(ctx); ok && claims.ID != 0 {
 				// DBから自分と相手のブロック関係にある全IDを取得
 				blockedIDs, err := blockRepo.GetBlockedAndBlockerIDs(ctx, claims.ID)
-
-				// エラーがなく、かつブロック関係のユーザーが1人以上いる場合のみContextに詰める
-				if err == nil && len(blockedIDs) > 0 {
-					ctx = context.WithValue(ctx, blockListKey{}, blockedIDs)
-					// 更新した Context を Request に再セットして後続へ渡す
-					c.SetRequest(c.Request().WithContext(ctx))
+				if err != nil {
+					// ここでリクエスト全体を失敗させないのは、ブロック除外を使わない
+					// 操作（メッセージ送信など）まで巻き込むため。失敗したという事実は
+					// Context に載せ、実際に除外を使うクエリだけが失敗する。
+					logger.Log.Error().Err(err).
+						Str("component", "block_filter").
+						Int64("user_id", claims.ID).
+						Msg("failed to load block list; block-filtered queries will fail closed")
 				}
+
+				// 成否にかかわらず必ず詰める。ここで詰めないと後段からは
+				// 「未認証で除外不要」と区別が付かない。
+				ctx = context.WithValue(ctx, blockListKey{}, blockList{ids: blockedIDs, err: err})
+				// 更新した Context を Request に再セットして後続へ渡す
+				c.SetRequest(c.Request().WithContext(ctx))
 			}
 
 			return next(c)
@@ -35,11 +63,20 @@ func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
 	}
 }
 
-// GetBlockListFromContext は、リポジトリ層でブロックリストを取り出すためのヘルパーです
-func GetBlockListFromContext(ctx context.Context) []int64 {
-	ids, ok := ctx.Value(blockListKey{}).([]int64)
+// BlockListFromContext は、リポジトリ層でブロックリストを取り出すためのヘルパーです。
+//
+// 戻りのエラーが非 nil なら、このリクエストではブロック除外を適用できない。
+// 呼び出し側はそのまま返して失敗させること（空扱いで続行しないこと）。
+//
+// 未認証リクエストでは (nil, nil) を返す。除外すべき相手が居ないだけで、
+// 取得に失敗したわけではないため。
+func BlockListFromContext(ctx context.Context) ([]int64, error) {
+	list, ok := ctx.Value(blockListKey{}).(blockList)
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	return ids
+	if list.err != nil {
+		return nil, ErrBlockListUnavailable
+	}
+	return list.ids, nil
 }

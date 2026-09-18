@@ -486,8 +486,18 @@ func TimeSeriesFieldNames() []string {
 	return []string{"label", seriesPosts, seriesComments, seriesMessages, seriesNewUsers, seriesLikes, seriesActiveUsers}
 }
 
+// 時系列で使う時刻の書式。
+//   - dateFmt      … 日次のラベル、および DATE 列（user_activity_dates.activity_date）へ渡す形
+//   - hourLabelFmt … 時間別のラベル（GraphQL の応答に出る文字列）
+//   - sqlDateTimeFmt … DATETIME 列（user_activity_hours.activity_hour）へ渡す形
+const (
+	dateFmt        = "2006-01-02"
+	hourLabelFmt   = "2006-01-02 15:00"
+	sqlDateTimeFmt = "2006-01-02 15:04:05"
+)
+
 func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularity, from, to string, series repository.FieldSet) ([]*model.TimeSeriesPoint, error) {
-	const dateFmt = "2006-01-02"
+	hourly := granularity == "hour"
 
 	// サーバーが UTC コンテナで動いていても JST で統一する
 	jst, err := time.LoadLocation("Asia/Tokyo")
@@ -511,7 +521,7 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	toUnix := toT.Unix()
 
 	var labelFmt string
-	if granularity == "hour" {
+	if hourly {
 		labelFmt = "%Y-%m-%d %H:00"
 	} else {
 		labelFmt = "%Y-%m-%d"
@@ -535,26 +545,70 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	messages := map[string]int{}
 	newUsers := map[string]int{}
 	likes := map[string]int{}
-	// rawActiveSlots: スロット単位の生カウント（ローリングウィンドウ計算用に拡張範囲で取得）
-	rawActiveSlots := map[string]int{}
-
-	// 日次は3日、時間別は72時間分さかのぼって取得
 	wantActive := series.Wants(seriesActiveUsers)
-	var rollingSlots int
-	var activeSlotQuery string
-	if granularity == "hour" {
-		// 時間別は last_active_at ベース（user_activity_dates は日単位のため）
-		rollingSlots = 72
-		activeExtendedFromUnix := fromT.Add(-71 * time.Hour).Unix()
-		localActiveTS := fmt.Sprintf("(last_active_at + %d)", jstOffsetSec)
-		activeUsersBetween := fmt.Sprintf("last_active_at >= %d AND last_active_at < %d", activeExtendedFromUnix, toUnix)
-		activeSlotQuery = fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%%Y-%%m-%%d %%H:00') as lbl, COUNT(DISTINCT id) FROM users WHERE %s GROUP BY lbl`, localActiveTS, activeUsersBetween)
+
+	// 範囲内の全スロットを生成してギャップを0で埋める。
+	// 時間別の activeUsers がスロットの並びを先に要るのでここで作る。
+	var labels []string
+	if hourly {
+		for t := fromT; t.Before(toT); t = t.Add(time.Hour) {
+			labels = append(labels, t.Format(hourLabelFmt))
+		}
 	} else {
-		// 日次は user_activity_dates を使って正確な活動履歴を集計
-		rollingSlots = 3
-		activeExtendedFrom := fromT.AddDate(0, 0, -2).Format("2006-01-02")
-		activeExtendedTo := toT.AddDate(0, 0, -1).Format("2006-01-02") // toT は翌日 00:00 なので1日戻す
-		activeSlotQuery = fmt.Sprintf(`SELECT activity_date, COUNT(DISTINCT user_id) FROM user_activity_dates WHERE activity_date >= '%s' AND activity_date <= '%s' GROUP BY activity_date`, activeExtendedFrom, activeExtendedTo)
+		for t := fromT; t.Before(toT); t = t.AddDate(0, 0, 1) {
+			labels = append(labels, t.Format(dateFmt))
+		}
+	}
+
+	// ■ activeUsers（そのスロットの時点から窓ぶん過去までに活動した実人数）
+	//
+	// 窓は日次が3日、時間別が72時間。単位は違うが数え方は同じなので、日次も時間別も
+	// 同じ1本の経路（(user_id, スロット番号) を引いて rollingDistinctActiveUsers で
+	// 窓を滑らせる）に通す。rollingDistinctActiveUsers はスロット番号を整数としか
+	// 見ていないので、単位が「時」でも「日」でもそのまま使える。
+	//
+	// ■ 【重要】日次の数字は以前より小さくなる
+	//
+	// 以前の日次は「日別の DISTINCT 人数」を3日ぶん単純に足していた。窓が重なって
+	// いるので、3日連続で活動した1人が3人として数えられていた（毎日来る常連ほど
+	// 重複して効く）。つまり管理画面の日次グラフは実際より大きい値を出していた。
+	// いまは窓の中で同じ user_id を1回しか数えないので、常連が多いほど下がる。
+	// 上限は「実人数」で、下がったぶんが以前の数えすぎ。時間別のグラフは
+	// もともとこの数え方なので変わらない。
+	//
+	// なお時間別が user_activity_hours を使うのは、users.last_active_at が
+	// ユーザーごとに1値（最後の活動時刻）しか持たず、10時と14時に活動した人が
+	// 14時のスロットにしか現れないため（過去の時間帯ほど実際より少なく出ていた）。
+	const (
+		activeUsersWindowHours = 72
+		activeUsersWindowDays  = 3
+	)
+	// activeUsersQuery は (user_id, スロット番号) を user_id 昇順・スロット昇順で返す。
+	// activeUsersWindow はそのスロット番号の単位で数えた窓の長さ。
+	var activeUsersQuery string
+	var activeUsersWindow int
+	if hourly {
+		activeUsersWindow = activeUsersWindowHours
+		// 窓のぶん手前から引く。fromT のスロットは fromT-71h の活動まで数える。
+		activeExtendedFrom := fromT.Add(-time.Duration(activeUsersWindowHours-1) * time.Hour)
+		// activity_hour は JST の時の始まりをそのまま入れてある列なので、
+		// created_at / last_active_at のような Unix 秒と違い jstOffsetSec の補正は要らない
+		// （user_activity_dates.activity_date と同じ流儀）。
+		// TIMESTAMPDIFF で最初のスロットからの経過時間＝スロット番号にして返す
+		// （負なら範囲より手前の活動）。並びは主キー (user_id, activity_hour) の順。
+		activeUsersQuery = fmt.Sprintf(
+			`SELECT user_id, TIMESTAMPDIFF(HOUR, '%s', activity_hour) AS slot FROM user_activity_hours WHERE activity_hour >= '%s' AND activity_hour < '%s' ORDER BY user_id, activity_hour`,
+			fromT.Format(sqlDateTimeFmt), activeExtendedFrom.Format(sqlDateTimeFmt), toT.Format(sqlDateTimeFmt))
+	} else {
+		activeUsersWindow = activeUsersWindowDays
+		// 時間別と同じで窓のぶん手前から引く（fromT のスロットは2日前の活動まで数える）。
+		activeExtendedFrom := fromT.AddDate(0, 0, -(activeUsersWindowDays - 1)).Format(dateFmt)
+		activeExtendedTo := toT.AddDate(0, 0, -1).Format(dateFmt) // toT は翌日 00:00 なので1日戻す
+		// DATEDIFF で最初のスロットからの経過日数＝スロット番号にする
+		// （負なら範囲より手前の活動）。並びは主キー (user_id, activity_date) の順。
+		activeUsersQuery = fmt.Sprintf(
+			`SELECT user_id, DATEDIFF(activity_date, '%s') AS slot FROM user_activity_dates WHERE activity_date >= '%s' AND activity_date <= '%s' ORDER BY user_id, activity_date`,
+			fromT.Format(dateFmt), activeExtendedFrom, activeExtendedTo)
 	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
@@ -568,15 +622,19 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		{seriesMessages, metricQuery{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)}},
 		{seriesNewUsers, metricQuery{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)}},
 		{seriesLikes, metricQuery{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)}},
-		{seriesActiveUsers, metricQuery{rawActiveSlots, activeSlotQuery}},
 	}
 
+	// activeUsers はここに並べていない。他の系列は「ラベル → 件数」で引けるが、
+	// activeUsers は窓の中の重複を潰すのに user_id が要るので形が違う。下で別に投げる。
 	mqs := make([]metricQuery, 0, len(all))
 	for _, e := range all {
-		if series.Wants(e.field) {
-			mqs = append(mqs, e.mq)
+		if !series.Wants(e.field) {
+			continue
 		}
+		mqs = append(mqs, e.mq)
 	}
+
+	activeUsers := make(map[string]int, len(labels))
 
 	g, gctx := errgroup.WithContext(ctx)
 	for _, mq := range mqs {
@@ -598,48 +656,23 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 			return rows.Err()
 		})
 	}
+	// activeUsers（窓の中の実人数）。日次・時間別とも並行に引く1本で、
+	// 結果は labels の並びのまま返ってくる。
+	if wantActive {
+		g.Go(func() error {
+			counts, err := rollingDistinctActiveUsers(gctx, r.DB, activeUsersQuery, len(labels), activeUsersWindow)
+			if err != nil {
+				return err
+			}
+			for i, l := range labels {
+				activeUsers[l] = counts[i]
+			}
+			return nil
+		})
+	}
+
 	if err := g.Wait(); err != nil {
 		return nil, err
-	}
-
-	// 範囲内の全スロットを生成してギャップを0で埋める
-	var labels []string
-	if granularity == "hour" {
-		for t := fromT; t.Before(toT); t = t.Add(time.Hour) {
-			labels = append(labels, t.Format("2006-01-02 15:00"))
-		}
-	} else {
-		for t := fromT; t.Before(toT); t = t.AddDate(0, 0, 1) {
-			labels = append(labels, t.Format("2006-01-02"))
-		}
-	}
-
-	// 各スロットで過去3日（日次）または72時間（時間別）のローリングウィンドウを集計
-	// last_active_at はユーザーごとに1値のみなので、スロット間の重複なし
-	//
-	// activeUsers が要求されていなければ元データ（rawActiveSlots）も引いていないので、
-	// ここは丸ごと飛ばす。
-	activeUsers := make(map[string]int, len(labels))
-	if wantActive {
-		for _, l := range labels {
-			var slotT time.Time
-			if granularity == "hour" {
-				slotT, _ = time.ParseInLocation("2006-01-02 15:04", l, jst)
-			} else {
-				slotT, _ = time.ParseInLocation(dateFmt, l, jst)
-			}
-			total := 0
-			for i := 0; i < rollingSlots; i++ {
-				var key string
-				if granularity == "hour" {
-					key = slotT.Add(-time.Duration(i) * time.Hour).Format("2006-01-02 15:00")
-				} else {
-					key = slotT.AddDate(0, 0, -i).Format(dateFmt)
-				}
-				total += rawActiveSlots[key]
-			}
-			activeUsers[l] = total
-		}
 	}
 
 	points := make([]*model.TimeSeriesPoint, len(labels))
@@ -655,4 +688,105 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		}
 	}
 	return points, nil
+}
+
+// rollingDistinctActiveUsers は「各スロットの時点から window スロットぶん過去までに
+// 活動した実人数」をスロット順に返す。日次（1スロット＝1日・窓3）と時間別
+// （1スロット＝1時間・窓72）の両方がこれを使う。スロット番号は整数としか見て
+// いないので、単位はこの関数の外で決まる。
+//
+// query は (user_id, スロット番号) を user_id 昇順・スロット番号昇順で返すこと。
+// スロット番号は最初のスロットからの経過スロット数で、範囲より手前の活動は負になる。
+//
+// ■ なぜスロットごとに COUNT(DISTINCT user_id) を足すのでは駄目か
+// 窓は隣り合うスロットで重なっているので、同じ人が窓の中の複数のスロットに現れる。
+// 足すとその人をスロットの数だけ数えてしまう（時間別なら毎時アクセスする1人が
+// 72人ぶん、日次なら3日連続で来た1人が3人ぶん）。窓ごとに DISTINCT を取り直すのが
+// 正しいが、SQL でスロットの数だけ窓を数え直すと重い。
+//
+// ■ 代わりにやっていること
+// 1件の活動（スロット a）が人数に効くのは出力スロット a..a+window-1 の区間。
+// 同じ人の区間を重ねて1本に潰し（だから窓の中で二重に数えない）、区間の始まりで
+// +1・終わりの次で -1 を置いて最後に累積する（いもす法）。
+// user_id 順に並んでいるので、人ごとの区間は流しながら潰せる。
+// 持つのはスロット数ぶんの配列だけで、活動の件数に比例したメモリは要らない。
+//
+// ■ 引く行数
+// （窓を含む範囲で活動した人数）×（その人が活動した時間帯の数）。管理画面の
+// プリセットで最大の「過去90日 × 時間別」がいちばん大きく、DAU 1,000 人・
+// 1人1日4時間帯なら 36万行ほど。行はスカラー2つなので流す間のメモリは増えないが、
+// ここが重くなったら「時間別で選べる範囲を絞る」のが先（表の持ち方を変えても
+// 読む行数は変わらない）。
+func rollingDistinctActiveUsers(ctx context.Context, db *sql.DB, query string, slots, window int) ([]int, error) {
+	counts := make([]int, slots)
+	if slots <= 0 {
+		return counts, nil
+	}
+
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	diff := make([]int, slots+1)
+	var (
+		curUser  int64
+		haveUser bool
+		start    int
+		end      int
+		haveSpan bool
+	)
+	flush := func() {
+		if haveSpan {
+			diff[start]++
+			diff[end+1]--
+			haveSpan = false
+		}
+	}
+
+	for rows.Next() {
+		var userID int64
+		var slot int
+		if err := rows.Scan(&userID, &slot); err != nil {
+			return nil, err
+		}
+		if !haveUser || userID != curUser {
+			flush()
+			curUser, haveUser = userID, true
+		}
+
+		// この活動が覆う出力スロットの範囲（範囲外は切り詰める）。
+		spanStart, spanEnd := slot, slot+window-1
+		if spanStart < 0 {
+			spanStart = 0
+		}
+		if spanEnd > slots-1 {
+			spanEnd = slots - 1
+		}
+		if spanStart > spanEnd {
+			continue // 窓が範囲に一切かからない（起こらないはずだが、引き方が変わっても壊れないように）
+		}
+
+		// 同じ人の隣接・重複する区間は1本に潰す。スロット番号昇順なので前とだけ見ればよい。
+		if haveSpan && spanStart <= end+1 {
+			if spanEnd > end {
+				end = spanEnd
+			}
+			continue
+		}
+		flush()
+		start, end, haveSpan = spanStart, spanEnd, true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	flush()
+
+	running := 0
+	for i := 0; i < slots; i++ {
+		running += diff[i]
+		counts[i] = running
+	}
+	return counts, nil
 }

@@ -2,15 +2,24 @@
 #
 # https://gqlgen.com/getting-started/
 type Query {
-  users(limit: Int = 20, offset: Int = 0): UserPage!
-  me: User!
+  users(limit: Int = 20, offset: Int = 0): UserAccountPage!
+  me: UserAccount!
   # 未設定（サーバー側にまだ明示的な選択が保存されていない）なら null。
   # 初期表示はクライアント側で localStorage / prefers-color-scheme から決める。
   themePreference: ThemePreference
   # 未設定なら true（デフォルトで公開）。
   timetableProfileVisibility: Boolean!
-  getUserByID(id: ID!): User
+  getUserByID(id: ID!): UserAccount
+  # searchUsers は一般ユーザーが使う（＝他人が並ぶ）ので User を返す。email は出ない。
   searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
+  # adminSearchUsers は管理画面のユーザー検索。同じ検索だが管理者専用で、
+  # email を含む UserAccount を返す。searchUsers に「管理者なら email も」を
+  # 足せないのは、GraphQL の型が呼び出し元の権限で変わらないため。
+  adminSearchUsers(
+    keyword: String!
+    limit: Int = 20
+    offset: Int = 0
+  ): UserAccountPage!
   myNotifications(limit: Int = 20, offset: Int = 0, type: String, actorID: ID): NotificationPage!
   myNotificationGroups(limit: Int = 20, offset: Int = 0): NotificationGroupPage!
   notification(id: ID!): Notification
@@ -34,14 +43,26 @@ type Query {
   getPostByID(id: ID!): Post
   getPostByIDIncludeDeleted(id: ID!): Post
   getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
-  getRepliesByPostID(post_id: ID!): [Post!]!
+  # limit/offset は任意。**既定値を入れていない**のは、入れると引数を送っていない
+  # 既存のクライアントで「今まで全件返っていたものが黙って切れる」ため。
+  # 送らなかったときはサーバー側の安全弁（graph.unpagedCollectionCap）で頭打ちにする。
+  # 詳しくは helpers.go の unpagedCollectionCap のコメント参照。
+  getRepliesByPostID(post_id: ID!, limit: Int, offset: Int): [Post!]!
   getFavoritePostsByUserID(
     user_id: ID!
     limit: Int = 20
     offset: Int = 0
   ): PostPage!
-  searchPosts(keyword: String!): [Post!]!
-  searchPostsByHashtag(tag: String!): [Post!]!
+  # 投稿検索は limit/offset を取る。既定値は 20 件（クライアントが1画面に出す件数と
+  # 同じ）。以前は引数が無く、条件に当たった投稿を**全件**返していた。
+  # content LIKE '%...%' はインデックスが効かないので全表走査になり、返す行数も
+  # 投稿が増えるだけ増える。1件の検索が DB とネットワークの両方を占有していた。
+  #
+  # 返り値は [Post!]!（PostPage! ではない）のまま。total はクライアントが使って
+  # いないので、型を変えずに窓だけを足してある。「次があるか」は
+  # 「返ってきた件数が limit と同じか」で判断すること。
+  searchPosts(keyword: String!, limit: Int = 20, offset: Int = 0): [Post!]!
+  searchPostsByHashtag(tag: String!, limit: Int = 20, offset: Int = 0): [Post!]!
   popularHashtags: HashtagSuggestionPage!
   suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
   # メンション (@accountID) のサジェスト。accountID の前方一致で返す。
@@ -51,10 +72,10 @@ type Query {
   # 「候補に出たのに送ると成立しない」というズレが起きない。
   # 自分自身・凍結ユーザー・ブロック関係にある相手は除外する。
   # コミュニティ以外のルーム（授業内チャットは匿名、DM は相手が1人）では常に空を返す。
-  # メンバー数が増えたら、このクエリに prefix / limit を足して前方一致に切り替える。
-  mentionCandidates(roomID: ID!): [User!]!
+  mentionCandidates(roomID: ID!, prefix: String!, limit: Int = 8): [User!]!
 
   getFavoriteByID(id: ID!): Favorite
+    @deprecated(reason: "Use Post.favorites or viewer-specific favorite fields; removal requires confirming no external clients use this query")
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile
   messages(
@@ -79,6 +100,12 @@ type Query {
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
   getCommunityMembers(communityID: ID!): [CommunityMember!]!
+    @deprecated(reason: "Use communityMembers(limit, offset); removal requires confirming no external clients use this query")
+  communityMembers(
+    communityID: ID!
+    limit: Int = 50
+    offset: Int = 0
+  ): CommunityMemberPage!
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
@@ -104,7 +131,8 @@ type Query {
   currentTerms: TermsOfService
   myTermsConsentStatus: TermsConsentStatus!
 
-  adminListTerms: [TermsOfService!]!
+  # limit/offset の既定値を入れていない理由は getRepliesByPostID と同じ。
+  adminListTerms(limit: Int, offset: Int): [TermsOfService!]!
   adminListConsents(
     termsID: ID!
     limit: Int = 20
@@ -113,14 +141,16 @@ type Query {
 
   listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
   myFollowers(limit: Int = 20, offset: Int = 0): UserPage!
-  searchFavoriteUsers(keyword: String!): [User!]!
-  GetFavoriteUsersByUserID(userID: ID!): [User!]!
-  adminGetFavoriteUsers(userID: ID!): [User!]!
+  # Favorite/Block の一覧・検索は6つとも引数を1つも取らず全件返していた。
+  # limit/offset の既定値を入れていない理由は getRepliesByPostID と同じ。
+  searchFavoriteUsers(keyword: String!, limit: Int, offset: Int): [User!]!
+  GetFavoriteUsersByUserID(userID: ID!, limit: Int, offset: Int): [User!]!
+  adminGetFavoriteUsers(userID: ID!, limit: Int, offset: Int): [User!]!
 
   listBlockedUsers(limit: Int = 20, offset: Int = 0): UserPage!
-  searchBlockedUsers(keyword: String!): [User!]!
-  GetBlockersByUserID(userID: ID!): [User!]!
-  adminGetBlockers(userID: ID!): [User!]!
+  searchBlockedUsers(keyword: String!, limit: Int, offset: Int): [User!]!
+  GetBlockersByUserID(userID: ID!, limit: Int, offset: Int): [User!]!
+  adminGetBlockers(userID: ID!, limit: Int, offset: Int): [User!]!
 
   isReportServiceEnabled: Boolean!
 
@@ -160,6 +190,8 @@ type Query {
   # 寸法が未取得の画像メディア。メンテナンス中に一括で埋めるツール
   # (SPACE-client/scripts/fill-media-dimensions.mjs) が対象を列挙するために使う。
   # 全件が埋まればこのクエリごと不要になる。
+  # Temporary operations endpoint for the media-dimension backfill. Keep until
+  # production reports zero remaining rows and that observation is recorded.
   adminListMediaMissingDimensions(limit: Int = 200, offset: Int = 0): [Media!]!
 
   adminListCourses(
@@ -172,11 +204,22 @@ type Query {
   ): CoursePage!
 }
 
+# User は「他人に見せてよいユーザー像」。
+#
+# 認証さえ通っていれば誰でも辿れる場所（投稿の作者、ルームのメンバー、メンション候補、
+# 検索結果、いいねした人…）は全部この型を返す。**個人の連絡先は持たない**。
+#
+# 以前はここに email: String! があり、一般ユーザーが使える searchUsers から他人の
+# メールアドレスが取れていた。email を「本人と管理者にしか見えないもの」として
+# 扱うために、連絡先を持つ側を UserAccount に分けてある。
+#
+# 新しくユーザーを返すフィールドを足すときは、まずこの型を使うこと。
+# UserAccount を返してよいのは「本人だけ」か「管理者だけ」が辿れると
+# リゾルバで保証できる場所に限る（UserAccount のコメント参照）。
 type User {
   ID: ID!
   accountID: String!
   name: String!
-  email: String!
   role: String!
   status: String!
   avatarUrl: String
@@ -186,8 +229,42 @@ type User {
   favorites: [Favorite!]!
 }
 
+# UserAccount は「本人または管理者にだけ見せるユーザー像」。User に email を足したもの。
+#
+# この型を返せるのは、リゾルバで次のどちらかを保証している場所だけ:
+#
+#   - 本人しか辿れない: me / updateUser（claims.ID 固定） /
+#     loginUser・createUser（自分が今そのメールを入力した）
+#   - 管理者しか辿れない: users / getUserByID / adminSearchUsers /
+#     adminUpdateUser / adminListConsents（TermsConsentRecord.user）
+#
+# 「一般ユーザーも辿れるが、管理者のときだけ email を出したい」という使い方はできない。
+# GraphQL の型は呼び出し元の権限で変わらないので、そういう場所は User を返し、
+# 管理者向けには admin* の別フィールドを用意すること（searchUsers と
+# adminSearchUsers がその例）。
+#
+# avatarUrl / posts / favorites を持たないのは意図的。あれらは「人を画面に出す」ための
+# フィールドで、本人・管理者向けの口（アカウント台帳・設定・監査）では要らない。
+# 必要になったら、足す前に「その画面が本当に UserAccount を見る必要があるか」を
+# 確かめること。
+type UserAccount {
+  ID: ID!
+  accountID: String!
+  name: String!
+  email: String!
+  role: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
 type UserPage {
   items: [User!]!
+  total: Int!
+}
+
+type UserAccountPage {
+  items: [UserAccount!]!
   total: Int!
 }
 
@@ -231,7 +308,7 @@ type Post {
   rootPost: Post
   favorites: [Favorite!]!
   parent: Post
-  replies: [Post!]!
+  replies(limit: Int = 50, offset: Int = 0): [Post!]!
   media: [Media!]!
   # 本文中のメンション。表示側はここに載っている text を本文と突き合わせて着色・リンク化する。
   mentions: [Mention!]!
@@ -261,7 +338,8 @@ type Blocker {
 type UserAuthPayload {
   token: String!
   refreshToken: String!
-  user: User!
+  # ログイン直後の本人なので UserAccount（自分のメールは自分に見せてよい）。
+  user: UserAccount!
 }
 
 type AdministratorAuthPayload {
@@ -278,10 +356,10 @@ input LoginInput {
 type Mutation {
   sendEmailOTP(email: String!): Boolean!
   verifyEmailOTP(email: String!, otp: String!): Boolean!
-  createUser(input: CreateUserInput!): User!
+  createUser(input: CreateUserInput!): UserAccount!
   deleteUser(id: ID!): Boolean!
   deleteMyAccount: Boolean!
-  updateUser(input: UpdateUserInput!): User!
+  updateUser(input: UpdateUserInput!): UserAccount!
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
   logoutUser(token: String!): Boolean!
@@ -305,8 +383,10 @@ type Mutation {
   updateProfile(input: UpdateProfileInput!): Profile!
   updateMyProfile(input: UpdateMyProfileInput!): Profile!
   createRoom(input: CreateRoomInput!): Room!
+    @deprecated(reason: "Use createCommunity, getOrCreateDMRoom, or registerTimetableEntry; removal requires confirming no external clients use this mutation")
   getOrCreateDMRoom(targetUserID: ID!): Room!
   addUserToRoom(input: AddUserToRoomInput!): Boolean!
+    @deprecated(reason: "Use joinRoom for communities; course membership comes from the timetable and DM membership is fixed")
   removeUserFromRoom(input: RemoveUserFromRoomInput!): Boolean!
   deleteRoom(roomID: ID!): Boolean!
   createCommunity(input: CreateCommunityInput!): Community!
@@ -361,12 +441,15 @@ type Mutation {
   # polls. Irreversible - the resolver's registeredCount on Course is meant to be
   # shown to the admin as a confirmation prompt before calling this.
   adminDeleteCourse(id: ID!): Boolean!
-  adminUpdateUser(id: ID!, input: UpdateUserInput!): User!
+  adminUpdateUser(id: ID!, input: UpdateUserInput!): UserAccount!
   adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
   updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
   kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action KICK")
   promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action PROMOTE")
   demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action DEMOTE")
   updateCommunityMembers(
     communityID: ID!
     updates: [CommunityMemberUpdateInput!]!
@@ -413,6 +496,15 @@ type Mutation {
   deleteNotifications(ids: [ID!]!): Boolean!
   deleteReadNotifications: Boolean!
   deleteReadNotificationsByActor(type: String!, actorID: ID!): Boolean!
+
+  # 通知の SSE（/events）へ繋ぐための使い捨てチケットを発行する。
+  #
+  # ブラウザ標準の EventSource はカスタムヘッダーを送れないため、/events の認証情報は
+  # URL に載せるしかない。アクセストークンをそのまま載せるとアクセスログやプロキシに
+  # 残って有効期限まで再利用できてしまうので、代わりに「1回使ったら無効・30秒で失効」
+  # するチケットを載せる。接続の直前に1枚取り、?ticket= に付けて繋ぐこと。
+  # 再接続のたびに取り直す（使い回しはできない）。
+  issueNotificationStreamTicket: String!
 
   createAnnouncement(input: CreateAnnouncementInput!): Announcement!
   updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
@@ -676,6 +768,11 @@ type RoomPage {
 type CommunityMember {
   user: User!
   role: String!
+}
+
+type CommunityMemberPage {
+  items: [CommunityMember!]!
+  total: Int!
 }
 
 input CreateCommunityInput {
@@ -997,7 +1094,9 @@ type TermsConsentStatus {
 
 type TermsConsentRecord {
   ID: ID!
-  user: User!
+  # adminListConsents（管理者専用）からしか辿れないので UserAccount。
+  # 同意者の連絡先は管理者が見る前提の台帳。
+  user: UserAccount!
   consentedAt: String!
 }
 

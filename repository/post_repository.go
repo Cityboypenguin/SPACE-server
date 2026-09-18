@@ -18,15 +18,20 @@ type PostRepository interface {
 	GetRootPost(ctx context.Context, id int64) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error)
 	GetPostsByUserID(ctx context.Context, user_id int64, q PageQuery) ([]*model.Post, int, error)
-	GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
-	GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
+	GetRepliesByPostIDs(ctx context.Context, parentIDs []int64, q PageQuery) (map[int64][]*model.Post, error)
+	GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64, q PageQuery) (map[int64][]*model.Post, error)
 	ListTopLevelPosts(ctx context.Context, q PageQuery) ([]*model.Post, int, error)
 	GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Post, int, error)
 	GetFeedPosts(ctx context.Context, viewerID int64, q PageQuery) ([]*model.Post, int, error)
 	CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error)
 	ListPosts(ctx context.Context, q PageQuery) ([]*model.Post, int, error)
-	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
-	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
+	// 投稿検索は窓（PageQuery）を必ず取る。以前は引数が無く条件に当たった投稿を
+	// 全件返していた。content LIKE '%...%' はインデックスが効かず全表走査になるので、
+	// 返す行数を絞らないと投稿が増えるだけ1回の検索が重くなる。
+	// total は返さない（GraphQL 側が [Post!]! を返すので数える先が無い）ため、
+	// PageQuery.WithTotal は見ない。
+	SearchPosts(ctx context.Context, keyword string, q PageQuery) ([]*model.Post, error)
+	SearchPostsByHashtag(ctx context.Context, tag string, q PageQuery) ([]*model.Post, error)
 	CreatePostHashtags(ctx context.Context, postID int64, tags []string) error
 	DeletePostHashtagsByPostID(ctx context.Context, postID int64) error
 	ListPopularHashtags(ctx context.Context, limit int) ([]*model.HashtagSuggestion, error)
@@ -37,6 +42,9 @@ type PostRepository interface {
 	DeletePostMentionsByPostID(ctx context.Context, postID int64) error
 	// ListMentionsByPostIDs は投稿IDごとのメンション一覧を返す（DataLoader 用）。
 	ListMentionsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error)
-	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
+	// 返信一覧は窓（PageQuery）を取る。以前は引数が無く、その投稿の返信を全件
+	// 返していた。伸びた投稿ほど重くなるうえ、重くなるまで誰も気づけない。
+	// total は返さない（GraphQL 側が [Post!]! を返すので数える先が無い）。
+	GetRepliesByID(ctx context.Context, id int64, q PageQuery) ([]*model.Post, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Post, int, error)
 }

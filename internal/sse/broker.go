@@ -46,10 +46,26 @@ type Client struct {
 	ch chan Event
 }
 
-// userHistory は1ユーザーぶんのイベント履歴と、最後に書き足した時刻。
+// userHistory は1ユーザーぶんのイベント履歴と、そのユーザー向けの採番、
+// 最後に書き足した時刻。
 // 時刻を持つのは、接続が無くなったユーザーの履歴を捨ててよいか判断するため。
+//
+// nextID がここ（ユーザー単位）にあるのは、履歴がユーザー単位だから。
+// 以前は Broker が全ユーザー共通の連番を持っていたので、
+//
+//	利用者A のイベント: id=1, id=7, id=23, ...
+//
+// のように**自分宛のID列が飛び飛び**になっていた。間の 2..6 は他人宛に消費された
+// ぶんで、A の履歴には最初から存在しない。それでも SSE の仕様上 Last-Event-ID は
+// 「最後に受け取った id」しか運べないので、受け手からは「欠番＝取りこぼし」と
+// 区別がつかない。実際サーバ側のリプレイ判定（hist[0].ID > lastEventID+1）も
+// この欠番で誤爆し、正常な再接続のたびに「取りこぼしたかもしれない」警告を
+// 吐いていた。IDを配る単位と、履歴を持つ単位は揃っていなければならない。
 type userHistory struct {
-	events    []Event
+	events []Event
+	// nextID は次に払い出すイベントID。1 から始まり、このユーザー宛の
+	// PublishToUser のたびに1つずつ増える（＝欠番が出ない）。
+	nextID    int
 	updatedAt time.Time
 }
 
@@ -57,8 +73,9 @@ type userHistory struct {
 type Broker struct {
 	mu      sync.Mutex
 	clients map[int64][]*Client
-	history map[int64]*userHistory // ユーザーごとの直近イベント履歴（再接続時リプレイ用）
-	nextID  int64
+	// history はユーザーごとの直近イベント履歴（再接続時リプレイ用）と採番。
+	// 採番も含めてここに持つ理由は userHistory の型コメント参照。
+	history map[int64]*userHistory
 
 	// now はテストで時間を進めるための差し替え口（履歴の期限切れを待たずに試すため）。
 	now func() time.Time
@@ -70,7 +87,6 @@ func NewBroker() *Broker {
 	return &Broker{
 		clients: make(map[int64][]*Client),
 		history: make(map[int64]*userHistory),
-		nextID:  1,
 		now:     time.Now,
 	}
 }
@@ -89,21 +105,31 @@ func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event, err
 	c := &Client{ch: make(chan Event, 32)}
 	var missed []Event
 	if lastEventID >= 0 {
-		// サーバー再起動後は nextID が 1 から始まるため、クライアントの lastEventID が
-		// 現在の nextID 以上であれば再起動を検出できる。この場合は履歴が空のため
-		// リプレイは起きないが、sync イベントで未読数は補正される。
-		if int64(lastEventID) >= b.nextID {
+		h := b.history[userID]
+		switch {
+		case h == nil:
+			// このユーザーの履歴そのものが無い。サーバー再起動直後か、無接続のまま
+			// historyTTL を過ぎて掃除された後。どちらもリプレイできるものは無い。
+			// 通知の本体は DB にあるので、クライアントが接続後に一覧を取り直す。
+			// 珍しくない（TTL 超えの切断は日常的に起きる）ので警告にはしない。
+			logger.Log.Debug().
+				Int64("userID", userID).
+				Int("lastEventID", lastEventID).
+				Msg("SSE reconnect with no history for this user: nothing to replay")
+		case lastEventID >= h.nextID:
+			// クライアントが名乗るIDが、このユーザーの採番より先に居る。
+			// ＝サーバーが再起動して採番が 1 に戻った後、既に何件か配り直している。
+			// 採番はユーザー単位なので、他人宛の配信でここへ来ることはない。
 			logger.Log.Warn().
 				Int64("userID", userID).
 				Int("lastEventID", lastEventID).
-				Int64("currentNextID", b.nextID).
-				Msg("SSE reconnect after server restart: Last-Event-ID exceeds server counter, skipping replay")
-		} else {
-			var hist []Event
-			if h := b.history[userID]; h != nil {
-				hist = h.events
-			}
-			// lastEventID が履歴の保持範囲外（100件超の切断）かチェックしてログ警告
+				Int("currentNextID", h.nextID).
+				Msg("SSE reconnect after server restart: Last-Event-ID exceeds this user's counter, skipping replay")
+		default:
+			hist := h.events
+			// lastEventID が履歴の保持範囲外（historySize 件超の切断）かチェックしてログ警告。
+			// 採番がユーザー単位になったので、ここが立つのは本当に evict された時だけ
+			// （以前は他人宛に消費された欠番でも立っていた）。
 			if len(hist) > 0 && hist[0].ID > lastEventID+1 {
 				logger.Log.Warn().
 					Int64("userID", userID).
@@ -204,18 +230,18 @@ func (b *Broker) Broadcast(eventType string, data map[string]any) {
 
 func (b *Broker) PublishToUser(userID int64, eventType string, data map[string]any) {
 	b.mu.Lock()
-	id := b.nextID
-	b.nextID++
-
-	ev := Event{ID: int(id), Type: eventType, Data: data}
-
-	// 履歴に追加（直近 historySize 件を保持）
+	// 履歴に追加（直近 historySize 件を保持）。採番も履歴と同じ単位＝ユーザーごと。
 	now := b.now()
 	h := b.history[userID]
 	if h == nil {
-		h = &userHistory{}
+		h = &userHistory{nextID: 1}
 		b.history[userID] = h
 	}
+	id := h.nextID
+	h.nextID++
+
+	ev := Event{ID: id, Type: eventType, Data: data}
+
 	h.events = append(h.events, ev)
 	if len(h.events) > historySize {
 		h.events = h.events[len(h.events)-historySize:]
@@ -234,7 +260,7 @@ func (b *Broker) PublishToUser(userID int64, eventType string, data map[string]a
 			// チャンネルバッファ満杯。イベントは履歴に残るため次回再接続時にリプレイされる。
 			logger.Log.Warn().
 				Int64("userID", userID).
-				Int("eventID", int(id)).
+				Int("eventID", id).
 				Str("eventType", eventType).
 				Msg("SSE channel buffer full: event dropped for active client, will replay on reconnect")
 		}

@@ -103,38 +103,48 @@ func (r *MySQLNotificationRepository) ListByTargetForUsers(ctx context.Context, 
 		return nil, nil
 	}
 
-	args := make([]any, 0, len(userIDs)+2)
-	args = append(args, targetType, targetID)
-	for _, id := range userIDs {
-		args = append(args, id)
-	}
+	// userIDs は「いま SSE を張っている人」がそのまま来るので、件数は接続数しだいで
+	// いくらでも増えうる。IN 句のプレースホルダ数は 65535 が上限なので、素で組むと
+	// 「同時接続が増えた日にだけお知らせの配信が落ちる」という壊れ方になる。
+	// 他の IN 句・バルク INSERT と同じく inChunks に切ってもらう。
+	var list []*model.Notification
+	err := inChunks(userIDs, 1, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)+2)
+		args = append(args, targetType, targetID)
+		for _, id := range chunk {
+			args = append(args, id)
+		}
 
-	rows, err := r.DB.QueryContext(ctx, `
+		rows, err := r.DB.QueryContext(ctx, `
 		SELECT `+notificationColumns+`
 		FROM notifications
-		WHERE target_type = ? AND target_id = ? AND user_id IN (`+inPlaceholders(len(userIDs))+`)`,
-		args...,
-	)
+		WHERE target_type = ? AND target_id = ? AND user_id IN (`+inPlaceholders(len(chunk))+`)`,
+			args...,
+		)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var n model.Notification
+			var createdAtUnix int64
+			if err := rows.Scan(
+				&n.ID, &n.UserID, &n.Type,
+				&n.ActorID, &n.TargetType, &n.TargetID,
+				&n.Message, &n.IsRead, &createdAtUnix,
+			); err != nil {
+				return err
+			}
+			n.CreatedAt = time.Unix(createdAtUnix, 0)
+			list = append(list, &n)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var list []*model.Notification
-	for rows.Next() {
-		var n model.Notification
-		var createdAtUnix int64
-		if err := rows.Scan(
-			&n.ID, &n.UserID, &n.Type,
-			&n.ActorID, &n.TargetType, &n.TargetID,
-			&n.Message, &n.IsRead, &createdAtUnix,
-		); err != nil {
-			return nil, err
-		}
-		n.CreatedAt = time.Unix(createdAtUnix, 0)
-		list = append(list, &n)
-	}
-	return list, rows.Err()
+	return list, nil
 }
 
 func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Notification, int, error) {

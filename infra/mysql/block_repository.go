@@ -90,9 +90,11 @@ func (r *MySQLBlockRepository) ListBlockers(ctx context.Context, userID int64, q
 	return blocks, total, nil
 }
 
-func (r *MySQLBlockRepository) GetBlockersByUserID(ctx context.Context, userID int64) ([]*model.Blocker, error) {
-	query := "SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ?"
-	rows, err := r.DB.QueryContext(ctx, query, userID)
+func (r *MySQLBlockRepository) GetBlockersByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, error) {
+	// 並びを id 降順（新しい順）に固定してから窓を切る。ORDER BY 無しに LIMIT を
+	// 足すとページごとに順序が変わりうるので、重複と抜けが出る。
+	query := "SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+	rows, err := r.DB.QueryContext(ctx, query, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -115,16 +117,19 @@ func (r *MySQLBlockRepository) GetBlockersByUserID(ctx context.Context, userID i
 	return blocks, nil
 }
 
-func (r *MySQLBlockRepository) SearchBlockers(ctx context.Context, userID int64, keyword string) ([]*model.Blocker, error) {
+func (r *MySQLBlockRepository) SearchBlockers(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.Blocker, error) {
+	// 並びの固定理由は GetBlockersByUserID と同じ。
 	query := `
 		SELECT bl.id, bl.user_id, bl.blocked_user_id, bl.created_at
 		FROM blocks bl
 		JOIN users u ON bl.blocked_user_id = u.id
 		WHERE bl.user_id = ? AND (u.name LIKE ? OR u.account_id LIKE ?)
+		ORDER BY bl.id DESC
+		LIMIT ? OFFSET ?
 	`
 
 	searchParam := "%" + keyword + "%"
-	rows, err := r.DB.QueryContext(ctx, query, userID, searchParam, searchParam)
+	rows, err := r.DB.QueryContext(ctx, query, userID, searchParam, searchParam, q.Limit, q.Offset)
 	if err != nil {
 		return nil, err
 	}

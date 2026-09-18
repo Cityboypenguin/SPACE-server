@@ -19,6 +19,7 @@ type fakeUserRepo struct {
 	mu         sync.Mutex
 	lastActive []int64
 	dates      []string
+	hours      []string
 	err        error
 }
 
@@ -36,10 +37,23 @@ func (f *fakeUserRepo) LogActivityDate(_ context.Context, _ int64, jstDate strin
 	return f.err
 }
 
+func (f *fakeUserRepo) LogActivityHour(_ context.Context, _ int64, jstHour string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hours = append(f.hours, jstHour)
+	return f.err
+}
+
 func (f *fakeUserRepo) writes() (int, []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.lastActive), append([]string(nil), f.dates...)
+}
+
+func (f *fakeUserRepo) writtenHours() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.hours...)
 }
 
 // テスト用のレコーダ。時計を手で進められるようにし、書き込みは同期で走らせる
@@ -88,8 +102,71 @@ func TestUserActivityRecorder_WritesAgainAfterTheInterval(t *testing.T) {
 	}
 }
 
+// 間引く間隔の中でも、JST の時間帯が変わったら書くこと
+// （その時間帯の行が丸ごと落ちて、時間別グラフのスロットが欠けるのを防ぐ）。
+//
+// これが無いと 10:58 に書いた人の 11:02 のアクセスが「5分以内」で間引かれ、
+// user_activity_hours に11時台の行が残らない。last_active_at ベースの集計が
+// 抱えていた「過去の時間帯ほど人数が少なく出る」状態がそのまま再発する。
+func TestUserActivityRecorder_WritesOnJSTHourChange(t *testing.T) {
+	repo := &fakeUserRepo{}
+	// 01:58 UTC = 10:58 JST。4分後に JST の時間帯が変わる（日付は変わらない）。
+	now := time.Date(2026, 9, 18, 1, 58, 0, 0, time.UTC)
+	r := newTestRecorder(repo, &now)
+
+	if !r.Record(context.Background(), 1) {
+		t.Fatal("the first request should record the activity")
+	}
+	now = now.Add(4 * time.Minute) // まだ間引く間隔（5分）の中
+	if !r.Record(context.Background(), 1) {
+		t.Fatal("crossing the JST hour boundary must record even within the interval")
+	}
+
+	count, dates := repo.writes()
+	if count != 2 {
+		t.Fatalf("expected 2 writes, got %d", count)
+	}
+	// 日付は変わっていないので、活動日の行は同じ日付のまま2回（INSERT IGNORE が捨てる）。
+	if dates[0] != "2026-09-18" || dates[1] != "2026-09-18" {
+		t.Fatalf("activity dates = %v, want the same JST date twice", dates)
+	}
+	hours := repo.writtenHours()
+	if len(hours) != 2 || hours[0] != "2026-09-18 10:00:00" || hours[1] != "2026-09-18 11:00:00" {
+		t.Fatalf("activity hours = %v, want 10時台と11時台の2行", hours)
+	}
+}
+
+// 同じ時間帯の中では、5分の間引きが効いたままであること
+// （時間帯で見るようにしても、書き込み回数が毎リクエストに戻ってはいけない）。
+func TestUserActivityRecorder_StillThrottlesWithinTheSameHour(t *testing.T) {
+	repo := &fakeUserRepo{}
+	// 01:00 UTC = 10:00 JST。以降59分ぶん、1分ごとにアクセスする。
+	now := time.Date(2026, 9, 18, 1, 0, 0, 0, time.UTC)
+	r := newTestRecorder(repo, &now)
+
+	writes := 0
+	for i := 0; i < 60; i++ {
+		if r.Record(context.Background(), 1) {
+			writes++
+		}
+		now = now.Add(time.Minute)
+	}
+
+	// 10:00 の1回目と、5分ごとの11回（10:05..10:55）で12回。
+	// 毎分書いていたら 60 回、時間帯だけで判定していたら 1 回になる。
+	if writes != 12 {
+		t.Fatalf("writes in one hour = %d, want 12 (5分ごと)", writes)
+	}
+	for _, h := range repo.writtenHours() {
+		if h != "2026-09-18 10:00:00" {
+			t.Fatalf("activity hour = %q, want すべて 10時台", h)
+		}
+	}
+}
+
 // 間引く間隔の中でも、JST の日付が変わったら書くこと
-// （活動日の行が1日ぶん丸ごと落ちるのを防ぐ）。
+// （活動日の行が1日ぶん丸ごと落ちるのを防ぐ）。時間帯で見るようになっても
+// この規則は保たれる（日付が変われば時間帯も必ず変わる）。
 func TestUserActivityRecorder_WritesOnJSTDateChange(t *testing.T) {
 	repo := &fakeUserRepo{}
 	// 14:58 UTC = 23:58 JST。2分後に JST の日付が変わる。
@@ -108,6 +185,10 @@ func TestUserActivityRecorder_WritesOnJSTDateChange(t *testing.T) {
 	}
 	if dates[0] != "2026-09-18" || dates[1] != "2026-09-19" {
 		t.Fatalf("expected consecutive JST dates, got %v", dates)
+	}
+	hours := repo.writtenHours()
+	if len(hours) != 2 || hours[0] != "2026-09-18 23:00:00" || hours[1] != "2026-09-19 00:00:00" {
+		t.Fatalf("activity hours = %v, want 日付をまたいだ2つの時間帯", hours)
 	}
 }
 

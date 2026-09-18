@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -160,6 +162,13 @@ func analyticsSchemaDDL() []string {
 			total_max_scroll_depth DOUBLE NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE user_activity_dates (user_id BIGINT NOT NULL, activity_date DATE NOT NULL)`,
+		// db/migrations/070 から外部キー無し・索引だけ落とした形。主キーは残す
+		// （同じ人・同じ時間帯が1行なのは集計の前提なので、テストでも効かせる）。
+		`CREATE TABLE user_activity_hours (
+			user_id BIGINT NOT NULL,
+			activity_hour DATETIME NOT NULL,
+			PRIMARY KEY (user_id, activity_hour)
+		)`,
 	}
 }
 
@@ -391,5 +400,380 @@ func TestTimeSeriesRunsOnlyRequestedSeries(t *testing.T) {
 	}
 	if len(points) != 1 || points[0].Label != day {
 		t.Fatalf("points = %+v, want 1 点で label=%s", points, day)
+	}
+}
+
+// ■ 時間別 activeUsers（ここが今回の本題）
+//
+// 直したいのは「同じ人が複数の時間帯に活動しても、最後の1スロットにしか出ない」こと。
+// 原因は users.last_active_at がユーザーごとに1値しか持たないこと。時間解像度の
+// 活動履歴（user_activity_hours）から数えれば、活動した時間帯すべてに出る。
+//
+// 集計の窓は従来どおり72時間のローリング（あるスロットの値は、そのスロットの時点から
+// 72時間さかのぼる間に活動した実人数）。窓は隣のスロットと重なるので、窓の中で
+// 同じ人を二重に数えないことも同時に確かめる。
+
+// jstHourUnix は JST の時刻を Unix 秒にする（last_active_at 用）。
+func jstHourUnix(t *testing.T, s string) int64 {
+	t.Helper()
+	loc := time.FixedZone("JST", 9*60*60)
+	ts, err := time.ParseInLocation("2006-01-02 15:04:05", s, loc)
+	if err != nil {
+		t.Fatalf("failed to parse the JST time %q: %v", s, err)
+	}
+	return ts.Unix()
+}
+
+func TestTimeSeriesHourlyActiveUsersCountsEveryHour(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	const (
+		alice = int64(1) // 10時と14時に活動（本題: 10時のスロットにも出るべき）
+		bob   = int64(2) // 10・11・12時に活動（窓の中で3人ぶんに数えてはいけない）
+		carol = int64(3) // 前日23時（範囲の手前だが72時間の窓には入る）
+		dave  = int64(4) // 4日前（どの窓にも入らない）
+	)
+
+	// last_active_at は「最後の活動時刻」だけを持つ。修正前の集計はこれを見ていた。
+	mustExec(t, db, `INSERT INTO users (id, created_at, status, last_active_at) VALUES (?,?,'active',?),(?,?,'active',?),(?,?,'active',?),(?,?,'active',?)`,
+		alice, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-18 14:30:00"),
+		bob, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-18 12:30:00"),
+		carol, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-17 23:30:00"),
+		dave, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-14 12:30:00"),
+	)
+	mustExec(t, db, `INSERT INTO user_activity_hours (user_id, activity_hour) VALUES
+		(?, '2026-09-18 10:00:00'),
+		(?, '2026-09-18 14:00:00'),
+		(?, '2026-09-18 10:00:00'),
+		(?, '2026-09-18 11:00:00'),
+		(?, '2026-09-18 12:00:00'),
+		(?, '2026-09-17 23:00:00'),
+		(?, '2026-09-14 12:00:00')`,
+		alice, alice, bob, bob, bob, carol, dave)
+
+	repo := NewMySQLAnalyticsRepository(db)
+	points, err := repo.GetTimeSeries(context.Background(), "hour", "2026-09-18", "2026-09-18", repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetTimeSeries failed: %v", err)
+	}
+	if len(points) != 24 {
+		t.Fatalf("points = %d, want 24 (1日ぶんの時間スロット)", len(points))
+	}
+
+	got := map[string]int{}
+	for _, p := range points {
+		got[p.Label] = p.ActiveUsers
+	}
+
+	// 00:00〜09:00 は carol だけ（前日23時の活動が72時間の窓に入っている）。
+	// 10:00 以降は alice と bob が加わって3人。dave は窓の外なのでどこにも出ない。
+	for h := 0; h < 24; h++ {
+		label := fmt.Sprintf("2026-09-18 %02d:00", h)
+		want := 1
+		if h >= 10 {
+			want = 3
+		}
+		if got[label] != want {
+			t.Errorf("activeUsers[%s] = %d, want %d", label, got[label], want)
+		}
+	}
+
+	// 本題の確認をもう一度、狙いを名指しで。
+	// 10時のスロットに alice が出ること（修正前は最後の活動である14時にしか出なかった）。
+	if got["2026-09-18 10:00"] != 3 {
+		t.Errorf("10時のスロット = %d, want 3（10時に活動した alice と bob が出ること）", got["2026-09-18 10:00"])
+	}
+	// 12時のスロットで bob が3人ぶんに膨らんでいないこと（窓の中の重複を潰す）。
+	if got["2026-09-18 12:00"] != 3 {
+		t.Errorf("12時のスロット = %d, want 3（3時間帯に活動した bob は1人）", got["2026-09-18 12:00"])
+	}
+
+	// 修正前の集計が何を見ていたか（＝なぜ直せなかったか）を固定しておく。
+	// 10時台に last_active_at を持つユーザーは0人。alice も bob もその後さらに
+	// 活動しているので、last_active_at からは「10時に活動した」ことが分からない。
+	var lastActiveInHour10 int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users WHERE DATE_FORMAT(FROM_UNIXTIME(last_active_at + 32400), '%Y-%m-%d %H:00') = '2026-09-18 10:00'`).Scan(&lastActiveInHour10); err != nil {
+		t.Fatalf("failed to run the legacy count: %v", err)
+	}
+	if lastActiveInHour10 != 0 {
+		t.Fatalf("legacy count = %d, want 0; the fixture no longer demonstrates the bug", lastActiveInHour10)
+	}
+}
+
+// 日次の activeUsers は user_activity_dates だけから決まること。
+// 時間別の表（user_activity_hours）に何が入っていても日次は動かない。
+func TestTimeSeriesDailyActiveUsersUnchangedByTheHourlyTable(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	const (
+		alice    = int64(1)
+		bob      = int64(2)
+		hourOnly = int64(99) // 時間別の表にしか行が無い人。日次に混ざってはいけない。
+	)
+	mustExec(t, db, `INSERT INTO user_activity_dates (user_id, activity_date) VALUES
+		(?, '2026-09-16'), (?, '2026-09-17'), (?, '2026-09-18'), (?, '2026-09-18')`,
+		alice, alice, alice, bob)
+
+	repo := NewMySQLAnalyticsRepository(db)
+	daily := func() int {
+		points, err := repo.GetTimeSeries(context.Background(), "day", "2026-09-18", "2026-09-18", repository.AllFields())
+		if err != nil {
+			t.Fatalf("GetTimeSeries failed: %v", err)
+		}
+		if len(points) != 1 {
+			t.Fatalf("points = %d, want 1", len(points))
+		}
+		return points[0].ActiveUsers
+	}
+
+	// 日次は3日ぶんのローリング窓の「実人数」。窓には alice（9/16・17・18）と
+	// bob（9/18）が入るので2人。
+	//
+	// 以前はここが 4 だった（日別の DISTINCT 人数 1+1+2 を単純に足していたため、
+	// 3日とも来た alice が3人ぶんに膨らんでいた）。
+	before := daily()
+	if before != 2 {
+		t.Fatalf("daily activeUsers = %d, want 2 (窓に居るのは alice と bob の2人)", before)
+	}
+
+	// 時間別の表を埋めても日次は動かない（別の人を入れても増えない）。
+	mustExec(t, db, `INSERT INTO user_activity_hours (user_id, activity_hour) VALUES
+		(?, '2026-09-18 10:00:00'),
+		(?, '2026-09-18 11:00:00'),
+		(?, '2026-09-18 10:00:00')`,
+		alice, alice, hourOnly)
+
+	if after := daily(); after != before {
+		t.Fatalf("daily activeUsers changed after filling user_activity_hours: %d -> %d", before, after)
+	}
+}
+
+// 時間別でも「要求された系列ぶんしか SQL を投げない」が保たれること。
+// activeUsers の引き方を変えたので、本数が増えていないことを固定しておく。
+func TestTimeSeriesHourlyRunsOnlyRequestedSeries(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+	singleConnDB(db)
+
+	repo := NewMySQLAnalyticsRepository(db)
+	ctx := context.Background()
+
+	run := func(series repository.FieldSet) int {
+		var err error
+		c := countStatements(t, db, func() {
+			_, err = repo.GetTimeSeries(ctx, "hour", "2026-09-18", "2026-09-18", series)
+		})
+		if err != nil {
+			t.Fatalf("GetTimeSeries failed: %v", err)
+		}
+		return c.selects
+	}
+
+	if got := run(repository.AllFields()); got != 6 {
+		t.Fatalf("全系列で SELECT %d 本、期待 6 本", got)
+	}
+	if got := run(repository.NewFieldSet([]string{"label", "activeUsers"})); got != 1 {
+		t.Fatalf("activeUsers だけで SELECT %d 本、期待 1 本", got)
+	}
+	if got := run(repository.NewFieldSet([]string{"label", "posts"})); got != 1 {
+		t.Fatalf("posts だけで SELECT %d 本、期待 1 本", got)
+	}
+	if got := run(repository.NewFieldSet([]string{"label"})); got != 0 {
+		t.Fatalf("label だけで SELECT %d 本、期待 0 本", got)
+	}
+}
+
+// migration 070 を実際に流して、043 の既存データが壊れないこと。
+//
+// 案として「user_activity_dates に時刻の列を足して主キーを広げる」もあったが、
+// 本番適用済みの表を作り替える必要があった。採ったのは表を足すほうなので、
+// ここで確かめるのは「既存の表と、そこから出る日次の数字に一切触っていない」こと。
+func TestMigration070LeavesUserActivityDatesIntact(t *testing.T) {
+	db, cleanup := throwawaySchemaDB(t, "space_migration070_test", nil)
+	defer cleanup()
+
+	ctx := context.Background()
+	runMigration := func(name string) {
+		t.Helper()
+		sqlBytes, err := os.ReadFile("../../db/migrations/" + name)
+		if err != nil {
+			t.Fatalf("failed to read the migration %s: %v", name, err)
+		}
+		if _, err := db.ExecContext(ctx, string(sqlBytes)); err != nil {
+			t.Fatalf("failed to run the migration %s: %v", name, err)
+		}
+	}
+
+	// 043 の状態（本番にある形）を作って、既存データを入れる。
+	runMigration("043_create_user_activity_dates.up.sql")
+	mustExec(t, db, `INSERT INTO user_activity_dates (user_id, activity_date) VALUES (1, '2026-09-17'), (1, '2026-09-18'), (2, '2026-09-18')`)
+
+	dailyCounts := func() map[string]int {
+		t.Helper()
+		rows, err := db.QueryContext(ctx, `SELECT activity_date, COUNT(DISTINCT user_id) FROM user_activity_dates GROUP BY activity_date`)
+		if err != nil {
+			t.Fatalf("failed to aggregate the activity dates: %v", err)
+		}
+		defer rows.Close()
+		out := map[string]int{}
+		for rows.Next() {
+			var d string
+			var c int
+			if err := rows.Scan(&d, &c); err != nil {
+				t.Fatalf("failed to scan: %v", err)
+			}
+			out[d[:10]] = c
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("failed to iterate: %v", err)
+		}
+		return out
+	}
+	before := dailyCounts()
+
+	runMigration("070_create_user_activity_hours.up.sql")
+
+	after := dailyCounts()
+	if len(after) != len(before) || after["2026-09-17"] != before["2026-09-17"] || after["2026-09-18"] != before["2026-09-18"] {
+		t.Fatalf("daily counts changed by the migration: %v -> %v", before, after)
+	}
+	var rowCount int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_activity_dates`).Scan(&rowCount); err != nil {
+		t.Fatalf("failed to count the existing rows: %v", err)
+	}
+	if rowCount != 3 {
+		t.Fatalf("user_activity_dates has %d rows, want the original 3", rowCount)
+	}
+
+	// 新しい表は「同じ人・同じ時間帯は1行」。書き込み側は INSERT IGNORE なので、
+	// 二重に投げても増えないことが前提になっている。
+	mustExec(t, db, `INSERT IGNORE INTO user_activity_hours (user_id, activity_hour) VALUES (1, '2026-09-18 10:00:00')`)
+	mustExec(t, db, `INSERT IGNORE INTO user_activity_hours (user_id, activity_hour) VALUES (1, '2026-09-18 10:00:00')`)
+	var hourRows int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_activity_hours`).Scan(&hourRows); err != nil {
+		t.Fatalf("failed to count the hourly rows: %v", err)
+	}
+	if hourRows != 1 {
+		t.Fatalf("user_activity_hours has %d rows, want 1 (同じ時間帯の2回目は捨てる)", hourRows)
+	}
+
+	// down を流しても、既存の表は残る（触っていないので当たり前だが、
+	// 巻き戻しが日次を壊さないことをここで固定する）。
+	runMigration("070_create_user_activity_hours.down.sql")
+	if got := dailyCounts(); len(got) != len(before) || got["2026-09-18"] != before["2026-09-18"] {
+		t.Fatalf("daily counts changed by the rollback: %v -> %v", before, got)
+	}
+}
+
+// ■ 日次 activeUsers の重複カウント（今回直したところ）
+//
+// 日次も時間別と同じ「3日の窓に居る実人数」を出す。以前は日別の DISTINCT 人数を
+// 3日ぶん単純に足していたので、3日連続で活動した1人が3人として数えられていた。
+// 管理画面の日次グラフはこの修正で下がる（常連が多いほど下がり幅が大きい）。
+
+// dailyActiveUsers は1日ぶんの日次グラフを引いて activeUsers を返す。
+func dailyActiveUsers(t *testing.T, db *sql.DB, day string) int {
+	t.Helper()
+	points, err := NewMySQLAnalyticsRepository(db).GetTimeSeries(
+		context.Background(), "day", day, day, repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetTimeSeries failed: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("points = %d, want 1", len(points))
+	}
+	return points[0].ActiveUsers
+}
+
+// 3日連続で活動した1人が「3」ではなく「1」と数えられること。
+func TestTimeSeriesDailyActiveUsersCountsAPersonOnce(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	const regular = int64(1) // 9/16・17・18 と毎日活動する常連
+	mustExec(t, db, `INSERT INTO user_activity_dates (user_id, activity_date) VALUES
+		(?, '2026-09-16'), (?, '2026-09-17'), (?, '2026-09-18')`,
+		regular, regular, regular)
+
+	if got := dailyActiveUsers(t, db, "2026-09-18"); got != 1 {
+		t.Fatalf("daily activeUsers = %d, want 1（3日とも来た1人を3人と数えないこと）", got)
+	}
+}
+
+// 3日の窓の端の扱い。9/18 のスロットは 9/16 までを数え、9/15 は数えない。
+func TestTimeSeriesDailyActiveUsersWindowEdges(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	const (
+		onDay      = int64(1) // 9/18 … 窓の内側（当日）
+		twoDaysAgo = int64(2) // 9/16 … 窓の内側（いちばん古い日）
+		threeAgo   = int64(3) // 9/15 … 窓の外（1日ぶんはみ出す）
+	)
+	mustExec(t, db, `INSERT INTO user_activity_dates (user_id, activity_date) VALUES
+		(?, '2026-09-18'), (?, '2026-09-16'), (?, '2026-09-15')`,
+		onDay, twoDaysAgo, threeAgo)
+
+	// 9/18 の窓は 9/16〜9/18。9/15 の人だけが外。
+	if got := dailyActiveUsers(t, db, "2026-09-18"); got != 2 {
+		t.Fatalf("2026-09-18 の activeUsers = %d, want 2（9/16 は窓の内、9/15 は外）", got)
+	}
+
+	// 9/17 の窓は 9/15〜9/17。当日（9/18）の人が外れ、9/15 の人が入る。
+	if got := dailyActiveUsers(t, db, "2026-09-17"); got != 2 {
+		t.Fatalf("2026-09-17 の activeUsers = %d, want 2（9/16 と 9/15 の2人）", got)
+	}
+
+	// 9/20 の窓は 9/18〜9/20。当日の人だけ残る。
+	if got := dailyActiveUsers(t, db, "2026-09-20"); got != 1 {
+		t.Fatalf("2026-09-20 の activeUsers = %d, want 1（9/18 の人だけ窓に残る）", got)
+	}
+
+	// 9/21 の窓は 9/19〜9/21。誰も居ない。
+	if got := dailyActiveUsers(t, db, "2026-09-21"); got != 0 {
+		t.Fatalf("2026-09-21 の activeUsers = %d, want 0（窓に誰も居ない）", got)
+	}
+}
+
+// 複数日にまたがる範囲でも、各スロットが「その日の窓の実人数」になること。
+// 範囲の手前（表示しない日）の活動も窓に入れて数えること。
+func TestTimeSeriesDailyActiveUsersAcrossARange(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	const (
+		regular = int64(1) // 9/16〜9/18 毎日
+		newbie  = int64(2) // 9/18 だけ
+		early   = int64(3) // 9/15 だけ（範囲の手前。9/16・9/17 の窓には入る）
+	)
+	mustExec(t, db, `INSERT INTO user_activity_dates (user_id, activity_date) VALUES
+		(?, '2026-09-16'), (?, '2026-09-17'), (?, '2026-09-18'),
+		(?, '2026-09-18'),
+		(?, '2026-09-15')`,
+		regular, regular, regular, newbie, early)
+
+	points, err := NewMySQLAnalyticsRepository(db).GetTimeSeries(
+		context.Background(), "day", "2026-09-16", "2026-09-18", repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetTimeSeries failed: %v", err)
+	}
+	if len(points) != 3 {
+		t.Fatalf("points = %d, want 3", len(points))
+	}
+
+	// 9/16 の窓(9/14-16): early と regular → 2
+	// 9/17 の窓(9/15-17): early と regular → 2
+	// 9/18 の窓(9/16-18): regular と newbie → 2（regular を3回数えない）
+	want := map[string]int{
+		"2026-09-16": 2,
+		"2026-09-17": 2,
+		"2026-09-18": 2,
+	}
+	for _, p := range points {
+		if want[p.Label] != p.ActiveUsers {
+			t.Errorf("activeUsers[%s] = %d, want %d", p.Label, p.ActiveUsers, want[p.Label])
+		}
 	}
 }

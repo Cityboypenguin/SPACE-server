@@ -25,6 +25,8 @@ func toGraphHashtagSuggestions(suggestions []*model.HashtagSuggestion) []*gqlmod
 	return result
 }
 
+// toGraphUser は「他人に見せてよいユーザー像」への変換。連絡先は載らない
+// （gqlmodel.User に Email フィールドが無いので、載せようとしても書けない）。
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
 		return nil
@@ -33,11 +35,31 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 		ID:        encodeGraphID("user", user.ID),
 		AccountID: user.AccountID,
 		Name:      user.Name,
-		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
 		CreatedAt: user.CreatedAt.Format(timeFormat),
 		UpdatedAt: user.UpdatedAt.Format(timeFormat),
+	}
+}
+
+// toGraphUserAccount は本人・管理者向けの変換。連絡先を載せる。
+//
+// 呼んでよいのは、本人か管理者しか辿れないとリゾルバで保証できるフィールドだけ
+// （graph/schema.graphqls の UserAccount のコメントに一覧がある）。
+// 表示のためにユーザーを返すだけなら toGraphUser を使うこと。
+func toGraphUserAccount(account *model.UserAccount) *gqlmodel.UserAccount {
+	if account == nil {
+		return nil
+	}
+	return &gqlmodel.UserAccount{
+		ID:        encodeGraphID("user", account.ID),
+		AccountID: account.AccountID,
+		Name:      account.Name,
+		Email:     account.Email,
+		Role:      account.Role,
+		Status:    account.Status,
+		CreatedAt: account.CreatedAt.Format(timeFormat),
+		UpdatedAt: account.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -51,7 +73,6 @@ func toGraphDeletedUserWithID(id int64) *gqlmodel.User {
 		ID:        encodeGraphID("user", id),
 		AccountID: "deleted-account",
 		Name:      deletedAccountDisplayName,
-		Email:     "",
 		Role:      "",
 		Status:    "",
 		CreatedAt: deletedAt,
@@ -179,7 +200,6 @@ func toGraphAnonymousUser(identity *model.RoomAnonymousIdentity) *gqlmodel.User 
 		ID:        encodeGraphID("anon", identity.ID),
 		AccountID: "",
 		Name:      identity.Label,
-		Email:     "",
 		Role:      "",
 		Status:    "",
 		CreatedAt: createdAt,
@@ -203,7 +223,6 @@ func anonymousPlaceholderUser() *gqlmodel.User {
 		ID:        encodeGraphID("anon", 0),
 		AccountID: "",
 		Name:      anonymousPlaceholderLabel,
-		Email:     "",
 		Role:      "",
 		Status:    "",
 	}

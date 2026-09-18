@@ -8,7 +8,7 @@ import (
 )
 
 type SearchFavoriteUsersUseCase interface {
-	Execute(ctx context.Context, userID int64, keyword string) ([]*model.FavoriteUser, error)
+	Execute(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.FavoriteUser, error)
 }
 
 var _ SearchFavoriteUsersUseCase = &searchFavoritesInteractor{}
@@ -23,6 +23,6 @@ func NewSearchFavoriteUsersUseCase(favoriteUserRepo repository.FavoriteUserRepos
 	}
 }
 
-func (uc *searchFavoritesInteractor) Execute(ctx context.Context, userID int64, keyword string) ([]*model.FavoriteUser, error) {
-	return uc.favoriteUserRepo.SearchFavoriteUsers(ctx, userID, keyword)
+func (uc *searchFavoritesInteractor) Execute(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.FavoriteUser, error) {
+	return uc.favoriteUserRepo.SearchFavoriteUsers(ctx, userID, keyword, q)
 }

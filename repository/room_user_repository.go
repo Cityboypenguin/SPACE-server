@@ -15,6 +15,9 @@ type RoomUserRepository interface {
 	RemoveUsersFromRoom(ctx context.Context, roomID int64, userIDs []int64) error
 	GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error)
 	ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error)
+	// SearchRoomUsersByPrefix is the bounded display search used by mention
+	// suggestions. It does not replace complete membership validation APIs.
+	SearchRoomUsersByPrefix(ctx context.Context, roomID int64, prefix string, limit int) ([]*model.User, error)
 	// CountUsersByRoomIDs は複数ルームの在籍人数を1クエリで数える。
 	//
 	// コミュニティ一覧の memberCount 用。以前は一覧の1件ごとに
@@ -40,6 +43,11 @@ type RoomUserRepository interface {
 	SetRoomUserRoles(ctx context.Context, roomID int64, userIDs []int64, role string) error
 	CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error)
 	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
+	ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q PageQuery) ([]*model.RoomMember, int, error)
+	// LockRoomMemberRolesForUpdate returns the complete membership role map while
+	// locking those rows. It is for business validation only and must be called
+	// inside TxManager.RunInTx; display pagination must never use it.
+	LockRoomMemberRolesForUpdate(ctx context.Context, roomID int64) (map[int64]string, error)
 	// UpdateLastRead は既読位置を進める。lastReadMessageID はそのルームの最新
 	// メッセージID（1件も無ければ nil）、readAt は既読にした時刻。
 	// 既読位置は巻き戻さない（別端末が先に進めていればそちらを残す）。

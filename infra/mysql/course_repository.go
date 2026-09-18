@@ -79,6 +79,145 @@ func (r *MySQLCourseRepository) SaveCourseWithRoom(ctx context.Context, param re
 	}, nil
 }
 
+// courseRoomInsertColumns / courseInsertColumns は一括 INSERT の1行あたりの列数（分割の単位）。
+const (
+	courseRoomInsertColumns = 4
+	courseInsertColumns     = 10
+)
+
+// SaveCoursesWithRooms は rooms と courses をそれぞれ1本の INSERT でまとめて作る。
+//
+// 以前は取り込みが1件ごとに SaveCourseWithRoom を呼んでおり、シラバス1年ぶん
+// （数千件）の取り込みでトランザクションと INSERT が件数ぶん並んでいた。
+// 取り込みは管理者が眺めている間に走るので、往復の数がそのまま待ち時間になる。
+//
+// 全件を1つのトランザクションに入れているのは、SaveCourseWithRoom と同じく
+// 「rooms だけ出来て courses が無い」を作らないため。途中で失敗したら丸ごと
+// 巻き戻る（取り込みは再実行できる＝DedupKey で冪等なので、部分適用を残すより
+// 何も残さないほうが後始末が要らない）。
+func (r *MySQLCourseRepository) SaveCoursesWithRooms(ctx context.Context, params []repository.SaveCourseParam) ([]*model.Course, error) {
+	if len(params) == 0 {
+		return nil, nil
+	}
+
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	nowUnix := now.Unix()
+
+	courses := make([]*model.Course, 0, len(params))
+	for _, p := range params {
+		courses = append(courses, &model.Course{
+			DayOfWeek:   p.DayOfWeek,
+			Period:      p.Period,
+			TeacherName: p.TeacherName,
+			CourseName:  p.CourseName,
+			Year:        p.Year,
+			Semester:    p.Semester,
+			DedupKey:    p.DedupKey,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		})
+	}
+
+	// rooms を先に作って採番を受け取る。行数が事前に分かる複数 VALUES の INSERT では
+	// InnoDB が AUTO_INCREMENT を連番でまとめて確保するので、先頭IDから順に振ってよい
+	// （media の CreateMediaBatch / notifications の SaveBatch と同じ前提）。
+	if err := inChunks(courses, courseRoomInsertColumns, func(chunk []*model.Course) error {
+		args := make([]any, 0, len(chunk)*courseRoomInsertColumns)
+		for _, c := range chunk {
+			args = append(args, c.CourseName, model.RoomTypeCourse, nowUnix, nowUnix)
+		}
+		result, err := tx.ExecContext(ctx,
+			`INSERT INTO rooms (name, type, created_at, updated_at) VALUES `+
+				valuesPlaceholders(len(chunk), courseRoomInsertColumns), args...)
+		if err != nil {
+			return err
+		}
+		firstID, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		for i, c := range chunk {
+			c.RoomID = firstID + int64(i)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := inChunks(courses, courseInsertColumns, func(chunk []*model.Course) error {
+		args := make([]any, 0, len(chunk)*courseInsertColumns)
+		for _, c := range chunk {
+			args = append(args, c.RoomID, c.DayOfWeek, c.Period, c.TeacherName, c.CourseName,
+				c.Year, c.Semester, c.DedupKey, nowUnix, nowUnix)
+		}
+		result, err := tx.ExecContext(ctx,
+			`INSERT INTO courses (room_id, day_of_week, period, teacher_name, course_name, year, semester, dedup_key, created_at, updated_at)
+			 VALUES `+valuesPlaceholders(len(chunk), courseInsertColumns), args...)
+		if err != nil {
+			return err
+		}
+		firstID, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		for i, c := range chunk {
+			c.ID = firstID + int64(i)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return courses, nil
+}
+
+// FindExistingDedupKeys は1本の IN 句で「もう在る dedup_key」を引く。
+// 取り込みの存在確認はここだけを使うこと（1件ずつの FindByDedupKey に戻すと、
+// 件数ぶん SELECT が並ぶ）。
+func (r *MySQLCourseRepository) FindExistingDedupKeys(ctx context.Context, dedupKeys []string) (map[string]bool, error) {
+	existing := make(map[string]bool, len(dedupKeys))
+	if len(dedupKeys) == 0 {
+		return existing, nil
+	}
+
+	db := extractDB(ctx, r.DB)
+	// 取り込みは件数が読めない（シラバス1年ぶんが丸ごと来る）ので、IN 句の
+	// プレースホルダ上限に当たらないよう inChunks に切ってもらう。
+	if err := inChunks(dedupKeys, 1, func(chunk []string) error {
+		args := make([]any, 0, len(chunk))
+		for _, k := range chunk {
+			args = append(args, k)
+		}
+		rows, err := db.QueryContext(ctx,
+			`SELECT dedup_key FROM courses WHERE dedup_key IN (`+inPlaceholders(len(chunk))+`)`, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				return err
+			}
+			existing[key] = true
+		}
+		return rows.Err()
+	}); err != nil {
+		return nil, err
+	}
+	return existing, nil
+}
+
 func (r *MySQLCourseRepository) FindByDedupKey(ctx context.Context, dedupKey string) (*model.Course, error) {
 	row := extractDB(ctx, r.DB).QueryRowContext(ctx, `SELECT `+courseColumns+` FROM courses c WHERE c.dedup_key = ?`, dedupKey)
 	return scanCourse(row)

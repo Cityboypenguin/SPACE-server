@@ -15,6 +15,6 @@ func NewListTermsUseCase(r repository.TermsRepository) *ListTermsUseCase {
 	return &ListTermsUseCase{TermsRepository: r}
 }
 
-func (uc *ListTermsUseCase) Execute(ctx context.Context) ([]*model.TermsOfService, error) {
-	return uc.TermsRepository.FindAll(ctx)
+func (uc *ListTermsUseCase) Execute(ctx context.Context, q repository.PageQuery) ([]*model.TermsOfService, error) {
+	return uc.TermsRepository.FindAll(ctx, q)
 }

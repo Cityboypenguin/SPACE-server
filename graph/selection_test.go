@@ -76,12 +76,12 @@ func TestFieldRequested_SelectionShapes(t *testing.T) {
 		},
 		{
 			name:      "インラインフラグメントの中でも数える",
-			query:     `{ users { ... on UserPage { total } } }`,
+			query:     `{ users { ... on UserAccountPage { total } } }`,
 			wantTotal: true,
 		},
 		{
 			name:      "名前付きフラグメントの中でも数える",
-			query:     `{ users { ...f } } fragment f on UserPage { total }`,
+			query:     `{ users { ...f } } fragment f on UserAccountPage { total }`,
 			wantTotal: true,
 		},
 		{
@@ -121,11 +121,11 @@ func TestFieldRequested_SelectionShapes(t *testing.T) {
 type fakeListUsersUseCase struct {
 	calls     int
 	lastQuery repository.PageQuery
-	users     []*model.User
+	users     []*model.UserAccount
 	total     int
 }
 
-func (f *fakeListUsersUseCase) Execute(_ context.Context, q repository.PageQuery) ([]*model.User, int, error) {
+func (f *fakeListUsersUseCase) Execute(_ context.Context, q repository.PageQuery) ([]*model.UserAccount, int, error) {
 	f.calls++
 	f.lastQuery = q
 	return f.users, f.total, nil

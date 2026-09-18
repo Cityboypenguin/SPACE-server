@@ -63,7 +63,7 @@ import (
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
-	"github.com/gorilla/websocket"
+	coderws "github.com/coder/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -169,6 +169,10 @@ func main() {
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
+	// 連絡先まで返す取得（本人・管理者向け）。表示系は上の3つを使う。
+	getUserAccountByIDUseCase := userusecase.NewGetUserAccountByIDUseCase(userRepository)
+	getUserAccountsByIDsUseCase := userusecase.NewGetUserAccountsByIDsUseCase(userRepository)
+	searchUserAccountsUseCase := userusecase.NewSearchUserAccountsUseCase(userRepository)
 	suggestUsersUseCase := userusecase.NewSuggestUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
@@ -183,7 +187,7 @@ func main() {
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
-	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository)
+	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository, txManager)
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
@@ -225,6 +229,10 @@ func main() {
 	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
 	passwordResetRepository := infraredis.NewRedisPasswordResetRepository(redisClient)
+	// SSE(/events) の接続チケット。Redis に置くのは寿命(30秒)の管理を任せられるのと、
+	// 将来インスタンスを増やしたときに「発行した台と接続先の台が違う」でも引き換えが
+	// 通るようにするため（docs/realtime-scaling.md）。
+	sseTicketRepository := infraredis.NewRedisSSETicketRepository(redisClient)
 	mailer := infrasmtp.NewSMTPMailer()
 	maintenanceRepository := infraredis.NewRedisMaintenanceRepository(redisClient)
 
@@ -271,21 +279,21 @@ func main() {
 	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
 	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
-	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
 	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
+	searchRoomUsersUseCase := roomusecase.NewSearchRoomUsersUseCase(roomUserRepository)
 	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
 	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
-	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
-	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
+	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomRepository, roomUserRepository)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
 	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
 	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
+	listRoomMembersWithRolesPageUseCase := roomusecase.NewListRoomMembersWithRolesPageUseCase(roomUserRepository)
 	// 既読位置はメッセージIDで持つので、既読を打つ側は「ルームの最新メッセージID」を
 	// 引ける messageRepository も要る。
 	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository, messageRepository)
@@ -399,6 +407,7 @@ func main() {
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
+	issueStreamTicketUseCase := notificationuc.NewIssueStreamTicketUseCase(sseTicketRepository)
 
 	// チャットの配線は publisher → 権限判定 → 各サービス → resolver の一方向。
 	// 以前は配信アダプタが *Resolver をまるごと持っていたため「resolver を作ってから
@@ -471,6 +480,9 @@ func main() {
 			GetUserByIDUseCase:            getUserByIDUseCase,
 			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
 			SearchUsersUseCase:            searchUsersUseCase,
+			GetUserAccountByIDUseCase:     getUserAccountByIDUseCase,
+			GetUserAccountsByIDsUseCase:   getUserAccountsByIDsUseCase,
+			SearchUserAccountsUseCase:     searchUserAccountsUseCase,
 			SuggestUsersUseCase:           suggestUsersUseCase,
 			LoginUserUseCase:              loginUserUseCase,
 			RefreshUserTokenUseCase:       refreshUserTokenUseCase,
@@ -535,25 +547,25 @@ func main() {
 		ListImagesMissingDimensionsUseCase: listImagesMissingDimensionsUseCase,
 
 		MessageRoomUseCases: graph.MessageRoomUseCases{
-			GetMessageByIDUseCase:           getMessageByIDUseCase,
-			GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
-			CreateRoomUseCase:               createRoomUseCase,
-			GetRoomUseCase:                  getRoomUseCase,
-			DeleteRoomUseCase:               deleteRoomUseCase,
-			GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
-			ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
-			CountUsersByRoomIDsUseCase:      countUsersByRoomIDsUseCase,
-			ListJoinedRoomIDsUseCase:        listJoinedRoomIDsUseCase,
-			ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
-			GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
-			AddUserToRoomUseCase:            addUserToRoomUseCase,
-			RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
-			JoinRoomUseCase:                 joinRoomUseCase,
-			GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
-			SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
-			ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
-			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
-			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
+			GetMessageByIDUseCase:               getMessageByIDUseCase,
+			GetLastMessagesByRoomIDsUseCase:     getLastMessagesByRoomIDsUseCase,
+			GetRoomUseCase:                      getRoomUseCase,
+			DeleteRoomUseCase:                   deleteRoomUseCase,
+			GetUserIDsByRoomIDUseCase:           getUserIDsByRoomIDUseCase,
+			ListUsersByRoomIDsUseCase:           listUsersByRoomIDsUseCase,
+			SearchRoomUsersUseCase:              searchRoomUsersUseCase,
+			CountUsersByRoomIDsUseCase:          countUsersByRoomIDsUseCase,
+			ListJoinedRoomIDsUseCase:            listJoinedRoomIDsUseCase,
+			ListMyDMRoomsUseCase:                listMyDMRoomsUseCase,
+			GetOrCreateDMRoomUseCase:            getOrCreateDMRoomUseCase,
+			RemoveUserFromRoomUseCase:           removeUserFromRoomUseCase,
+			JoinRoomUseCase:                     joinRoomUseCase,
+			GetRoomUserRoleUseCase:              getRoomUserRoleUseCase,
+			SetRoomUserRoleUseCase:              setRoomUserRoleUseCase,
+			ListRoomMembersWithRolesUseCase:     listRoomMembersWithRolesUseCase,
+			ListRoomMembersWithRolesPageUseCase: listRoomMembersWithRolesPageUseCase,
+			GetRoomReadStatusBatchUseCase:       getRoomReadStatusBatchUseCase,
+			CountUnreadByRoomTypeUseCase:        countUnreadByRoomTypeUseCase,
 		},
 
 		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
@@ -616,6 +628,7 @@ func main() {
 			DeleteNotificationsUseCase:            deleteNotificationsUseCase,
 			DeleteReadNotificationsUseCase:        deleteReadNotificationsUseCase,
 			DeleteReadNotificationsByActorUseCase: deleteReadNotificationsByActorUseCase,
+			IssueStreamTicketUseCase:              issueStreamTicketUseCase,
 		},
 		SSEBroker: sseBroker,
 
@@ -704,13 +717,10 @@ func main() {
 	wsLimiter := connlimit.NewWSLimiter()
 
 	gqlServer.AddTransport(transport.Websocket{
-		Upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return isOriginAllowed(r.Header.Get("Origin"), allowedOrigins)
-			},
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-		},
+		// gqlgen v0.17.95 で WebSocket 実装が gorilla/websocket から coder/websocket に
+		// 置き換わり、Upgrader フィールドが無くなった。オリジン検証は
+		// WebsocketImplementation を差し替えて従来どおり isOriginAllowed で行う。
+		Implementation:        newOriginCheckingWebsocketImplementation(allowedOrigins),
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
 			var userID int64
@@ -786,7 +796,7 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, revokedTokenRepository, userRepository, passwordResetRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, sseTicketRepository, revokedTokenRepository, userRepository, passwordResetRepository))
 
 	termsBroadcastScheduler.SchedulePending(context.Background())
 
@@ -883,6 +893,44 @@ func isOriginAllowed(origin string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// originCheckingWebsocketImplementation は gqlgen の WebSocket 実装をラップし、
+// ハンドシェイク前に Origin ヘッダーを isOriginAllowed で検証する。
+//
+// gqlgen v0.17.95 で transport.Websocket.Upgrader (gorilla/websocket) が廃止され、
+// 実装が coder/websocket に移行した。coder/websocket の既定のオリジン検証は
+// 「Origin のホストがリクエストホストと一致する場合のみ許可（Origin 無しは許可）」
+// であり、従来の許可リスト方式とは意味が異なる。そのため coder 側の検証は
+// InsecureSkipVerify で無効化し、代わりに従来と同一の isOriginAllowed を
+// Accept の前段で適用することで挙動を完全に保つ。
+type originCheckingWebsocketImplementation struct {
+	allowedOrigins []string
+	inner          transport.WebsocketImplementation
+}
+
+func newOriginCheckingWebsocketImplementation(allowedOrigins []string) originCheckingWebsocketImplementation {
+	return originCheckingWebsocketImplementation{
+		allowedOrigins: allowedOrigins,
+		inner: transport.CoderWebsocketImplementation{
+			AcceptOptions: coderws.AcceptOptions{
+				// オリジン検証は下の isOriginAllowed が担当するため、
+				// coder/websocket 側の既定検証は無効化する。
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+}
+
+func (i originCheckingWebsocketImplementation) Accept(
+	w http.ResponseWriter,
+	r *http.Request,
+	options transport.WebsocketAcceptOptions,
+) (transport.WebsocketConn, error) {
+	if !isOriginAllowed(r.Header.Get("Origin"), i.allowedOrigins) {
+		return nil, fmt.Errorf("websocket: request origin %q not allowed", r.Header.Get("Origin"))
+	}
+	return i.inner.Accept(w, r, options)
 }
 
 func authHeaderFromInitPayload(initPayload transport.InitPayload) string {

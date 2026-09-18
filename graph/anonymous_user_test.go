@@ -161,7 +161,10 @@ func TestAnonymousUserForCourseRoom_NeverFallsBackToTheRealName(t *testing.T) {
 			if got.ID == encodeGraphID("user", authorID) {
 				t.Fatal("実ユーザーのIDが漏れている")
 			}
-			if got.AccountID != "" || got.Email != "" {
+			// email は gqlmodel.User から消えたので、ここで見るのは accountID だけ
+			// （連絡先が出ないことは型で保証されている。graph/schema.graphqls の
+			//  User / UserAccount のコメント参照）。
+			if got.AccountID != "" {
 				t.Fatalf("匿名表示にアカウント情報が乗っている: %+v", got)
 			}
 		})

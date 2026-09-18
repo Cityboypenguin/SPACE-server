@@ -21,9 +21,10 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 }
 
 // roomMemberUserColumns は room_users から JOIN して出すユーザーの列。
-// users.hashed_password は含めない（ここは完全な表示系）。列の並びは
+// users.hashed_password も users.email も含めない（ここは完全な表示系で、
+// ルームのメンバー一覧に他人の連絡先を載せる理由がひとつも無い）。列の並びは
 // infra/mysql/user_repository.go の userPublicColumns と同じにしてある。
-const roomMemberUserColumns = `u.id, u.account_id, u.name, u.email, u.role, u.status, u.created_at, u.updated_at`
+const roomMemberUserColumns = `u.id, u.account_id, u.name, u.role, u.status, u.created_at, u.updated_at`
 
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
 	now := time.Now().Unix()
@@ -126,7 +127,7 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 		var roomRole string
 		var createdAt, updatedAt int64
 		if err := rows.Scan(
-			&u.ID, &u.AccountID, &u.Name, &u.Email,
+			&u.ID, &u.AccountID, &u.Name,
 			&u.Role, &u.Status, &createdAt, &updatedAt, &roomRole,
 		); err != nil {
 			return nil, err
@@ -136,6 +137,73 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 		members = append(members, &model.RoomMember{User: &u, Role: roomRole})
 	}
 	return members, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.RoomMember, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM room_users WHERE room_id = ?`, roomID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT `+roomMemberUserColumns+`, ru.role
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id = ?
+		ORDER BY ru.created_at ASC, ru.user_id ASC
+		LIMIT ? OFFSET ?
+	`, roomID, q.Limit, q.Offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	members := make([]*model.RoomMember, 0, q.Limit)
+	for rows.Next() {
+		var user model.User
+		var role string
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&user.ID, &user.AccountID, &user.Name, &user.Role, &user.Status,
+			&createdAt, &updatedAt, &role,
+		); err != nil {
+			return nil, 0, err
+		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
+		members = append(members, &model.RoomMember{User: &user, Role: role})
+	}
+	return members, total, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) LockRoomMemberRolesForUpdate(ctx context.Context, roomID int64) (map[int64]string, error) {
+	tx, ok := txFromContext(ctx)
+	if !ok {
+		return nil, errors.New("LockRoomMemberRolesForUpdate requires a transaction")
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT user_id, role
+		FROM room_users
+		WHERE room_id = ?
+		ORDER BY user_id
+		FOR UPDATE
+	`, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make(map[int64]string)
+	for rows.Next() {
+		var userID int64
+		var role string
+		if err := rows.Scan(&userID, &role); err != nil {
+			return nil, err
+		}
+		roles[userID] = role
+	}
+	return roles, rows.Err()
 }
 
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {
@@ -241,7 +309,6 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 			&user.ID,
 			&user.AccountID,
 			&user.Name,
-			&user.Email,
 			&user.Role,
 			&user.Status,
 			&createdAt,
@@ -258,6 +325,40 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 	}
 
 	return result, nil
+}
+
+func (r *MySQLRoomUserRepository) SearchRoomUsersByPrefix(ctx context.Context, roomID int64, prefix string, limit int) ([]*model.User, error) {
+	query := `
+		SELECT ` + roomMemberUserColumns + `
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id = ?
+		  AND u.status = ?
+		  AND (u.name LIKE ? ESCAPE '\\' OR u.account_id LIKE ? ESCAPE '\\')
+		ORDER BY u.name ASC, u.id ASC
+		LIMIT ?
+	`
+	prefixPattern := escapeLikePrefix(prefix) + "%"
+	rows, err := r.DB.QueryContext(ctx, query, roomID, model.UserStatusActive, prefixPattern, prefixPattern, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]*model.User, 0, limit)
+	for rows.Next() {
+		var user model.User
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&user.ID, &user.AccountID, &user.Name, &user.Role, &user.Status, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, err
+		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
+		users = append(users, &user)
+	}
+	return users, rows.Err()
 }
 
 // CountUsersByRoomIDs は在籍人数だけを GROUP BY で数える。

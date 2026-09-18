@@ -20,15 +20,33 @@ func NewMySQLUserRepository(db *sql.DB) *MySQLUserRepository {
 	return &MySQLUserRepository{DB: db}
 }
 
-// userPublicColumns は表示に使う列。hashed_password を含めないこと。
+// 列リストは「読んでよい範囲」の段階そのもの。上から順に広くなる:
 //
-// 秘密を読む SELECT はこのファイルの「認証情報」区画（userCredentialColumns を
-// 使う3つ）だけに閉じている。表示系の SELECT を書き足すときは必ずこの定数を
-// 使うこと（列を並べ直すと、ここにハッシュが紛れ込んでも気づけない）。
-const userPublicColumns = `id, account_id, name, email, role, status, created_at, updated_at`
+//	userPublicColumns      表示系。連絡先も秘密も引かない。
+//	userAccountColumns     本人・管理者向け。email を足す。
+//	userCredentialColumns  認証のみ。hashed_password を足す。
+//
+// 定数にしているのは、SELECT を書き足す人が並びを写し間違えても、
+// user_projection_test.go が「どの段階に何が入っているか」を固定して見張れるようにするため。
 
-// userCredentialColumns は認証に使う列。公開情報に hashed_password を足しただけ。
-const userCredentialColumns = userPublicColumns + `, hashed_password`
+// userPublicColumns は表示に使う列。email も hashed_password も含めないこと。
+//
+// email が抜けているのは、他人の連絡先を表示系の SELECT に載せないため。
+// 以前はここに email があり、投稿の作者・ルームのメンバー・検索結果を引くたびに
+// 他人のメールアドレスを DB から持ち上げていた（GraphQL の User.email 経由で
+// 実際に外へ出てもいた）。hashed_password と同じ扱いにしてある: 要らない経路では
+// そもそも引かない。
+const userPublicColumns = `id, account_id, name, role, status, created_at, updated_at`
+
+// userAccountColumns は本人・管理者向けの列。表示用の列に email を足しただけ。
+//
+// email を末尾に足しているのは、scanUser（公開列）の並びをそのまま流用して
+// 最後に1つ読み足せるようにするため。公開列を並べ替えたら両方の scan が壊れるので、
+// 列数と並びは user_projection_test.go で固定してある。
+const userAccountColumns = userPublicColumns + `, email`
+
+// userCredentialColumns は認証に使う列。本人・管理者向けの列に hashed_password を足しただけ。
+const userCredentialColumns = userAccountColumns + `, hashed_password`
 
 // scanUser は userPublicColumns の並びで1行を読む。
 func scanUser(row rowScanner) (*model.User, error) {
@@ -38,7 +56,6 @@ func scanUser(row rowScanner) (*model.User, error) {
 		&u.ID,
 		&u.AccountID,
 		&u.Name,
-		&u.Email,
 		&u.Role,
 		&u.Status,
 		&createdAtUnix,
@@ -51,6 +68,27 @@ func scanUser(row rowScanner) (*model.User, error) {
 	return &u, nil
 }
 
+// scanUserAccount は userAccountColumns の並びで1行を読む。
+func scanUserAccount(row rowScanner) (*model.UserAccount, error) {
+	var a model.UserAccount
+	var createdAtUnix, updatedAtUnix int64
+	if err := row.Scan(
+		&a.ID,
+		&a.AccountID,
+		&a.Name,
+		&a.Role,
+		&a.Status,
+		&createdAtUnix,
+		&updatedAtUnix,
+		&a.Email,
+	); err != nil {
+		return nil, err
+	}
+	a.CreatedAt = time.Unix(createdAtUnix, 0)
+	a.UpdatedAt = time.Unix(updatedAtUnix, 0)
+	return &a, nil
+}
+
 // scanUserCredentials は userCredentialColumns の並びで1行を読む。
 func scanUserCredentials(row rowScanner) (*model.UserCredentials, error) {
 	var c model.UserCredentials
@@ -59,11 +97,11 @@ func scanUserCredentials(row rowScanner) (*model.UserCredentials, error) {
 		&c.ID,
 		&c.AccountID,
 		&c.Name,
-		&c.Email,
 		&c.Role,
 		&c.Status,
 		&createdAtUnix,
 		&updatedAtUnix,
+		&c.Email,
 		&c.HashedPassword,
 	); err != nil {
 		return nil, err
@@ -84,6 +122,19 @@ func scanUsers(rows *sql.Rows) ([]*model.User, error) {
 		users = append(users, u)
 	}
 	return users, rows.Err()
+}
+
+// scanUserAccounts は userAccountColumns で SELECT した rows を []*model.UserAccount に詰め替える。
+func scanUserAccounts(rows *sql.Rows) ([]*model.UserAccount, error) {
+	var accounts []*model.UserAccount
+	for rows.Next() {
+		a, err := scanUserAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, a)
+	}
+	return accounts, rows.Err()
 }
 
 // SaveUser は公開情報の保存には使わない。この型に残っているのは
@@ -157,14 +208,57 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 	return affected > 0, nil
 }
 
-func (r *MySQLUserRepository) ListUsers(ctx context.Context, q repository.PageQuery) ([]*model.User, int, error) {
+// --- 本人・管理者向け -------------------------------------------------------
+// ここだけが email を SELECT する（hashed_password は読まない）。
+
+// GetUserAccountByID は本人・管理者向けの1件取得。表示のために引くだけなら
+// GetUserByID（連絡先なし）を使うこと。
+func (r *MySQLUserRepository) GetUserAccountByID(ctx context.Context, id int64) (*model.UserAccount, error) {
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx,
+		`SELECT `+userAccountColumns+` FROM users WHERE id = ?`, id)
+
+	a, err := scanUserAccount(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return a, nil
+}
+
+// GetUserAccountsByIDs はまとめて引く版。GetUsersByIDs と同じ形で、引く列だけが違う。
+func (r *MySQLUserRepository) GetUserAccountsByIDs(ctx context.Context, ids []int64) ([]*model.UserAccount, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx,
+		fmt.Sprintf(`SELECT `+userAccountColumns+` FROM users WHERE id IN (%s)`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanUserAccounts(rows)
+}
+
+// ListUserAccounts は管理画面のユーザー台帳。一覧に連絡先が要るのは管理者だけなので、
+// 公開の一覧は用意していない（必要になったら ListUsers を足すこと）。
+func (r *MySQLUserRepository) ListUserAccounts(ctx context.Context, q repository.PageQuery) ([]*model.UserAccount, int, error) {
 	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM users`)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx, `
-		SELECT `+userPublicColumns+`
+		SELECT `+userAccountColumns+`
 		FROM users
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -174,11 +268,45 @@ func (r *MySQLUserRepository) ListUsers(ctx context.Context, q repository.PageQu
 	}
 	defer rows.Close()
 
-	users, err := scanUsers(rows)
+	accounts, err := scanUserAccounts(rows)
 	if err != nil {
 		return nil, 0, err
 	}
-	return users, total, nil
+	return accounts, total, nil
+}
+
+// SearchUserAccountsByKeyword は管理画面の検索。絞り込み条件も並び順も
+// SearchUsersByKeyword と同じで、引く列だけが違う（email を足す）。
+// 条件が分かれると「管理画面と一般画面で検索結果が違う」という分かりにくい差になるので、
+// 変えるときは両方を揃えること。
+func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.UserAccount, int, error) {
+	searchParam := "%" + keyword + "%"
+
+	total, err := countForPage(ctx, r.DB, q,
+		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		searchParam, searchParam,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT DISTINCT `+userAccountColumns+`
+		FROM users
+		WHERE name LIKE ? OR account_id LIKE ?
+		ORDER BY name ASC, id ASC
+		LIMIT ? OFFSET ?
+	`, searchParam, searchParam, q.Limit, q.Offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	accounts, err := scanUserAccounts(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return accounts, total, nil
 }
 
 func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.User, int, error) {
@@ -268,12 +396,11 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		UPDATE users
-		SET account_id = ?, name = ?, email = ?, role = ?, status = ?, updated_at = ?
+		SET account_id = ?, name = ?, role = ?, status = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		u.AccountID,
 		u.Name,
-		u.Email,
 		u.Role,
 		u.Status,
 		u.UpdatedAt.Unix(),
@@ -365,6 +492,22 @@ func (r *MySQLUserRepository) LogActivityDate(ctx context.Context, userID int64,
 	return err
 }
 
+// LogActivityHour は「その人がその時間帯に活動した」を1行残す。
+//
+// この表は消す仕組みが無く、1ユーザー1日あたり最大24行（実際は活動した時間帯の数）で
+// 単調増加する。保持期間は運用要件なのでここでは決めていない。見積もりと申し送りは
+// db/migrations/070_create_user_activity_hours.up.sql のコメントに1箇所だけ書いてある。
+// jstHour は JST の時の始まり（"2006-01-02 15:00:00"）。同じ時間帯の2回目以降は
+// INSERT IGNORE が主キー重複として捨てるので、呼び出し側は重複を気にしなくてよい
+// （書き込みの回数そのものは middleware 側で間引いている）。
+func (r *MySQLUserRepository) LogActivityHour(ctx context.Context, userID int64, jstHour string) error {
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
+		`INSERT IGNORE INTO user_activity_hours (user_id, activity_hour) VALUES (?, ?)`,
+		userID, jstHour,
+	)
+	return err
+}
+
 // GetUsersByAccountIDs は accountID からユーザーをまとめて引く（メンション解決用）。
 // 比較は DB の照合順序（大文字小文字を区別しない）に従うため、
 // 本文に "@Taro" と書かれていても accountID が "taro" のユーザーに解決される。
@@ -404,7 +547,10 @@ func (r *MySQLUserRepository) SuggestUsersByPrefix(ctx context.Context, prefix s
 		WHERE account_id LIKE ? ESCAPE '\\' AND status = ?`
 	args := []interface{}{escapeLikePrefix(prefix) + "%", model.UserStatusActive}
 
-	query, args = AppendBlockFilter(ctx, query, args, "id")
+	query, args, err := AppendBlockFilter(ctx, query, args, "id")
+	if err != nil {
+		return nil, err
+	}
 	query += " ORDER BY account_id ASC LIMIT ?"
 	args = append(args, limit)
 

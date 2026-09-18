@@ -11,7 +11,7 @@ import (
 )
 
 type CreateUserUseCase interface {
-	Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error)
+	Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.UserAccount, error)
 }
 
 var _ CreateUserUseCase = &CreateUserInteractor{}
@@ -34,7 +34,7 @@ func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo reposi
 	}
 }
 
-func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error) {
+func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.UserAccount, error) {
 	if uc.validationEnabled {
 		if err := model.ValidateUserEmail(param.Email); err != nil {
 			return nil, err
@@ -85,9 +85,11 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		return nil, err
 	}
 
-	// 返すのは公開情報だけ。ハッシュはこの関数の外へ出さない。
-	publicUser := user.User
-	return &publicUser, nil
+	// 返すのはハッシュを外した本人ぶん。連絡先を含めてよいのは、いま登録した
+	// 本人が自分で入力したメールアドレスだから（GraphQL の createUser は UserAccount）。
+	// ハッシュはこの関数の外へ出さない。
+	account := user.UserAccount
+	return &account, nil
 }
 
 func (uc *CreateUserInteractor) checkOTP(ctx context.Context, email, code string) error {

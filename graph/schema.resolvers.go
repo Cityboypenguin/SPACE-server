@@ -254,7 +254,7 @@ func (r *mutationResolver) VerifyEmailOtp(ctx context.Context, email string, otp
 }
 
 // CreateUser is the resolver for the createUser field.
-func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.User, error) {
+func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.CreateUserInput) (*gqlmodel.UserAccount, error) {
 	param := model.CreateUserParam{
 		AccountID: input.AccountID,
 		Name:      input.Name,
@@ -267,7 +267,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 
-	return toGraphUser(user), nil
+	return toGraphUserAccount(user), nil
 }
 
 // DeleteUser is the resolver for the deleteUser field.
@@ -302,7 +302,7 @@ func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
 }
 
 // UpdateUser is the resolver for the updateUser field.
-func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
+func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.UpdateUserInput) (*gqlmodel.UserAccount, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -323,7 +323,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input gqlmodel.Update
 		return nil, err
 	}
 
-	return toGraphUser(user), nil
+	return toGraphUserAccount(user), nil
 }
 
 // LoginUser is the resolver for the loginUser field.
@@ -336,7 +336,7 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 	return &gqlmodel.UserAuthPayload{
 		Token:        result.AccessToken,
 		RefreshToken: result.RefreshToken,
-		User:         toGraphUser(result.User),
+		User:         toGraphUserAccount(result.User),
 	}, nil
 }
 
@@ -350,7 +350,7 @@ func (r *mutationResolver) RefreshUserToken(ctx context.Context, refreshToken st
 	return &gqlmodel.UserAuthPayload{
 		Token:        result.AccessToken,
 		RefreshToken: result.RefreshToken,
-		User:         toGraphUser(result.User),
+		User:         toGraphUserAccount(result.User),
 	}, nil
 }
 
@@ -678,19 +678,19 @@ func (r *mutationResolver) UpdateMyProfile(ctx context.Context, input gqlmodel.U
 
 // CreateRoom is the resolver for the createRoom field.
 func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	room, err := r.CreateRoomUseCase.Execute(ctx, model.CreateRoomParam{
-		Name: input.Name,
-	})
+	community, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, "", nil)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, claims.ID); err != nil {
+	if community == nil {
+		return nil, nil
+	}
+	room, err := r.GetRoomUseCase.Execute(ctx, community.RoomID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -773,31 +773,40 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 		return false, errors.New("room not found")
 	}
 
-	if room.Type == model.RoomTypeCommunity {
+	// ルーム種別ごとに「何が許されるか」を明示的に並べる。
+	//
+	// 以前はコミュニティだけを特別扱いし、それ以外は「呼び出し元がこのルームの
+	// メンバーか」しか見ずに任意のユーザーを room_users へ入れられた。これは
+	// 種別ごとの前提を2つとも壊せる:
+	//
+	//   - 授業ルーム: 参加者は時間割（履修）から決まり room_users を使わない。
+	//     ここから入れると、履修していない人をルームに置ける。
+	//   - DM: 2人であることを他のコードが前提にしている。3人目が入ると
+	//     dmPartnerID が「相手1人」を決められず false を返し、ブロック判定が
+	//     黙ってスキップされる（ブロックした相手と会話できてしまう）。
+	//
+	// 既定を「拒否」にしてあるので、新しいルーム種別を足した人はここで
+	// 明示的に判断することになる（既定が素通しだと足した種別が黙って開く）。
+	switch room.Type {
+	case model.RoomTypeCommunity:
+		// コミュニティは公開参加なので自分自身だけ入れられる（従来どおり）。
 		if uid != claims.ID {
 			return false, errors.New("forbidden: can only join community as yourself")
 		}
 
-		if err := r.AddUserToRoomUseCase.Execute(ctx, rid, claims.ID); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
+		return r.JoinRoomUseCase.Execute(ctx, rid)
 
-	// これは閲覧判定ではなく「他人を招待できるか」の書き込み系の判定なので、
-	// EnsureReadAccess（授業ルームは全員可）には寄せない。
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return false, errors.New("forbidden: not a member of this room")
-	}
+	case model.RoomTypeCourse:
+		// 授業ルームの参加は時間割から決まる。room_users へ直接入れる口は用意しない。
+		return false, errors.New("forbidden: course room membership is determined by the timetable")
 
-	if err := r.AddUserToRoomUseCase.Execute(ctx, rid, uid); err != nil {
-		return false, err
+	case model.RoomTypeDM:
+		// DM は2人固定。作成は createDMRoom（相手を引数で決める）が担う。
+		return false, errors.New("forbidden: cannot add a user to a direct message room")
+
+	default:
+		return false, errors.New("forbidden: cannot add a user to this room type")
 	}
-	return true, nil
 }
 
 // RemoveUserFromRoom is the resolver for the removeUserFromRoom field.
@@ -1454,7 +1463,7 @@ func (r *mutationResolver) AdminDeleteCourse(ctx context.Context, id string) (bo
 }
 
 // AdminUpdateUser is the resolver for the adminUpdateUser field.
-func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input gqlmodel.UpdateUserInput) (*gqlmodel.User, error) {
+func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input gqlmodel.UpdateUserInput) (*gqlmodel.UserAccount, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -1486,7 +1495,7 @@ func (r *mutationResolver) AdminUpdateUser(ctx context.Context, id string, input
 		return nil, err
 	}
 
-	return toGraphUser(user), nil
+	return toGraphUserAccount(user), nil
 }
 
 // AdminUpdateProfile is the resolver for the adminUpdateProfile field.
@@ -1562,8 +1571,7 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 
 // KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
 func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityID string, userID string) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
 
@@ -1577,67 +1585,9 @@ func (r *mutationResolver) KickUserFromCommunity(ctx context.Context, communityI
 		return false, fmt.Errorf("invalid user id")
 	}
 
-	c, err := r.GetCommunityUseCase.Execute(ctx, numericCommunityID)
-	if err != nil {
+	if err := r.updateCommunityMembers(ctx, numericCommunityID, []communityusecase.MemberUpdate{{UserID: numericUserID, Action: communityusecase.MemberActionKick}}); err != nil {
 		return false, err
 	}
-	if c == nil {
-		return false, fmt.Errorf("community not found")
-	}
-
-	if !isAdminRole(claims.Role) {
-		callerRole, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
-		if err != nil {
-			return false, err
-		}
-		if callerRole != model.RoomUserRoleOwner {
-			return false, errors.New("forbidden: only community owners or administrators can kick members")
-		}
-		if claims.ID == numericUserID {
-			return false, errors.New("cannot kick yourself; use leave instead")
-		}
-	}
-
-	kickedRole, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, numericUserID)
-	if err != nil {
-		return false, err
-	}
-	if kickedRole == model.RoomUserRoleOwner {
-		ownerCount, err := r.countCommunityOwners(ctx, c.RoomID)
-		if err != nil {
-			return false, err
-		}
-		if ownerCount <= 1 {
-			memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, c.RoomID)
-			if err != nil {
-				return false, err
-			}
-			if len(memberIDs) > 1 {
-				return false, errors.New("cannot kick the last owner while other members remain; promote another member first")
-			}
-		}
-	}
-
-	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, c.RoomID, numericUserID); err != nil {
-		return false, err
-	}
-
-	if err := r.deleteCommunityIfEmpty(ctx, c.RoomID); err != nil {
-		logger.Log.Error().Err(err).Int64("room_id", c.RoomID).Msg("failed to auto-delete empty community room")
-	}
-
-	targetType := notificationuc.TargetCommunity
-	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-		UserID:     numericUserID,
-		Type:       notificationuc.TypeCommunityKick,
-		ActorID:    &claims.ID,
-		TargetType: &targetType,
-		TargetID:   &numericCommunityID,
-		Message:    "コミュニティからキックされました",
-	}); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to publish community kick notification")
-	}
-
 	return true, nil
 }
 
@@ -1654,19 +1604,8 @@ func (r *mutationResolver) PromoteToCommunityOwner(ctx context.Context, communit
 	if err != nil {
 		return false, fmt.Errorf("invalid user id")
 	}
-	ok, err := r.PromoteToCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
-	if err != nil || !ok {
-		return ok, err
-	}
-	targetType := notificationuc.TargetCommunity
-	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-		UserID:     numericUserID,
-		Type:       notificationuc.TypeCommunityRole,
-		TargetType: &targetType,
-		TargetID:   &numericCommunityID,
-		Message:    "コミュニティのオーナーに昇格しました",
-	}); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to publish community promote notification")
+	if err := r.updateCommunityMembers(ctx, numericCommunityID, []communityusecase.MemberUpdate{{UserID: numericUserID, Action: communityusecase.MemberActionPromote}}); err != nil {
+		return false, err
 	}
 	return true, nil
 }
@@ -1684,19 +1623,8 @@ func (r *mutationResolver) DemoteFromCommunityOwner(ctx context.Context, communi
 	if err != nil {
 		return false, fmt.Errorf("invalid user id")
 	}
-	ok, err := r.DemoteFromCommunityOwnerUseCase.Execute(ctx, numericCommunityID, numericUserID)
-	if err != nil || !ok {
-		return ok, err
-	}
-	targetType := notificationuc.TargetCommunity
-	if err := r.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
-		UserID:     numericUserID,
-		Type:       notificationuc.TypeCommunityRole,
-		TargetType: &targetType,
-		TargetID:   &numericCommunityID,
-		Message:    "コミュニティのオーナーから降格されました",
-	}); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to publish community demote notification")
+	if err := r.updateCommunityMembers(ctx, numericCommunityID, []communityusecase.MemberUpdate{{UserID: numericUserID, Action: communityusecase.MemberActionDemote}}); err != nil {
+		return false, err
 	}
 	return true, nil
 }
@@ -1732,7 +1660,7 @@ func (r *mutationResolver) UpdateCommunityMembers(ctx context.Context, community
 		params = append(params, communityusecase.MemberUpdate{UserID: numericUserID, Action: action})
 	}
 
-	if err := r.UpdateCommunityMembersUseCase.Execute(ctx, numericCommunityID, params); err != nil {
+	if err := r.updateCommunityMembers(ctx, numericCommunityID, params); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -2229,6 +2157,18 @@ func (r *mutationResolver) DeleteReadNotificationsByActor(ctx context.Context, t
 	return true, nil
 }
 
+// IssueNotificationStreamTicket is the resolver for the issueNotificationStreamTicket field.
+func (r *mutationResolver) IssueNotificationStreamTicket(ctx context.Context) (string, error) {
+	// 認証は通常どおりヘッダーで行う（チケットは /events へ渡すためだけのもので、
+	// これ自体を取る口は認証済みでないと叩けない）。発行するのは常に「自分ぶん」で、
+	// 他人ぶんを発行させる引数は持たせない。
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return "", err
+	}
+	return r.IssueStreamTicketUseCase.Execute(ctx, claims.ID)
+}
+
 // CreateAnnouncement is the resolver for the createAnnouncement field.
 func (r *mutationResolver) CreateAnnouncement(ctx context.Context, input gqlmodel.CreateAnnouncementInput) (*gqlmodel.Announcement, error) {
 	claims, err := requireAdminAuth(ctx)
@@ -2627,7 +2567,7 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 }
 
 // Replies is the resolver for the replies field.
-func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Post, error) {
+func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post, limit *int32, offset *int32) ([]*gqlmodel.Post, error) {
 	isAdmin := false
 	if _, adminErr := requireAdminAuth(ctx); adminErr == nil {
 		isAdmin = true
@@ -2647,11 +2587,13 @@ func (r *postResolver) Replies(ctx context.Context, obj *gqlmodel.Post) ([]*gqlm
 	// admin/user で DataLoader を切り替えて soft-delete の可視性を制御する
 	var replies []*model.Post
 	var loaderErr error
+	l, o := resolvePagination(limit, offset, 50)
+	key := dataloader.ReplyPageKey{PostID: numericPostID, Page: repository.PageQuery{Limit: l, Offset: o}}
 
 	if isAdmin {
-		replies, loaderErr = dataloader.For(ctx).AdminReplyLoader.Load(ctx, numericPostID)
+		replies, loaderErr = dataloader.For(ctx).AdminReplyLoader.Load(ctx, key)
 	} else {
-		replies, loaderErr = dataloader.For(ctx).ReplyLoader.Load(ctx, numericPostID)
+		replies, loaderErr = dataloader.For(ctx).ReplyLoader.Load(ctx, key)
 	}
 
 	if loaderErr != nil {
@@ -2699,7 +2641,7 @@ func (r *postResolver) Mentions(ctx context.Context, obj *gqlmodel.Post) ([]*gql
 }
 
 // Users is the resolver for the users field.
-func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserPage, error) {
+func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) (*gqlmodel.UserAccountPage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2709,26 +2651,27 @@ func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) 
 		return nil, err
 	}
 
-	items := make([]*gqlmodel.User, 0, len(users))
+	items := make([]*gqlmodel.UserAccount, 0, len(users))
 	for _, user := range users {
-		items = append(items, toGraphUser(user))
+		items = append(items, toGraphUserAccount(user))
 	}
-	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
+	return &gqlmodel.UserAccountPage{Items: items, Total: int32(total)}, nil
 }
 
 // Me is the resolver for the me field.
-func (r *queryResolver) Me(ctx context.Context) (*gqlmodel.User, error) {
+func (r *queryResolver) Me(ctx context.Context) (*gqlmodel.UserAccount, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+	// 本人ぶんなので連絡先込みで引く（me は UserAccount）。
+	user, err := r.GetUserAccountByIDUseCase.Execute(ctx, claims.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return toGraphUser(user), nil
+	return toGraphUserAccount(user), nil
 }
 
 // ThemePreference is the resolver for the themePreference field.
@@ -2757,7 +2700,7 @@ func (r *queryResolver) TimetableProfileVisibility(ctx context.Context) (bool, e
 }
 
 // GetUserByID is the resolver for the getUserByID field.
-func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.User, error) {
+func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.UserAccount, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -2767,12 +2710,13 @@ func (r *queryResolver) GetUserByID(ctx context.Context, id string) (*gqlmodel.U
 		return nil, fmt.Errorf("invalid user id")
 	}
 
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericID)
+	// 管理者専用の口なので連絡先込みで引く（getUserByID は UserAccount）。
+	user, err := r.GetUserAccountByIDUseCase.Execute(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}
 
-	return toGraphUser(user), nil
+	return toGraphUserAccount(user), nil
 }
 
 // SearchUsers is the resolver for the searchUsers field.
@@ -2789,6 +2733,26 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string, limit *
 		items = append(items, toGraphUser(user))
 	}
 	return &gqlmodel.UserPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminSearchUsers is the resolver for the adminSearchUsers field.
+//
+// searchUsers と同じ検索だが、管理者専用で連絡先まで返す。口を分けているのは、
+// GraphQL の戻り値の型が呼び出し元の権限で変わらないため（searchUsers に
+// 「管理者のときだけ email も」を足すことはできない）。
+func (r *queryResolver) AdminSearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*gqlmodel.UserAccountPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	users, total, err := r.SearchUserAccountsUseCase.Execute(ctx, keyword, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.UserAccount, 0, len(users))
+	for _, user := range users {
+		items = append(items, toGraphUserAccount(user))
+	}
+	return &gqlmodel.UserAccountPage{Items: items, Total: int32(total)}, nil
 }
 
 // MyNotifications is the resolver for the myNotifications field.
@@ -3160,7 +3124,7 @@ func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string, lim
 }
 
 // GetRepliesByPostID is the resolver for the getRepliesByPostID field.
-func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string, limit *int32, offset *int32) ([]*gqlmodel.Post, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -3169,7 +3133,7 @@ func (r *queryResolver) GetRepliesByPostID(ctx context.Context, postID string) (
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID)
+	replies, err := r.GetRepliesByIDUseCase.Execute(ctx, numericPostID, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -3203,12 +3167,13 @@ func (r *queryResolver) GetFavoritePostsByUserID(ctx context.Context, userID str
 }
 
 // SearchPosts is the resolver for the searchPosts field.
-func (r *queryResolver) SearchPosts(ctx context.Context, keyword string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) SearchPosts(ctx context.Context, keyword string, limit *int32, offset *int32) ([]*gqlmodel.Post, error) {
 	_, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	posts, err := r.SearchPostsUseCase.Execute(ctx, keyword)
+	l, o := resolvePagination(limit, offset, defaultPageSize)
+	posts, err := r.SearchPostsUseCase.Execute(ctx, keyword, repository.PageQuery{Limit: l, Offset: o})
 	if err != nil {
 		return nil, err
 	}
@@ -3221,12 +3186,13 @@ func (r *queryResolver) SearchPosts(ctx context.Context, keyword string) ([]*gql
 }
 
 // SearchPostsByHashtag is the resolver for the searchPostsByHashtag field.
-func (r *queryResolver) SearchPostsByHashtag(ctx context.Context, tag string) ([]*gqlmodel.Post, error) {
+func (r *queryResolver) SearchPostsByHashtag(ctx context.Context, tag string, limit *int32, offset *int32) ([]*gqlmodel.Post, error) {
 	_, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	posts, err := r.SearchPostsByHashtagUseCase.Execute(ctx, tag)
+	l, o := resolvePagination(limit, offset, defaultPageSize)
+	posts, err := r.SearchPostsByHashtagUseCase.Execute(ctx, tag, repository.PageQuery{Limit: l, Offset: o})
 	if err != nil {
 		return nil, err
 	}
@@ -3305,7 +3271,7 @@ func (r *queryResolver) SuggestUsers(ctx context.Context, prefix string, limit *
 }
 
 // MentionCandidates is the resolver for the mentionCandidates field.
-func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string, prefix string, limit *int32) ([]*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -3328,17 +3294,17 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([
 
 	// これは閲覧判定ではなく「メンション候補を引けるのはメンバーだけ」という別規則。
 	// EnsureReadAccess は非メンバーの管理者にも閲覧を許すので、そこには寄せない。
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
+	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, rid, claims.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
-	if !containsInt64(memberIDs, claims.ID) {
+	if role == "" {
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
+	users, err := r.SearchRoomUsersUseCase.Execute(ctx, rid, prefix, resolveLimit(limit, 8, 50))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load room members")
+		return nil, fmt.Errorf("failed to search room members")
 	}
 
 	// 除外条件は送信時の検証 (message.ResolveMentionsUseCase) と揃える。
@@ -3348,7 +3314,6 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([
 		return nil, fmt.Errorf("failed to load block relations")
 	}
 
-	users := usersByRoomID[rid]
 	candidates := make([]*gqlmodel.User, 0, len(users))
 	for _, u := range users {
 		if u.ID == claims.ID || u.Status != model.UserStatusActive || blockedSet[u.ID] {
@@ -3811,7 +3776,7 @@ func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*
 		return nil, err
 	}
 
-	communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, claims.ID, int(limit))
+	communities, err := r.GetRandomCommunitiesUseCase.Execute(ctx, claims.ID, resolveLimit(&limit, defaultPageSize, maxPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3889,6 +3854,37 @@ func (r *queryResolver) GetCommunityMembers(ctx context.Context, communityID str
 		})
 	}
 	return result, nil
+}
+
+// CommunityMembers is the resolver for the communityMembers field.
+func (r *queryResolver) CommunityMembers(ctx context.Context, communityID string, limit *int32, offset *int32) (*gqlmodel.CommunityMemberPage, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericCommunityID, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid community id")
+	}
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericCommunityID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("community not found")
+	}
+
+	l, o := resolvePagination(limit, offset, 50)
+	q := repository.PageQuery{Limit: l, Offset: o, WithTotal: fieldRequested(ctx, "total")}
+	members, total, err := r.ListRoomMembersWithRolesPageUseCase.Execute(ctx, c.RoomID, q)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CommunityMember, 0, len(members))
+	for _, member := range members {
+		items = append(items, &gqlmodel.CommunityMember{User: toGraphUser(member.User), Role: member.Role})
+	}
+	return &gqlmodel.CommunityMemberPage{Items: items, Total: int32(total)}, nil
 }
 
 // PresignedAvatarUploadURL is the resolver for the presignedAvatarUploadUrl field.
@@ -4154,11 +4150,11 @@ func (r *queryResolver) MyTermsConsentStatus(ctx context.Context) (*gqlmodel.Ter
 }
 
 // AdminListTerms is the resolver for the adminListTerms field.
-func (r *queryResolver) AdminListTerms(ctx context.Context) ([]*gqlmodel.TermsOfService, error) {
+func (r *queryResolver) AdminListTerms(ctx context.Context, limit *int32, offset *int32) ([]*gqlmodel.TermsOfService, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	list, err := r.ListTermsUseCase.Execute(ctx)
+	list, err := r.ListTermsUseCase.Execute(ctx, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4187,11 +4183,13 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string, l
 	for _, c := range consents {
 		userIDs = append(userIDs, c.UserID)
 	}
-	users, err := r.GetUsersByIDsUseCase.Execute(ctx, userIDs)
+	// 同意者台帳は管理者専用（このリゾルバの先頭で requireAdminAuth 済み）なので、
+	// 連絡先込みで引く。TermsConsentRecord.user は UserAccount。
+	users, err := r.GetUserAccountsByIDsUseCase.Execute(ctx, userIDs)
 	if err != nil {
 		return nil, err
 	}
-	userMap := make(map[int64]*model.User, len(users))
+	userMap := make(map[int64]*model.UserAccount, len(users))
 	for _, u := range users {
 		userMap[u.ID] = u
 	}
@@ -4204,7 +4202,7 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string, l
 		}
 		items = append(items, &gqlmodel.TermsConsentRecord{
 			ID:          strconv.FormatInt(c.ID, 10),
-			User:        toGraphUser(u),
+			User:        toGraphUserAccount(u),
 			ConsentedAt: c.ConsentedAt.Format(timeFormat),
 		})
 	}
@@ -4246,12 +4244,12 @@ func (r *queryResolver) MyFollowers(ctx context.Context, limit *int32, offset *i
 }
 
 // SearchFavoriteUsers is the resolver for the searchFavoriteUsers field.
-func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	favoriteUsers, err := r.SearchFavoriteUsersUseCase.Execute(ctx, claims.ID, keyword)
+	favoriteUsers, err := r.SearchFavoriteUsersUseCase.Execute(ctx, claims.ID, keyword, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4259,7 +4257,7 @@ func (r *queryResolver) SearchFavoriteUsers(ctx context.Context, keyword string)
 }
 
 // GetFavoriteUsersByUserID is the resolver for the GetFavoriteUsersByUserID field.
-func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		if _, err := requireAdminAuth(ctx); err != nil {
 			return nil, err
@@ -4270,7 +4268,7 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
+	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4278,7 +4276,7 @@ func (r *queryResolver) GetFavoriteUsersByUserID(ctx context.Context, userID str
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.
-func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -4286,7 +4284,7 @@ func (r *queryResolver) AdminGetFavoriteUsers(ctx context.Context, userID string
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID)
+	favoriteUsers, err := r.GetFavoriteUserByUserIDUseCase.Execute(ctx, numericUserID, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4311,12 +4309,12 @@ func (r *queryResolver) ListBlockedUsers(ctx context.Context, limit *int32, offs
 }
 
 // SearchBlockedUsers is the resolver for the searchBlockedUsers field.
-func (r *queryResolver) SearchBlockedUsers(ctx context.Context, keyword string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) SearchBlockedUsers(ctx context.Context, keyword string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	blockedUsers, err := r.SearchBlockersUseCase.Execute(ctx, claims.ID, keyword)
+	blockedUsers, err := r.SearchBlockersUseCase.Execute(ctx, claims.ID, keyword, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4324,7 +4322,7 @@ func (r *queryResolver) SearchBlockedUsers(ctx context.Context, keyword string) 
 }
 
 // GetBlockersByUserID is the resolver for the GetBlockersByUserID field.
-func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	claims, err := requireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -4336,7 +4334,7 @@ func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) 
 	if claims.ID != numericUserID && !isAdminRole(claims.Role) {
 		return nil, errors.New("forbidden: cannot view other users' block list")
 	}
-	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
+	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -4344,7 +4342,7 @@ func (r *queryResolver) GetBlockersByUserID(ctx context.Context, userID string) 
 }
 
 // AdminGetBlockers is the resolver for the adminGetBlockers field.
-func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]*gqlmodel.User, error) {
+func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string, limit *int32, offset *int32) ([]*gqlmodel.User, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -4352,7 +4350,7 @@ func (r *queryResolver) AdminGetBlockers(ctx context.Context, userID string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID)
+	blockedUsers, err := r.GetBlockersByUserIDUseCase.Execute(ctx, numericUserID, resolveUnpagedWindow(limit, offset))
 	if err != nil {
 		return nil, err
 	}

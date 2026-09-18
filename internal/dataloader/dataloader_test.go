@@ -71,6 +71,12 @@ func (f answerPageFn) Execute(ctx context.Context, ids []int64, q repository.Pag
 	return f(ctx, ids, q)
 }
 
+type replyPageFn func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error)
+
+func (f replyPageFn) Execute(ctx context.Context, ids []int64, q repository.PageQuery) (map[int64][]*model.Post, error) {
+	return f(ctx, ids, q)
+}
+
 type anonFn func(context.Context, []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error)
 
 func (f anonFn) Execute(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
@@ -88,8 +94,8 @@ func nopUseCases() UseCases {
 		ListMediaByMessageIDs:         mapFn[[]*model.Media](func(context.Context, []int64) (map[int64][]*model.Media, error) { return nil, nil }),
 		ListMediaByQuestionIDs:        mapFn[[]*model.Media](func(context.Context, []int64) (map[int64][]*model.Media, error) { return nil, nil }),
 		ListMediaByAnswerIDs:          mapFn[[]*model.Media](func(context.Context, []int64) (map[int64][]*model.Media, error) { return nil, nil }),
-		GetRepliesByPostIDs:           mapFn[[]*model.Post](func(context.Context, []int64) (map[int64][]*model.Post, error) { return nil, nil }),
-		GetRepliesByPostIDsIncludeDel: mapFn[[]*model.Post](func(context.Context, []int64) (map[int64][]*model.Post, error) { return nil, nil }),
+		GetRepliesByPostIDs:           replyPageFn(func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error) { return nil, nil }),
+		GetRepliesByPostIDsIncludeDel: replyPageFn(func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error) { return nil, nil }),
 		GetFavoritesByPostIDs:         mapFn[[]*model.Favorite](func(context.Context, []int64) (map[int64][]*model.Favorite, error) { return nil, nil }),
 		GetMessagesByIDs:              mapFn[*model.Message](func(context.Context, []int64) (map[int64]*model.Message, error) { return nil, nil }),
 		ListMentionsByPostIDs:         mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),

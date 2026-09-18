@@ -18,9 +18,17 @@ type fakeAdminRepo struct {
 	count    int
 	countErr error
 	deleted  bool
+	// countedForUpdate は「削除の判定がロックを取る版の COUNT を使ったか」。
+	// ロックなしで数えると同時削除で管理者が0人になりうるので、ここを見張る。
+	countedForUpdate bool
 }
 
 func (f *fakeAdminRepo) CountAdministrators(_ context.Context) (int, error) {
+	return f.count, f.countErr
+}
+
+func (f *fakeAdminRepo) CountAdministratorsForUpdate(_ context.Context) (int, error) {
+	f.countedForUpdate = true
 	return f.count, f.countErr
 }
 
@@ -32,6 +40,17 @@ func (f *fakeAdminRepo) ListAdministrators(_ context.Context, _ repository.PageQ
 func (f *fakeAdminRepo) DeleteAdministrator(_ context.Context, _ int64) (bool, error) {
 	f.deleted = true
 	return true, nil
+}
+
+// inlineTxManager はトランザクションの境界だけを再現する（実 DB を使わない）。
+// ロックが本当に効くかは MySQL でしか確かめられないので、それは
+// infra/mysql 側の並行テストに任せ、ここでは「1つのトランザクションに入っているか」
+// と「ロックを取る版で数えているか」だけを見る。
+type inlineTxManager struct{ calls int }
+
+func (m *inlineTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.calls++
+	return fn(ctx)
 }
 
 func TestCountAdministrators_UsesCountQuery(t *testing.T) {
@@ -55,7 +74,7 @@ func TestCountAdministrators_PropagatesError(t *testing.T) {
 
 func TestDeleteAdministrator_KeepsTheLastOne(t *testing.T) {
 	repo := &fakeAdminRepo{t: t, count: 1}
-	ok, err := NewDeleteAdministratorUseCase(repo).Execute(context.Background(), 1)
+	ok, err := NewDeleteAdministratorUseCase(repo, &inlineTxManager{}).Execute(context.Background(), 1)
 	if err == nil {
 		t.Fatal("expected an error when deleting the last administrator")
 	}
@@ -69,11 +88,18 @@ func TestDeleteAdministrator_KeepsTheLastOne(t *testing.T) {
 
 func TestDeleteAdministrator_DeletesWhenOthersRemain(t *testing.T) {
 	repo := &fakeAdminRepo{t: t, count: 2}
-	ok, err := NewDeleteAdministratorUseCase(repo).Execute(context.Background(), 1)
+	tx := &inlineTxManager{}
+	ok, err := NewDeleteAdministratorUseCase(repo, tx).Execute(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !ok || !repo.deleted {
 		t.Fatalf("ok = %v, deleted = %v; want the delete to go through", ok, repo.deleted)
+	}
+	if tx.calls != 1 {
+		t.Fatalf("RunInTx calls = %d, want the count and the delete to share one transaction", tx.calls)
+	}
+	if !repo.countedForUpdate {
+		t.Fatal("the guard must count with a row lock, otherwise concurrent deletes can remove every administrator")
 	}
 }

@@ -118,16 +118,20 @@ func (r *MySQLFavoriteUserRepository) ListFollowers(ctx context.Context, userID 
 	return followers, total, nil
 }
 
-func (r *MySQLFavoriteUserRepository) SearchFavoriteUsers(ctx context.Context, userID int64, keyword string) ([]*model.FavoriteUser, error) {
+func (r *MySQLFavoriteUserRepository) SearchFavoriteUsers(ctx context.Context, userID int64, keyword string, q repository.PageQuery) ([]*model.FavoriteUser, error) {
+	// 並びを id 降順（新しい順）に固定してから窓を切る。ORDER BY 無しに LIMIT を
+	// 足すとページごとに順序が変わりうるので、重複と抜けが出る。
 	query := `
 		SELECT fu.id, fu.user_id, fu.favorite_user_id, fu.created_at
 		FROM favorite_users fu
 		JOIN users u ON fu.favorite_user_id = u.id
 		WHERE fu.user_id = ? AND (u.name LIKE ? OR u.account_id LIKE ?)
+		ORDER BY fu.id DESC
+		LIMIT ? OFFSET ?
 	`
 
 	searchParam := "%" + keyword + "%"
-	rows, err := r.DB.QueryContext(ctx, query, userID, searchParam, searchParam)
+	rows, err := r.DB.QueryContext(ctx, query, userID, searchParam, searchParam, q.Limit, q.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -155,9 +159,10 @@ func (r *MySQLFavoriteUserRepository) SearchFavoriteUsers(ctx context.Context, u
 	return favoriteUsers, nil
 }
 
-func (r *MySQLFavoriteUserRepository) GetFavoriteUsersByUserID(ctx context.Context, userID int64) ([]*model.FavoriteUser, error) {
-	query := "SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE user_id = ?"
-	rows, err := r.DB.QueryContext(ctx, query, userID)
+func (r *MySQLFavoriteUserRepository) GetFavoriteUsersByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, error) {
+	// 並びの固定理由は SearchFavoriteUsers と同じ。
+	query := "SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+	rows, err := r.DB.QueryContext(ctx, query, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, err
 	}

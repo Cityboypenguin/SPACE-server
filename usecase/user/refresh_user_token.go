@@ -12,7 +12,8 @@ import (
 type RefreshUserTokenResult struct {
 	AccessToken  string
 	RefreshToken string
-	User         *model.User
+	// User はトークンを更新した本人。ログインと同じく連絡先を含む。
+	User *model.UserAccount
 }
 
 type RefreshUserTokenUseCase interface {
@@ -56,7 +57,8 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 		return nil, err
 	}
 
-	u, err := uc.userRepo.GetUserByID(ctx, claims.ID)
+	// 返すのは本人ぶんなので連絡先込みで引く（UserAuthPayload.user は UserAccount）。
+	u, err := uc.userRepo.GetUserAccountByID(ctx, claims.ID)
 	if err != nil {
 		return nil, err
 	}

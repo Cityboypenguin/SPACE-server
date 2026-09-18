@@ -156,6 +156,11 @@ type CommunityMember struct {
 	Role string `json:"role"`
 }
 
+type CommunityMemberPage struct {
+	Items []*CommunityMember `json:"items"`
+	Total int32              `json:"total"`
+}
+
 type CommunityMemberUpdateInput struct {
 	UserID string                `json:"userID"`
 	Action CommunityMemberAction `json:"action"`
@@ -564,9 +569,9 @@ type TermsConsentPage struct {
 }
 
 type TermsConsentRecord struct {
-	ID          string `json:"ID"`
-	User        *User  `json:"user"`
-	ConsentedAt string `json:"consentedAt"`
+	ID          string       `json:"ID"`
+	User        *UserAccount `json:"user"`
+	ConsentedAt string       `json:"consentedAt"`
 }
 
 type TermsConsentStatus struct {
@@ -654,7 +659,6 @@ type User struct {
 	ID        string      `json:"ID"`
 	AccountID string      `json:"accountID"`
 	Name      string      `json:"name"`
-	Email     string      `json:"email"`
 	Role      string      `json:"role"`
 	Status    string      `json:"status"`
 	AvatarURL *string     `json:"avatarUrl,omitempty"`
@@ -664,10 +668,26 @@ type User struct {
 	Favorites []*Favorite `json:"favorites"`
 }
 
+type UserAccount struct {
+	ID        string `json:"ID"`
+	AccountID string `json:"accountID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type UserAccountPage struct {
+	Items []*UserAccount `json:"items"`
+	Total int32          `json:"total"`
+}
+
 type UserAuthPayload struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refreshToken"`
-	User         *User  `json:"user"`
+	Token        string       `json:"token"`
+	RefreshToken string       `json:"refreshToken"`
+	User         *UserAccount `json:"user"`
 }
 
 type UserPage struct {
@@ -733,7 +753,7 @@ func (e *CommunityMemberAction) UnmarshalGQL(v any) error {
 }
 
 func (e CommunityMemberAction) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
@@ -792,7 +812,7 @@ func (e *CourseImportState) UnmarshalGQL(v any) error {
 }
 
 func (e CourseImportState) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *CourseImportState) UnmarshalJSON(b []byte) error {
@@ -855,7 +875,7 @@ func (e *InquiryCategory) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryCategory) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryCategory) UnmarshalJSON(b []byte) error {
@@ -912,7 +932,7 @@ func (e *InquiryStatus) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
@@ -971,7 +991,7 @@ func (e *ReportStatus) UnmarshalGQL(v any) error {
 }
 
 func (e ReportStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportStatus) UnmarshalJSON(b []byte) error {
@@ -1028,7 +1048,7 @@ func (e *ReportTargetType) UnmarshalGQL(v any) error {
 }
 
 func (e ReportTargetType) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
@@ -1083,7 +1103,7 @@ func (e *ThemePreference) UnmarshalGQL(v any) error {
 }
 
 func (e ThemePreference) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ThemePreference) UnmarshalJSON(b []byte) error {
@@ -1138,7 +1158,7 @@ func (e *TimeSeriesGranularity) UnmarshalGQL(v any) error {
 }
 
 func (e TimeSeriesGranularity) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
@@ -1261,7 +1281,7 @@ func (e *TimetableEntryColor) UnmarshalGQL(v any) error {
 }
 
 func (e TimetableEntryColor) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *TimetableEntryColor) UnmarshalJSON(b []byte) error {

@@ -67,17 +67,20 @@ func subscribeTopicFunc[S any, T any](
 	sub := src.Subscribe(topic)
 
 	go func() {
+		// 後始末は defer に寄せる。終了地点が「受信待ちでの ctx 終了」「PubSub の
+		// クローズ」「送信待ちでの ctx 終了」の3つに増えたので、各 return の手前で
+		// close(out) を書き並べると閉じ忘れが必ず出る。LIFO なので close(out) →
+		// Unsubscribe の順で走る。
 		defer src.Unsubscribe(topic, sub)
+		defer close(out)
 		for {
 			select {
 			case <-ctx.Done():
 				logSubscription(scope, topic).Str("reason", "context_done").Msg("subscription end")
-				close(out)
 				return
 			case data, ok := <-sub:
 				if !ok {
 					logSubscription(scope, topic).Str("reason", "pubsub_closed").Msg("subscription end")
-					close(out)
 					return
 				}
 				v, ok := data.(S)
@@ -88,7 +91,17 @@ func subscribeTopicFunc[S any, T any](
 				if !keep {
 					continue
 				}
-				out <- converted
+				// 送信もキャンセル可能にする。out はバッファ1なので、gqlgen 側が
+				// 読まないまま2件目が来るとここで止まる。以前は素の `out <- converted`
+				// だったため、その状態で購読が切れても ctx.Done() へ戻れず、
+				// goroutine と PubSub の購読が永久に残っていた（切断済みクライアント
+				// ぶんだけ溜まる）。
+				select {
+				case out <- converted:
+				case <-ctx.Done():
+					logSubscription(scope, topic).Str("reason", "context_done_blocked_send").Msg("subscription end")
+					return
+				}
 			}
 		}
 	}()
