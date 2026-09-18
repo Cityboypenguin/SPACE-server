@@ -10,7 +10,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
@@ -47,6 +46,25 @@ const CourseImportStatusTopic = "course_import:status"
 //
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
+//
+// ■ フィールドが多いことについて
+//
+// ここは composition root（依存を1箇所に集める場所）なので、スキーマに口が
+// 増えれば依存も増える。数そのものは問題ではない。分割して困るのは、
+// 「どのリゾルバがどれを使うか」の対応が別ファイルに散って、口を足すときに
+// 見る場所が増えることのほう。
+//
+// グループ（*UseCases）に切り出してあるのは、数を減らすためではなく
+// 「まとめること自体に意味がある」ものだけ:
+//
+//   - ChatUseCases: 権限判定を飛ばして保存処理を叩けないよう、入口を絞るため
+//     （MessageRoomUseCases のコメント参照）
+//   - CourseUseCases / QuestionUseCases のように、複数パッケージのユースケースが
+//     1つの画面のために組で使われるもの
+//
+// 逆に、1つのパッケージのユースケースが並んでいるだけの塊（administrator、
+// favorite、block、terms など）は空行で区切ってあるだけにしてある。構造体に
+// しても増えるのは名前だけで、探しにくくなるぶん損になる。
 type Resolver struct {
 	StorageRepository     repository.StorageRepository
 	MaintenanceRepository repository.MaintenanceRepository
@@ -79,7 +97,6 @@ type Resolver struct {
 	GetFavoriteByUserIDAndPostIDUseCase    favorite.GetFavoriteByUserIDAndPostIDUseCase
 	GetFavoritesByPostIDUseCase            favorite.GetFavoritesByPostIDUseCase
 	GetFavoritesByUserIDUseCase            favorite.GetFavoritesByUserIDUseCase
-	ListFavoritesUseCase                   favorite.ListFavoritesUseCase
 
 	ListMediaByPostIDUseCase           mediausecase.ListMediaByPostIDUseCase
 	ReportMediaDimensionsUseCase       mediausecase.ReportDimensionsUseCase
@@ -137,6 +154,9 @@ type Resolver struct {
 	CheckConsentUseCase    *termsusecase.CheckConsentUseCase
 	ListTermsUseCase       *termsusecase.ListTermsUseCase
 	ListConsentsUseCase    *termsusecase.ListConsentsUseCase
+	// TermsBroadcastScheduler は「effectiveDate に terms_updated を配信する」タイマーの
+	// 唯一の入口。起動時（cmd/server/main.go）も同じインスタンスを使う。
+	TermsBroadcastScheduler *termsusecase.BroadcastScheduler
 
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
 	ManageUserSettingUsecase   usersettingsusecase.ManageUserSettingUsecase
@@ -210,6 +230,10 @@ type MessageRoomUseCases struct {
 	GetRoomUseCase                  roomusecase.GetRoomUseCase
 	GetUserIDsByRoomIDUseCase       roomusecase.GetUserIDsByRoomIDUseCase
 	ListUsersByRoomIDsUseCase       roomusecase.ListUsersByRoomIDsUseCase
+	// コミュニティ一覧の memberCount / isMember を一覧ぶん1クエリで出す口
+	// （以前は1件ごとに GetUserIDsByRoomID を呼んでいた）。
+	CountUsersByRoomIDsUseCase      roomusecase.CountUsersByRoomIDsUseCase
+	ListJoinedRoomIDsUseCase        roomusecase.ListJoinedRoomIDsUseCase
 	ListMyDMRoomsUseCase            roomusecase.ListMyDMRoomsUseCase
 	GetOrCreateDMRoomUseCase        roomusecase.GetOrCreateDMRoomUseCase
 	AddUserToRoomUseCase            roomusecase.AddUserToRoomUseCase
@@ -271,15 +295,14 @@ type CourseUseCases struct {
 	GetCurrentSemesterUseCase          semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase       semesterusecase.UpdateCurrentSemesterUseCase
 	ListCourseRoomUnreadCountsUseCase  courseusecase.ListCourseRoomUnreadCountsUseCase
-	// GetAnonymousIdentityUseCase は採番しない読み取り専用の口。表示側はこちらを使う。
-	GetAnonymousIdentityUseCase     anonusecase.GetAnonymousIdentityUseCase
-	ImportCoursesUseCase            courseusecase.ImportCoursesUseCase
-	ListCoursesUseCase              courseusecase.ListCoursesUseCase
-	ListCourseYearsUseCase          courseusecase.ListCourseYearsUseCase
-	ListDedupKeysByYearUseCase      courseusecase.ListDedupKeysByYearUseCase
-	AdminCreateCourseUseCase        courseusecase.AdminCreateCourseUseCase
-	AdminDeleteCourseUseCase        courseusecase.AdminDeleteCourseUseCase
-	GetCourseRegisteredCountUseCase courseusecase.GetCourseRegisteredCountUseCase
+	ImportCoursesUseCase               courseusecase.ImportCoursesUseCase
+	ListCoursesUseCase                 courseusecase.ListCoursesUseCase
+	ListCourseYearsUseCase             courseusecase.ListCourseYearsUseCase
+	ListDedupKeysByYearUseCase         courseusecase.ListDedupKeysByYearUseCase
+	AdminCreateCourseUseCase           courseusecase.AdminCreateCourseUseCase
+	AdminDeleteCourseUseCase           courseusecase.AdminDeleteCourseUseCase
+	GetCourseRegisteredCountUseCase    courseusecase.GetCourseRegisteredCountUseCase
+	GetCourseRegisteredCountsUseCase   courseusecase.GetCourseRegisteredCountsUseCase
 }
 
 type QuestionUseCases struct {
@@ -292,8 +315,6 @@ type QuestionUseCases struct {
 	DeleteQuestionUseCase   questionusecase.DeleteQuestionUseCase
 	DeleteMyQuestionUseCase questionusecase.DeleteMyQuestionUseCase
 	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
-	ListAnswersUseCase      answerusecase.ListAnswersUseCase
-	GetAnswerByIDUseCase    answerusecase.GetAnswerByIDUseCase
 	UpdateAnswerUseCase     answerusecase.UpdateAnswerUseCase
 	DeleteAnswerUseCase     answerusecase.DeleteAnswerUseCase
 	LikeAnswerUseCase       answerusecase.LikeAnswerUseCase
@@ -301,13 +322,11 @@ type QuestionUseCases struct {
 }
 
 type PollUseCases struct {
-	CreatePollUseCase            pollusecase.CreatePollUseCase
-	VotePollUseCase              pollusecase.VotePollUseCase
-	DeletePollUseCase            pollusecase.DeletePollUseCase
-	ListPollsUseCase             pollusecase.ListPollsUseCase
-	GetPollByIDUseCase           pollusecase.GetPollByIDUseCase
-	ListPollOptionResultsUseCase pollusecase.ListPollOptionResultsUseCase
-	CountPollVotersUseCase       pollusecase.CountPollVotersUseCase
+	CreatePollUseCase  pollusecase.CreatePollUseCase
+	VotePollUseCase    pollusecase.VotePollUseCase
+	DeletePollUseCase  pollusecase.DeletePollUseCase
+	ListPollsUseCase   pollusecase.ListPollsUseCase
+	GetPollByIDUseCase pollusecase.GetPollByIDUseCase
 }
 
 type NotificationUseCases struct {

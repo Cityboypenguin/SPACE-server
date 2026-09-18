@@ -67,7 +67,6 @@ func NewCourseUseCases(
 		GetCurrentSemesterUseCase:          semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:       semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		ListCourseRoomUnreadCountsUseCase:  courseusecase.NewListCourseRoomUnreadCountsUseCase(unreadCounter, settingRepo),
-		GetAnonymousIdentityUseCase:        anonusecase.NewGetAnonymousIdentityUseCase(anonIdentityRepo),
 		ImportCoursesUseCase:               courseusecase.NewImportCoursesUseCase(courseRepo),
 		ListCoursesUseCase:                 courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:             courseusecase.NewListCourseYearsUseCase(courseRepo),
@@ -75,6 +74,7 @@ func NewCourseUseCases(
 		AdminCreateCourseUseCase:           courseusecase.NewAdminCreateCourseUseCase(courseRepo),
 		AdminDeleteCourseUseCase:           courseusecase.NewAdminDeleteCourseUseCase(courseRepo, roomRepo),
 		GetCourseRegisteredCountUseCase:    courseusecase.NewGetCourseRegisteredCountUseCase(timetableRepo),
+		GetCourseRegisteredCountsUseCase:   courseusecase.NewGetCourseRegisteredCountsUseCase(timetableRepo),
 	}
 }
 
@@ -103,8 +103,6 @@ func NewQuestionUseCases(
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo, requireWritable),
 		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
-		ListAnswersUseCase:      answerusecase.NewListAnswersUseCase(answerRepo),
-		GetAnswerByIDUseCase:    answerusecase.NewGetAnswerByIDUseCase(answerRepo),
 		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
@@ -124,12 +122,10 @@ func NewPollUseCases(
 ) PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return PollUseCases{
-		CreatePollUseCase:            pollusecase.NewCreatePollUseCase(pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
-		VotePollUseCase:              pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
-		DeletePollUseCase:            pollusecase.NewDeletePollUseCase(pollRepo, requireWritable),
-		ListPollsUseCase:             pollusecase.NewListPollsUseCase(pollRepo),
-		GetPollByIDUseCase:           pollusecase.NewGetPollByIDUseCase(pollRepo),
-		ListPollOptionResultsUseCase: pollusecase.NewListPollOptionResultsUseCase(pollRepo),
-		CountPollVotersUseCase:       pollusecase.NewCountPollVotersUseCase(pollRepo),
+		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
+		VotePollUseCase:    pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
+		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(pollRepo, requireWritable),
+		ListPollsUseCase:   pollusecase.NewListPollsUseCase(pollRepo),
+		GetPollByIDUseCase: pollusecase.NewGetPollByIDUseCase(pollRepo),
 	}
 }

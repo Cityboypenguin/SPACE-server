@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLFavoriteUserRepository struct {
@@ -53,17 +54,15 @@ func (r *MySQLFavoriteUserRepository) DeleteFavoriteUser(ctx context.Context, us
 	return rowsAffected > 0, nil
 }
 
-func (r *MySQLFavoriteUserRepository) ListFavoriteUsers(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM favorite_users WHERE user_id = ?`, userID,
-	).Scan(&total); err != nil {
+func (r *MySQLFavoriteUserRepository) ListFavoriteUsers(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM favorite_users WHERE user_id = ?`, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		userID, limit, offset,
+		userID, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -87,17 +86,15 @@ func (r *MySQLFavoriteUserRepository) ListFavoriteUsers(ctx context.Context, use
 	return favoriteUsers, total, nil
 }
 
-func (r *MySQLFavoriteUserRepository) ListFollowers(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM favorite_users WHERE favorite_user_id = ?`, userID,
-	).Scan(&total); err != nil {
+func (r *MySQLFavoriteUserRepository) ListFollowers(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM favorite_users WHERE favorite_user_id = ?`, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE favorite_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		userID, limit, offset,
+		userID, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err

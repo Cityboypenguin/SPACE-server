@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -59,15 +61,34 @@ func (r *MySQLRoomRepository) DeleteRoom(ctx context.Context, id int64) (bool, e
 	return rowsAffected > 0, nil
 }
 
-func (r *MySQLRoomRepository) ListRooms(ctx context.Context) ([]*model.Room, error) {
-	query := "SELECT id, name, type, created_at, updated_at FROM rooms"
-	rows, err := r.DB.QueryContext(ctx, query)
+// GetRoomsByIDs は GetRoomByID の一括版。DataLoader から1クエリでまとめて呼ばれる。
+//
+// 見つからなかった ID は map に入れない（単体版が nil, nil を返すのと同じ扱い）。
+// 「見つからない」をエラーにしないのは、ルームが消えていても一覧の他の行は
+// 描けるようにするため。
+func (r *MySQLRoomRepository) GetRoomsByIDs(ctx context.Context, ids []int64) (map[int64]*model.Room, error) {
+	result := make(map[int64]*model.Room, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	query := fmt.Sprintf(
+		"SELECT id, name, type, created_at, updated_at FROM rooms WHERE id IN (%s)",
+		placeholders,
+	)
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var rooms []*model.Room
 	for rows.Next() {
 		var room model.Room
 		var createdAt, updatedAt int64
@@ -76,16 +97,7 @@ func (r *MySQLRoomRepository) ListRooms(ctx context.Context) ([]*model.Room, err
 		}
 		room.CreatedAt = time.Unix(createdAt, 0)
 		room.UpdatedAt = time.Unix(updatedAt, 0)
-		rooms = append(rooms, &room)
+		result[room.ID] = &room
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return rooms, nil
-}
-
-func (r *MySQLRoomRepository) UpdateRoom(ctx context.Context, room *model.Room) error {
-	query := "UPDATE rooms SET name = ?, updated_at = ? WHERE id = ?"
-	_, err := r.DB.ExecContext(ctx, query, room.Name, room.UpdatedAt.Unix(), room.ID)
-	return err
+	return result, rows.Err()
 }

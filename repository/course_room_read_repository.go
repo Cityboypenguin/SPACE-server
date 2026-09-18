@@ -16,7 +16,4 @@ type CourseRoomReadRepository interface {
 	UpsertLastRead(ctx context.Context, roomID, userID int64, lastReadMessageID *int64, readAt int64) error
 	// GetLastRead returns nil when userID has never read the room.
 	GetLastRead(ctx context.Context, roomID, userID int64) (*ReadPosition, error)
-	// GetLastReadAtByRoomIDs は複数ルームの既読位置をまとめて返す（未読の部屋は
-	// キーごと含まれない）。授業一覧のように部屋数ぶん引くと N+1 になる用途向け。
-	GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int64, error)
 }

@@ -42,7 +42,7 @@ func TestGetUserTimetable_RequiresAuth(t *testing.T) {
 	uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{}, &fakeBlockRepo{})
 
 	y, s := 2026, "前期"
-	if _, err := uc.Execute(context.Background(), 1, &y, &s); err == nil {
+	if _, _, err := uc.Execute(context.Background(), 1, &y, &s); err == nil {
 		t.Fatal("expected error when no claims are present in context")
 	}
 }
@@ -54,9 +54,12 @@ func TestGetUserTimetable_OwnerSeesOwnHiddenTimetable(t *testing.T) {
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 7})
 
 	y, s := 2026, "前期"
-	got, err := uc.Execute(ctx, 7, &y, &s)
+	got, visible, err := uc.Execute(ctx, 7, &y, &s)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !visible {
+		t.Fatal("visible = false, want true for the owner")
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d entries, want %d", len(got), len(want))
@@ -73,9 +76,12 @@ func TestGetUserTimetable_AdminSeesHiddenTimetable(t *testing.T) {
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 99, Role: "admin"})
 
 	y, s := 2026, "前期"
-	got, err := uc.Execute(ctx, 7, &y, &s)
+	got, visible, err := uc.Execute(ctx, 7, &y, &s)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !visible {
+		t.Fatal("visible = false, want true for an admin")
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d entries, want %d (admin should bypass visibility)", len(got), len(want))
@@ -88,9 +94,12 @@ func TestGetUserTimetable_OtherUserHiddenReturnsEmpty(t *testing.T) {
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
 
 	y, s := 2026, "前期"
-	got, err := uc.Execute(ctx, 7, &y, &s)
+	got, visible, err := uc.Execute(ctx, 7, &y, &s)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if visible {
+		t.Fatal("visible = true, want false for a hidden timetable viewed by another user")
 	}
 	if len(got) != 0 {
 		t.Fatalf("got %d entries, want 0 for a hidden timetable viewed by another user", len(got))
@@ -103,16 +112,21 @@ func TestGetUserTimetable_BlockRelationReturnsEmpty(t *testing.T) {
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
 
 	y, s := 2026, "前期"
-	got, err := uc.Execute(ctx, 7, &y, &s)
+	got, visible, err := uc.Execute(ctx, 7, &y, &s)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if visible {
+		t.Fatal("visible = true, want false when the viewer and the owner have a block relation")
 	}
 	if len(got) != 0 {
 		t.Fatalf("got %d entries, want 0 when the viewer and the owner have a block relation", len(got))
 	}
 }
 
-func TestGetUserTimetable_IsProfileVisible(t *testing.T) {
+// 閲覧可否の判定はユースケースの中だけにあるので、Execute の戻り値 visible で検証する
+// （以前はリゾルバが同じ判定を呼び直していて、公開メソッドとして露出していた）。
+func TestGetUserTimetable_VisibilityRules(t *testing.T) {
 	cases := []struct {
 		name    string
 		value   string
@@ -128,13 +142,20 @@ func TestGetUserTimetable_IsProfileVisible(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			uc := NewGetUserTimetableUseCase(&fakeListTimetableRepo{}, nil, &fakeUserSettingRepo{value: tc.value, found: tc.found}, &fakeBlockRepo{blocked: tc.blocked})
-			got, err := uc.IsProfileVisible(context.Background(), 1, 7)
+			repo := &fakeListTimetableRepo{result: []*repository.TimetableEntryWithCourse{{}}}
+			uc := NewGetUserTimetableUseCase(repo, nil, &fakeUserSettingRepo{value: tc.value, found: tc.found}, &fakeBlockRepo{blocked: tc.blocked})
+			ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
+
+			y, s := 2026, "前期"
+			entries, visible, err := uc.Execute(ctx, 7, &y, &s)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if got != tc.want {
-				t.Fatalf("IsProfileVisible() = %v, want %v", got, tc.want)
+			if visible != tc.want {
+				t.Fatalf("visible = %v, want %v", visible, tc.want)
+			}
+			if !tc.want && len(entries) != 0 {
+				t.Fatalf("got %d entries, want 0 when the timetable is not visible", len(entries))
 			}
 		})
 	}
@@ -147,9 +168,12 @@ func TestGetUserTimetable_OtherUserDefaultVisibleReturnsEntries(t *testing.T) {
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1})
 
 	y, s := 2026, "前期"
-	got, err := uc.Execute(ctx, 7, &y, &s)
+	got, visible, err := uc.Execute(ctx, 7, &y, &s)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !visible {
+		t.Fatal("visible = false, want true (unset visibility defaults to visible)")
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d entries, want %d (unset visibility defaults to visible)", len(got), len(want))

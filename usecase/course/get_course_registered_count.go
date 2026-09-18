@@ -30,3 +30,24 @@ func NewGetCourseRegisteredCountUseCase(timetableRepo repository.TimetableReposi
 func (uc *GetCourseRegisteredCountInteractor) Execute(ctx context.Context, courseID int64) (int, error) {
 	return uc.timetableRepo.CountByCourseID(ctx, courseID)
 }
+
+// GetCourseRegisteredCountsUseCase は GetCourseRegisteredCountUseCase の一括版。
+// 管理画面の授業一覧が使う（1件ずつ数えると授業の件数ぶん COUNT が走るため）。
+type GetCourseRegisteredCountsUseCase interface {
+	Execute(ctx context.Context, courseIDs []int64) (map[int64]int, error)
+}
+
+var _ GetCourseRegisteredCountsUseCase = &GetCourseRegisteredCountsInteractor{}
+
+type GetCourseRegisteredCountsInteractor struct {
+	timetableRepo repository.TimetableRepository
+}
+
+func NewGetCourseRegisteredCountsUseCase(timetableRepo repository.TimetableRepository) GetCourseRegisteredCountsUseCase {
+	return &GetCourseRegisteredCountsInteractor{timetableRepo: timetableRepo}
+}
+
+// Execute は単体版と同じく、認可はリゾルバ側（管理者のみ）に任せる。
+func (uc *GetCourseRegisteredCountsInteractor) Execute(ctx context.Context, courseIDs []int64) (map[int64]int, error) {
+	return uc.timetableRepo.CountByCourseIDs(ctx, courseIDs)
+}

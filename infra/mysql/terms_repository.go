@@ -135,9 +135,9 @@ func (r *MySQLTermsRepository) FindAll(ctx context.Context) ([]*model.TermsOfSer
 	return list, rows.Err()
 }
 
-func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64, limit, offset int) ([]*model.TermsConsent, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM terms_consents WHERE terms_id = ?`, termsID).Scan(&total); err != nil {
+func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64, q repository.PageQuery) ([]*model.TermsConsent, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM terms_consents WHERE terms_id = ?`, termsID)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count terms_consents: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsI
 		FROM terms_consents
 		WHERE terms_id = ?
 		ORDER BY consented_at DESC
-		LIMIT ? OFFSET ?`, termsID, limit, offset)
+		LIMIT ? OFFSET ?`, termsID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query terms_consents: %w", err)
 	}

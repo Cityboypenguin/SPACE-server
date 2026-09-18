@@ -49,7 +49,9 @@ func (uc *UpdateMyProfileInteractor) Execute(ctx context.Context, userID int64, 
 			return fmt.Errorf("user not found")
 		}
 
-		if err := user.UpdateUser(param.User); err != nil {
+		// プロフィール更新はパスワードを変えない経路なので、公開情報だけを
+		// 更新する UpdateProfile を使う（パスワードを渡すとエラーになる）。
+		if err := user.UpdateProfile(param.User); err != nil {
 			return err
 		}
 		if err := uc.userRepo.UpdateUser(txCtx, user); err != nil {

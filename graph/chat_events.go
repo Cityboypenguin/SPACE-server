@@ -31,7 +31,7 @@ type chatEventPubSub interface {
 
 type chatEventSSEBroker interface {
 	PublishToUser(userID int64, eventType string, data map[string]any)
-	PublishSyncToUser(userID int64, unreadCount int)
+	PublishNotificationsChangedToUser(userID int64)
 }
 
 // chatEventAsyncRunner は「順序も応答時間も要らない配信」をリクエストの外へ出す口。
@@ -72,7 +72,6 @@ type ChatEventPublisherDeps struct {
 	GetAnonymousIdentity anonusecase.GetAnonymousIdentityUseCase
 
 	MarkNotificationsAsReadByActor notificationuc.MarkAllAsReadByActorUseCase
-	CountUnreadNotifications       notificationuc.CountUnreadUseCase
 }
 
 // chatEventPublisher は chat.EventPublisher の実装。PubSub / SSE / 通知 /
@@ -118,7 +117,6 @@ const (
 	chatDeliveryAnonymousLabel    = "anonymous_label_lookup"
 	chatDeliveryMentionNotify     = "mention_notification"
 	chatDeliveryDMReadSync        = "dm_notification_read_sync"
-	chatDeliveryUnreadCountSync   = "notification_unread_count_sync"
 )
 
 // logChatDelivery はベストエフォートな配信・通知の取りこぼしを、必ず同じ形で残す。
@@ -369,8 +367,13 @@ func (p *chatEventPublisher) RoomMarkedAsRead(ctx context.Context, ev chatusecas
 	})
 }
 
-// syncDMNotificationsOnRead は DM を既読にしたとき、相手からの DM 通知も既読にして
-// ベルの数字を送り直す。
+// syncDMNotificationsOnRead は DM を既読にしたとき、相手からの DM 通知も既読にして、
+// 通知の状態が変わったことを本人へ知らせる。
+//
+// 以前はここで未読通知数を COUNT して数字ごと配っていた。やめたのは room_changed と
+// 同じ理由で、派生値をサーバが配らないため（sse.EventNotificationsChanged のコメント参照）。
+// 受け取った側（＝既読を打った本人の他のタブ・他の端末）は自分で数を取り直す。
+// 既読を打った端末自身も、mutation の応答を見て自分で数を直せる。
 func (p *chatEventPublisher) syncDMNotificationsOnRead(ctx context.Context, ev chatusecase.RoomMarkedAsReadEvent) {
 	for _, memberID := range ev.MemberIDs {
 		if memberID == ev.ActorID {
@@ -384,17 +387,7 @@ func (p *chatEventPublisher) syncDMNotificationsOnRead(ctx context.Context, ev c
 				Msg("failed to mark dm notifications as read")
 		}
 	}
-	count, err := p.deps.CountUnreadNotifications.Execute(ctx, ev.ActorID)
-	if err != nil {
-		// 件数が引けないときはベルの同期を送らない（挙動は従来どおり）。
-		// 黙って落とすと「既読にしたのにベルの数字が減らない」に気づけないので残す。
-		logChatDelivery(err, chatDeliveryUnreadCountSync).
-			Int64("room_id", ev.Room.ID).
-			Int64("actor_id", ev.ActorID).
-			Msg("failed to count unread notifications; skipping the bell sync")
-		return
-	}
-	p.deps.SSEBroker.PublishSyncToUser(ev.ActorID, int(count))
+	p.deps.SSEBroker.PublishNotificationsChangedToUser(ev.ActorID)
 }
 
 // publishMessageReplyNotification notifies the author of the message that `reply`

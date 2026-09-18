@@ -51,7 +51,8 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	param.CreatedAt = now
 	param.UpdatedAt = now
 
-	user := &model.User{}
+	// 新規登録はパスワードハッシュを作る経路なので UserCredentials を使う。
+	user := &model.UserCredentials{}
 	if err := user.CreateUser(param); err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	}
 
 	err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
-		if err := uc.userRepo.SaveUser(ctx, user); err != nil {
+		if err := uc.userRepo.SaveCredentials(ctx, user); err != nil {
 			return err
 		}
 		emptyProfile := &model.Profile{
@@ -84,7 +85,9 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		return nil, err
 	}
 
-	return user, nil
+	// 返すのは公開情報だけ。ハッシュはこの関数の外へ出さない。
+	publicUser := user.User
+	return &publicUser, nil
 }
 
 func (uc *CreateUserInteractor) checkOTP(ctx context.Context, email, code string) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -56,12 +57,36 @@ type PublishParams struct {
 // usecase 層はこのインターフェースに依存し、具体的な配信手段（SSE 等）を知らない。
 type UserEventDelivery interface {
 	PublishToUser(userID int64, eventType string, data map[string]any)
+
+	// ConnectedUserIDs はいま接続している利用者のIDを返す。
+	//
+	// 全員宛の配信（お知らせ）で「誰に送るか」を決めるために要る。配信手段が
+	// 「今つながっている相手」を知っていること自体は SSE でも WebSocket でも
+	// 変わらないので、ポートに置いても実装先を縛らない。
+	ConnectedUserIDs() []int64
 }
 
 // NotificationPublisher は通知を DB に保存し、接続中のユーザーへリアルタイム配信する。
 type NotificationPublisher interface {
 	Publish(ctx context.Context, params PublishParams) error
 	PublishBatch(ctx context.Context, params []PublishParams) error
+
+	// PublishToAllActiveUsers は同じ通知を全アクティブ利用者へ配る（お知らせ）。
+	//
+	// PublishBatch との違いは宛先の決まり方。PublishBatch は呼び出し側が宛先を
+	// 並べて渡す（返信・メンションのように相手が数人）のに対し、こちらは宛先を
+	// アプリが列挙しない。保存は DB 内の INSERT ... SELECT で閉じ、配信は
+	// 接続中の利用者にだけ行う。
+	PublishToAllActiveUsers(ctx context.Context, params BroadcastParams) error
+}
+
+// BroadcastParams は PublishToAllActiveUsers の指定。PublishParams から UserID を
+// 抜いた形（宛先はアプリではなく DB と Broker が決める）。
+type BroadcastParams struct {
+	Type       NotificationType
+	TargetType TargetType
+	TargetID   int64
+	Message    string
 }
 
 type notificationPublisher struct {
@@ -150,5 +175,73 @@ func (p *notificationPublisher) Publish(ctx context.Context, params PublishParam
 	}
 
 	p.delivery.PublishToUser(params.UserID, "notification", deliveryData(n, params))
+	return nil
+}
+
+// PublishToAllActiveUsers は全アクティブ利用者への通知を保存し、接続中の利用者にだけ配信する。
+//
+// 以前は (1) 全アクティブ利用者IDを SELECT でアプリへ読み込み、(2) 人数ぶんの
+// PublishParams と通知モデルを組み、(3) 人数ぶんの VALUES を並べた INSERT を撃ち、
+// (4) 全員へ SSE を送っていた。利用者数に比例してメモリ・SQL 文長・イベント数が
+// 増え、しかも (4) は接続していない人の履歴（Broker の history）にも積まれていた
+// （履歴の用途は再接続時のリプレイだけなので、繋いでいない人のぶんは TTL の間
+// メモリを占めるだけ）。
+//
+// ここでは3つに分ける:
+//
+//  1. 保存は INSERT ... SELECT で DB 内に閉じる（行の中身をアプリへ運ばない）
+//  2. 宛先は Broker が知っている「いま接続している人」だけに絞る
+//  3. 配信ペイロードに要る通知IDは、その接続中の人ぶんだけ引き直す
+//
+// 配信するイベントは今までと同じ "notification"（中身も同じ）。事実だけを送る
+// notifications_changed に寄せなかったのは、お知らせはトーストを出す通知であり、
+// 事実だけに変えると接続中の利用者からトーストが消える＝外から見える挙動が
+// 変わってしまうため。notifications_changed の考え方（サーバは配れるものだけを
+// 配り、配れないものを無理に配らない）は「接続していない人へは送らない」という
+// 形でここに効いている。切断中に作られた通知は、再接続時にクライアントが
+// 通知一覧と未読数を取り直すので取りこぼしにはならない。
+func (p *notificationPublisher) PublishToAllActiveUsers(ctx context.Context, params BroadcastParams) error {
+	targetType := string(params.TargetType)
+	created, err := p.repo.SaveForAllActiveUsers(ctx, repository.BroadcastNotificationParam{
+		Type:       string(params.Type),
+		TargetType: &targetType,
+		TargetID:   &params.TargetID,
+		Message:    params.Message,
+		CreatedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		return err
+	}
+	logger.Log.Info().
+		Str("component", "notification_broadcast").
+		Str("notification_type", string(params.Type)).
+		Str("target_type", targetType).
+		Int64("target_id", params.TargetID).
+		Int64("created_rows", created).
+		Msg("stored a broadcast notification for every active user")
+
+	connected := p.delivery.ConnectedUserIDs()
+	if len(connected) == 0 {
+		return nil
+	}
+
+	// 通知IDは配信ペイロード（クライアントの遷移先）に要るので引き直す。
+	// 引くのは接続中の人ぶんだけなので、全件を運ぶことにはならない。
+	ns, err := p.repo.ListByTargetForUsers(ctx, targetType, params.TargetID, connected)
+	if err != nil {
+		// 配信できなくても保存は済んでいる（再接続時に取り直される）ので、
+		// お知らせ作成そのものは失敗させない。黙って落とすと「一部の人にだけ
+		// 届かない」が誰にも気づかれないので、必ずログには残す。
+		logger.Log.Error().Err(err).
+			Str("component", "notification_broadcast").
+			Int64("target_id", params.TargetID).
+			Int("connected_users", len(connected)).
+			Msg("failed to look up broadcast notifications for delivery")
+		return nil
+	}
+
+	for _, n := range ns {
+		p.delivery.PublishToUser(n.UserID, "notification", deliveryData(n, PublishParams{}))
+	}
 	return nil
 }

@@ -91,14 +91,12 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 	return scanCommunity(row)
 }
 
-func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, userID int64, limit, offset int) ([]*model.Community, int, error) {
+func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {
 	searchParam := "%" + name + "%"
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM communities WHERE name LIKE ? AND room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)`,
-		searchParam, userID,
-	).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities WHERE name LIKE ? AND room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)`,
+		searchParam, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -112,7 +110,7 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 		  AND c.room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)
 		ORDER BY c.created_at DESC
 		LIMIT ? OFFSET ?
-	`, searchParam, userID, limit, offset)
+	`, searchParam, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -176,18 +174,6 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	return tx.Commit()
 }
 
-func (r *MySQLCommunityRepository) DeleteCommunity(ctx context.Context, id int64) (bool, error) {
-	result, err := r.DB.ExecContext(ctx, `DELETE FROM communities WHERE id = ?`, id)
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 func (r *MySQLCommunityRepository) DeleteCommunitiesWhereOnlyMember(ctx context.Context, userID int64) (int64, error) {
 	result, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		DELETE rm
@@ -204,12 +190,10 @@ func (r *MySQLCommunityRepository) DeleteCommunitiesWhereOnlyMember(ctx context.
 	return result.RowsAffected()
 }
 
-func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Community, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM communities c JOIN room_users ru ON c.room_id = ru.room_id WHERE ru.user_id = ?`,
-		userID,
-	).Scan(&total); err != nil {
+func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities c JOIN room_users ru ON c.room_id = ru.room_id WHERE ru.user_id = ?`,
+		userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -223,7 +207,7 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 		WHERE ru.user_id = ?
 		ORDER BY ru.created_at DESC
 		LIMIT ? OFFSET ?`,
-		userID, limit, offset,
+		userID, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -236,9 +220,9 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 	return communities, total, nil
 }
 
-func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, limit, offset int) ([]*model.Community, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM communities`).Scan(&total); err != nil {
+func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, q repository.PageQuery) ([]*model.Community, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities`)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -249,7 +233,7 @@ func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, limit
 		FROM communities c
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		ORDER BY c.created_at DESC
-		LIMIT ? OFFSET ?`, limit, offset,
+		LIMIT ? OFFSET ?`, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err

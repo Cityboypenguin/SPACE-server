@@ -42,17 +42,21 @@ type sseEvent struct {
 
 type fakeSSEBroker struct {
 	events []sseEvent
-	syncs  map[int64]int
+	// notificationsChanged は「通知の状態が変わった」を知らせた回数（ユーザーごと）。
+	// 数字は載らないイベントなので、数えるのは回数だけ。
+	notificationsChanged map[int64]int
 }
 
-func newFakeSSEBroker() *fakeSSEBroker { return &fakeSSEBroker{syncs: map[int64]int{}} }
+func newFakeSSEBroker() *fakeSSEBroker {
+	return &fakeSSEBroker{notificationsChanged: map[int64]int{}}
+}
 
 func (f *fakeSSEBroker) PublishToUser(userID int64, eventType string, data map[string]any) {
 	f.events = append(f.events, sseEvent{userID: userID, eventType: eventType, data: data})
 }
 
-func (f *fakeSSEBroker) PublishSyncToUser(userID int64, unreadCount int) {
-	f.syncs[userID] = unreadCount
+func (f *fakeSSEBroker) PublishNotificationsChangedToUser(userID int64) {
+	f.notificationsChanged[userID]++
 }
 
 type fakeNotificationPublisher struct {
@@ -74,6 +78,10 @@ func (f *fakeNotificationPublisher) PublishBatch(_ context.Context, params []not
 		return f.err
 	}
 	f.batched = append(f.batched, params...)
+	return nil
+}
+
+func (f *fakeNotificationPublisher) PublishToAllActiveUsers(_ context.Context, _ notificationuc.BroadcastParams) error {
 	return nil
 }
 
@@ -126,12 +134,6 @@ func (f *fakeMarkAllAsReadByActor) Execute(_ context.Context, _ int64, _ string,
 	return nil
 }
 
-type fakeCountUnreadNotifications struct{ count int }
-
-func (f *fakeCountUnreadNotifications) Execute(_ context.Context, _ int64) (int, error) {
-	return f.count, nil
-}
-
 type publisherHarness struct {
 	pubsub      *fakePubSub
 	sse         *fakeSSEBroker
@@ -162,7 +164,6 @@ func newPublisherHarnessWith(runner chatEventAsyncRunner) *publisherHarness {
 		GetMessage:                     &fakeGetMessageByID{msg: &model.Message{ID: 99, UserID: 42}},
 		GetAnonymousIdentity:           &fakeGetAnonymousIdentity{},
 		MarkNotificationsAsReadByActor: &fakeMarkAllAsReadByActor{},
-		CountUnreadNotifications:       &fakeCountUnreadNotifications{count: 4},
 	})
 	return h
 }
@@ -474,7 +475,9 @@ func TestChatEventPublisher_MessageSent_SentAtDoesNotGoBackwards(t *testing.T) {
 	}
 }
 
-func TestChatEventPublisher_RoomMarkedAsRead_DMSyncsTheBell(t *testing.T) {
+// DM を既読にしたら、通知の既読化に続けて「通知の状態が変わった」を本人へ知らせること。
+// 数字（未読通知数）は載らない: 受け取った側が自分で取り直す。
+func TestChatEventPublisher_RoomMarkedAsRead_DMTellsTheReaderNotificationsChanged(t *testing.T) {
 	h := newPublisherHarness()
 	room := &model.Room{ID: 3, Type: model.RoomTypeDM}
 
@@ -488,8 +491,12 @@ func TestChatEventPublisher_RoomMarkedAsRead_DMSyncsTheBell(t *testing.T) {
 	if got := len(h.pubsub.published[roomGraphID+":read_status"]); got != 1 {
 		t.Errorf("read_status publishes = %d, want 1 so the partner sees the read receipt", got)
 	}
-	if got, ok := h.sse.syncs[10]; !ok || got != 4 {
-		t.Errorf("bell sync for the reader = %d (present=%v), want 4", got, ok)
+	if got := h.sse.notificationsChanged[10]; got != 1 {
+		t.Errorf("notifications_changed for the reader = %d, want 1", got)
+	}
+	// 相手（11）は自分の通知を触られていないので知らせない。
+	if got := h.sse.notificationsChanged[11]; got != 0 {
+		t.Errorf("notifications_changed for the partner = %d, want 0", got)
 	}
 }
 

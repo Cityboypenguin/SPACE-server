@@ -12,20 +12,19 @@ type PostRepository interface {
 	UpdatePost(ctx context.Context, post *model.Post) error
 	DeletePost(ctx context.Context, id int64) (bool, error)
 	DeletePostsByUserID(ctx context.Context, userID int64) error
-	RecalculateReplyCounts(ctx context.Context) error
 	RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error
 	GetPostByID(ctx context.Context, id int64) (*model.Post, error)
 	GetPostsByIDs(ctx context.Context, ids []int64) ([]*model.Post, error)
 	GetRootPost(ctx context.Context, id int64) (*model.Post, error)
 	GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error)
-	GetPostsByUserID(ctx context.Context, user_id int64, limit, offset int) ([]*model.Post, int, error)
+	GetPostsByUserID(ctx context.Context, user_id int64, q PageQuery) ([]*model.Post, int, error)
 	GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
 	GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
-	ListTopLevelPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
-	GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
-	GetFeedPosts(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error)
+	ListTopLevelPosts(ctx context.Context, q PageQuery) ([]*model.Post, int, error)
+	GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Post, int, error)
+	GetFeedPosts(ctx context.Context, viewerID int64, q PageQuery) ([]*model.Post, int, error)
 	CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error)
-	ListPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
+	ListPosts(ctx context.Context, q PageQuery) ([]*model.Post, int, error)
 	SearchPosts(ctx context.Context, keyword string) ([]*model.Post, error)
 	SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error)
 	CreatePostHashtags(ctx context.Context, postID int64, tags []string) error
@@ -39,5 +38,5 @@ type PostRepository interface {
 	// ListMentionsByPostIDs は投稿IDごとのメンション一覧を返す（DataLoader 用）。
 	ListMentionsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error)
 	GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error)
-	GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
+	GetFavoritePostsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Post, int, error)
 }

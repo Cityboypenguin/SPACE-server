@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -131,4 +132,49 @@ func (r *MySQLRoomAnonymousIdentityRepository) Get(ctx context.Context, roomID, 
 	}
 	identity.CreatedAt = time.Unix(createdAt, 0)
 	return &identity, nil
+}
+
+// GetByRoomUserKeys は Get の一括版。DataLoader から1クエリでまとめて呼ばれる。
+//
+// (room_id, user_id) の組で引くので、行コンストラクタ
+// `WHERE (room_id, user_id) IN ((?,?), ...)` を使う。unique (room_id, user_id) が
+// そのまま効くので、件数が増えても1回のインデックス走査で済む。
+//
+// 行が無い key は map に入れない（Get が nil, nil を返すのと同じ扱い）。
+// 呼び出し側はそれを「実名にフォールバックしてよい」と読んではいけない。
+// 授業ルームなら番号なしの「匿名」へ倒すこと（anonymousPlaceholderUser を参照）。
+func (r *MySQLRoomAnonymousIdentityRepository) GetByRoomUserKeys(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
+	result := make(map[repository.RoomUserKey]*model.RoomAnonymousIdentity, len(keys))
+	if len(keys) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("(?,?),", len(keys)), ",")
+	query := fmt.Sprintf(`
+		SELECT id, room_id, user_id, label, created_at
+		FROM room_anonymous_identities
+		WHERE (room_id, user_id) IN (%s)
+	`, placeholders)
+
+	args := make([]any, 0, len(keys)*2)
+	for _, k := range keys {
+		args = append(args, k.RoomID, k.UserID)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var identity model.RoomAnonymousIdentity
+		var createdAt int64
+		if err := rows.Scan(&identity.ID, &identity.RoomID, &identity.UserID, &identity.Label, &createdAt); err != nil {
+			return nil, err
+		}
+		identity.CreatedAt = time.Unix(createdAt, 0)
+		result[repository.RoomUserKey{RoomID: identity.RoomID, UserID: identity.UserID}] = &identity
+	}
+	return result, rows.Err()
 }

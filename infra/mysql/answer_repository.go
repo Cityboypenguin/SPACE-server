@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/messagecrypto"
@@ -209,4 +210,159 @@ func (r *MySQLAnswerRepository) scanAnswerWithLikes(row answerScanner) (*reposit
 		LikeCount: likeCount,
 		LikedByMe: myLikeCount.Valid && myLikeCount.Int64 > 0,
 	}, nil
+}
+
+// GetAnswersWithLikesByIDs は GetAnswerWithLikesByID の一括版。
+// DataLoader から1クエリでまとめて呼ばれる。
+//
+// 見つからなかった ID は map に入れない（単体版が nil, nil を返すのと同じ扱い）。
+func (r *MySQLAnswerRepository) GetAnswersWithLikesByIDs(ctx context.Context, ids []int64, viewerUserID int64) (map[int64]*repository.AnswerWithLikes, error) {
+	result := make(map[int64]*repository.AnswerWithLikes, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	query := fmt.Sprintf(`
+		SELECT a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at,
+		       COUNT(al.id) AS like_count,
+		       SUM(CASE WHEN al.user_id = ? THEN 1 ELSE 0 END) AS my_like_count
+		FROM answers a
+		LEFT JOIN answer_likes al ON al.answer_id = a.id
+		WHERE a.id IN (%s)
+		GROUP BY a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at
+	`, placeholders)
+
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, viewerUserID)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		aw, err := r.scanAnswerWithLikes(rows)
+		if err != nil {
+			return nil, err
+		}
+		if aw != nil {
+			result[aw.Answer.ID] = aw
+		}
+	}
+	return result, rows.Err()
+}
+
+// ListAnswerPagesByQuestionIDs は ListAnswersWithLikesByQuestionID +
+// CountAnswersByQuestionID の一括版。質問 N 件ぶんを 2 クエリで返す。
+//
+// 1ページぶんを質問ごとに切り出すのに ROW_NUMBER() を使う。LIMIT/OFFSET は
+// 結果全体にしか効かないので、質問ごとの「上位 limit 件」は窓関数でしか取れない。
+// OVER の ORDER BY は単体版の ORDER BY と一字一句同じにしてある（並びがずれると
+// 同じ引数なのに返る回答が変わる）。
+//
+// 回答が1件も無い質問も、空の *AnswerPage として map に入れる。Total を
+// 「行が無いからゼロ値」ではなく明示的に 0 として返したいため。
+func (r *MySQLAnswerRepository) ListAnswerPagesByQuestionIDs(ctx context.Context, questionIDs []int64, viewerUserID int64, q repository.PageQuery) (map[int64]*repository.AnswerPage, error) {
+	result := make(map[int64]*repository.AnswerPage, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result, nil
+	}
+	for _, qid := range questionIDs {
+		result[qid] = &repository.AnswerPage{}
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(questionIDs)), ",")
+	db := extractDB(ctx, r.DB)
+
+	pageQuery := fmt.Sprintf(`
+		SELECT t.id, t.question_id, t.author_user_id, t.author_role, t.body, t.created_at, t.updated_at,
+		       t.like_count, t.my_like_count
+		FROM (
+			SELECT a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at,
+			       COUNT(al.id) AS like_count,
+			       SUM(CASE WHEN al.user_id = ? THEN 1 ELSE 0 END) AS my_like_count,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY a.question_id
+			           ORDER BY COUNT(al.id) DESC, a.created_at ASC, a.id ASC
+			       ) AS rn
+			FROM answers a
+			LEFT JOIN answer_likes al ON al.answer_id = a.id
+			WHERE a.question_id IN (%s)
+			GROUP BY a.id, a.question_id, a.author_user_id, a.author_role, a.body, a.created_at, a.updated_at
+		) t
+		WHERE t.rn > ? AND t.rn <= ?
+		ORDER BY t.question_id ASC, t.rn ASC
+	`, placeholders)
+
+	pageArgs := make([]any, 0, len(questionIDs)+3)
+	pageArgs = append(pageArgs, viewerUserID)
+	for _, qid := range questionIDs {
+		pageArgs = append(pageArgs, qid)
+	}
+	pageArgs = append(pageArgs, q.Offset, q.Offset+q.Limit)
+
+	rows, err := db.QueryContext(ctx, pageQuery, pageArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		aw, err := r.scanAnswerWithLikes(rows)
+		if err != nil {
+			return nil, err
+		}
+		if aw == nil {
+			continue
+		}
+		page := result[aw.Answer.QuestionID]
+		if page == nil {
+			// IN で絞っているので通常は起きないが、取りこぼさないよう作る。
+			page = &repository.AnswerPage{}
+			result[aw.Answer.QuestionID] = page
+		}
+		page.Items = append(page.Items, aw)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// total は AnswerPage.Total（= GraphQL の AnswerPage.total）にしかならない。
+	// 選ばれていなければ、質問ごとの GROUP BY COUNT を丸ごと省く。
+	// countForPage を使わないのは、ここが1行ではなく質問ID→件数の複数行を返す
+	// COUNT だから。分岐の意味は同じ（PageQuery.WithTotal に従う）。
+	if !q.WithTotal {
+		return result, nil
+	}
+
+	countArgs := make([]any, len(questionIDs))
+	for i, qid := range questionIDs {
+		countArgs[i] = qid
+	}
+	countQuery := fmt.Sprintf(
+		`SELECT question_id, COUNT(*) FROM answers WHERE question_id IN (%s) GROUP BY question_id`,
+		placeholders,
+	)
+	countRows, err := db.QueryContext(ctx, countQuery, countArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer countRows.Close()
+
+	for countRows.Next() {
+		var questionID int64
+		var total int
+		if err := countRows.Scan(&questionID, &total); err != nil {
+			return nil, err
+		}
+		if page := result[questionID]; page != nil {
+			page.Total = total
+		}
+	}
+	return result, countRows.Err()
 }

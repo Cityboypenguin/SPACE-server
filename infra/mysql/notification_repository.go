@@ -73,11 +73,73 @@ func (r *MySQLNotificationRepository) SaveBatch(ctx context.Context, ns []*model
 	return nil
 }
 
-func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Notification, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM notifications WHERE user_id = ?`, userID,
-	).Scan(&total); err != nil {
+// announcementNotificationSelect は SaveForAllActiveUsers / ListByTargetForUsers が
+// 共有する列の並び。ScanNotification 側と食い違わないよう1箇所に置く。
+const notificationColumns = `id, user_id, type, actor_id, target_type, target_id, message, is_read, created_at`
+
+// insertNotificationForAllActiveUsersQuery は全アクティブ利用者ぶんの通知を1文で作る。
+//
+// 宛先の列挙（users）も行の生成も DB の中で完結するので、利用者数が何万でも
+// アプリ側のメモリと SQL 文の長さは一定。users.status の条件は、これを置き換えた
+// AnnouncementRepository.ListAllUserIDs と同じ 'active' のまま（宛先は変えない）。
+const insertNotificationForAllActiveUsersQuery = `
+	INSERT INTO notifications (user_id, type, actor_id, target_type, target_id, message, is_read, created_at)
+	SELECT u.id, ?, NULL, ?, ?, ?, FALSE, ?
+	FROM users u
+	WHERE u.status = 'active'`
+
+func (r *MySQLNotificationRepository) SaveForAllActiveUsers(ctx context.Context, p repository.BroadcastNotificationParam) (int64, error) {
+	result, err := r.DB.ExecContext(ctx, insertNotificationForAllActiveUsersQuery,
+		p.Type, p.TargetType, p.TargetID, p.Message, p.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func (r *MySQLNotificationRepository) ListByTargetForUsers(ctx context.Context, targetType string, targetID int64, userIDs []int64) ([]*model.Notification, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, 0, len(userIDs)+2)
+	args = append(args, targetType, targetID)
+	for _, id := range userIDs {
+		args = append(args, id)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT `+notificationColumns+`
+		FROM notifications
+		WHERE target_type = ? AND target_id = ? AND user_id IN (`+inPlaceholders(len(userIDs))+`)`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.Notification
+	for rows.Next() {
+		var n model.Notification
+		var createdAtUnix int64
+		if err := rows.Scan(
+			&n.ID, &n.UserID, &n.Type,
+			&n.ActorID, &n.TargetType, &n.TargetID,
+			&n.Message, &n.IsRead, &createdAtUnix,
+		); err != nil {
+			return nil, err
+		}
+		n.CreatedAt = time.Unix(createdAtUnix, 0)
+		list = append(list, &n)
+	}
+	return list, rows.Err()
+}
+
+func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Notification, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM notifications WHERE user_id = ?`, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -87,7 +149,7 @@ func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID i
 		WHERE user_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
-	`, userID, limit, offset)
+	`, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -137,8 +199,7 @@ func (r *MySQLNotificationRepository) GetByID(ctx context.Context, id int64, use
 // グループキー。クライアントに全件を送って集計させるのではなく、ここで集計してから返す。
 const notificationGroupKeyExpr = `CASE WHEN type = 'dm' AND actor_id IS NOT NULL THEN CONCAT('dm-', actor_id) ELSE CONCAT('single-', id) END`
 
-func (r *MySQLNotificationRepository) ListGroupedByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.NotificationGroup, int, error) {
-	var total int
+func (r *MySQLNotificationRepository) ListGroupedByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.NotificationGroup, int, error) {
 	countQuery := `
 		SELECT COUNT(*) FROM (
 			SELECT ` + notificationGroupKeyExpr + ` AS group_key
@@ -147,7 +208,8 @@ func (r *MySQLNotificationRepository) ListGroupedByUserID(ctx context.Context, u
 			GROUP BY group_key
 		) g
 	`
-	if err := r.DB.QueryRowContext(ctx, countQuery, userID).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -177,7 +239,7 @@ func (r *MySQLNotificationRepository) ListGroupedByUserID(ctx context.Context, u
 		ORDER BY a.latest_created_at DESC, r.id DESC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.DB.QueryContext(ctx, query, userID, limit, offset)
+	rows, err := r.DB.QueryContext(ctx, query, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -199,12 +261,10 @@ func (r *MySQLNotificationRepository) ListGroupedByUserID(ctx context.Context, u
 	return groups, total, rows.Err()
 }
 
-func (r *MySQLNotificationRepository) ListByActor(ctx context.Context, userID int64, notifType string, actorID int64, limit, offset int) ([]*model.Notification, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = ? AND actor_id = ?`,
-		userID, notifType, actorID,
-	).Scan(&total); err != nil {
+func (r *MySQLNotificationRepository) ListByActor(ctx context.Context, userID int64, notifType string, actorID int64, q repository.PageQuery) ([]*model.Notification, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = ? AND actor_id = ?`,
+		userID, notifType, actorID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -214,7 +274,7 @@ func (r *MySQLNotificationRepository) ListByActor(ctx context.Context, userID in
 		WHERE user_id = ? AND type = ? AND actor_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
-	`, userID, notifType, actorID, limit, offset)
+	`, userID, notifType, actorID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -20,12 +20,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
 	infracache "github.com/Cityboypenguin/SPACE-server/infra/cache"
-	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
@@ -42,6 +42,7 @@ import (
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
 	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
+	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
@@ -51,8 +52,10 @@ import (
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
+	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
@@ -214,7 +217,6 @@ func main() {
 	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
 	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
-	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
 	getFavoritesByPostIDsUseCase := favoriteusecase.NewGetFavoritesByPostIDsUseCase(favoriteRepository)
 
 	redisClient, err := infraredis.New()
@@ -234,8 +236,7 @@ func main() {
 	}
 
 	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
-	smtpEmailService := infraemail.NewSMTPEmailService()
-	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, mailer)
 	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
@@ -275,6 +276,8 @@ func main() {
 	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
+	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
+	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
 	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
@@ -345,6 +348,17 @@ func main() {
 	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
 	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
 	listPostMentionsUseCase := postusecase.NewListMentionsByPostIDsUseCase(postRepository)
+
+	// DataLoader からしか使わないバッチ取得の口。リゾルバは dataloader.For(ctx) 経由で
+	// 触るので Resolver には持たせない（単体取得と二重に持つと、片方だけ使う
+	// リゾルバが残って N+1 が戻る）。
+	getRoomsByIDsUseCase := roomusecase.NewGetRoomsByIDsUseCase(roomRepository)
+	getQuestionsByIDsUseCase := questionusecase.NewGetQuestionsByIDsUseCase(questionRepository)
+	getAnswersByIDsUseCase := answerusecase.NewGetAnswersByIDsUseCase(answerRepository)
+	listAnswerPagesByQuestionIDsUseCase := answerusecase.NewListAnswerPagesByQuestionIDsUseCase(answerRepository)
+	listPollOptionResultsByPollIDsUseCase := pollusecase.NewListPollOptionResultsByPollIDsUseCase(pollRepository)
+	countPollVotersByPollIDsUseCase := pollusecase.NewCountPollVotersByPollIDsUseCase(pollRepository)
+	getAnonymousIdentitiesUseCase := anonusecase.NewGetAnonymousIdentitiesUseCase(roomAnonymousIdentityRepository)
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
@@ -354,9 +368,22 @@ func main() {
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
 	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
 	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
+	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(termsRepository, sseBroker)
+
+	// リクエストの応答を待たせずに走らせる処理（チャット配信・お知らせ通知・活動記録）の
+	// 実行口。流儀は internal/async.Runner の1つだけに揃えてあり、component 名だけが違う。
+	// ここでまとめて作るのは、停止時に「全部待つ」を1箇所（asyncRunners）で書くため。
+	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
+	announcementAsyncRunner := async.NewRunner("announcement")
+	userActivityAsyncRunner := async.NewRunner("user_activity")
+	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner}
+
+	// 認証済みリクエストの活動記録。毎リクエスト DB へ書かないよう、ユーザーごとに
+	// 間引いてから Runner へ渡す（internal/middleware/user_activity.go 参照）。
+	userActivityRecorder := authmiddleware.NewUserActivityRecorder(userRepository, userActivityAsyncRunner)
 
 	announcementRepository := mysql.NewMySQLAnnouncementRepository(database)
-	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
+	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher, announcementAsyncRunner)
 	listAnnouncementsUseCase := announcementusecase.NewListAnnouncementsUseCase(announcementRepository)
 	getAnnouncementUseCase := announcementusecase.NewGetAnnouncementUseCase(announcementRepository)
 	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
@@ -382,7 +409,6 @@ func main() {
 	// リクエストの外へ出す。購読中の画面へ流す PubSub は順序が崩れるとチャット本体の
 	// 並びが壊れるので、アダプタの中で同期のまま残してある（どちらがどちらかは
 	// graph/chat_events.go と usecase/chat/async_events.go のコメント参照）。
-	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
 	chatEventPublisher := graph.NewChatEventPublisher(graph.ChatEventPublisherDeps{
 		PubSub:                         ps,
 		SSEBroker:                      sseBroker,
@@ -392,7 +418,6 @@ func main() {
 		GetMessage:                     getMessageByIDUseCase,
 		GetAnonymousIdentity:           getAnonymousIdentityUseCase,
 		MarkNotificationsAsReadByActor: markAllAsReadByActorUseCase,
-		CountUnreadNotifications:       countUnreadUseCase,
 	})
 
 	// 権限判定は1つだけ作り、送信・一覧・既読の各サービスで共有する
@@ -504,7 +529,6 @@ func main() {
 		GetFavoriteByUserIDAndPostIDUseCase:    getFavoriteByUserIDAndPostIDUseCase,
 		GetFavoritesByPostIDUseCase:            getFavoritesByPostIDUseCase,
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
-		ListFavoritesUseCase:                   listFavoritesUseCase,
 
 		ListMediaByPostIDUseCase:           listMediaByPostIDUseCase,
 		ReportMediaDimensionsUseCase:       reportMediaDimensionsUseCase,
@@ -518,6 +542,8 @@ func main() {
 			DeleteRoomUseCase:               deleteRoomUseCase,
 			GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
 			ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
+			CountUsersByRoomIDsUseCase:      countUsersByRoomIDsUseCase,
+			ListJoinedRoomIDsUseCase:        listJoinedRoomIDsUseCase,
 			ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
 			GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
 			AddUserToRoomUseCase:            addUserToRoomUseCase,
@@ -569,12 +595,13 @@ func main() {
 		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
 		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
 
-		CreateTermsUseCase:     createTermsUseCase,
-		GetCurrentTermsUseCase: getCurrentTermsUseCase,
-		ConsentToTermsUseCase:  consentToTermsUseCase,
-		CheckConsentUseCase:    checkConsentUseCase,
-		ListTermsUseCase:       listTermsUseCase,
-		ListConsentsUseCase:    listConsentsUseCase,
+		CreateTermsUseCase:      createTermsUseCase,
+		TermsBroadcastScheduler: termsBroadcastScheduler,
+		GetCurrentTermsUseCase:  getCurrentTermsUseCase,
+		ConsentToTermsUseCase:   consentToTermsUseCase,
+		CheckConsentUseCase:     checkConsentUseCase,
+		ListTermsUseCase:        listTermsUseCase,
+		ListConsentsUseCase:     listConsentsUseCase,
 
 		NotificationUseCases: graph.NotificationUseCases{
 			NotificationPublisher:                 notificationPublisher,
@@ -627,24 +654,35 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.MetricsMiddleware())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository, userActivityRecorder))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
-	e.Use(echo.WrapMiddleware(dataloader.Middleware(
-		getUsersByIDsUseCase,
-		listMediaByPostIDsUseCase,
-		listMediaByMessageIDsUseCase,
-		listMediaByQuestionIDsUseCase,
-		listMediaByAnswerIDsUseCase,
-		getRepliesByPostIDsUseCase,
-		getRepliesByPostIDsIncludeDeletedUseCase,
-		getFavoritesByPostIDsUseCase,
-		getMessagesByIDsUseCase,
-		listPostMentionsUseCase,
-		listMessageMentionsUseCase,
-	)))
+	// DataLoader はリクエストごとに作り直す（キャッシュがリクエスト内でだけ正しいため）。
+	// 渡す口は名前付きフィールドで指定する。同じ形のインターフェースが並ぶので、
+	// 位置引数だと取り違えてもコンパイルが通ってしまう。
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(dataloader.UseCases{
+		GetUsersByIDs:                  getUsersByIDsUseCase,
+		GetPostsByIDs:                  getPostsByIDsUseCase,
+		ListMediaByPostIDs:             listMediaByPostIDsUseCase,
+		ListMediaByMessageIDs:          listMediaByMessageIDsUseCase,
+		ListMediaByQuestionIDs:         listMediaByQuestionIDsUseCase,
+		ListMediaByAnswerIDs:           listMediaByAnswerIDsUseCase,
+		GetRepliesByPostIDs:            getRepliesByPostIDsUseCase,
+		GetRepliesByPostIDsIncludeDel:  getRepliesByPostIDsIncludeDeletedUseCase,
+		GetFavoritesByPostIDs:          getFavoritesByPostIDsUseCase,
+		GetMessagesByIDs:               getMessagesByIDsUseCase,
+		ListMentionsByPostIDs:          listPostMentionsUseCase,
+		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
+		GetRoomsByIDs:                  getRoomsByIDsUseCase,
+		GetQuestionsByIDs:              getQuestionsByIDsUseCase,
+		GetAnswersByIDs:                getAnswersByIDsUseCase,
+		ListAnswerPagesByQuestionIDs:   listAnswerPagesByQuestionIDsUseCase,
+		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
+		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
+		GetAnonymousIdentities:         getAnonymousIdentitiesUseCase,
+	})))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -748,9 +786,9 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository, passwordResetRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, revokedTokenRepository, userRepository, passwordResetRepository))
 
-	schedulePendingTerms(termsRepository, sseBroker)
+	termsBroadcastScheduler.SchedulePending(context.Background())
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -771,11 +809,16 @@ func main() {
 		logger.Log.Error().Err(err).Msg("server shutdown error")
 	}
 
-	// 走っているチャット配信を、DB 接続を閉じる前に片付ける。ここで待たないと
-	// 処理中の通知の保存や宛先の取得が「閉じた DB」に当たって全部失敗する。
-	// 待ちきれなかったぶんは諦める（配信はベストエフォート。chat.EventPublisher 参照）。
-	if err := chatEventAsyncRunner.Wait(shutdownCtx); err != nil {
-		logger.Log.Error().Err(err).Msg("chat event publisher did not drain before shutdown")
+	// リクエストの外で走っている処理（チャット配信・お知らせ通知・活動記録）を、
+	// DB 接続を閉じる前に片付ける。ここで待たないと、処理中の書き込みが
+	// 「閉じた DB」に当たって全部失敗する。待ちきれなかったぶんは諦める
+	// （どれもベストエフォート。chat.EventPublisher 参照）。
+	for _, runner := range asyncRunners {
+		if err := runner.Wait(shutdownCtx); err != nil {
+			logger.Log.Error().Err(err).Msg("async tasks did not drain before shutdown")
+			// 1つ待ちきれなければ残りも待ちきれない（同じ shutdownCtx のため）。
+			break
+		}
 	}
 
 	if err := database.Close(); err != nil {
@@ -786,25 +829,6 @@ func main() {
 	}
 
 	logger.Log.Info().Msg("server stopped")
-}
-
-// schedulePendingTerms fetches all future-dated terms on startup and sets a one-shot
-// timer for each so the SSE broadcast fires exactly when each version becomes effective.
-func schedulePendingTerms(termsRepo repository.TermsRepository, broker *sse.Broker) {
-	pending, err := termsRepo.FindFuture(context.Background())
-	if err != nil {
-		logger.Log.Error().Err(err).Msg("failed to fetch pending future terms on startup")
-		return
-	}
-	for _, t := range pending {
-		version := t.Version
-		delay := time.Until(t.EffectiveDate)
-		time.AfterFunc(delay, func() {
-			broker.Broadcast("terms_updated", map[string]any{"version": version})
-			logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
-		})
-		logger.Log.Info().Str("version", version).Dur("delay", delay).Msg("scheduled terms broadcast timer set")
-	}
 }
 
 // errorCodeFor maps a resolver error to a stable machine-readable code exposed

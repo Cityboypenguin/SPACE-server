@@ -18,32 +18,6 @@ func NewMySQLFavoriteRepository(db *sql.DB) *MySQLFavoriteRepository {
 	return &MySQLFavoriteRepository{DB: db}
 }
 
-func (r *MySQLFavoriteRepository) ListFavorites(ctx context.Context) ([]*model.Favorite, error) {
-	query := `SELECT id, post_id, user_id, created_at FROM favorites`
-	rows, err := r.DB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var favorites []*model.Favorite
-	for rows.Next() {
-		var favorite model.Favorite
-		var createdAtUnix int64
-		if err := rows.Scan(&favorite.ID, &favorite.PostID, &favorite.UserID, &createdAtUnix); err != nil {
-			return nil, err
-		}
-		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
-		favorites = append(favorites, &favorite)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return favorites, nil
-}
-
 func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64) (*model.Favorite, error) {
 	query := `SELECT id, post_id, user_id, created_at FROM favorites WHERE id = ?`
 	row := r.DB.QueryRowContext(ctx, query, id)
@@ -71,7 +45,10 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, f *model.F
 		f.CreatedAt.Unix(),
 	)
 	if err != nil {
-		return 0, err
+		// favorites には UNIQUE KEY unique_user_post (user_id, post_id) があるので、
+		// 二重登録はここで 1062 として返る。呼び出し側が事前 SELECT せずに済むよう
+		// repository.ErrDuplicateKey に包んで返す。
+		return 0, wrapDuplicateKey(err)
 	}
 
 	id, err := result.LastInsertId()

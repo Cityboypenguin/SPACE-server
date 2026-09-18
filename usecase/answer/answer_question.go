@@ -96,12 +96,13 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 		if err := uc.answerRepo.SaveAnswer(ctx, a); err != nil {
 			return err
 		}
-		for i, input := range mediaInputs {
-			media := model.NewMedia(claims.ID, input, now)
-			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
+		// 添付はまとめて保存する（media 行を1本、紐付けを1本）。以前は入力1件ごとに
+		// 2往復していたので、4枚付けると8往復していた。
+		if medias := model.NewMediaBatch(claims.ID, mediaInputs, now); len(medias) > 0 {
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
 				return err
 			}
-			if err := uc.mediaRepo.CreateAnswerMedia(ctx, a.ID, media.ID, i); err != nil {
+			if err := uc.mediaRepo.CreateAnswerMediaBatch(ctx, a.ID, model.MediaIDs(medias), 0); err != nil {
 				return err
 			}
 		}

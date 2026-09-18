@@ -9,7 +9,7 @@ import (
 )
 
 type SearchUsersUseCase interface {
-	Execute(ctx context.Context, keyword string, limit, offset int) ([]*model.User, int, error)
+	Execute(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.User, int, error)
 }
 
 var _ SearchUsersUseCase = &SearchUsersInteractor{}
@@ -24,12 +24,12 @@ func NewSearchUsersUseCase(userRepo repository.UserRepository) SearchUsersUseCas
 	}
 }
 
-func (uc *SearchUsersInteractor) Execute(ctx context.Context, keyword string, limit, offset int) ([]*model.User, int, error) {
+func (uc *SearchUsersInteractor) Execute(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.User, int, error) {
 	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, 0, err
 	}
 
-	users, total, err := uc.userRepo.SearchUsersByKeyword(ctx, keyword, limit, offset)
+	users, total, err := uc.userRepo.SearchUsersByKeyword(ctx, keyword, q)
 	if err != nil {
 		return nil, 0, err
 	}

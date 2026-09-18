@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLBlockRepository struct {
@@ -29,7 +30,9 @@ func (r *MySQLBlockRepository) CreateBlocker(ctx context.Context, block *model.B
 		block.CreatedAt.Unix(),
 	)
 	if err != nil {
-		return 0, err
+		// blocks の一意制約違反（同じ相手を二重にブロック）は
+		// repository.ErrDuplicateKey に包んで返す（favorites と同じ扱い）。
+		return 0, wrapDuplicateKey(err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
@@ -55,17 +58,15 @@ func (r *MySQLBlockRepository) DeleteBlocker(ctx context.Context, userID int64, 
 	return affected > 0, nil
 }
 
-func (r *MySQLBlockRepository) ListBlockers(ctx context.Context, userID int64, limit, offset int) ([]*model.Blocker, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM blocks WHERE user_id = ?`, userID,
-	).Scan(&total); err != nil {
+func (r *MySQLBlockRepository) ListBlockers(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM blocks WHERE user_id = ?`, userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		userID, limit, offset,
+		userID, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err

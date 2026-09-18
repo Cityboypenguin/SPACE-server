@@ -26,7 +26,9 @@ func NewUpdateUserUseCase(userRepo repository.UserRepository) UpdateUserUseCase 
 }
 
 func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.User, error) {
-	user, err := uc.userRepo.GetUserByID(ctx, id)
+	// このユースケースはパスワードを変えられる（param.Password）ので、
+	// 現在パスワードの照合と保存の両方でハッシュが要る。
+	user, err := uc.userRepo.GetCredentialsByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -48,10 +50,12 @@ func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param mod
 		return nil, err
 	}
 
-	err = uc.userRepo.SaveUser(ctx, user)
+	err = uc.userRepo.SaveCredentials(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	// 返すのは公開情報だけ（リゾルバは toGraphUser に渡すだけ）。
+	publicUser := user.User
+	return &publicUser, nil
 }

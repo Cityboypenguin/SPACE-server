@@ -17,7 +17,6 @@ import (
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
-	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -30,8 +29,10 @@ import (
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
+	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	"github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	"github.com/Cityboypenguin/SPACE-server/usecase/report"
+	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
 	"github.com/google/uuid"
@@ -47,9 +48,13 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 	// 回答は質問を経由しないとルームが分からないので、匿名表示の判定に質問を引く。
 	// 引けないと授業ルームでも実名で出てしまうため、失敗は必ず残す
 	// （ID のデコード失敗は audit.LogProbe が既に記録している）。
+	//
+	// 質問は DataLoader 経由。1つの質問にぶら下がる回答は全て同じ質問を指すので、
+	// 新しいクエリが増えるのではなくリクエスト内キャッシュで1回に畳まれる
+	// （回答一覧 N 件で N クエリ → 1クエリ）。
 	qid, err := decodeGraphID(ctx, "question", obj.QuestionID)
 	if err == nil {
-		q, err := r.GetQuestionByIDUseCase.Execute(ctx, qid)
+		q, err := dataloader.For(ctx).QuestionLoader.Load(ctx, qid)
 		if err != nil {
 			logChatLookup(err, chatLookupQuestionRoom).
 				Int64("question_id", qid).
@@ -98,7 +103,9 @@ func (r *favoriteResolver) User(ctx context.Context, obj *gqlmodel.Favorite) (*g
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
-	user, err := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
+	// いいね一覧は同じ投稿・同じ人が何度も並ぶので DataLoader 経由で引く
+	//（いいね N 件で N クエリ → 1クエリ）。単体取得と同じく、居なければ nil。
+	user, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +119,10 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 		return nil, fmt.Errorf("invalid post id: %s", obj.Post.ID)
 	}
 
-	post, err := r.GetPostByIDUseCase.Execute(ctx, numericPostID)
+	// user フィールドと同じ理由で DataLoader 経由（いいね N 件で N クエリ → 1クエリ）。
+	// PostLoader の裏は GetPostsByIDs で、削除済み・ブロック相手の投稿が
+	// 落ちるところまで単体の GetPostByID と同じ。
+	post, err := dataloader.For(ctx).PostLoader.Load(ctx, numericPostID)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +139,10 @@ func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gql
 	if err != nil {
 		return nil, nil
 	}
-	rm, err := r.GetRoomUseCase.Execute(ctx, numericID)
+	// チャット履歴は同じルームのメッセージが並ぶので DataLoader 経由で引く
+	//（メッセージ N 件で N クエリ → 1クエリ、かつ同一ルームならキャッシュで1回）。
+	// 引けなくても従来どおり nil を返して画面は出す。
+	rm, err := dataloader.For(ctx).RoomLoader.Load(ctx, numericID)
 	if err != nil || rm == nil {
 		return nil, nil
 	}
@@ -698,36 +711,39 @@ func (r *mutationResolver) GetOrCreateDMRoom(ctx context.Context, targetUserID s
 		return nil, fmt.Errorf("invalid target user id")
 	}
 
+	// 双方のメンバー登録は GetOrCreateDMRoomUseCase（= RoomUserRepository.FindOrCreateDMRoom）
+	// が SERIALIZABLE トランザクション内で担保している。既存ルームは「両者の room_users が
+	// 揃っている」ことを JOIN 条件にして探し、無ければ rooms と2件の room_users を同じ
+	// トランザクションで作る。したがってここで AddUserToRoom を撃ち直す必要はない。
 	room, err := r.GetOrCreateDMRoomUseCase.Execute(ctx, claims.ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	// 既存DMを返すケースでも、双方が必ずメンバーに含まれるように補強する。
-	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, claims.ID); err != nil {
-		return nil, err
-	}
-	if err := r.AddUserToRoomUseCase.Execute(ctx, room.ID, tid); err != nil {
-		return nil, err
-	}
-
-	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{room.ID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to load room members")
-	}
-
-	members := make([]*gqlmodel.User, 0)
-	for _, u := range usersByRoomID[room.ID] {
-		members = append(members, toGraphUser(u))
-	}
-
 	gqlRoom := toGraphRoom(room)
-	gqlRoom.User = members
-	isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, tid)
-	if err != nil {
-		gqlRoom.IsMessagingDisabled = false
-	} else {
-		gqlRoom.IsMessagingDisabled = isBlocked
+
+	// room クエリと同じで、メンバー一覧とブロック判定は選ばれたときだけ引く。
+	// ここは DM を作る（または見つける）ミューテーションなので、相手は引数から
+	// 決まっており、メンバー一覧はブロック判定には要らない。
+	if fieldRequested(ctx, "user") {
+		usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{room.ID})
+		if err != nil {
+			return nil, fmt.Errorf("failed to load room members")
+		}
+		members := make([]*gqlmodel.User, 0)
+		for _, u := range usersByRoomID[room.ID] {
+			members = append(members, toGraphUser(u))
+		}
+		gqlRoom.User = members
+	}
+
+	if fieldRequested(ctx, "isMessagingDisabled") {
+		isBlocked, err := r.CheckBlockRelationUseCase.Execute(ctx, claims.ID, tid)
+		if err != nil {
+			gqlRoom.IsMessagingDisabled = false
+		} else {
+			gqlRoom.IsMessagingDisabled = isBlocked
+		}
 	}
 
 	return gqlRoom, nil
@@ -881,8 +897,18 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 	if err != nil {
 		return nil, err
 	}
+	if c == nil {
+		// 以前は toGraphCommunityWithMembership が nil を受けて (nil, nil) を
+		// 返していた。集計を先に引く形にしたので、ここで同じところへ倒す。
+		return nil, nil
+	}
 
-	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+	membership, err := r.loadCommunityMembership(ctx, []int64{c.RoomID}, &claims.ID,
+		fieldRequested(ctx, "memberCount"), fieldRequested(ctx, "isMember"))
+	if err != nil {
+		return nil, err
+	}
+	return r.toGraphCommunityWith(c, membership), nil
 }
 
 // RegisterTimetableEntry is the resolver for the registerTimetableEntry field.
@@ -1526,7 +1552,12 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, err
 	}
 
-	return r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
+	membership, err := r.loadCommunityMembership(ctx, []int64{c.RoomID}, &claims.ID,
+		fieldRequested(ctx, "memberCount"), fieldRequested(ctx, "isMember"))
+	if err != nil {
+		return nil, err
+	}
+	return r.toGraphCommunityWith(c, membership), nil
 }
 
 // KickUserFromCommunity is the resolver for the kickUserFromCommunity field.
@@ -2114,9 +2145,9 @@ func (r *mutationResolver) MarkNotificationAsRead(ctx context.Context, id string
 	if err := r.MarkAsReadUseCase.Execute(ctx, numericID, claims.ID); err != nil {
 		return false, err
 	}
-	if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
-		r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
-	}
+	// 数は配らず「変わった」ことだけを知らせる。受け取った他のタブ・他の端末が
+	// 自分で未読数を取り直す（sse.EventNotificationsChanged のコメント参照）。
+	r.SSEBroker.PublishNotificationsChangedToUser(claims.ID)
 	return true, nil
 }
 
@@ -2129,7 +2160,7 @@ func (r *mutationResolver) MarkAllNotificationsAsRead(ctx context.Context) (bool
 	if err := r.MarkAllAsReadUseCase.Execute(ctx, claims.ID); err != nil {
 		return false, err
 	}
-	r.SSEBroker.PublishSyncToUser(claims.ID, 0)
+	r.SSEBroker.PublishNotificationsChangedToUser(claims.ID)
 	return true, nil
 }
 
@@ -2146,9 +2177,7 @@ func (r *mutationResolver) MarkAllNotificationsAsReadByActor(ctx context.Context
 	if err := r.MarkAllAsReadByActorUseCase.Execute(ctx, claims.ID, typeArg, numericActorID); err != nil {
 		return false, err
 	}
-	if count, err := r.CountUnreadUseCase.Execute(ctx, claims.ID); err == nil {
-		r.SSEBroker.PublishSyncToUser(claims.ID, int(count))
-	}
+	r.SSEBroker.PublishNotificationsChangedToUser(claims.ID)
 	return true, nil
 }
 
@@ -2305,7 +2334,7 @@ func (r *mutationResolver) CreateTermsOfService(ctx context.Context, input gqlmo
 		return nil, err
 	}
 
-	scheduleTermsBroadcast(r.SSEBroker, t.Version, t.EffectiveDate)
+	r.TermsBroadcastScheduler.Schedule(t.Version, t.EffectiveDate)
 
 	return toGraphTerms(t, r.StorageRepository.PublicURL(t.ObjectKey)), nil
 }
@@ -2475,7 +2504,10 @@ func (r *pollResolver) Options(ctx context.Context, obj *gqlmodel.Poll) ([]*gqlm
 		return nil, fmt.Errorf("invalid poll id")
 	}
 
-	results, err := r.ListPollOptionResultsUseCase.Execute(ctx, pid)
+	// 投票一覧では投票ごとにこのフィールドが呼ばれるので DataLoader 経由で引く
+	//（投票 N 件で N クエリ → 1クエリ）。選択肢が無い投票は nil スライスが返り、
+	// 単体取得のときと同じ「空配列」になる。
+	results, err := dataloader.For(ctx).PollOptionLoader.Load(ctx, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -2494,7 +2526,10 @@ func (r *pollResolver) VoterCount(ctx context.Context, obj *gqlmodel.Poll) (int3
 		return 0, fmt.Errorf("invalid poll id")
 	}
 
-	count, err := r.CountPollVotersUseCase.Execute(ctx, pid)
+	// options と同じ理由で DataLoader 経由（投票 N 件で N クエリ → 1クエリ）。
+	// 誰も投票していない投票はバッチの map に現れないが、int のゼロ値が
+	// そのまま正しい「0人」になる。
+	count, err := dataloader.For(ctx).PollVoterCountLoader.Load(ctx, pid)
 	if err != nil {
 		return 0, err
 	}
@@ -2571,7 +2606,9 @@ func (r *postResolver) Parent(ctx context.Context, obj *gqlmodel.Post) (*gqlmode
 		return nil, fmt.Errorf("invalid parent post id")
 	}
 
-	parent, err := r.GetPostByIDUseCase.Execute(ctx, numericParentID)
+	// 返信が並ぶ画面では投稿ごとにこのフィールドが呼ばれるので DataLoader 経由で引く
+	//（投稿 N 件で N クエリ → 1クエリ。同じ親を指す返信が並べばキャッシュで更に減る）。
+	parent, err := dataloader.For(ctx).PostLoader.Load(ctx, numericParentID)
 	if err != nil {
 		return nil, err
 	}
@@ -2667,8 +2704,7 @@ func (r *queryResolver) Users(ctx context.Context, limit *int32, offset *int32) 
 		return nil, err
 	}
 
-	l, o := resolvePagination(limit, offset)
-	users, total, err := r.ListUsersUseCase.Execute(ctx, l, o)
+	users, total, err := r.ListUsersUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -2744,8 +2780,7 @@ func (r *queryResolver) SearchUsers(ctx context.Context, keyword string, limit *
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	users, total, err := r.SearchUsersUseCase.Execute(ctx, keyword, l, o)
+	users, total, err := r.SearchUsersUseCase.Execute(ctx, keyword, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -2762,7 +2797,7 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offse
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
+	pq := resolvePageQuery(ctx, limit, offset, defaultPageSize)
 
 	var notifications []*model.Notification
 	var total int
@@ -2775,44 +2810,33 @@ func (r *queryResolver) MyNotifications(ctx context.Context, limit *int32, offse
 		if typeArg != nil {
 			notifType = *typeArg
 		}
-		notifications, total, err = r.ListNotificationsByActorUseCase.Execute(ctx, claims.ID, notifType, numericActorID, l, o)
+		notifications, total, err = r.ListNotificationsByActorUseCase.Execute(ctx, claims.ID, notifType, numericActorID, pq)
 	} else {
-		notifications, total, err = r.ListNotificationsUseCase.Execute(ctx, claims.ID, l, o)
+		notifications, total, err = r.ListNotificationsUseCase.Execute(ctx, claims.ID, pq)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	// unique actor IDs を収集してバッチフェッチ (N+1 防止)
-	seen := map[int64]struct{}{}
-	var actorIDs []int64
+	// actor と対象 Post は、選ばれたときだけまとめて引く（N+1 は避けたまま、
+	// 要求されていない一括取得は撃たない）。判定は共通の fieldRequested。
+	actorIDs := make([]*int64, 0, len(notifications))
 	for _, n := range notifications {
-		if n.ActorID != nil {
-			if _, ok := seen[*n.ActorID]; !ok {
-				seen[*n.ActorID] = struct{}{}
-				actorIDs = append(actorIDs, *n.ActorID)
-			}
-		}
+		actorIDs = append(actorIDs, n.ActorID)
 	}
-	actorMap := map[int64]*model.User{}
-	if len(actorIDs) > 0 {
-		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
-		if aerr != nil {
-			return nil, aerr
-		}
-		for _, u := range actors {
-			actorMap[u.ID] = u
-		}
-	}
-
-	postMap, err := r.buildPostMapFromNotifications(ctx, notifications)
+	hydration, err := r.hydrateNotifications(ctx,
+		uniqueInt64(actorIDs),
+		postTargetIDs(notifications),
+		fieldRequested(ctx, "items", "actor"),
+		fieldRequested(ctx, "items", "targetPost"),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]*gqlmodel.Notification, 0, len(notifications))
 	for _, n := range notifications {
-		items = append(items, toGraphNotification(n, actorMap, postMap))
+		items = append(items, toGraphNotification(n, hydration))
 	}
 	return &gqlmodel.NotificationPage{Items: items, Total: int32(total)}, nil
 }
@@ -2823,41 +2847,29 @@ func (r *queryResolver) MyNotificationGroups(ctx context.Context, limit *int32, 
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	groups, total, err := r.ListNotificationGroupsUseCase.Execute(ctx, claims.ID, l, o)
+	groups, total, err := r.ListNotificationGroupsUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
 
-	seen := map[int64]struct{}{}
-	var actorIDs []int64
+	// 通知一覧（MyNotifications）と同じ扱い。
+	actorIDs := make([]*int64, 0, len(groups))
 	for _, g := range groups {
-		if g.ActorID != nil {
-			if _, ok := seen[*g.ActorID]; !ok {
-				seen[*g.ActorID] = struct{}{}
-				actorIDs = append(actorIDs, *g.ActorID)
-			}
-		}
+		actorIDs = append(actorIDs, g.ActorID)
 	}
-	actorMap := map[int64]*model.User{}
-	if len(actorIDs) > 0 {
-		actors, aerr := r.GetUsersByIDsUseCase.Execute(ctx, actorIDs)
-		if aerr != nil {
-			return nil, aerr
-		}
-		for _, u := range actors {
-			actorMap[u.ID] = u
-		}
-	}
-
-	postMap, err := r.buildPostMapFromNotificationGroups(ctx, groups)
+	hydration, err := r.hydrateNotifications(ctx,
+		uniqueInt64(actorIDs),
+		groupPostTargetIDs(groups),
+		fieldRequested(ctx, "items", "actor"),
+		fieldRequested(ctx, "items", "targetPost"),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]*gqlmodel.NotificationGroup, 0, len(groups))
 	for _, g := range groups {
-		items = append(items, toGraphNotificationGroup(g, actorMap, postMap))
+		items = append(items, toGraphNotificationGroup(g, hydration))
 	}
 	return &gqlmodel.NotificationGroupPage{Items: items, Total: int32(total)}, nil
 }
@@ -2879,21 +2891,20 @@ func (r *queryResolver) Notification(ctx context.Context, id string) (*gqlmodel.
 	if n == nil {
 		return nil, nil
 	}
-	actorMap := map[int64]*model.User{}
-	if n.ActorID != nil {
-		actor, aerr := r.GetUserByIDUseCase.Execute(ctx, *n.ActorID)
-		if aerr != nil {
-			return nil, aerr
-		}
-		if actor != nil {
-			actorMap[actor.ID] = actor
-		}
-	}
-	postMap, err := r.buildPostMapFromNotifications(ctx, []*model.Notification{n})
+	// 一覧と同じく、actor と対象 Post は選ばれたときだけ引く。単体なので
+	// GetUsersByIDs に1件渡す形になるが、判定と経路を一覧と揃えておくほうが
+	// 「ここだけ常に引いている」という取りこぼしが起きにくい。
+	notifications := []*model.Notification{n}
+	hydration, err := r.hydrateNotifications(ctx,
+		uniqueInt64([]*int64{n.ActorID}),
+		postTargetIDs(notifications),
+		fieldRequested(ctx, "actor"),
+		fieldRequested(ctx, "targetPost"),
+	)
 	if err != nil {
 		return nil, err
 	}
-	return toGraphNotification(n, actorMap, postMap), nil
+	return toGraphNotification(n, hydration), nil
 }
 
 // MyUnreadNotificationCount is the resolver for the myUnreadNotificationCount field.
@@ -2941,8 +2952,7 @@ func (r *queryResolver) Administrators(ctx context.Context, limit *int32, offset
 		return nil, err
 	}
 
-	l, o := resolvePagination(limit, offset)
-	admins, total, err := r.ListAdministratorsUseCase.Execute(ctx, l, o)
+	admins, total, err := r.ListAdministratorsUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -2996,8 +3006,7 @@ func (r *queryResolver) Posts(ctx context.Context, limit *int32, offset *int32) 
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.ListPostsUseCase.Execute(ctx, l, o)
+	posts, total, err := r.ListPostsUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3015,8 +3024,7 @@ func (r *queryResolver) TopLevelPosts(ctx context.Context, limit *int32, offset 
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.GetFeedPostsUseCase.Execute(ctx, claims.ID, l, o)
+	posts, total, err := r.GetFeedPostsUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3038,8 +3046,7 @@ func (r *queryResolver) FollowersTopLevelPosts(ctx context.Context, userID strin
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id")
 	}
-	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.GetFollowersTopLevelPostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
+	posts, total, err := r.GetFollowersTopLevelPostsByUserIDUseCase.Execute(ctx, numericUserID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3141,8 +3148,7 @@ func (r *queryResolver) GetPostsByUserID(ctx context.Context, userID string, lim
 		return nil, fmt.Errorf("invalid user id")
 	}
 
-	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
+	posts, total, err := r.GetPostsByUserIDUseCase.Execute(ctx, numericUserID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3185,8 +3191,7 @@ func (r *queryResolver) GetFavoritePostsByUserID(ctx context.Context, userID str
 		return nil, fmt.Errorf("invalid user id")
 	}
 
-	l, o := resolvePagination(limit, offset)
-	posts, total, err := r.GetFavoritePostsByUserIDUseCase.Execute(ctx, numericUserID, l, o)
+	posts, total, err := r.GetFavoritePostsByUserIDUseCase.Execute(ctx, numericUserID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3238,7 +3243,10 @@ func (r *queryResolver) PopularHashtags(ctx context.Context) (*gqlmodel.HashtagS
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	items, total, err := r.PopularHashtagsUseCase.Execute(ctx)
+	// この一覧だけは窓をクライアントから受け取らない（常にユースケース側の
+	// PopularHashtagsCap 件）ので、resolvePageQuery ではなく WithTotal だけを
+	// 載せた PageQuery を渡す。判定に使う関数は他と同じ fieldRequested 1本。
+	items, total, err := r.PopularHashtagsUseCase.Execute(ctx, repository.PageQuery{WithTotal: fieldRequested(ctx, "total")})
 	if err != nil {
 		return nil, err
 	}
@@ -3253,6 +3261,8 @@ func (r *queryResolver) SuggestHashtags(ctx context.Context, prefix string, limi
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+	// 既定値・上限はユースケース側（defaultSuggestLimit / maxSuggestLimit）が持つ。
+	// 0 以下はそこで既定値に丸められるので、ここでは素通しでよい。
 	l := 0
 	if limit != nil {
 		l = int(*limit)
@@ -3271,7 +3281,9 @@ func (r *queryResolver) SuggestUsers(ctx context.Context, prefix string, limit *
 		return nil, err
 	}
 
-	l := 8
+	// 既定値・上限はユースケース側（defaultSuggestUsersLimit / maxSuggestUsersLimit）が
+	// 持つ。0 以下はそこで既定値に丸められるので、ここでは素通しでよい。
+	l := 0
 	if limit != nil {
 		l = int(*limit)
 	}
@@ -3345,30 +3357,6 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string) ([
 		candidates = append(candidates, toGraphUser(u))
 	}
 	return candidates, nil
-}
-
-// Favorites is the resolver for the favorites field.
-func (r *queryResolver) Favorites(ctx context.Context) ([]*gqlmodel.Favorite, error) {
-	//使ってないけど一応認証は必要にしておく
-	_, err := requireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-	favorites, err := r.ListFavoritesUseCase.Execute(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var gqlFavorites []*gqlmodel.Favorite
-	for _, f := range favorites {
-		gqlFavorites = append(gqlFavorites, &gqlmodel.Favorite{
-			ID:        encodeGraphID("favorite", f.ID),
-			CreatedAt: f.CreatedAt.Format(timeFormat),
-			User:      &gqlmodel.User{ID: encodeGraphID("user", f.UserID)},
-			Post:      &gqlmodel.Post{ID: encodeGraphID("post", f.PostID)},
-		})
-	}
-	return gqlFavorites, nil
 }
 
 // GetFavoriteByID is the resolver for the getFavoriteByID field.
@@ -3445,13 +3433,9 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	l := 50
-	if limit != nil && *limit > 0 {
-		l = int(*limit)
-		if l > 200 {
-			l = 200
-		}
-	}
+	// チャットは1画面に載る件数が一覧系より多いので、ここだけ上限が maxPageSize
+	// ではなく maxMessagePageSize。クランプそのものは resolveLimit に揃える。
+	l := resolveLimit(limit, 50, maxMessagePageSize)
 	var beforeID *int64
 	if before != nil {
 		id, err := decodeGraphID(ctx, "message", *before)
@@ -3529,25 +3513,40 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		return nil, err
 	}
 
-	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
-	if err != nil {
-		return nil, fmt.Errorf("failed to load room members")
-	}
-
-	users := usersByRoomID[rid]
-	members := make([]*gqlmodel.User, 0, len(users))
-	for _, u := range users {
-		members = append(members, toGraphUser(u))
-	}
-
 	gqlRoom := toGraphRoom(room)
-	gqlRoom.User = members
+
+	// ここから下は「要求されたときだけ引く」付帯情報。閲覧可否の判定
+	// （requireRoomReadAccess）はこの上で必ず済ませてあるので、遅らせても
+	// 権限判定より先に DB を触ることはない。既読もブロックも「権限判定済みの
+	// room」を前提にした口を使っているため、判定の順序はこの形でないと崩れる。
+	//
+	// メンバー一覧は user フィールドだけでなく isMessagingDisabled（DM の相手を
+	// 特定するため）も使うので、どちらかが選ばれていれば引く。
+	wantMembers := fieldRequested(ctx, "user")
+	wantMessagingDisabled := fieldRequested(ctx, "isMessagingDisabled")
+
+	var users []*model.User
+	if wantMembers || wantMessagingDisabled {
+		usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
+		if err != nil {
+			return nil, fmt.Errorf("failed to load room members")
+		}
+		users = usersByRoomID[rid]
+	}
+
+	if wantMembers {
+		members := make([]*gqlmodel.User, 0, len(users))
+		for _, u := range users {
+			members = append(members, toGraphUser(u))
+		}
+		gqlRoom.User = members
+	}
 
 	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor のブロック判定と
 	// 同じ規則に揃える（画面の状態と実際の送信可否が食い違わないようにするため）。
 	// 相手が1人に決まらない DM ではブロックを引けないので、向こうと同じく判定しない。
 	gqlRoom.IsMessagingDisabled = false
-	if room.Type == model.RoomTypeDM {
+	if wantMessagingDisabled && room.Type == model.RoomTypeDM {
 		partnerID, ok := dmPartnerID(users, claims.ID)
 		if ok {
 			// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
@@ -3574,14 +3573,16 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	// 状態を作らないため。
 	// 閲覧権限は requireRoomReadAccess で判定済みなので、その room をそのまま渡す
 	// 口を使う（GetReadStatus を呼ぶとルームと membership の取得がもう一度走る）。
-	readStatus, err := r.ChatReads.ReadStatusOfAuthorizedRoom(ctx, room)
-	if err != nil {
-		logChatLookup(err, chatLookupReadStatus).
-			Int64("room_id", rid).
-			Int64("user_id", claims.ID).
-			Msg("failed to load read status; returning the room without it")
-	} else {
-		applyRoomReadStatus(gqlRoom, readStatus)
+	if roomReadStatusRequested(ctx) {
+		readStatus, err := r.ChatReads.ReadStatusOfAuthorizedRoom(ctx, room)
+		if err != nil {
+			logChatLookup(err, chatLookupReadStatus).
+				Int64("room_id", rid).
+				Int64("user_id", claims.ID).
+				Msg("failed to load read status; returning the room without it")
+		} else {
+			applyRoomReadStatus(gqlRoom, readStatus)
+		}
 	}
 
 	return gqlRoom, nil
@@ -3594,8 +3595,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		return nil, err
 	}
 
-	l, o := resolvePagination(limit, offset)
-	rooms, total, err := r.ListMyDMRoomsUseCase.Execute(ctx, claims.ID, l, o)
+	rooms, total, err := r.ListMyDMRoomsUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3605,60 +3605,88 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		roomIDs = append(roomIDs, room.ID)
 	}
 
-	usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load room members")
+	// room クエリと同じで、ここから下は「要求されたときだけ引く」付帯情報。
+	// 一覧に載せてよいルームかどうかは ListMyDMRooms（自分が入っている DM だけ）で
+	// 絞り済みなので、付帯情報を遅らせても権限判定の順序は変わらない。
+	//
+	// メンバー一覧は user と isMessagingDisabled の両方が使う（相手の特定と
+	// 「退会済みで自分しか居ない」の判定）ので、どちらかが選ばれていれば引く。
+	wantMembers := fieldRequested(ctx, "items", "user")
+	wantMessagingDisabled := fieldRequested(ctx, "items", "isMessagingDisabled")
+
+	usersByRoomID := map[int64][]*model.User{}
+	if wantMembers || wantMessagingDisabled {
+		usersByRoomID, err = r.ListUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load room members")
+		}
 	}
 
 	// ブロック一覧が引けないと、ブロック相手の DM が「ブロックなし」の見た目で並ぶ。
 	// 一覧ごと落とすほどではないので続けるが、黙って落とすと気づけないので残す。
-	blockedSet, err := r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
-	if err != nil {
-		logChatLookup(err, chatLookupBlockedUserIDs).
-			Int64("user_id", claims.ID).
-			Msg("failed to load blocked user ids; returning the DM rooms without block marks")
+	blockedSet := map[int64]bool{}
+	if wantMessagingDisabled {
+		blockedSet, err = r.GetBlockRelatedUserIDsUseCase.Execute(ctx, claims.ID)
+		if err != nil {
+			logChatLookup(err, chatLookupBlockedUserIDs).
+				Int64("user_id", claims.ID).
+				Msg("failed to load blocked user ids; returning the DM rooms without block marks")
+		}
 	}
 
 	// 既読の取得に失敗しても一覧は返す（未読バッジは一覧の付帯情報で、そのために
 	// DM 一覧ごと落とさない）。ただし画面上は「未読0」と区別がつかないので、
 	// room リゾルバと同じく必ずログに残す。
-	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeDM)
-	if err != nil {
-		logChatLookup(err, chatLookupReadStatusBatch).
-			Int64("user_id", claims.ID).
-			Int("rooms", len(roomIDs)).
-			Msg("failed to load read statuses; returning the DM rooms without unread counts")
+	readStatusMap := map[int64]*roomusecase.RoomReadStatus{}
+	if roomReadStatusRequested(ctx, "items") {
+		readStatusMap, err = r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeDM)
+		if err != nil {
+			logChatLookup(err, chatLookupReadStatusBatch).
+				Int64("user_id", claims.ID).
+				Int("rooms", len(roomIDs)).
+				Msg("failed to load read statuses; returning the DM rooms without unread counts")
+		}
 	}
 
 	// 最新メッセージ（一覧のプレビュー）も同じ扱い。取れなければ空欄で出す。
-	lastMessageMap, err := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
-	if err != nil {
-		logChatLookup(err, chatLookupLastMessages).
-			Int64("user_id", claims.ID).
-			Int("rooms", len(roomIDs)).
-			Msg("failed to load last messages; returning the DM rooms without previews")
+	// Room の content がプレビューの置き場（Community 側は lastMessage）。
+	lastMessageMap := map[int64]*model.Message{}
+	if fieldRequested(ctx, "items", "content") {
+		lastMessageMap, err = r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+		if err != nil {
+			logChatLookup(err, chatLookupLastMessages).
+				Int64("user_id", claims.ID).
+				Int("rooms", len(roomIDs)).
+				Msg("failed to load last messages; returning the DM rooms without previews")
+		}
 	}
 
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
-		members := make([]*gqlmodel.User, 0, len(users))
 		hasOnlyCurrentUser := len(users) == 1 && users[0].ID == claims.ID
-		for _, u := range users {
-			members = append(members, toGraphUser(u))
-		}
-		if hasOnlyCurrentUser {
-			members = []*gqlmodel.User{toGraphDeletedUser(), members[0]}
-		}
 
 		gqlRoom := toGraphRoom(room)
-		gqlRoom.User = members
-		// 相手が退会済み（自分しか居ない）なら送信不可。それ以外は相手が1人に決まる
-		// DM のときだけブロックを見る。ここは myDMRooms なので room.Type は DM のはず
-		// だが、人数から DM を推測しないという規則を一覧側でも崩さないために明示する。
-		partnerID, hasPartner := dmPartnerID(users, claims.ID)
-		gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser ||
-			(room.Type == model.RoomTypeDM && hasPartner && blockedSet[partnerID])
+
+		if wantMembers {
+			members := make([]*gqlmodel.User, 0, len(users))
+			for _, u := range users {
+				members = append(members, toGraphUser(u))
+			}
+			if hasOnlyCurrentUser {
+				members = []*gqlmodel.User{toGraphDeletedUser(), members[0]}
+			}
+			gqlRoom.User = members
+		}
+
+		if wantMessagingDisabled {
+			// 相手が退会済み（自分しか居ない）なら送信不可。それ以外は相手が1人に決まる
+			// DM のときだけブロックを見る。ここは myDMRooms なので room.Type は DM のはず
+			// だが、人数から DM を推測しないという規則を一覧側でも崩さないために明示する。
+			partnerID, hasPartner := dmPartnerID(users, claims.ID)
+			gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser ||
+				(room.Type == model.RoomTypeDM && hasPartner && blockedSet[partnerID])
+		}
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
 			gqlRoom.Content = &lastMsg.Content
@@ -3678,8 +3706,7 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	communities, total, err := r.ListMyCommunitiesUseCase.Execute(ctx, l, o)
+	communities, total, err := r.ListMyCommunitiesUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3690,27 +3717,37 @@ func (r *queryResolver) MyCommunities(ctx context.Context, limit *int32, offset 
 
 	// DM 一覧と同じ流儀。未読もプレビューも取れなくても一覧は返し、失敗はログに残す。
 	// コミュニティなので partnerLastReadAt は返らない（RoomReadStatus のコメント参照）。
-	readStatusMap, err := r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeCommunity)
-	if err != nil {
-		logChatLookup(err, chatLookupReadStatusBatch).
-			Int64("user_id", claims.ID).
-			Int("rooms", len(roomIDs)).
-			Msg("failed to load read statuses; returning the communities without unread counts")
+	// Community が持つ既読まわりは unreadCount だけなので、判定もそれ1つ。
+	readStatusMap := map[int64]*roomusecase.RoomReadStatus{}
+	if fieldRequested(ctx, "items", "unreadCount") {
+		readStatusMap, err = r.GetRoomReadStatusBatchUseCase.Execute(ctx, roomIDs, claims.ID, model.RoomTypeCommunity)
+		if err != nil {
+			logChatLookup(err, chatLookupReadStatusBatch).
+				Int64("user_id", claims.ID).
+				Int("rooms", len(roomIDs)).
+				Msg("failed to load read statuses; returning the communities without unread counts")
+		}
 	}
-	lastMessageMap, err := r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+	lastMessageMap := map[int64]*model.Message{}
+	if fieldRequested(ctx, "items", "lastMessage") {
+		lastMessageMap, err = r.GetLastMessagesByRoomIDsUseCase.Execute(ctx, roomIDs)
+		if err != nil {
+			logChatLookup(err, chatLookupLastMessages).
+				Int64("user_id", claims.ID).
+				Int("rooms", len(roomIDs)).
+				Msg("failed to load last messages; returning the communities without previews")
+		}
+	}
+
+	membership, err := r.loadCommunityMembership(ctx, roomIDs, &claims.ID,
+		fieldRequested(ctx, "items", "memberCount"), fieldRequested(ctx, "items", "isMember"))
 	if err != nil {
-		logChatLookup(err, chatLookupLastMessages).
-			Int64("user_id", claims.ID).
-			Int("rooms", len(roomIDs)).
-			Msg("failed to load last messages; returning the communities without previews")
+		return nil, err
 	}
 
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
-		if err != nil {
-			return nil, err
-		}
+		gqlC := r.toGraphCommunityWith(c, membership)
 		if readStatus := readStatusMap[c.RoomID]; readStatus != nil {
 			gqlC.UnreadCount = int32(readStatus.UnreadCount)
 		}
@@ -3728,18 +3765,18 @@ func (r *queryResolver) SearchCommunities(ctx context.Context, name string, limi
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	communities, total, err := r.SearchCommunityUseCase.Execute(ctx, name, l, o)
+	communities, total, err := r.SearchCommunityUseCase.Execute(ctx, name, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	membership, err := r.loadCommunityMembership(ctx, communityRoomIDs(communities), &claims.ID,
+		fieldRequested(ctx, "items", "memberCount"), fieldRequested(ctx, "items", "isMember"))
 	if err != nil {
 		return nil, err
 	}
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, gqlC)
+		items = append(items, r.toGraphCommunityWith(c, membership))
 	}
 	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
@@ -3749,18 +3786,20 @@ func (r *queryResolver) Communities(ctx context.Context, limit *int32, offset *i
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	communities, total, err := r.ListAllCommunitiesUseCase.Execute(ctx, l, o)
+	communities, total, err := r.ListAllCommunitiesUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	// 管理者の全件一覧は viewer を渡さない（誰の所属かが決まらないので isMember は
+	// 以前から false 固定）。人数だけ、選ばれていれば1クエリで数える。
+	membership, err := r.loadCommunityMembership(ctx, communityRoomIDs(communities), nil,
+		fieldRequested(ctx, "items", "memberCount"), false)
 	if err != nil {
 		return nil, err
 	}
 	items := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, nil)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, gqlC)
+		items = append(items, r.toGraphCommunityWith(c, membership))
 	}
 	return &gqlmodel.CommunityPage{Items: items, Total: int32(total)}, nil
 }
@@ -3777,13 +3816,16 @@ func (r *queryResolver) RandomCommunities(ctx context.Context, limit int32) ([]*
 		return nil, err
 	}
 
+	// randomCommunities は Community のリストを直接返す（ページ型でない）ので、
+	// 選択パスは items を挟まない。
+	membership, err := r.loadCommunityMembership(ctx, communityRoomIDs(communities), &claims.ID,
+		fieldRequested(ctx, "memberCount"), fieldRequested(ctx, "isMember"))
+	if err != nil {
+		return nil, err
+	}
 	result := make([]*gqlmodel.Community, 0, len(communities))
 	for _, c := range communities {
-		gqlC, err := r.toGraphCommunityWithMembership(ctx, c, &claims.ID)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, gqlC)
+		result = append(result, r.toGraphCommunityWith(c, membership))
 	}
 	return result, nil
 }
@@ -3921,8 +3963,7 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		}
 	}
 
-	l, o := resolvePagination(limit, offset)
-	reports, total, err := r.ManageReportUsecase.Search(ctx, domainFilter, l, o)
+	reports, total, err := r.ManageReportUsecase.Search(ctx, domainFilter, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -3996,8 +4037,7 @@ func (r *queryResolver) SearchInquiries(ctx context.Context, status *gqlmodel.In
 		domainStatus = &s
 	}
 
-	l, o := resolvePagination(limit, offset)
-	inquiries, total, err := r.ManageInquiryUsecase.Search(ctx, domainStatus, l, o)
+	inquiries, total, err := r.ManageInquiryUsecase.Search(ctx, domainStatus, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4029,8 +4069,7 @@ func (r *queryResolver) Announcements(ctx context.Context, limit *int32, offset 
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, l, o)
+	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4062,8 +4101,7 @@ func (r *queryResolver) AdminListAnnouncements(ctx context.Context, limit *int32
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, l, o)
+	list, total, err := r.ListAnnouncementsUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4140,8 +4178,7 @@ func (r *queryResolver) AdminListConsents(ctx context.Context, termsID string, l
 	if err != nil {
 		return nil, fmt.Errorf("invalid terms id")
 	}
-	l, o := resolvePagination(limit, offset)
-	consents, total, err := r.ListConsentsUseCase.Execute(ctx, tid, l, o)
+	consents, total, err := r.ListConsentsUseCase.Execute(ctx, tid, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4180,8 +4217,7 @@ func (r *queryResolver) ListFavoriteUsers(ctx context.Context, limit *int32, off
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	favoriteUsers, total, err := r.ListFavoriteUsersUseCase.Execute(ctx, claims.ID, l, o)
+	favoriteUsers, total, err := r.ListFavoriteUsersUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4198,8 +4234,7 @@ func (r *queryResolver) MyFollowers(ctx context.Context, limit *int32, offset *i
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	followers, total, err := r.ListFollowersUseCase.Execute(ctx, claims.ID, l, o)
+	followers, total, err := r.ListFollowersUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4264,8 +4299,7 @@ func (r *queryResolver) ListBlockedUsers(ctx context.Context, limit *int32, offs
 	if err != nil {
 		return nil, err
 	}
-	l, o := resolvePagination(limit, offset)
-	blockedUsers, total, err := r.ListBlockersUseCase.Execute(ctx, claims.ID, l, o)
+	blockedUsers, total, err := r.ListBlockersUseCase.Execute(ctx, claims.ID, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4335,7 +4369,7 @@ func (r *queryResolver) AdminGetAnalytics(ctx context.Context) (*gqlmodel.Analyt
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	summary, err := r.GetAnalyticsUseCase.Execute(ctx)
+	summary, err := r.GetAnalyticsUseCase.Execute(ctx, resolveAnalyticsFields(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -4347,14 +4381,7 @@ func (r *queryResolver) AdminGetCommunityAnalytics(ctx context.Context, limit *i
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	l, o := 20, 0
-	if limit != nil {
-		l = int(*limit)
-	}
-	if offset != nil {
-		o = int(*offset)
-	}
-	items, total, err := r.GetCommunityAnalyticsUseCase.Execute(ctx, l, o)
+	items, total, err := r.GetCommunityAnalyticsUseCase.Execute(ctx, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4370,7 +4397,7 @@ func (r *queryResolver) AdminGetTimeSeries(ctx context.Context, granularity gqlm
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	points, err := r.GetTimeSeriesUseCase.Execute(ctx, string(granularity), from, to)
+	points, err := r.GetTimeSeriesUseCase.Execute(ctx, string(granularity), from, to, resolveAnalyticsFields(ctx, "points"))
 	if err != nil {
 		return nil, err
 	}
@@ -4395,15 +4422,8 @@ func (r *queryResolver) SearchCourses(ctx context.Context, dayOfWeek string, per
 	if keyword != nil {
 		kw = *keyword
 	}
-	l, o := 50, 0
-	if limit != nil {
-		l = int(*limit)
-	}
-	if offset != nil {
-		o = int(*offset)
-	}
 
-	items, total, err := r.SearchCoursesUseCase.Execute(ctx, dayOfWeek, int(period), kw, l, o)
+	items, total, err := r.SearchCoursesUseCase.Execute(ctx, dayOfWeek, int(period), kw, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4449,7 +4469,9 @@ func (r *queryResolver) UserTimetable(ctx context.Context, userID string, year *
 		y = &v
 	}
 
-	entries, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
+	// 閲覧可否はユースケース側で判定済み（見えないときは entries が空）。
+	// このフィールドは可否をレスポンスに載せないので visible は捨てる。
+	entries, _, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -4468,26 +4490,15 @@ func (r *queryResolver) UserTimetableProfile(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	claims, err := authz.RequireAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	visible := true
-	if claims.ID != uID && !authz.IsAdminRole(claims.Role) {
-		visible, err = r.GetUserTimetableUseCase.IsProfileVisible(ctx, claims.ID, uID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	var y *int
 	if year != nil {
 		v := int(*year)
 		y = &v
 	}
 
-	entries, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
+	// 認証と閲覧可否（公開設定・ブロック関係）の判定はユースケースに集約してある。
+	// ここで再判定すると同じルールが2箇所に散るので、結果をそのまま返すだけにする。
+	entries, visible, err := r.GetUserTimetableUseCase.Execute(ctx, uID, y, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -4558,15 +4569,7 @@ func (r *queryResolver) Questions(ctx context.Context, roomID string, limit *int
 		return nil, err
 	}
 
-	l, o := 50, 0
-	if limit != nil {
-		l = int(*limit)
-	}
-	if offset != nil {
-		o = int(*offset)
-	}
-
-	items, total, err := r.ListQuestionsUseCase.Execute(ctx, rid, l, o)
+	items, total, err := r.ListQuestionsUseCase.Execute(ctx, rid, resolvePageQuery(ctx, limit, offset, defaultPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -4614,15 +4617,10 @@ func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, 
 		return nil, err
 	}
 
-	l, o := 50, 0
-	if limit != nil {
-		l = int(*limit)
-	}
-	if offset != nil {
-		o = int(*offset)
-	}
-
-	items, total, unvotedTotal, err := r.ListPollsUseCase.Execute(ctx, rid, l, o)
+	items, total, unvotedTotal, err := r.ListPollsUseCase.Execute(ctx, rid, pollusecase.ListPollsQuery{
+		Page:             resolvePageQuery(ctx, limit, offset, 50),
+		WithUnvotedTotal: fieldRequested(ctx, "unvotedTotal"),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -4698,11 +4696,14 @@ func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmode
 		return nil, err
 	}
 	gqlCourse := toGraphCourse(c)
-	count, err := r.GetCourseRegisteredCountUseCase.Execute(ctx, c.ID)
-	if err != nil {
-		return nil, err
+	// 履修者数は削除前の影響範囲を見せるためだけの値なので、選ばれたときだけ数える。
+	if fieldRequested(ctx, "registeredCount") {
+		count, err := r.GetCourseRegisteredCountUseCase.Execute(ctx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		gqlCourse.RegisteredCount = int32(count)
 	}
-	gqlCourse.RegisteredCount = int32(count)
 	return gqlCourse, nil
 }
 
@@ -4712,7 +4713,7 @@ func (r *queryResolver) AdminListMediaMissingDimensions(ctx context.Context, lim
 		return nil, err
 	}
 
-	lim, off := resolvePagination(limit, offset)
+	lim, off := resolvePagination(limit, offset, defaultPageSize)
 	items, err := r.ListImagesMissingDimensionsUseCase.Execute(ctx, lim, off)
 	if err != nil {
 		return nil, err
@@ -4740,34 +4741,36 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	if keyword != nil {
 		kw = *keyword
 	}
-	l, o := 20, 0
-	if limit != nil {
-		l = int(*limit)
-	}
-	if offset != nil {
-		o = int(*offset)
-	}
-
 	items, total, err := r.ListCoursesUseCase.Execute(ctx, courseusecase.ListCoursesParam{
 		Year:      y,
 		Semester:  semester,
 		DayOfWeek: dayOfWeek,
 		Keyword:   kw,
-		Limit:     l,
-		Offset:    o,
+		Page:      resolvePageQuery(ctx, limit, offset, defaultPageSize),
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	gqlItems := make([]*gqlmodel.Course, 0, len(items))
-	for _, c := range items {
-		gqlCourse := toGraphCourse(c)
-		count, err := r.GetCourseRegisteredCountUseCase.Execute(ctx, c.ID)
+	// 履修者数は、選ばれたときだけ授業IDの集合で1クエリにまとめて数える。
+	// 以前は一覧の1件ごとに COUNT を撃っていた（20件なら20本）。
+	// 単体の adminCourse と同じく、判定は共通の fieldRequested。
+	registeredCounts := map[int64]int{}
+	if fieldRequested(ctx, "items", "registeredCount") {
+		courseIDs := make([]int64, 0, len(items))
+		for _, c := range items {
+			courseIDs = append(courseIDs, c.ID)
+		}
+		registeredCounts, err = r.GetCourseRegisteredCountsUseCase.Execute(ctx, courseIDs)
 		if err != nil {
 			return nil, err
 		}
-		gqlCourse.RegisteredCount = int32(count)
+	}
+
+	gqlItems := make([]*gqlmodel.Course, 0, len(items))
+	for _, c := range items {
+		gqlCourse := toGraphCourse(c)
+		gqlCourse.RegisteredCount = int32(registeredCounts[c.ID])
 		gqlItems = append(gqlItems, gqlCourse)
 	}
 
@@ -4801,7 +4804,9 @@ func (r *questionResolver) BestAnswer(ctx context.Context, obj *gqlmodel.Questio
 	if err != nil {
 		return nil, nil
 	}
-	a, err := r.GetAnswerByIDUseCase.Execute(ctx, aid)
+	// 質問一覧では質問ごとにこのフィールドが呼ばれるので DataLoader 経由で引く
+	//（質問 N 件で N クエリ → 1クエリ）。
+	a, err := dataloader.For(ctx).AnswerLoader.Load(ctx, aid)
 	if err != nil || a == nil {
 		return nil, err
 	}
@@ -4815,25 +4820,28 @@ func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question, 
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	lim := 20
-	if limit != nil {
-		lim = int(*limit)
-	}
-	off := 0
-	if offset != nil {
-		off = int(*offset)
-	}
-
-	answers, total, err := r.ListAnswersUseCase.Execute(ctx, qid, lim, off)
+	// 質問一覧では質問ごとにこのフィールドが呼ばれ、しかも1件あたり
+	// 一覧 + COUNT の2クエリだった（質問 N 件で 2N クエリ → 2クエリ）。
+	// limit/offset もキーに含める（同じ質問でも件数が違えば別の結果なので、
+	// ID だけをキーにすると先に来た方のページを使い回してしまう）。
+	page, err := dataloader.For(ctx).AnswerPageLoader.Load(ctx, dataloader.AnswerPageKey{
+		QuestionID: qid,
+		Page:       resolvePageQuery(ctx, limit, offset, defaultPageSize),
+	})
 	if err != nil {
 		return nil, err
 	}
+	if page == nil {
+		// バッチは回答ゼロの質問にも空ページを返すので通常ここには来ない。
+		// 来たとしても「回答なし」として従来と同じ形を返す。
+		return &gqlmodel.AnswerPage{Items: []*gqlmodel.Answer{}, Total: 0}, nil
+	}
 
-	items := make([]*gqlmodel.Answer, 0, len(answers))
-	for _, a := range answers {
+	items := make([]*gqlmodel.Answer, 0, len(page.Items))
+	for _, a := range page.Items {
 		items = append(items, toGraphAnswerWithLikes(a))
 	}
-	return &gqlmodel.AnswerPage{Items: items, Total: int32(total)}, nil
+	return &gqlmodel.AnswerPage{Items: items, Total: int32(page.Total)}, nil
 }
 
 // Media is the resolver for the media field.
@@ -4892,33 +4900,16 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 	}
 
 	currentUserGraphID := encodeGraphID("user", claims.ID)
-	ch := make(chan *gqlmodel.RoomReadStatusUpdate, 1)
-	topic := roomID + ":read_status"
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if update, ok := data.(*gqlmodel.RoomReadStatusUpdate); ok {
-					// 自分の読み取りイベントは除外し、相手のものだけ配信
-					if update.UserID != currentUserGraphID {
-						ch <- update
-					}
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return subscribeTopicFunc(
+		ctx,
+		r.PubSub,
+		roomID+":read_status",
+		subscriptionScope{UserID: claims.ID, RoomID: roomID},
+		func(update *gqlmodel.RoomReadStatusUpdate) (*gqlmodel.RoomReadStatusUpdate, bool) {
+			// 自分の読み取りイベントは除外し、相手のものだけ配信
+			return update, update.UserID != currentUserGraphID
+		},
+	), nil
 }
 
 // QuestionAdded is the resolver for the questionAdded field.
@@ -4953,47 +4944,13 @@ func (r *subscriptionResolver) AnswerDeleted(ctx context.Context, questionID str
 
 // PollAdded is the resolver for the pollAdded field.
 func (r *subscriptionResolver) PollAdded(ctx context.Context, roomID string) (<-chan *gqlmodel.Poll, error) {
-	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
-		return nil, err
-	}
-
-	topic := roomID + ":poll:added"
-	ch := make(chan *gqlmodel.Poll, 1)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if p, ok := data.(*gqlmodel.Poll); ok {
-					ch <- p
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return r.roomPollSubscription(ctx, roomID, roomID+":poll:added")
 }
 
 // PollUpdated is the resolver for the pollUpdated field.
 func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (<-chan *gqlmodel.Poll, error) {
-	if _, err := requireAuth(ctx); err != nil {
+	claims, err := requireAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -5012,101 +4969,34 @@ func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (
 		return nil, err
 	}
 
-	topic := pollID + ":poll:updated"
-	ch := make(chan *gqlmodel.Poll, 1)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if p, ok := data.(*gqlmodel.Poll); ok {
-					ch <- p
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return subscribeTopic[*gqlmodel.Poll](ctx, r.PubSub, pollID+":poll:updated", subscriptionScope{
+		UserID: claims.ID,
+		RoomID: encodeGraphID("room", p.RoomID),
+	}), nil
 }
 
 // PollDeleted is the resolver for the pollDeleted field.
 func (r *subscriptionResolver) PollDeleted(ctx context.Context, roomID string) (<-chan *gqlmodel.Poll, error) {
-	if _, err := requireAuth(ctx); err != nil {
-		return nil, err
-	}
-
-	rid, err := decodeGraphID(ctx, "room", roomID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid room id")
-	}
-	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
-		return nil, err
-	}
-
-	topic := roomID + ":poll:deleted"
-	ch := make(chan *gqlmodel.Poll, 1)
-	sub := r.PubSub.Subscribe(topic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(topic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if p, ok := data.(*gqlmodel.Poll); ok {
-					ch <- p
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	return r.roomPollSubscription(ctx, roomID, roomID+":poll:deleted")
 }
 
 // AdminCourseImportStatusUpdated is the resolver for the adminCourseImportStatusUpdated field.
 func (r *subscriptionResolver) AdminCourseImportStatusUpdated(ctx context.Context) (<-chan *gqlmodel.CourseImportStatus, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
+	claims, err := requireAdminAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	ch := make(chan *gqlmodel.CourseImportStatus, 1)
-	sub := r.PubSub.Subscribe(CourseImportStatusTopic)
-
-	go func() {
-		defer r.PubSub.Unsubscribe(CourseImportStatusTopic, sub)
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			case data, ok := <-sub:
-				if !ok {
-					close(ch)
-					return
-				}
-				if status, ok := data.(courseimport.Status); ok {
-					ch <- toGraphCourseImportStatus(status)
-				}
-			}
-		}
-	}()
-
-	return ch, nil
+	// ドメインの値（courseimport.Status）で流れてくるので GraphQL 型へ直してから配信する。
+	return subscribeTopicFunc(
+		ctx,
+		r.PubSub,
+		CourseImportStatusTopic,
+		subscriptionScope{UserID: claims.ID},
+		func(status courseimport.Status) (*gqlmodel.CourseImportStatus, bool) {
+			return toGraphCourseImportStatus(status), true
+		},
+	), nil
 }
 
 // AvatarURL is the resolver for the avatarUrl field.

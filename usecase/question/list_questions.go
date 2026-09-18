@@ -9,7 +9,7 @@ import (
 )
 
 type ListQuestionsUseCase interface {
-	Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Question, int, error)
+	Execute(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.Question, int, error)
 }
 
 var _ ListQuestionsUseCase = &ListQuestionsInteractor{}
@@ -22,9 +22,9 @@ func NewListQuestionsUseCase(questionRepo repository.QuestionRepository) ListQue
 	return &ListQuestionsInteractor{questionRepo: questionRepo}
 }
 
-func (uc *ListQuestionsInteractor) Execute(ctx context.Context, roomID int64, limit, offset int) ([]*model.Question, int, error) {
+func (uc *ListQuestionsInteractor) Execute(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.Question, int, error) {
 	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, 0, err
 	}
-	return uc.questionRepo.ListQuestionsByRoomID(ctx, roomID, limit, offset)
+	return uc.questionRepo.ListQuestionsByRoomID(ctx, roomID, q)
 }

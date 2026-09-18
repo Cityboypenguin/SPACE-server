@@ -93,12 +93,13 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 			}
 		}
 
-		for i, input := range mediaInputs {
-			media := model.NewMedia(param.UserID, input, now)
-			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
+		// 添付はまとめて保存する（media 行を1本、紐付けを1本）。以前は入力1件ごとに
+		// 2往復していたので、4枚付けると8往復していた。
+		if medias := model.NewMediaBatch(param.UserID, mediaInputs, now); len(medias) > 0 {
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
 				return err
 			}
-			if err := uc.mediaRepo.CreatePostMedia(ctx, post.ID, media.ID, i); err != nil {
+			if err := uc.mediaRepo.CreatePostMediaBatch(ctx, post.ID, model.MediaIDs(medias), 0); err != nil {
 				return err
 			}
 		}

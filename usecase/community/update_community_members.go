@@ -84,25 +84,50 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 		return err
 	}
 
+	// 操作の種類ごとにまとめてから撃つ。以前は updates を1件ずつ回して人数ぶんの
+	// UPDATE / DELETE を出しており、20人チェックすれば20往復していた
+	// （トランザクションの中なので結果は同じで、費用だけが人数に比例していた）。
+	// 種類は3つしか無いので、まとめれば最大3本で済む。
+	//
+	// 同じ利用者が2回出てこないことは validateNoDuplicates が先に保証しているので、
+	// 「昇格と除名が同じ人に当たって順序で結果が変わる」は起きない。
+	promote, demote, kick := groupByAction(updates)
+
 	return uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
-		for _, u := range updates {
-			switch u.Action {
-			case MemberActionPromote:
-				if err := uc.roomUserRepo.SetRoomUserRole(ctx, c.RoomID, u.UserID, model.RoomUserRoleOwner); err != nil {
-					return err
-				}
-			case MemberActionDemote:
-				if err := uc.roomUserRepo.SetRoomUserRole(ctx, c.RoomID, u.UserID, model.RoomUserRoleMember); err != nil {
-					return err
-				}
-			case MemberActionKick:
-				if err := uc.roomUserRepo.RemoveUserFromRoom(ctx, c.RoomID, u.UserID); err != nil {
-					return err
-				}
+		if len(promote) > 0 {
+			if err := uc.roomUserRepo.SetRoomUserRoles(ctx, c.RoomID, promote, model.RoomUserRoleOwner); err != nil {
+				return err
+			}
+		}
+		if len(demote) > 0 {
+			if err := uc.roomUserRepo.SetRoomUserRoles(ctx, c.RoomID, demote, model.RoomUserRoleMember); err != nil {
+				return err
+			}
+		}
+		if len(kick) > 0 {
+			if err := uc.roomUserRepo.RemoveUsersFromRoom(ctx, c.RoomID, kick); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+// groupByAction は更新指定を操作の種類ごとの利用者IDへ振り分ける。
+// 知らない Action は黙って落とす（1件ずつ回していたときの switch に
+// default が無かったのと同じ扱い）。
+func groupByAction(updates []MemberUpdate) (promote, demote, kick []int64) {
+	for _, u := range updates {
+		switch u.Action {
+		case MemberActionPromote:
+			promote = append(promote, u.UserID)
+		case MemberActionDemote:
+			demote = append(demote, u.UserID)
+		case MemberActionKick:
+			kick = append(kick, u.UserID)
+		}
+	}
+	return promote, demote, kick
 }
 
 func (uc *UpdateCommunityMembersInteractor) validateNoDuplicates(updates []MemberUpdate) error {

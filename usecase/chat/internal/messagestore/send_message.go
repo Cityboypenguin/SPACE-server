@@ -133,12 +133,13 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 		if err := uc.mentionStore.CreateMessageMentions(ctx, m.ID, mentions); err != nil {
 			return err
 		}
-		for i, input := range mediaInputs {
-			media := model.NewMedia(userID, input, now)
-			if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
+		// 添付はまとめて保存する（media 行を1本、紐付けを1本）。以前は入力1件ごとに
+		// 2往復していたので、4枚付けると8往復していた。
+		if medias := model.NewMediaBatch(userID, mediaInputs, now); len(medias) > 0 {
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
 				return err
 			}
-			if err := uc.mediaRepo.CreateMessageMedia(ctx, m.ID, media.ID, i); err != nil {
+			if err := uc.mediaRepo.CreateMessageMediaBatch(ctx, m.ID, model.MediaIDs(medias), 0); err != nil {
 				return err
 			}
 		}

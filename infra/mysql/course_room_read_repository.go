@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -60,37 +59,4 @@ func (r *MySQLCourseRoomReadRepository) GetLastRead(ctx context.Context, roomID,
 		LastReadMessageID: nullInt64Ptr(messageID),
 		LastReadAt:        nullInt64Ptr(lastReadAt),
 	}, nil
-}
-
-func (r *MySQLCourseRoomReadRepository) GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]int64, error) {
-	result := make(map[int64]int64, len(roomIDs))
-	if len(roomIDs) == 0 {
-		return result, nil
-	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
-	query := fmt.Sprintf(
-		`SELECT room_id, last_read_at FROM course_room_reads WHERE user_id = ? AND room_id IN (%s)`,
-		placeholders,
-	)
-
-	args := make([]interface{}, 0, 1+len(roomIDs))
-	args = append(args, userID)
-	for _, id := range roomIDs {
-		args = append(args, id)
-	}
-
-	rows, err := r.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var roomID, lastReadAt int64
-		if err := rows.Scan(&roomID, &lastReadAt); err != nil {
-			return nil, err
-		}
-		result[roomID] = lastReadAt
-	}
-	return result, rows.Err()
 }

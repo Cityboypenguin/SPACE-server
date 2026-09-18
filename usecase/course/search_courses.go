@@ -10,7 +10,7 @@ import (
 )
 
 type SearchCoursesUseCase interface {
-	Execute(ctx context.Context, dayOfWeek string, period int, keyword string, limit, offset int) ([]*model.Course, int, error)
+	Execute(ctx context.Context, dayOfWeek string, period int, keyword string, q repository.PageQuery) ([]*model.Course, int, error)
 }
 
 var _ SearchCoursesUseCase = &SearchCoursesInteractor{}
@@ -30,7 +30,7 @@ func NewSearchCoursesUseCase(courseRepo repository.CourseRepository, settingRepo
 // occupied by unrelated courses across 前期/後期 (or past years), and mixing them
 // together in one result list would be confusing and would let students register
 // for a course that isn't actually offered this term.
-func (uc *SearchCoursesInteractor) Execute(ctx context.Context, dayOfWeek string, period int, keyword string, limit, offset int) ([]*model.Course, int, error) {
+func (uc *SearchCoursesInteractor) Execute(ctx context.Context, dayOfWeek string, period int, keyword string, q repository.PageQuery) ([]*model.Course, int, error) {
 	if _, err := authz.RequireAuth(ctx); err != nil {
 		return nil, 0, err
 	}
@@ -38,5 +38,5 @@ func (uc *SearchCoursesInteractor) Execute(ctx context.Context, dayOfWeek string
 	if err != nil {
 		return nil, 0, err
 	}
-	return uc.courseRepo.SearchByDayPeriod(ctx, dayOfWeek, period, keyword, year, semesterName, limit, offset)
+	return uc.courseRepo.SearchByDayPeriod(ctx, dayOfWeek, period, keyword, year, semesterName, q)
 }

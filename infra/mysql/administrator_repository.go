@@ -98,9 +98,17 @@ func (r *MySQLAdministratorRepository) DeleteAdministrator(ctx context.Context, 
 	return affected > 0, nil
 }
 
-func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context, limit, offset int) ([]*model.Administrator, int, error) {
+func (r *MySQLAdministratorRepository) CountAdministrators(ctx context.Context) (int, error) {
 	var total int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM administrators`).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context, q repository.PageQuery) ([]*model.Administrator, int, error) {
+	total, err := countForPage(ctx, r.db, q, `SELECT COUNT(*) FROM administrators`)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -109,7 +117,7 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context, l
 		FROM administrators
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
-	`, limit, offset)
+	`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}

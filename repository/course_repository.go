@@ -25,8 +25,9 @@ type ListCoursesParam struct {
 	Semester  *string
 	DayOfWeek *string
 	Keyword   string
-	Limit     int
-	Offset    int
+	// Page は窓と「total を数えるか」。他の一覧と同じ PageQuery に揃えてある
+	// （以前は Limit/Offset の2フィールドだった）。
+	Page PageQuery
 }
 
 type CourseRepository interface {
@@ -37,7 +38,7 @@ type CourseRepository interface {
 	FindByDedupKey(ctx context.Context, dedupKey string) (*model.Course, error)
 	GetCourseByID(ctx context.Context, id int64) (*model.Course, error)
 	GetCourseByRoomID(ctx context.Context, roomID int64) (*model.Course, error)
-	SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, limit, offset int) ([]*model.Course, int, error)
+	SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, q PageQuery) ([]*model.Course, int, error)
 	ListCourses(ctx context.Context, param ListCoursesParam) ([]*model.Course, int, error)
 	// ListDistinctYears returns every year present in courses, newest first, so the
 	// admin course-management screen can offer a year picker backed by actual data

@@ -42,7 +42,8 @@ func (uc *ResetPasswordInteractor) Execute(ctx context.Context, resetToken, newP
 		return errors.New("invalid or expired reset token")
 	}
 
-	user, err := uc.userRepo.FindByEmail(ctx, email)
+	// 新しいハッシュを書き込む経路なので認証情報側を取る。
+	user, err := uc.userRepo.FindCredentialsByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func (uc *ResetPasswordInteractor) Execute(ctx context.Context, resetToken, newP
 		return err
 	}
 
-	if err := uc.userRepo.UpdateUser(ctx, user); err != nil {
+	if err := uc.userRepo.SaveCredentials(ctx, user); err != nil {
 		return err
 	}
 

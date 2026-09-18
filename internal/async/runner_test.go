@@ -1,4 +1,4 @@
-package chat
+package async
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// 配信の非同期化そのもののテスト。
+// 投げっぱなしの実行口そのもののテスト。
 //
 // 何をどこへ配信するかは graph/chat_events_test.go が受け持つ。ここで見るのは
 // ctx の扱い・panic の握り・Wait の3点だけ。
@@ -18,11 +18,11 @@ import (
 // もの（PubSub の message:added など）を外し、アダプタ側で同期に実行するようにした
 // ので、この Runner に順序の保証は要らなくなった。渡した関数は goroutine で即座に
 // 走り、どちらが先に終わるかは決まらない。したがって順序のテストも無い。
-// 順序が要るものをここへ渡さないこと（判断は usecase/chat/async_events.go のコメント）。
+// 順序が要るものをここへ渡さないこと（チャット配信での判断は usecase/chat/async_events.go のコメント）。
 
 type ctxKey struct{}
 
-func waitForDelivery(t *testing.T, r *AsyncRunner) {
+func waitForDelivery(t *testing.T, r *Runner) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -34,8 +34,8 @@ func waitForDelivery(t *testing.T, r *AsyncRunner) {
 // リクエストの ctx がキャンセルされても配信は続けられること、かつ ctx に載せた値は
 // 引き継がれること。Background() に差し替えると値まで落ちて、通知の保存や監査ログが
 // 「誰の操作か」を見失う。
-func TestAsyncRunner_KeepsContextValuesButNotCancellation(t *testing.T) {
-	runner := NewAsyncRunner()
+func TestRunner_KeepsContextValuesButNotCancellation(t *testing.T) {
+	runner := NewRunner("test")
 
 	var (
 		mu      sync.Mutex
@@ -69,8 +69,8 @@ func TestAsyncRunner_KeepsContextValuesButNotCancellation(t *testing.T) {
 
 // goroutine の panic はプロセスごと落とす。配信の失敗でサーバを落とさないこと、
 // かつ後続の配信が止まらないこと。
-func TestAsyncRunner_RecoversFromAPanicAndKeepsGoing(t *testing.T) {
-	runner := NewAsyncRunner()
+func TestRunner_RecoversFromAPanicAndKeepsGoing(t *testing.T) {
+	runner := NewRunner("test")
 
 	delivered := make(chan struct{}, 1)
 	runner.Go(context.Background(), "message_sent", func(context.Context) {
@@ -89,8 +89,8 @@ func TestAsyncRunner_RecoversFromAPanicAndKeepsGoing(t *testing.T) {
 }
 
 // 配信同士は互いを待たない（重い授業ルームの宛先解決が他のルームの配信を止めない）。
-func TestAsyncRunner_DeliveriesDoNotBlockEachOther(t *testing.T) {
-	runner := NewAsyncRunner()
+func TestRunner_DeliveriesDoNotBlockEachOther(t *testing.T) {
+	runner := NewRunner("test")
 
 	gate := make(chan struct{})
 	free := make(chan struct{}, 1)
@@ -109,8 +109,8 @@ func TestAsyncRunner_DeliveriesDoNotBlockEachOther(t *testing.T) {
 
 // Wait は「片付くまで待つ」のであって「止める」ものではない。ctx が先に切れたら
 // 待つのをやめて理由を返す（停止時の待ち合わせに上限を掛けられるように）。
-func TestAsyncRunner_WaitGivesUpWhenItsContextExpires(t *testing.T) {
-	runner := NewAsyncRunner()
+func TestRunner_WaitGivesUpWhenItsContextExpires(t *testing.T) {
+	runner := NewRunner("test")
 
 	gate := make(chan struct{})
 	runner.Go(context.Background(), "message_sent", func(context.Context) { <-gate })

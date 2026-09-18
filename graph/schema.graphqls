@@ -54,7 +54,6 @@ type Query {
   # メンバー数が増えたら、このクエリに prefix / limit を足して前方一致に切り替える。
   mentionCandidates(roomID: ID!): [User!]!
 
-  favorites: [Favorite!]!
   getFavoriteByID(id: ID!): Favorite
   myProfile: Profile
   getProfileByUserID(userID: ID!): Profile

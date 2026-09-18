@@ -1,3 +1,5 @@
+// Package smtp は repository.Mailer の唯一の実装を提供する。
+// SMTP_* 環境変数の読み取りもここ1箇所に閉じる。
 package smtp
 
 import (
@@ -10,6 +12,9 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
+// defaultSMTPPort は SMTP_PORT 未設定時のポート（submission over STARTTLS）。
+const defaultSMTPPort = 587
+
 type SMTPMailer struct {
 	host     string
 	port     int
@@ -21,7 +26,7 @@ type SMTPMailer struct {
 func NewSMTPMailer() repository.Mailer {
 	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	if port == 0 {
-		port = 587
+		port = defaultSMTPPort
 	}
 	return &SMTPMailer{
 		host:     os.Getenv("SMTP_HOST"),
@@ -32,16 +37,18 @@ func NewSMTPMailer() repository.Mailer {
 	}
 }
 
-func (m *SMTPMailer) SendPasswordResetOTP(_ context.Context, toEmail, otp string) error {
+// Send は1通を送る。件名・本文は呼び出し側（ユースケース）が組み立てる。
+func (m *SMTPMailer) Send(_ context.Context, to, subject, body string) error {
 	auth := smtp.PlainAuth("", m.username, m.password, m.host)
 	addr := fmt.Sprintf("%s:%d", m.host, m.port)
 
-	subject := "パスワードリセット認証コード"
-	body := fmt.Sprintf("認証コード: %s\n\nこのコードは10分間有効です。\n心当たりがない場合は無視してください。", otp)
 	msg := []byte(fmt.Sprintf(
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		m.from, toEmail, subject, body,
+		m.from, to, subject, body,
 	))
 
-	return smtp.SendMail(addr, auth, m.from, []string{toEmail}, msg)
+	if err := smtp.SendMail(addr, auth, m.from, []string{to}, msg); err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+	return nil
 }

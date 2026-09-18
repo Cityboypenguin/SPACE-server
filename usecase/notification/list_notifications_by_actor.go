@@ -8,7 +8,7 @@ import (
 )
 
 type ListNotificationsByActorUseCase interface {
-	Execute(ctx context.Context, userID int64, notifType string, actorID int64, limit, offset int) ([]*model.Notification, int, error)
+	Execute(ctx context.Context, userID int64, notifType string, actorID int64, q repository.PageQuery) ([]*model.Notification, int, error)
 }
 
 var _ ListNotificationsByActorUseCase = &listNotificationsByActorInteractor{}
@@ -21,9 +21,9 @@ func NewListNotificationsByActorUseCase(repo repository.NotificationRepository) 
 	return &listNotificationsByActorInteractor{repo: repo}
 }
 
-func (uc *listNotificationsByActorInteractor) Execute(ctx context.Context, userID int64, notifType string, actorID int64, limit, offset int) ([]*model.Notification, int, error) {
-	if limit <= 0 {
-		limit = defaultLimit
+func (uc *listNotificationsByActorInteractor) Execute(ctx context.Context, userID int64, notifType string, actorID int64, q repository.PageQuery) ([]*model.Notification, int, error) {
+	if q.Limit <= 0 {
+		q.Limit = defaultLimit
 	}
-	return uc.repo.ListByActor(ctx, userID, notifType, actorID, limit, offset)
+	return uc.repo.ListByActor(ctx, userID, notifType, actorID, q)
 }

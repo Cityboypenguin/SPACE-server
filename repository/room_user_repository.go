@@ -9,13 +9,35 @@ import (
 type RoomUserRepository interface {
 	AddUserToRoom(ctx context.Context, roomID, userID int64) error
 	RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error
+
+	// RemoveUsersFromRoom は RemoveUserFromRoom の一括版（IN 句の DELETE 1本）。
+	// メンバー編集のようにまとめて外す経路で使う。
+	RemoveUsersFromRoom(ctx context.Context, roomID int64, userIDs []int64) error
 	GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error)
 	ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error)
-	ListDMRoomsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error)
-	FindDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error)
+	// CountUsersByRoomIDs は複数ルームの在籍人数を1クエリで数える。
+	//
+	// コミュニティ一覧の memberCount 用。以前は一覧の1件ごとに
+	// GetUserIDsByRoomID でメンバーIDを全部取り、その len を人数にしていた。
+	// 20件のコミュニティで20クエリ、しかも人数しか使わないのに行を全部
+	// 持ち帰っていた。
+	//
+	// 在籍が0のルームは key ごと欠ける。int のゼロ値がそのまま「0人」という
+	// 正しい値になるので、呼び出し側は欠けを気にしなくてよい。
+	CountUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]int, error)
+	// ListJoinedRoomIDs は roomIDs のうち userID が在籍しているものを返す。
+	//
+	// コミュニティ一覧の isMember 用。人数と同じ理由で、一覧ぶんを1クエリにする。
+	// 在籍していないルームは key ごと欠ける（bool のゼロ値 false が正しい）。
+	ListJoinedRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]bool, error)
+	ListDMRoomsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Room, int, error)
 	FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error)
 	GetRoomUserRole(ctx context.Context, roomID, userID int64) (string, error)
 	SetRoomUserRole(ctx context.Context, roomID, userID int64, role string) error
+
+	// SetRoomUserRoles は SetRoomUserRole の一括版（IN 句の UPDATE 1本）。
+	// 同じ役割へ変える人がまとめて渡ってくる経路（メンバー編集）で使う。
+	SetRoomUserRoles(ctx context.Context, roomID int64, userIDs []int64, role string) error
 	CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error)
 	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
 	// UpdateLastRead は既読位置を進める。lastReadMessageID はそのルームの最新

@@ -32,7 +32,8 @@ func NewLoginUserUseCase(userRepo repository.UserRepository) LoginUserUseCase {
 }
 
 func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password string) (*LoginUserResult, error) {
-	user, err := uc.userRepo.FindByEmail(ctx, email)
+	// ログインだけが照合用のハッシュを取ってよい経路。
+	user, err := uc.userRepo.FindCredentialsByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -58,5 +59,7 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, err
 	}
 
-	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: user}, nil
+	// 呼び出し元（リゾルバ）へ返すのは公開情報だけ。ハッシュはこの関数の外へ出さない。
+	publicUser := user.User
+	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: &publicUser}, nil
 }

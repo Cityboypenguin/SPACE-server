@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -18,6 +20,9 @@ type MySQLPollRepository struct {
 func NewMySQLPollRepository(db *sql.DB) repository.PollRepository {
 	return &MySQLPollRepository{DB: db}
 }
+
+// pollOptionColumns は poll_options に1行入れるときの列数（分割の単位）。
+const pollOptionColumns = 3
 
 func (r *MySQLPollRepository) CreatePoll(ctx context.Context, param repository.CreatePollParam) (*model.Poll, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -47,13 +52,22 @@ func (r *MySQLPollRepository) CreatePoll(ctx context.Context, param repository.C
 		return nil, err
 	}
 
-	for i, label := range param.OptionLabels {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO poll_options (poll_id, label, display_order) VALUES (?, ?, ?)`,
-			pollID, label, i,
-		); err != nil {
-			return nil, err
+	order := 0
+
+	// 選択肢は1本の INSERT にまとめる（以前は選択肢の数ぶん往復していた）。
+	// display_order は渡された順のままなので、表示の並びは変わらない。
+	if err := inChunks(param.OptionLabels, pollOptionColumns, func(chunk []string) error {
+		args := make([]any, 0, len(chunk)*pollOptionColumns)
+		for i, label := range chunk {
+			args = append(args, pollID, label, order+i)
 		}
+		order += len(chunk)
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO poll_options (poll_id, label, display_order) VALUES `+
+				valuesPlaceholders(len(chunk), pollOptionColumns), args...)
+		return err
+	}); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -80,16 +94,16 @@ func (r *MySQLPollRepository) GetPollByID(ctx context.Context, id int64) (*model
 	return scanPoll(row)
 }
 
-func (r *MySQLPollRepository) ListPollsByRoomID(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM polls WHERE room_id = ?`, roomID).Scan(&total); err != nil {
+func (r *MySQLPollRepository) ListPollsByRoomID(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.Poll, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM polls WHERE room_id = ?`, roomID)
+	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, deadline, created_at, updated_at
 		 FROM polls WHERE room_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		roomID, limit, offset,
+		roomID, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -189,16 +203,26 @@ func (r *MySQLPollRepository) ReplaceVotes(ctx context.Context, pollID, userID i
 		return err
 	}
 
+	// INSERT ... SELECT confirms the options actually belong to pollID, so a caller
+	// cannot vote for an option belonging to a different poll.
+	//
+	// 以前は選択肢1件ごとに同じ INSERT ... SELECT を撃っていた。IN 句に変えても
+	// 「pollID に属する選択肢しか入らない」という守りはそのまま（WHERE の
+	// poll_id = ? が残っているので、他の投票の選択肢IDを混ぜても行が作られない）。
 	now := time.Now().Unix()
-	for _, optionID := range optionIDs {
-		// INSERT ... SELECT confirms optionID actually belongs to pollID, so a caller
-		// cannot vote for an option belonging to a different poll.
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO poll_votes (poll_option_id, user_id, created_at)
-			SELECT id, ?, ? FROM poll_options WHERE id = ? AND poll_id = ?
-		`, userID, now, optionID, pollID); err != nil {
-			return err
+	if err := inChunks(optionIDs, 1, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)+3)
+		args = append(args, userID, now, pollID)
+		for _, optionID := range chunk {
+			args = append(args, optionID)
 		}
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO poll_votes (poll_option_id, user_id, created_at)
+			SELECT id, ?, ? FROM poll_options WHERE poll_id = ? AND id IN (`+inPlaceholders(len(chunk))+`)
+		`, args...)
+		return err
+	}); err != nil {
+		return err
 	}
 
 	return tx.Commit()
@@ -237,4 +261,96 @@ func scanPoll(row pollScanner) (*model.Poll, error) {
 	p.CreatedAt = time.Unix(createdAt, 0)
 	p.UpdatedAt = time.Unix(updatedAt, 0)
 	return &p, nil
+}
+
+// CountVotersByPollIDs は CountVoters の一括版。DataLoader から1クエリで呼ばれる。
+//
+// 投票が1件も無い投票IDは GROUP BY の結果に出てこないので map にも入らない。
+// int のゼロ値がそのまま「0人」という正しい値になるので、呼び出し側で補う必要はない。
+func (r *MySQLPollRepository) CountVotersByPollIDs(ctx context.Context, pollIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(pollIDs))
+	if len(pollIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(pollIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT po.poll_id, COUNT(DISTINCT pv.user_id)
+		FROM poll_votes pv
+		JOIN poll_options po ON pv.poll_option_id = po.id
+		WHERE po.poll_id IN (%s)
+		GROUP BY po.poll_id
+	`, placeholders)
+
+	args := make([]any, len(pollIDs))
+	for i, id := range pollIDs {
+		args[i] = id
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var pollID int64
+		var total int
+		if err := rows.Scan(&pollID, &total); err != nil {
+			return nil, err
+		}
+		result[pollID] = total
+	}
+	return result, rows.Err()
+}
+
+// ListOptionsWithResultsByPollIDs は ListOptionsWithResults の一括版。
+// DataLoader から1クエリでまとめて呼ばれる。
+//
+// 並びは単体版と同じ display_order 昇順。投票ごとに切り直す必要があるので
+// ORDER BY に poll_id を先頭に足してあるだけで、投票内の順序は変えていない。
+func (r *MySQLPollRepository) ListOptionsWithResultsByPollIDs(ctx context.Context, pollIDs []int64, viewerUserID int64) (map[int64][]*repository.PollOptionResult, error) {
+	result := make(map[int64][]*repository.PollOptionResult, len(pollIDs))
+	if len(pollIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(pollIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT po.id, po.poll_id, po.label, po.display_order,
+		       COUNT(pv.id) AS vote_count,
+		       SUM(CASE WHEN pv.user_id = ? THEN 1 ELSE 0 END) AS my_vote_count
+		FROM poll_options po
+		LEFT JOIN poll_votes pv ON pv.poll_option_id = po.id
+		WHERE po.poll_id IN (%s)
+		GROUP BY po.id, po.poll_id, po.label, po.display_order
+		ORDER BY po.poll_id, po.display_order
+	`, placeholders)
+
+	args := make([]any, 0, len(pollIDs)+1)
+	args = append(args, viewerUserID)
+	for _, id := range pollIDs {
+		args = append(args, id)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var opt model.PollOption
+		var voteCount int
+		var myVoteCount sql.NullInt64
+		if err := rows.Scan(&opt.ID, &opt.PollID, &opt.Label, &opt.DisplayOrder, &voteCount, &myVoteCount); err != nil {
+			return nil, err
+		}
+		result[opt.PollID] = append(result[opt.PollID], &repository.PollOptionResult{
+			Option:    &opt,
+			VoteCount: voteCount,
+			VotedByMe: myVoteCount.Valid && myVoteCount.Int64 > 0,
+		})
+	}
+	return result, rows.Err()
 }

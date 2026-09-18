@@ -30,12 +30,25 @@ type PollRepository interface {
 	// CreatePoll creates the Poll and all of its PollOptions in one transaction.
 	CreatePoll(ctx context.Context, param CreatePollParam) (*model.Poll, error)
 	GetPollByID(ctx context.Context, id int64) (*model.Poll, error)
-	ListPollsByRoomID(ctx context.Context, roomID int64, limit, offset int) ([]*model.Poll, int, error)
+	ListPollsByRoomID(ctx context.Context, roomID int64, q PageQuery) ([]*model.Poll, int, error)
 	CountUnvotedPollsByRoomID(ctx context.Context, roomID, viewerUserID int64) (int, error)
 	ListOptionsWithResults(ctx context.Context, pollID, viewerUserID int64) ([]*PollOptionResult, error)
+	// ListOptionsWithResultsByPollIDs は複数の投票の選択肢と集計を1クエリで引く
+	// （DataLoader 用）。並び順は ListOptionsWithResults と同一でなければならない。
+	//
+	// 返す map には選択肢が引けた投票IDだけを入れる。選択肢が1つも無い投票は key ごと
+	// 落ちるが、ローダーの戻り値はそこで nil スライスになり、
+	// ListOptionsWithResults が空を返すのと同じ表示になる。
+	ListOptionsWithResultsByPollIDs(ctx context.Context, pollIDs []int64, viewerUserID int64) (map[int64][]*PollOptionResult, error)
 	// CountVoters returns how many distinct users have voted on pollID. A user who
 	// picked several options on a multiple-choice poll is counted once.
 	CountVoters(ctx context.Context, pollID int64) (int, error)
+	// CountVotersByPollIDs は複数の投票の投票者数を1クエリで引く（DataLoader 用）。
+	//
+	// 返す map には1人以上投票がある投票IDだけを入れる。誰も投票していない投票は
+	// key ごと落ちるが、int のゼロ値がそのまま「0人」という正しい値になるので、
+	// 呼び出し側は欠けを気にしなくてよい。
+	CountVotersByPollIDs(ctx context.Context, pollIDs []int64) (map[int64]int, error)
 	// ReplaceVotes atomically clears userID's existing votes on pollID and inserts new
 	// votes for optionIDs (only options that actually belong to pollID are accepted,
 	// enforced at the SQL level). Used for both single- and multiple-choice polls:

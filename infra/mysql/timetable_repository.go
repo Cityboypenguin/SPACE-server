@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -149,6 +150,9 @@ func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64,
 	return list, rows.Err()
 }
 
+// timetableInsertColumns は timetables に1行入れるときの列数（分割の単位）。
+const timetableInsertColumns = 5
+
 // ReplaceForSemester implements the "edit mode" batch-commit flow: the whole
 // desired course list for a semester is applied in one transaction, guarded by an
 // optimistic-concurrency check against baselineEntryIDs. See the interface doc
@@ -212,25 +216,47 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 		desiredCourseSet[courseID] = true
 	}
 
+	// 消すぶん・足すぶんをそれぞれ1本にまとめる。以前はどちらも for の中で
+	// 1件ずつ ExecContext しており、学期まるごと入れ替えると科目数ぶん往復していた
+	// （トランザクションの中なので結果は同じで、費用だけが科目数に比例していた）。
+	var removedEntryIDs []int64
 	for entryID, courseID := range currentCourseByEntry {
 		if !desiredCourseSet[courseID] {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM timetables WHERE id = ?`, entryID); err != nil {
-				return nil, err
-			}
+			removedEntryIDs = append(removedEntryIDs, entryID)
 		}
 	}
-
-	now := time.Now().Unix()
+	var addedCourseIDs []int64
 	for _, courseID := range desiredCourseIDs {
 		if currentCourseIDs[courseID] {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO timetables (user_id, course_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-			userID, courseID, model.TimetableEntryColorDefault, now, now,
-		); err != nil {
-			return nil, err
+		addedCourseIDs = append(addedCourseIDs, courseID)
+	}
+
+	if err := inChunks(removedEntryIDs, 1, func(chunk []int64) error {
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
 		}
+		_, err := tx.ExecContext(ctx,
+			`DELETE FROM timetables WHERE id IN (`+inPlaceholders(len(chunk))+`)`, args...)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().Unix()
+	if err := inChunks(addedCourseIDs, timetableInsertColumns, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)*timetableInsertColumns)
+		for _, courseID := range chunk {
+			args = append(args, userID, courseID, model.TimetableEntryColorDefault, now, now)
+		}
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO timetables (user_id, course_id, color, created_at, updated_at) VALUES `+
+				valuesPlaceholders(len(chunk), timetableInsertColumns), args...)
+		return err
+	}); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -357,6 +383,41 @@ func (r *MySQLTimetableRepository) CountByCourseID(ctx context.Context, courseID
 		return 0, err
 	}
 	return count, nil
+}
+
+// CountByCourseIDs は CountByCourseID の一括版（GROUP BY 1本）。
+func (r *MySQLTimetableRepository) CountByCourseIDs(ctx context.Context, courseIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(courseIDs))
+	if len(courseIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(courseIDs)), ",")
+	args := make([]any, len(courseIDs))
+	for i, id := range courseIDs {
+		args[i] = id
+	}
+
+	rows, err := r.DB.QueryContext(ctx, fmt.Sprintf(`
+		SELECT course_id, COUNT(*)
+		FROM timetables
+		WHERE course_id IN (%s)
+		GROUP BY course_id
+	`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var courseID int64
+		var count int
+		if err := rows.Scan(&courseID, &count); err != nil {
+			return nil, err
+		}
+		result[courseID] = count
+	}
+	return result, rows.Err()
 }
 
 type timetableScanner interface {

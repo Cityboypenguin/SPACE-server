@@ -21,9 +21,5 @@ func NewCountAdministratorsUseCase(adminRepo repository.AdministratorRepository)
 }
 
 func (uc *CountAdministratorsInteractor) Execute(ctx context.Context) (int, error) {
-	_, total, err := uc.adminRepo.ListAdministrators(ctx, 1, 0)
-	if err != nil {
-		return 0, err
-	}
-	return total, nil
+	return uc.adminRepo.CountAdministrators(ctx)
 }

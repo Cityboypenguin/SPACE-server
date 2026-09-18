@@ -42,15 +42,15 @@ func (r *MySQLInquiryRepository) Save(ctx context.Context, inquiry *model.Inquir
 	return nil
 }
 
-func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.InquiryStatus, limit, offset int) ([]*model.Inquiry, int, error) {
+func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.InquiryStatus, q repository.PageQuery) ([]*model.Inquiry, int, error) {
 	countQuery := `SELECT COUNT(*) FROM inquiries WHERE 1=1`
 	var countArgs []interface{}
 	if status != nil {
 		countQuery += " AND status = ?"
 		countArgs = append(countArgs, string(*status))
 	}
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count inquiries: %w", err)
 	}
 
@@ -65,7 +65,7 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 		args = append(args, string(*status))
 	}
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {

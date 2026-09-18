@@ -129,18 +129,14 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 				return err
 			}
 
-			for i, input := range newMediaInputs {
-				media := model.NewMedia(param.UserID, input, post.UpdatedAt)
-
-				if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
-					return err
-				}
-
-				newPosition := currentMaxPos + 1 + i
-
-				if err := uc.mediaRepo.CreatePostMedia(ctx, post.ID, media.ID, newPosition); err != nil {
-					return err
-				}
+			// 追加ぶんは既存の添付の後ろへ続ける（開始位置が currentMaxPos+1）。
+			// 作成時と同じく media 行1本・紐付け1本にまとめる。
+			medias := model.NewMediaBatch(param.UserID, newMediaInputs, post.UpdatedAt)
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
+				return err
+			}
+			if err := uc.mediaRepo.CreatePostMediaBatch(ctx, post.ID, model.MediaIDs(medias), currentMaxPos+1); err != nil {
+				return err
 			}
 		}
 		return nil

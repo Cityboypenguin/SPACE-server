@@ -60,9 +60,9 @@ func (r *MySQLAnnouncementRepository) FindByID(ctx context.Context, id int64) (*
 	return &a, nil
 }
 
-func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, limit, offset int) ([]*model.Announcement, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM announcements`).Scan(&total); err != nil {
+func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, q repository.PageQuery) ([]*model.Announcement, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM announcements`)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count announcements: %w", err)
 	}
 
@@ -70,7 +70,7 @@ func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, limit, offset
 		SELECT id, title, body, admin_id, created_at, updated_at
 		FROM announcements
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query announcements: %w", err)
 	}
@@ -109,22 +109,4 @@ func (r *MySQLAnnouncementRepository) Update(ctx context.Context, a *model.Annou
 		return fmt.Errorf("failed to update announcement: %w", err)
 	}
 	return nil
-}
-
-func (r *MySQLAnnouncementRepository) ListAllUserIDs(ctx context.Context) ([]int64, error) {
-	rows, err := r.DB.QueryContext(ctx, `SELECT id FROM users WHERE status = 'active'`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query user ids: %w", err)
-	}
-	defer rows.Close()
-
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }

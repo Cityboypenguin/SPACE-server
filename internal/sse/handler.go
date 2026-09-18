@@ -14,7 +14,7 @@ import (
 // NewHandler は /events 用の Echo ハンドラを返す。
 // 認証は Authorization ヘッダー（JWTAuth middleware 経由）か ?token= クエリパラメータで行う。
 // ブラウザ標準の EventSource はカスタムヘッダーを送れないため、?token= を主な認証手段とする。
-func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.HandlerFunc {
+func NewHandler(hub *Broker, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
@@ -84,14 +84,16 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 			_ = writeSSE(res.Writer, replayEv)
 		}
 
-		// 現在の未読数を送信（再接続時にバッジ数を正確に同期する）
-		unreadCount, _ := notifRepo.CountUnread(req.Context(), userID)
-		_ = writeSSE(res.Writer, Event{
-			Type: "sync",
-			Data: map[string]any{"unreadCount": unreadCount},
-			Time: now,
-		})
-
+		// 接続時にベルの未読数を数えて送るのはやめた。
+		//
+		// 以前はここで接続・再接続のたびに COUNT を撃ち、失敗したら 0 を送っていた。
+		// 0 は「未読が無い」という嘘で、DB が不調なときほどベルが静かになる
+		// （＝一番気づいてほしいときに気づけない）。
+		//
+		// 数はサーバから配らず、クライアントが接続できた時点で
+		// myUnreadNotificationCount を取りに行く（room_changed で未読数を配るのを
+		// やめたのと同じ方針）。取得が失敗すればクライアント側で失敗として扱えるので、
+		// 嘘の 0 が画面に出ることも無い。
 		flusher.Flush()
 
 		ctx := req.Context()

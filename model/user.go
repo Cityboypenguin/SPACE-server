@@ -19,16 +19,45 @@ const (
 	UserStatusFrozen = "frozen"
 )
 
+// User は表示に使うユーザー。パスワードハッシュは持たない。
+//
+// 以前は HashedPassword もこの型にあり、表示用の取得（一覧・検索・ルームの
+// メンバー・メンションの解決・DataLoader の UserLoader）まで軒並み
+// hashed_password を SELECT していた。秘密が表示系のコードパスに載ると、
+// 取り違えて外へ出す事故の可能性がその経路の数だけ増える。
+//
+// 秘密は UserCredentials にだけ置き、「この型を持っている限りハッシュを
+// 触れない」ことを型で保証する。列を落とすだけにしなかったのは、構造体の
+// フィールドが残っていると、SELECT を書き足した誰かが表示系にハッシュを
+// 載せ直せてしまうため（それはコンパイルでは止まらない）。
+//
+// email は残してある。GraphQL の User.email が非 null の公開フィールドで、
+// 表示系（toGraphUser）が必ず埋めているため、ここから外すと外から見える挙動が
+// 変わる。今回の目的は「認証情報＝パスワードハッシュを表示系に載せない」こと。
 type User struct {
-	ID             int64
-	AccountID      string
-	Name           string
-	Email          string
+	ID        int64
+	AccountID string
+	Name      string
+	Email     string
+	Role      string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// UserCredentials は認証に使う秘密を伴うユーザー。
+//
+// これを取得してよいのは認証の経路だけ:
+//   - ログイン（LoginUserUseCase）
+//   - パスワード変更時の現在パスワード照合（UpdateUserUseCase）
+//   - パスワード再設定（ResetPasswordUseCase）
+//   - 新規登録（CreateUserUseCase）
+//
+// トークン検証（internal/auth.ValidateAndVerifyToken）は凍結状態しか見ないので
+// 公開情報の GetUserByID を使う。認証まわりでも、秘密が要らないなら取らない。
+type UserCredentials struct {
+	User
 	HashedPassword string
-	Role           string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 type CreateUserParam struct {
@@ -92,7 +121,8 @@ func hashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
-func (u *User) CreateUser(param CreateUserParam) error {
+// CreateUser は新規登録。パスワードをハッシュ化するので UserCredentials 側にある。
+func (c *UserCredentials) CreateUser(param CreateUserParam) error {
 	if err := ValidateAccountID(param.AccountID); err != nil {
 		return err
 	}
@@ -105,17 +135,29 @@ func (u *User) CreateUser(param CreateUserParam) error {
 		return err
 	}
 
-	u.AccountID = param.AccountID
-	u.Name = param.Name
-	u.Email = param.Email
-	u.HashedPassword = hashedPassword
-	u.CreatedAt = param.CreatedAt
-	u.UpdatedAt = param.UpdatedAt
+	c.AccountID = param.AccountID
+	c.Name = param.Name
+	c.Email = param.Email
+	c.HashedPassword = hashedPassword
+	c.CreatedAt = param.CreatedAt
+	c.UpdatedAt = param.UpdatedAt
 
 	return nil
 }
 
-func (u *User) UpdateUser(param UpdateUserParam) error {
+// UpdateProfile は公開情報だけを更新する（表示系の更新経路用）。
+//
+// パスワードを渡されたら黙って無視せずエラーにする。無視すると「変更したのに
+// 変わっていない」という気づけない壊れ方になるので、秘密を扱える
+// UserCredentials.UpdateUser を使えと明示的に知らせる。
+func (u *User) UpdateProfile(param UpdateUserParam) error {
+	if param.Password != nil {
+		return fmt.Errorf("password changes must go through UserCredentials.UpdateUser")
+	}
+	return u.applyPublicUpdate(param)
+}
+
+func (u *User) applyPublicUpdate(param UpdateUserParam) error {
 	if param.AccountID != nil {
 		if err := ValidateAccountID(*param.AccountID); err != nil {
 			return err
@@ -131,13 +173,21 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 	if param.Email != nil {
 		u.Email = *param.Email
 	}
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
+// UpdateUser は公開情報とパスワードをまとめて更新する（認証の経路用）。
+func (c *UserCredentials) UpdateUser(param UpdateUserParam) error {
+	if err := c.applyPublicUpdate(param); err != nil {
+		return err
+	}
 	if param.Password != nil {
 		hashedPassword, err := hashPassword(*param.Password)
 		if err != nil {
 			return err
 		}
-		u.HashedPassword = hashedPassword
+		c.HashedPassword = hashedPassword
 	}
-	u.UpdatedAt = time.Now()
 	return nil
 }

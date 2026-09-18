@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/Cityboypenguin/SPACE-server/infra/email"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -19,16 +18,16 @@ type SendEmailOTPUseCase interface {
 var _ SendEmailOTPUseCase = &SendEmailOTPInteractor{}
 
 type SendEmailOTPInteractor struct {
-	otpRepo      repository.EmailOTPRepository
-	userRepo     repository.UserRepository
-	emailService email.EmailService
+	otpRepo  repository.EmailOTPRepository
+	userRepo repository.UserRepository
+	mailer   repository.Mailer
 }
 
-func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserRepository, emailService email.EmailService) SendEmailOTPUseCase {
+func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserRepository, mailer repository.Mailer) SendEmailOTPUseCase {
 	return &SendEmailOTPInteractor{
-		otpRepo:      otpRepo,
-		userRepo:     userRepo,
-		emailService: emailService,
+		otpRepo:  otpRepo,
+		userRepo: userRepo,
+		mailer:   mailer,
 	}
 }
 
@@ -73,7 +72,7 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 		"Senshu-Universeへの新規登録の確認コードは以下の通りです。\n\n確認コード: %s\n\nこのコードは10分間有効です。\n※このメールに心当たりがない場合は、そのまま削除してください。",
 		code,
 	)
-	if err := uc.emailService.Send(emailAddr, subject, body); err != nil {
+	if err := uc.mailer.Send(ctx, emailAddr, subject, body); err != nil {
 		return err
 	}
 

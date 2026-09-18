@@ -57,6 +57,13 @@ type TimetableRepository interface {
 	// timetable - used by the admin course-deletion flow to warn how many students'
 	// registrations (and course-room history) would be wiped out by the cascade.
 	CountByCourseID(ctx context.Context, courseID int64) (int, error)
+	// CountByCourseIDs は複数授業の履修者数を1クエリで数える。
+	//
+	// 管理画面の授業一覧が使う。以前は一覧の1件ごとに CountByCourseID を呼んで
+	// いたので、20件なら COUNT が20本走っていた。
+	//
+	// 履修者が0の授業は key ごと欠ける（int のゼロ値 0 がそのまま正しい）。
+	CountByCourseIDs(ctx context.Context, courseIDs []int64) (map[int64]int, error)
 	// ReplaceForSemester atomically replaces userID's timetable entries for
 	// (year, semester) with exactly desiredCourseIDs, in one transaction: entries
 	// whose course is no longer desired are deleted, courses newly desired are

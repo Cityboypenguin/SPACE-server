@@ -16,8 +16,8 @@ func NewManageInquiryUsecase(inquiryRepo repository.InquiryRepository) *ManageIn
 	return &ManageInquiryUsecase{inquiryRepo: inquiryRepo}
 }
 
-func (u *ManageInquiryUsecase) Search(ctx context.Context, status *model.InquiryStatus, limit, offset int) ([]*model.Inquiry, int, error) {
-	return u.inquiryRepo.FindAll(ctx, status, limit, offset)
+func (u *ManageInquiryUsecase) Search(ctx context.Context, status *model.InquiryStatus, q repository.PageQuery) ([]*model.Inquiry, int, error) {
+	return u.inquiryRepo.FindAll(ctx, status, q)
 }
 
 func (u *ManageInquiryUsecase) GetByID(ctx context.Context, id string) (*model.Inquiry, error) {

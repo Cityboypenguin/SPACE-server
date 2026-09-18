@@ -24,7 +24,8 @@ func NewDeleteAdministratorUseCase(adminRepo repository.AdministratorRepository)
 }
 
 func (uc *DeleteAdministratorInteractor) Execute(ctx context.Context, id int64) (bool, error) {
-	_, total, err := uc.adminRepo.ListAdministrators(ctx, 1, 0)
+	// 件数だけが要るので、行を1件取って捨てる ListAdministrators ではなく Count を使う。
+	total, err := uc.adminRepo.CountAdministrators(ctx)
 	if err != nil {
 		return false, err
 	}

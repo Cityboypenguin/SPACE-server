@@ -316,10 +316,6 @@ func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID in
 	return err
 }
 
-func (r *MySQLPostRepository) RecalculateReplyCounts(ctx context.Context) error {
-	return recalculatePostReplyCounts(ctx, extractDB(ctx, r.DB))
-}
-
 func (r *MySQLPostRepository) RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		WITH RECURSIVE affected_ancestors AS (
@@ -364,35 +360,9 @@ type replyCountExecer interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
-func recalculatePostReplyCounts(ctx context.Context, execer replyCountExecer) error {
-	_, err := execer.ExecContext(ctx, `
-		WITH RECURSIVE visible_descendants AS (
-			SELECT parent_id AS ancestor_id, id AS descendant_id
-			FROM posts
-			WHERE parent_id IS NOT NULL AND deleted_at IS NULL
-
-			UNION ALL
-
-			SELECT vd.ancestor_id, p.id
-			FROM visible_descendants vd
-			JOIN posts p ON p.parent_id = vd.descendant_id
-			WHERE p.deleted_at IS NULL
-		),
-		reply_counts AS (
-			SELECT ancestor_id, COUNT(*) AS reply_count
-			FROM visible_descendants
-			GROUP BY ancestor_id
-		)
-		UPDATE posts p
-		LEFT JOIN reply_counts rc ON rc.ancestor_id = p.id
-		SET p.reply_count = COALESCE(rc.reply_count, 0)
-	`)
-	return err
-}
-
-func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM posts`).Scan(&total); err != nil {
+func (r *MySQLPostRepository) ListPosts(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM posts`)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -400,7 +370,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) 
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -433,7 +403,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) 
 	return posts, total, nil
 }
 
-func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM favorite_users fu
@@ -443,8 +413,8 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	var countArgs []interface{}
 	countArgs = append(countArgs, userID)
 	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -466,7 +436,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 		ORDER BY score DESC, p.created_at DESC
 		LIMIT ? OFFSET ?
 	`
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -735,12 +705,12 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	return posts, nil
 }
 
-func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
 	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -752,7 +722,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offs
 	var args []interface{}
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -783,12 +753,12 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offs
 
 // GetFeedPosts はハイブリッドスコアでソートされたトップレベル投稿を返す。
 // score = (いいね数×2 + 返信数×3 + 1) / (経過時間h + 2)^1.5 × フォローブースト(1.5)
-func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
 	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -810,7 +780,7 @@ func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, 
 		ORDER BY score DESC, p.created_at DESC
 		LIMIT ? OFFSET ?
 	`
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
@@ -1027,7 +997,7 @@ func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*m
 	return &p, nil
 }
 
-func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `
 		SELECT COUNT(*) 
 		FROM favorites f
@@ -1038,8 +1008,8 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	countArgs = append(countArgs, userID)
 	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -1054,7 +1024,7 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	query, args = AppendBlockFilter(ctx, query, args, "p.user_id")
 	query, args = AppendBlockFilter(ctx, query, args, "f.user_id")
 	query += " ORDER BY f.created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -1089,13 +1059,13 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	return posts, total, nil
 }
 
-func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL`
 	countArgs := []interface{}{userID}
 	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -1107,7 +1077,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	args := []interface{}{userID}
 	query, args = AppendBlockFilter(ctx, query, args, "user_id")
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {

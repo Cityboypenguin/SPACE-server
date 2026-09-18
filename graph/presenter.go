@@ -356,7 +356,7 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 const notificationTargetTypePost = "post"
 const notificationTargetTypeMessage = "message"
 
-func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
+func toGraphNotification(n *model.Notification, h notificationHydration) *gqlmodel.Notification {
 	if n == nil {
 		return nil
 	}
@@ -373,14 +373,17 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, 
 	if n.TargetID != nil {
 		id := encodeGraphID(*n.TargetType, *n.TargetID)
 		gql.TargetID = &id
-		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost {
-			if p, ok := postMap[*n.TargetID]; ok {
+		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost && h.postsLoaded {
+			if p, ok := h.posts[*n.TargetID]; ok {
 				gql.TargetPost = toGraphPost(p)
 			}
 		}
 	}
-	if n.ActorID != nil {
-		if u, ok := actorMap[*n.ActorID]; ok {
+	// actor を引いていないなら埋めない。actor が要求されていないときだけ
+	// 引かないので、ここが nil のままでも応答からフィールドが欠けることはない
+	// （notificationHydration のコメント参照）。
+	if n.ActorID != nil && h.actorsLoaded {
+		if u := h.actor(n.ActorID); u != nil {
 			gql.Actor = toGraphUser(u)
 		} else {
 			gql.Actor = toGraphDeletedUserWithID(*n.ActorID)
@@ -389,7 +392,7 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, 
 	return gql
 }
 
-func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.NotificationGroup {
+func toGraphNotificationGroup(g *model.NotificationGroup, h notificationHydration) *gqlmodel.NotificationGroup {
 	if g == nil {
 		return nil
 	}
@@ -414,14 +417,15 @@ func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*mo
 	if g.TargetID != nil {
 		id := encodeGraphID(*g.TargetType, *g.TargetID)
 		gql.TargetID = &id
-		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost {
-			if p, ok := postMap[*g.TargetID]; ok {
+		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost && h.postsLoaded {
+			if p, ok := h.posts[*g.TargetID]; ok {
 				gql.TargetPost = toGraphPost(p)
 			}
 		}
 	}
-	if g.ActorID != nil {
-		if u, ok := actorMap[*g.ActorID]; ok {
+	// 通知本体と同じ扱い（toGraphNotification のコメント参照）。
+	if g.ActorID != nil && h.actorsLoaded {
+		if u := h.actor(g.ActorID); u != nil {
 			gql.Actor = toGraphUser(u)
 		} else {
 			gql.Actor = toGraphDeletedUserWithID(*g.ActorID)

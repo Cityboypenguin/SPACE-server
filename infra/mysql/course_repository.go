@@ -97,14 +97,12 @@ func (r *MySQLCourseRepository) GetCourseByRoomID(ctx context.Context, roomID in
 // SearchByDayPeriod includes 通年 (full-year) courses alongside exact matches on
 // semester: a 通年 course occupies its slot in both terms, so it must be visible
 // (and registerable) whichever term the student is currently searching in.
-func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, limit, offset int) ([]*model.Course, int, error) {
+func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, q repository.PageQuery) ([]*model.Course, int, error) {
 	searchParam := "%" + keyword + "%"
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)`,
-		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam,
-	).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)`,
+		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -113,7 +111,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
 		 ORDER BY c.course_name
 		 LIMIT ? OFFSET ?`,
-		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam, limit, offset,
+		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam, q.Limit, q.Offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -193,14 +191,12 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM courses c "+whereClause, args...,
-	).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, param.Page, "SELECT COUNT(*) FROM courses c "+whereClause, args...)
+	if err != nil {
 		return nil, 0, err
 	}
 
-	queryArgs := append(append([]any{}, args...), param.Limit, param.Offset)
+	queryArgs := append(append([]any{}, args...), param.Page.Limit, param.Page.Offset)
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT `+courseColumns+` FROM courses c `+whereClause+`
 		 ORDER BY c.year DESC, c.semester DESC, c.day_of_week, c.period, c.course_name

@@ -9,7 +9,7 @@ import (
 )
 
 type SearchCommunityUseCase interface {
-	Execute(ctx context.Context, name string, limit, offset int) ([]*model.Community, int, error)
+	Execute(ctx context.Context, name string, q repository.PageQuery) ([]*model.Community, int, error)
 }
 
 var _ SearchCommunityUseCase = &SearchCommunityInteractor{}
@@ -22,10 +22,10 @@ func NewSearchCommunityUseCase(communityRepo repository.CommunityRepository) Sea
 	return &SearchCommunityInteractor{communityRepo: communityRepo}
 }
 
-func (uc *SearchCommunityInteractor) Execute(ctx context.Context, name string, limit, offset int) ([]*model.Community, int, error) {
+func (uc *SearchCommunityInteractor) Execute(ctx context.Context, name string, q repository.PageQuery) ([]*model.Community, int, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	return uc.communityRepo.SearchCommunities(ctx, name, claims.ID, limit, offset)
+	return uc.communityRepo.SearchCommunities(ctx, name, claims.ID, q)
 }

@@ -49,3 +49,32 @@ func NewMedia(uploaderUserID int64, input MediaInput, createdAt time.Time) *Medi
 		CreatedAt:      createdAt,
 	}
 }
+
+// NewMediaBatch は添付1回ぶんの入力をまとめて保存用の Media へ組み立てる。
+//
+// 添付は投稿・メッセージ・質問・回答のどれでも「入力の配列を順番どおり保存して
+// 並び順を付ける」という同じ形をしている。以前はその for ループが5箇所に
+// 散らばっていて、どれも中で1件ずつ DB を叩いていた。組み立てをここへ、
+// 保存を repository の一括版へ寄せることで、呼び出し側はどこでも同じ3行になる。
+func NewMediaBatch(uploaderUserID int64, inputs []MediaInput, createdAt time.Time) []*Media {
+	if len(inputs) == 0 {
+		return nil
+	}
+	out := make([]*Media, 0, len(inputs))
+	for _, input := range inputs {
+		out = append(out, NewMedia(uploaderUserID, input, createdAt))
+	}
+	return out
+}
+
+// MediaIDs は保存済み Media のIDを並び順のまま取り出す（紐付けの一括作成に渡す）。
+func MediaIDs(ms []*Media) []int64 {
+	if len(ms) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(ms))
+	for _, m := range ms {
+		ids = append(ids, m.ID)
+	}
+	return ids
+}

@@ -35,32 +35,72 @@ func (r *MySQLMediaRepository) CreateMedia(ctx context.Context, m *model.Media) 
 	return err
 }
 
-func (r *MySQLMediaRepository) CreatePostMedia(ctx context.Context, postID, mediaID int64, position int) error {
+// mediaInsertColumns / mediaLinkColumns は一括 INSERT の1行あたりの列数（分割の単位）。
+const (
+	mediaInsertColumns = 6
+	mediaLinkColumns   = 3
+)
+
+func (r *MySQLMediaRepository) CreateMediaBatch(ctx context.Context, ms []*model.Media) error {
 	db := extractDB(ctx, r.DB)
-	query := `INSERT INTO post_media (post_id, media_id, position) VALUES (?, ?, ?)`
-	_, err := db.ExecContext(ctx, query, postID, mediaID, position)
-	return err
+	return inChunks(ms, mediaInsertColumns, func(chunk []*model.Media) error {
+		args := make([]any, 0, len(chunk)*mediaInsertColumns)
+		for _, m := range chunk {
+			args = append(args, m.UploaderUserID, m.StorageKey, m.ContentType, m.Width, m.Height, m.CreatedAt.Unix())
+		}
+		result, err := db.ExecContext(ctx, `
+			INSERT INTO media (uploader_user_id, storage_key, content_type, width, height, created_at)
+			VALUES `+valuesPlaceholders(len(chunk), mediaInsertColumns), args...)
+		if err != nil {
+			return err
+		}
+		// 行数が事前に分かる複数 VALUES の INSERT では、InnoDB は AUTO_INCREMENT を
+		// 連番でまとめて確保する（notifications の SaveBatch も同じ前提に乗っている）。
+		// なので先頭IDから順に振り直してよい。
+		firstID, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		for i, m := range chunk {
+			m.ID = firstID + int64(i)
+		}
+		return nil
+	})
 }
 
-func (r *MySQLMediaRepository) CreateMessageMedia(ctx context.Context, messageID, mediaID int64, position int) error {
+// createMediaLinks は添付の紐付けを1本の INSERT で作る。
+// 親の種類ごとに表が違うだけで中身は同じなので、読み取り側の listByParentIDs と
+// 同じく表名と外部キー列名だけを引数にして1箇所に集約する。
+func (r *MySQLMediaRepository) createMediaLinks(ctx context.Context, joinTable, fkColumn string, parentID int64, mediaIDs []int64, startPosition int) error {
 	db := extractDB(ctx, r.DB)
-	query := `INSERT INTO message_media (message_id, media_id, position) VALUES (?, ?, ?)`
-	_, err := db.ExecContext(ctx, query, messageID, mediaID, position)
-	return err
+	offset := 0
+	return inChunks(mediaIDs, mediaLinkColumns, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)*mediaLinkColumns)
+		for i, mediaID := range chunk {
+			args = append(args, parentID, mediaID, startPosition+offset+i)
+		}
+		offset += len(chunk)
+		_, err := db.ExecContext(ctx, fmt.Sprintf(
+			`INSERT INTO %s (%s, media_id, position) VALUES %s`,
+			joinTable, fkColumn, valuesPlaceholders(len(chunk), mediaLinkColumns)), args...)
+		return err
+	})
 }
 
-func (r *MySQLMediaRepository) CreateQuestionMedia(ctx context.Context, questionID, mediaID int64, position int) error {
-	db := extractDB(ctx, r.DB)
-	query := `INSERT INTO question_media (question_id, media_id, position) VALUES (?, ?, ?)`
-	_, err := db.ExecContext(ctx, query, questionID, mediaID, position)
-	return err
+func (r *MySQLMediaRepository) CreatePostMediaBatch(ctx context.Context, postID int64, mediaIDs []int64, startPosition int) error {
+	return r.createMediaLinks(ctx, "post_media", "post_id", postID, mediaIDs, startPosition)
 }
 
-func (r *MySQLMediaRepository) CreateAnswerMedia(ctx context.Context, answerID, mediaID int64, position int) error {
-	db := extractDB(ctx, r.DB)
-	query := `INSERT INTO answer_media (answer_id, media_id, position) VALUES (?, ?, ?)`
-	_, err := db.ExecContext(ctx, query, answerID, mediaID, position)
-	return err
+func (r *MySQLMediaRepository) CreateMessageMediaBatch(ctx context.Context, messageID int64, mediaIDs []int64, startPosition int) error {
+	return r.createMediaLinks(ctx, "message_media", "message_id", messageID, mediaIDs, startPosition)
+}
+
+func (r *MySQLMediaRepository) CreateQuestionMediaBatch(ctx context.Context, questionID int64, mediaIDs []int64, startPosition int) error {
+	return r.createMediaLinks(ctx, "question_media", "question_id", questionID, mediaIDs, startPosition)
+}
+
+func (r *MySQLMediaRepository) CreateAnswerMediaBatch(ctx context.Context, answerID int64, mediaIDs []int64, startPosition int) error {
+	return r.createMediaLinks(ctx, "answer_media", "answer_id", answerID, mediaIDs, startPosition)
 }
 
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {

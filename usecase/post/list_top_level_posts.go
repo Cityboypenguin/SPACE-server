@@ -8,7 +8,7 @@ import (
 )
 
 type ListTopLevelPostsUseCase interface {
-	Execute(ctx context.Context, limit, offset int) ([]*model.Post, int, error)
+	Execute(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error)
 }
 
 var _ ListTopLevelPostsUseCase = &ListTopLevelPostsInteractor{}
@@ -23,6 +23,6 @@ func NewListTopLevelPostsUseCase(postRepo repository.PostRepository) ListTopLeve
 	}
 }
 
-func (uc *ListTopLevelPostsInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
-	return uc.postRepo.ListTopLevelPosts(ctx, limit, offset)
+func (uc *ListTopLevelPostsInteractor) Execute(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
+	return uc.postRepo.ListTopLevelPosts(ctx, q)
 }
