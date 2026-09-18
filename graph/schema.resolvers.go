@@ -765,48 +765,11 @@ func (r *mutationResolver) AddUserToRoom(ctx context.Context, input gqlmodel.Add
 		return false, fmt.Errorf("invalid user id")
 	}
 
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get room")
-	}
-	if room == nil {
-		return false, errors.New("room not found")
+	if uid != claims.ID {
+		return false, errors.New("forbidden: can only join community as yourself")
 	}
 
-	// ルーム種別ごとに「何が許されるか」を明示的に並べる。
-	//
-	// 以前はコミュニティだけを特別扱いし、それ以外は「呼び出し元がこのルームの
-	// メンバーか」しか見ずに任意のユーザーを room_users へ入れられた。これは
-	// 種別ごとの前提を2つとも壊せる:
-	//
-	//   - 授業ルーム: 参加者は時間割（履修）から決まり room_users を使わない。
-	//     ここから入れると、履修していない人をルームに置ける。
-	//   - DM: 2人であることを他のコードが前提にしている。3人目が入ると
-	//     dmPartnerID が「相手1人」を決められず false を返し、ブロック判定が
-	//     黙ってスキップされる（ブロックした相手と会話できてしまう）。
-	//
-	// 既定を「拒否」にしてあるので、新しいルーム種別を足した人はここで
-	// 明示的に判断することになる（既定が素通しだと足した種別が黙って開く）。
-	switch room.Type {
-	case model.RoomTypeCommunity:
-		// コミュニティは公開参加なので自分自身だけ入れられる（従来どおり）。
-		if uid != claims.ID {
-			return false, errors.New("forbidden: can only join community as yourself")
-		}
-
-		return r.JoinRoomUseCase.Execute(ctx, rid)
-
-	case model.RoomTypeCourse:
-		// 授業ルームの参加は時間割から決まる。room_users へ直接入れる口は用意しない。
-		return false, errors.New("forbidden: course room membership is determined by the timetable")
-
-	case model.RoomTypeDM:
-		// DM は2人固定。作成は createDMRoom（相手を引数で決める）が担う。
-		return false, errors.New("forbidden: cannot add a user to a direct message room")
-
-	default:
-		return false, errors.New("forbidden: cannot add a user to this room type")
-	}
+	return r.JoinRoomUseCase.Execute(ctx, rid)
 }
 
 // RemoveUserFromRoom is the resolver for the removeUserFromRoom field.

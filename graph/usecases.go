@@ -30,8 +30,6 @@ func NewCommunityUseCases(
 		SearchCommunityUseCase:             communityusecase.NewSearchCommunityUseCase(communityRepo),
 		ListMyCommunitiesUseCase:           communityusecase.NewListMyCommunitiesUseCase(communityRepo),
 		ListAllCommunitiesUseCase:          communityusecase.NewListAllCommunitiesUseCase(communityRepo),
-		PromoteToCommunityOwnerUseCase:     communityusecase.NewPromoteToCommunityOwnerUseCase(communityRepo, roomUserRepo),
-		DemoteFromCommunityOwnerUseCase:    communityusecase.NewDemoteFromCommunityOwnerUseCase(communityRepo, roomUserRepo),
 		IsSoleOwnerWithOtherMembersUseCase: communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepo),
 		GetRandomCommunitiesUseCase:        *communityusecase.NewGetRandomCommunitiesUseCase(communityRepo),
 	}

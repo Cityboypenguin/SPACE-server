@@ -279,8 +279,6 @@ type CommunityUseCases struct {
 	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
 	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
-	PromoteToCommunityOwnerUseCase     communityusecase.PromoteToCommunityOwnerUseCase
-	DemoteFromCommunityOwnerUseCase    communityusecase.DemoteFromCommunityOwnerUseCase
 	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
 	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
 }
