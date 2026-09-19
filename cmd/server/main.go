@@ -24,6 +24,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
+	"github.com/Cityboypenguin/SPACE-server/internal/activityarchive"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
@@ -151,20 +152,34 @@ func main() {
 	pollRepository := mysql.NewMySQLPollRepository(database)
 
 	var storageRepository repository.StorageRepository
+	var privateStorageRepository repository.PrivateStorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
-		storageRepository, err = azurerepo.New()
+		storage, storageErr := azurerepo.New()
+		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to azure blob storage")
 		}
+		storageRepository = storage
+		privateStorageRepository = storage
 	} else {
-		storageRepository, err = miniorepo.New()
+		storage, storageErr := miniorepo.New()
+		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to minio")
 		}
+		storageRepository = storage
+		privateStorageRepository = storage
 	}
+	activityArchiveRepository := mysql.NewMySQLActivityArchiveRepository(database)
+	activityArchiver, err := activityarchive.New(activityArchiveRepository, privateStorageRepository, config.ActivityArchiveHMACKey(isProd))
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize activity archive")
+	}
+	activityArchiveCtx, stopActivityArchive := context.WithCancel(context.Background())
+	activityArchiveDone := make(chan struct{})
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, communityRepository, txManager)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, roomRepository, roomUserRepository, txManager)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -183,7 +198,7 @@ func main() {
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
-	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
+	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository, txManager)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
@@ -280,7 +295,6 @@ func main() {
 	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
-	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
 	searchRoomUsersUseCase := roomusecase.NewSearchRoomUsersUseCase(roomUserRepository)
@@ -288,7 +302,8 @@ func main() {
 	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
-	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomRepository, roomUserRepository)
+	leaveCommunityUseCase := roomusecase.NewLeaveCommunityUseCase(roomRepository, roomUserRepository, txManager)
+	deleteOrphanedDMUseCase := roomusecase.NewDeleteOrphanedDMUseCase(roomRepository, roomUserRepository, txManager)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
 	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
 	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
@@ -550,7 +565,6 @@ func main() {
 			GetMessageByIDUseCase:               getMessageByIDUseCase,
 			GetLastMessagesByRoomIDsUseCase:     getLastMessagesByRoomIDsUseCase,
 			GetRoomUseCase:                      getRoomUseCase,
-			DeleteRoomUseCase:                   deleteRoomUseCase,
 			GetUserIDsByRoomIDUseCase:           getUserIDsByRoomIDUseCase,
 			ListUsersByRoomIDsUseCase:           listUsersByRoomIDsUseCase,
 			SearchRoomUsersUseCase:              searchRoomUsersUseCase,
@@ -558,7 +572,8 @@ func main() {
 			ListJoinedRoomIDsUseCase:            listJoinedRoomIDsUseCase,
 			ListMyDMRoomsUseCase:                listMyDMRoomsUseCase,
 			GetOrCreateDMRoomUseCase:            getOrCreateDMRoomUseCase,
-			RemoveUserFromRoomUseCase:           removeUserFromRoomUseCase,
+			LeaveCommunityUseCase:               leaveCommunityUseCase,
+			DeleteOrphanedDMUseCase:             deleteOrphanedDMUseCase,
 			JoinRoomUseCase:                     joinRoomUseCase,
 			GetRoomUserRoleUseCase:              getRoomUserRoleUseCase,
 			SetRoomUserRoleUseCase:              setRoomUserRoleUseCase,
@@ -568,7 +583,7 @@ func main() {
 			CountUnreadByRoomTypeUseCase:        countUnreadByRoomTypeUseCase,
 		},
 
-		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
+		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, roomUserRepository, txManager),
 		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
 		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
@@ -796,9 +811,13 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, sseTicketRepository, revokedTokenRepository, userRepository, passwordResetRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, sseTicketRepository))
 
 	termsBroadcastScheduler.SchedulePending(context.Background())
+	go func() {
+		defer close(activityArchiveDone)
+		activityArchiver.Run(activityArchiveCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -811,12 +830,18 @@ func main() {
 	<-quit
 
 	logger.Log.Info().Msg("shutting down server...")
+	stopActivityArchive()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error().Err(err).Msg("server shutdown error")
+	}
+	select {
+	case <-activityArchiveDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
 	}
 
 	// リクエストの外で走っている処理（チャット配信・お知らせ通知・活動記録）を、

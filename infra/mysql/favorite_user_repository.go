@@ -61,7 +61,7 @@ func (r *MySQLFavoriteUserRepository) ListFavoriteUsers(ctx context.Context, use
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		userID, q.Limit, q.Offset,
 	)
 	if err != nil {
@@ -93,7 +93,7 @@ func (r *MySQLFavoriteUserRepository) ListFollowers(ctx context.Context, userID 
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE favorite_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, user_id, favorite_user_id, created_at FROM favorite_users WHERE favorite_user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		userID, q.Limit, q.Offset,
 	)
 	if err != nil {

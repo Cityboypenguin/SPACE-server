@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -151,6 +152,20 @@ func (r *Resolver) avatarURLFor(p *model.Profile) *string {
 	}
 	url := r.StorageRepository.PublicURL(p.AvatarMedia.StorageKey)
 	return &url
+}
+
+func (r *Resolver) graphProfile(ctx context.Context, p *model.Profile) (*gqlmodel.Profile, error) {
+	if p == nil {
+		return nil, errors.New("profile update returned no profile")
+	}
+	user, err := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("profile user not found after update")
+	}
+	return toGraphProfile(user, p, r.avatarURLFor(p)), nil
 }
 
 func (r *Resolver) communityAvatarURL(c *model.Community) string {

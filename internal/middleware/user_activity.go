@@ -114,14 +114,6 @@ func (r *UserActivityRecorder) Record(ctx context.Context, userID int64) bool {
 		r.mu.Unlock()
 		return false
 	}
-	// 書く前に印を付ける。書いてから付けると、応答を返し終える前に同じユーザーの
-	// 次のリクエストが来たときに二重で撃つ。失敗したぶんは次の interval まで
-	// 記録されないが、それは「最終アクセス時刻が最大5分古い」だけの話で、
-	// 失敗はログに残るので気づけなくなるわけではない。
-	r.last[userID] = activityMark{at: now, hour: hour}
-	r.sweepLocked(now)
-	r.mu.Unlock()
-
 	record := func(ctx context.Context) {
 		if err := r.users.UpdateLastActiveAt(ctx, userID, now.Unix()); err != nil {
 			logActivity(err).Int64("user_id", userID).Msg("failed to update last_active_at")
@@ -141,10 +133,21 @@ func (r *UserActivityRecorder) Record(ctx context.Context, userID int64) bool {
 	// 投げっぱなしの流儀はサーバ全体で internal/async.Runner に揃えてあるので、
 	// 停止時にはここも待ってもらえる（以前の素の goroutine は誰も待たなかった）。
 	if r.async == nil {
+		r.last[userID] = activityMark{at: now, hour: hour}
+		r.sweepLocked(now)
+		r.mu.Unlock()
 		record(context.WithoutCancel(ctx))
 		return true
 	}
-	r.async.Go(ctx, "user_activity", record)
+	// TryGo is nonblocking: keep the mark lock until the runner has accepted the task.
+	// A rejected task must remain eligible on the next request.
+	if !r.async.TryGo(ctx, "user_activity", record) {
+		r.mu.Unlock()
+		return false
+	}
+	r.last[userID] = activityMark{at: now, hour: hour}
+	r.sweepLocked(now)
+	r.mu.Unlock()
 	return true
 }
 

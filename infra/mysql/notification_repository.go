@@ -157,7 +157,7 @@ func (r *MySQLNotificationRepository) ListByUserID(ctx context.Context, userID i
 		SELECT id, user_id, type, actor_id, target_type, target_id, message, is_read, created_at
 		FROM notifications
 		WHERE user_id = ?
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?
 	`, userID, q.Limit, q.Offset)
 	if err != nil {
@@ -282,7 +282,7 @@ func (r *MySQLNotificationRepository) ListByActor(ctx context.Context, userID in
 		SELECT id, user_id, type, actor_id, target_type, target_id, message, is_read, created_at
 		FROM notifications
 		WHERE user_id = ? AND type = ? AND actor_id = ?
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?
 	`, userID, notifType, actorID, q.Limit, q.Offset)
 	if err != nil {

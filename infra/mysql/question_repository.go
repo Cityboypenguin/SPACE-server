@@ -71,7 +71,7 @@ func (r *MySQLQuestionRepository) ListQuestionsByRoomID(ctx context.Context, roo
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, room_id, asker_user_id, author_role, body, is_answered, best_answer_id, created_at, updated_at
-		 FROM questions WHERE room_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		 FROM questions WHERE room_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		roomID, q.Limit, q.Offset,
 	)
 	if err != nil {

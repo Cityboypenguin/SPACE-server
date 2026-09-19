@@ -61,7 +61,7 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 		return fmt.Errorf("community not found")
 	}
 
-	if err := uc.validateNoDuplicates(updates); err != nil {
+	if err := uc.validateUpdates(updates); err != nil {
 		return err
 	}
 
@@ -70,7 +70,7 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 	// （トランザクションの中なので結果は同じで、費用だけが人数に比例していた）。
 	// 種類は3つしか無いので、まとめれば最大3本で済む。
 	//
-	// 同じ利用者が2回出てこないことは validateNoDuplicates が先に保証しているので、
+	// 同じ利用者が2回出てこないことは validateUpdates が先に保証しているので、
 	// 「昇格と除名が同じ人に当たって順序で結果が変わる」は起きない。
 	promote, demote, kick := groupByAction(updates)
 
@@ -112,9 +112,7 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 	})
 }
 
-// groupByAction は更新指定を操作の種類ごとの利用者IDへ振り分ける。
-// 知らない Action は黙って落とす（1件ずつ回していたときの switch に
-// default が無かったのと同じ扱い）。
+// groupByAction は、検証済みの更新指定を操作の種類ごとの利用者IDへ振り分ける。
 func groupByAction(updates []MemberUpdate) (promote, demote, kick []int64) {
 	for _, u := range updates {
 		switch u.Action {
@@ -129,9 +127,14 @@ func groupByAction(updates []MemberUpdate) (promote, demote, kick []int64) {
 	return promote, demote, kick
 }
 
-func (uc *UpdateCommunityMembersInteractor) validateNoDuplicates(updates []MemberUpdate) error {
+func (uc *UpdateCommunityMembersInteractor) validateUpdates(updates []MemberUpdate) error {
 	seen := make(map[int64]struct{}, len(updates))
 	for _, u := range updates {
+		switch u.Action {
+		case MemberActionPromote, MemberActionDemote, MemberActionKick:
+		default:
+			return fmt.Errorf("unknown member action %q", u.Action)
+		}
 		if _, dup := seen[u.UserID]; dup {
 			return fmt.Errorf("duplicate update for user %d", u.UserID)
 		}

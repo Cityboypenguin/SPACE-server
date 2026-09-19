@@ -45,7 +45,7 @@ func (r *MySQLAdministratorRepository) CreateAdministrator(ctx context.Context, 
 		INSERT INTO administrators (name, email, hashed_password, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
-	result, err := r.db.ExecContext(ctx, query, a.Name, a.Email, a.HashedPassword, a.CreatedAt.Unix(), a.UpdatedAt.Unix())
+	result, err := extractDB(ctx, r.db).ExecContext(ctx, query, a.Name, a.Email, a.HashedPassword, a.CreatedAt.Unix(), a.UpdatedAt.Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -58,7 +58,7 @@ func (r *MySQLAdministratorRepository) GetAdministratorByID(ctx context.Context,
 		FROM administrators
 		WHERE id = ?
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
+	row := extractDB(ctx, r.db).QueryRowContext(ctx, query, id)
 
 	var a model.Administrator
 	var createdAtUnix, updatedAtUnix int64
@@ -134,7 +134,7 @@ func (r *MySQLAdministratorRepository) ListAdministrators(ctx context.Context, q
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, email, hashed_password, created_at, updated_at
 		FROM administrators
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?
 	`, q.Limit, q.Offset)
 	if err != nil {

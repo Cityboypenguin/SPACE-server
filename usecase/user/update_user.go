@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"golang.org/x/crypto/bcrypt"
@@ -26,6 +27,13 @@ func NewUpdateUserUseCase(userRepo repository.UserRepository) UpdateUserUseCase 
 }
 
 func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.UserAccount, error) {
+	if requireCurrentPassword {
+		if _, err := authz.RequireSelfOrAdmin(ctx, id); err != nil {
+			return nil, err
+		}
+	} else if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	// このユースケースはパスワードを変えられる（param.Password）ので、
 	// 現在パスワードの照合と保存の両方でハッシュが要る。
 	user, err := uc.userRepo.GetCredentialsByID(ctx, id)

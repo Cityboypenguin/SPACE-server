@@ -385,20 +385,6 @@ func (r *mutationResolver) ResetPassword(ctx context.Context, resetToken string,
 
 // CreateAdministrator is the resolver for the createAdministrator field.
 func (r *mutationResolver) CreateAdministrator(ctx context.Context, input gqlmodel.CreateAdministratorInput) (*gqlmodel.Administrator, error) {
-	if claims, ok := auth.ClaimsFromContext(ctx); ok {
-		if !isAdminRole(claims.Role) {
-			return nil, errors.New("forbidden")
-		}
-	} else {
-		count, err := r.CountAdministratorsUseCase.Execute(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if count > 0 {
-			return nil, errors.New("unauthorized")
-		}
-	}
-
 	param := model.CreateAdministratorParam{
 		Name:     input.Name,
 		Email:    input.Email,
@@ -641,9 +627,7 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input gqlmodel.Upd
 		return nil, err
 	}
 
-	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, p.UserID)
-
-	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+	return r.graphProfile(ctx, p)
 }
 
 // UpdateMyProfile is the resolver for the updateMyProfile field.
@@ -687,11 +671,14 @@ func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.Create
 		return nil, err
 	}
 	if community == nil {
-		return nil, nil
+		return nil, errors.New("community creation returned no community")
 	}
 	room, err := r.GetRoomUseCase.Execute(ctx, community.RoomID)
 	if err != nil {
 		return nil, err
+	}
+	if room == nil {
+		return nil, errors.New("created community room not found")
 	}
 
 	gqlRoom := toGraphRoom(room)
@@ -792,34 +779,12 @@ func (r *mutationResolver) RemoveUserFromRoom(ctx context.Context, input gqlmode
 		return false, errors.New("forbidden: can only remove yourself from a room")
 	}
 
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get room")
-	}
-
-	if room != nil && room.Type == model.RoomTypeCommunity {
-		if err := r.checkCanLeaveCommunity(ctx, rid, uid); err != nil {
-			return false, err
-		}
-	}
-
-	if err := r.RemoveUserFromRoomUseCase.Execute(ctx, rid, uid); err != nil {
-		return false, err
-	}
-
-	if room != nil && room.Type == model.RoomTypeCommunity {
-		if err := r.deleteCommunityIfEmpty(ctx, rid); err != nil {
-			logger.Log.Error().Err(err).Int64("room_id", rid).Msg("failed to auto-delete empty community room")
-		}
-	}
-
-	return true, nil
+	return r.LeaveCommunityUseCase.Execute(ctx, rid)
 }
 
 // DeleteRoom is the resolver for the deleteRoom field.
 func (r *mutationResolver) DeleteRoom(ctx context.Context, roomID string) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
 
@@ -828,35 +793,7 @@ func (r *mutationResolver) DeleteRoom(ctx context.Context, roomID string) (bool,
 		return false, fmt.Errorf("invalid room id")
 	}
 
-	room, err := r.GetRoomUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get room")
-	}
-	if room == nil {
-		return false, errors.New("room not found")
-	}
-	if room.Type != model.RoomTypeDM {
-		return false, errors.New("forbidden: only DM rooms can be deleted")
-	}
-
-	// これは閲覧判定ではなく DM 削除（書き込み系）の判定なので統一しない。
-	memberIDs, err := r.GetUserIDsByRoomIDUseCase.Execute(ctx, rid)
-	if err != nil {
-		return false, fmt.Errorf("failed to verify room membership")
-	}
-	if !containsInt64(memberIDs, claims.ID) {
-		return false, errors.New("forbidden: not a member of this room")
-	}
-	// 相手アカウントが削除され room_users が連動して消えた(残りが自分だけの)場合のみ削除を許可する。
-	if len(memberIDs) != 1 {
-		return false, errors.New("forbidden: cannot delete a room with an active partner")
-	}
-
-	if _, err := r.DeleteRoomUseCase.Execute(ctx, rid); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return r.DeleteOrphanedDMUseCase.Execute(ctx, rid)
 }
 
 // CreateCommunity is the resolver for the createCommunity field.
@@ -870,9 +807,7 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 		return nil, err
 	}
 	if c == nil {
-		// 以前は toGraphCommunityWithMembership が nil を受けて (nil, nil) を
-		// 返していた。集計を先に引く形にしたので、ここで同じところへ倒す。
-		return nil, nil
+		return nil, errors.New("community creation returned no community")
 	}
 
 	membership, err := r.loadCommunityMembership(ctx, []int64{c.RoomID}, &claims.ID,
@@ -1312,12 +1247,8 @@ func (r *mutationResolver) VotePoll(ctx context.Context, pollID string, optionID
 		oids = append(oids, oid)
 	}
 
-	if err := r.VotePollUseCase.Execute(ctx, pid, oids); err != nil {
-		return nil, err
-	}
-
-	p, err := r.GetPollByIDUseCase.Execute(ctx, pid)
-	if err != nil || p == nil {
+	p, err := r.VotePollUseCase.Execute(ctx, pid, oids)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1359,10 +1290,12 @@ func (r *mutationResolver) AdminDeleteQuestion(ctx context.Context, id string) (
 
 // AdminTriggerCourseImport is the resolver for the adminTriggerCourseImport field.
 func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32) (*gqlmodel.CourseImportStatus, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
+	claims, err := requireAdminAuth(ctx)
+	if err != nil {
 		return nil, err
 	}
 	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context, reportProgress func(processed, total int)) (int, int, error) {
+		bgCtx = auth.WithClaims(bgCtx, claims)
 		knownDedupKeys, err := r.ListDedupKeysByYearUseCase.Execute(bgCtx, int(year))
 		if err != nil {
 			return 0, 0, err
@@ -1481,8 +1414,7 @@ func (r *mutationResolver) AdminUpdateProfile(ctx context.Context, userID string
 		return nil, err
 	}
 
-	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, numericUserID)
-	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+	return r.graphProfile(ctx, p)
 }
 
 // UpdateCommunity is the resolver for the updateCommunity field.
@@ -1497,30 +1429,12 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, fmt.Errorf("invalid community id")
 	}
 
-	c, err := r.GetCommunityUseCase.Execute(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-	if c == nil {
-		return nil, fmt.Errorf("community not found")
-	}
-
-	if !isAdminRole(claims.Role) {
-		role, err := r.GetRoomUserRoleUseCase.Execute(ctx, c.RoomID, claims.ID)
-		if err != nil {
-			return nil, err
-		}
-		if role != model.RoomUserRoleOwner {
-			return nil, errors.New("forbidden: only community owners or administrators can update the community")
-		}
-	}
-
-	c.UpdateCommunity(model.UpdateCommunityParam{
+	c, err := r.UpdateCommunityUseCase.Execute(ctx, numericID, communityusecase.UpdateCommunityParam{
 		Name:        input.Name,
 		Description: input.Description,
+		AvatarKey:   input.AvatarKey,
 	})
-
-	if err := r.UpdateCommunityUseCase.Execute(ctx, c, input.AvatarKey); err != nil {
+	if err != nil {
 		return nil, err
 	}
 
@@ -1683,8 +1597,7 @@ func (r *mutationResolver) SetAvatar(ctx context.Context, objectKey string) (*gq
 		return nil, err
 	}
 
-	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+	return r.graphProfile(ctx, p)
 }
 
 // DeleteAvatar is the resolver for the deleteAvatar field.
@@ -1699,8 +1612,7 @@ func (r *mutationResolver) DeleteAvatar(ctx context.Context) (*gqlmodel.Profile,
 		return nil, err
 	}
 
-	targetUser, _ := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
-	return toGraphProfile(targetUser, p, r.avatarURLFor(p)), nil
+	return r.graphProfile(ctx, p)
 }
 
 // JoinRoom is the resolver for the joinRoom field.
@@ -2134,14 +2046,13 @@ func (r *mutationResolver) IssueNotificationStreamTicket(ctx context.Context) (s
 
 // CreateAnnouncement is the resolver for the createAnnouncement field.
 func (r *mutationResolver) CreateAnnouncement(ctx context.Context, input gqlmodel.CreateAnnouncementInput) (*gqlmodel.Announcement, error) {
-	claims, err := requireAdminAuth(ctx)
+	_, err := requireAdminAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 	a, err := r.CreateAnnouncementUseCase.Execute(ctx, announcementusecase.CreateAnnouncementInput{
-		Title:   input.Title,
-		Body:    input.Body,
-		AdminID: claims.ID,
+		Title: input.Title,
+		Body:  input.Body,
 	})
 	if err != nil {
 		return nil, err

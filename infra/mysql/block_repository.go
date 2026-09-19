@@ -65,7 +65,7 @@ func (r *MySQLBlockRepository) ListBlockers(ctx context.Context, userID int64, q
 	}
 
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, user_id, blocked_user_id, created_at FROM blocks WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		userID, q.Limit, q.Offset,
 	)
 	if err != nil {

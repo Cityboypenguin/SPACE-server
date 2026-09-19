@@ -3,24 +3,31 @@ package azurerepo
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 )
 
 type AzureBlobStorageRepository struct {
-	client        *azblob.Client
-	sharedKeyCred *azblob.SharedKeyCredential
-	accountName   string
-	containerName string
+	client               *azblob.Client
+	sharedKeyCred        *azblob.SharedKeyCredential
+	accountName          string
+	containerName        string
+	privateContainerName string
 }
 
 func New() (*AzureBlobStorageRepository, error) {
 	accountName := os.Getenv("AZURE_STORAGE_ACCOUNT_NAME")
 	accountKey := os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")
 	containerName := os.Getenv("AZURE_STORAGE_CONTAINER_NAME")
+	privateContainerName := os.Getenv("AZURE_STORAGE_PRIVATE_CONTAINER_NAME")
+	if privateContainerName == "" {
+		privateContainerName = containerName + "-private"
+	}
 
 	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	if err != nil {
@@ -34,10 +41,11 @@ func New() (*AzureBlobStorageRepository, error) {
 	}
 
 	return &AzureBlobStorageRepository{
-		client:        client,
-		sharedKeyCred: cred,
-		accountName:   accountName,
-		containerName: containerName,
+		client:               client,
+		sharedKeyCred:        cred,
+		accountName:          accountName,
+		containerName:        containerName,
+		privateContainerName: privateContainerName,
 	}, nil
 }
 
@@ -64,5 +72,26 @@ func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
 
 func (r *AzureBlobStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := r.client.DeleteBlob(ctx, r.containerName, objectKey, nil)
+	return err
+}
+
+func (r *AzureBlobStorageRepository) PutPrivateObject(ctx context.Context, objectKey, _ string, body io.Reader, _ int64) error {
+	_, err := r.client.UploadStream(ctx, r.privateContainerName, objectKey, body, nil)
+	return err
+}
+
+func (r *AzureBlobStorageRepository) OpenPrivateObject(ctx context.Context, objectKey string) (io.ReadCloser, error) {
+	response, err := r.client.DownloadStream(ctx, r.privateContainerName, objectKey, nil)
+	if err != nil {
+		return nil, err
+	}
+	return response.Body, nil
+}
+
+func (r *AzureBlobStorageRepository) DeletePrivateObject(ctx context.Context, objectKey string) error {
+	_, err := r.client.DeleteBlob(ctx, r.privateContainerName, objectKey, nil)
+	if bloberror.HasCode(err, bloberror.BlobNotFound) {
+		return nil
+	}
 	return err
 }

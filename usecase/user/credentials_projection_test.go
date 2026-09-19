@@ -106,6 +106,7 @@ func (r *noCredentialsUserRepo) SuggestUsersByPrefix(context.Context, string, in
 }
 
 func (r *noCredentialsUserRepo) DeleteUser(context.Context, int64) (bool, error)        { return true, nil }
+func (r *noCredentialsUserRepo) DeleteActivityHistory(context.Context, int64) error     { return nil }
 func (r *noCredentialsUserRepo) UpdateLastActiveAt(context.Context, int64, int64) error { return nil }
 func (r *noCredentialsUserRepo) LogActivityDate(context.Context, int64, string) error   { return nil }
 func (r *noCredentialsUserRepo) LogActivityHour(context.Context, int64, string) error   { return nil }
@@ -156,7 +157,7 @@ func TestDisplayPathsNeverReadCredentials(t *testing.T) {
 
 	t.Run("凍結（読んで書き戻す経路）", func(t *testing.T) {
 		repo := newRepo(t)
-		if _, err := NewFreezeUserUseCase(repo).Execute(context.Background(), 42); err != nil {
+		if _, err := NewFreezeUserUseCase(repo).Execute(adminCtx(), 42); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if repo.updateCalls != 1 {

@@ -16,13 +16,12 @@ import (
 //
 // # 認証方式（2026-09 変更）
 //
-// 認証は次の3経路。上から順に試す。
+// 認証は次の2経路。上から順に試す。
 //
 //  1. Authorization ヘッダー（JWTAuth middleware がクレームを ctx に載せている）。
 //     fetch/EventSource ポリフィルなど、ヘッダーを付けられるクライアント向け。
 //  2. ?ticket= — 使い捨ての短命チケット（issueNotificationStreamTicket で発行）。
 //     ブラウザ標準の EventSource はカスタムヘッダーを送れないため、これが本命。
-//  3. ?token= — 旧方式。**非推奨。移行期間中のみ受け付ける**（下記）。
 //
 // # なぜクッキーではなくチケットにしたか
 //
@@ -42,23 +41,12 @@ import (
 // 既存の認証経路には触らない。URL に残る点は同じだが、チケットは**1回使ったら無効・
 // 30秒で失効**なので、アクセスログから拾っても再利用できない（JWT は有効期限まで
 // そのまま使えてしまう。これが元の指摘そのもの）。
-//
-// # ?token= の移行期間について
-//
-// 旧クライアント（配信済みの SPA を開いたままのタブ、キャッシュされた JS）が
-// ?token= で繋いでくるため、当面は受け付ける。受け付けたときは
-// component=sse / deprecated_query_token で Warn ログを出す。
-//
-// **外す条件**: このログが本番で丸一日出なくなったら削除してよい（アクセストークンの
-// 寿命とタブの寿命を考えれば、デプロイから数日で消えるはず）。削除するのは
-// legacyTokenAuth 関数と、それを呼んでいる箇所、および revokedTokenRepo /
-// userRepo / pwResetRepo の3引数（?ticket= 経路では使わない）。
-func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.HandlerFunc {
+func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
 
-		userID, err := authenticate(c, ticketRepo, revokedTokenRepo, userRepo, pwResetRepo)
+		userID, err := authenticate(c, ticketRepo)
 		if err != nil {
 			return err
 		}
@@ -161,9 +149,6 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository, revokedT
 func authenticate(
 	c echo.Context,
 	ticketRepo repository.SSETicketRepository,
-	revokedTokenRepo repository.RevokedTokenRepository,
-	userRepo repository.UserRepository,
-	pwResetRepo repository.PasswordResetRepository,
 ) (int64, error) {
 	req := c.Request()
 
@@ -191,22 +176,6 @@ func authenticate(
 			return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired ticket")
 		}
 		return userID, nil
-	}
-
-	// 3. 旧方式の ?token=。移行期間中のみ。削除条件は NewHandler のコメント参照。
-	if tokenStr := c.QueryParam("token"); tokenStr != "" {
-		claims, err := auth.ValidateAndVerifyToken(req.Context(), tokenStr, revokedTokenRepo, userRepo, pwResetRepo)
-		if err != nil {
-			return 0, echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-		}
-		// このログが出なくなったら ?token= 経路を消してよい。トークン本体は
-		// 絶対に載せない（URL に載せないための変更でログに載せたら本末転倒）。
-		logger.Log.Warn().
-			Str("component", "sse").
-			Str("reason", "deprecated_query_token").
-			Int64("user_id", claims.ID).
-			Msg("sse connected with deprecated ?token= query parameter")
-		return claims.ID, nil
 	}
 
 	return 0, echo.NewHTTPError(http.StatusUnauthorized, "missing ticket")

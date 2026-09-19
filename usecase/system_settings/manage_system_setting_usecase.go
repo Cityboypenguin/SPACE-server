@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -16,6 +17,9 @@ func NewManageSystemSettingUsecase(repo repository.SystemSettingRepository) *Man
 }
 
 func (u *ManageSystemSettingUsecase) Execute(ctx context.Context, enabled bool) error {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return err
+	}
 	value := "false"
 	if enabled {
 		value = "true"

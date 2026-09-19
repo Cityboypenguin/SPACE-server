@@ -183,7 +183,7 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, pos
 		SELECT id, user_id, post_id, created_at
 		FROM favorites
 		WHERE post_id IN (%s)
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 	`, strings.Join(placeholders, ","))
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)

@@ -248,7 +248,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT `+courseColumns+` FROM courses c
 		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
-		 ORDER BY c.course_name
+		 ORDER BY c.course_name, c.id
 		 LIMIT ? OFFSET ?`,
 		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam, q.Limit, q.Offset,
 	)
@@ -338,7 +338,7 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 	queryArgs := append(append([]any{}, args...), param.Page.Limit, param.Page.Offset)
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT `+courseColumns+` FROM courses c `+whereClause+`
-		 ORDER BY c.year DESC, c.semester DESC, c.day_of_week, c.period, c.course_name
+		 ORDER BY c.year DESC, c.semester DESC, c.day_of_week, c.period, c.course_name, c.id
 		 LIMIT ? OFFSET ?`,
 		queryArgs...,
 	)

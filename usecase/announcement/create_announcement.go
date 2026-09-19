@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/async"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -14,9 +15,8 @@ import (
 )
 
 type CreateAnnouncementInput struct {
-	Title   string
-	Body    string
-	AdminID int64
+	Title string
+	Body  string
 }
 
 type CreateAnnouncementUseCase struct {
@@ -42,6 +42,10 @@ func NewCreateAnnouncementUseCase(
 }
 
 func (u *CreateAnnouncementUseCase) Execute(ctx context.Context, input CreateAnnouncementInput) (*model.Announcement, error) {
+	claims, err := authz.RequireAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
 	title := strings.TrimSpace(input.Title)
 	body := strings.TrimSpace(input.Body)
 
@@ -55,7 +59,7 @@ func (u *CreateAnnouncementUseCase) Execute(ctx context.Context, input CreateAnn
 	a := &model.Announcement{
 		Title:     title,
 		Body:      body,
-		AdminID:   input.AdminID,
+		AdminID:   claims.ID,
 		CreatedAt: time.Now(),
 	}
 

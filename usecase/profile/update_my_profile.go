@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -37,6 +38,9 @@ func NewUpdateMyProfileUseCase(
 }
 
 func (uc *UpdateMyProfileInteractor) Execute(ctx context.Context, userID int64, param UpdateMyProfileParam) (*model.User, *model.Profile, error) {
+	if _, err := authz.RequireSelfOrAdmin(ctx, userID); err != nil {
+		return nil, nil, err
+	}
 	var updatedUser *model.User
 	var updatedProfile *model.Profile
 

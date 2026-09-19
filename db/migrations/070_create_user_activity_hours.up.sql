@@ -28,10 +28,9 @@
 -- 1ユーザー1日あたり最大24行（実際は「活動した時間帯の数」ぶんで、平均3〜5行）。
 -- DAU 1,000 人・1人あたり4時間帯なら 4,000行/日 ≒ 146万行/年、
 -- InnoDB の主キー+索引込みで年 100〜150MB 程度。DAU 10,000 人なら10倍。
--- 単調増加するので保持期間を決める必要があるが、何日残すかは運用要件なので
--- ここでは決めない（削除処理も入れていない）。user_activity_dates /
--- user_session_summaries / page_view_stats も同じく無期限なので、
--- まとめて決めて1箇所で消すのが筋。
+-- migration 071とactivityarchiveジョブにより、MySQLには400日分を保持する。
+-- それより古い完了済み月は非公開ストレージへCSV.gzで3年間保管し、
+-- アップロード成功と件数一致を確認した後だけこの表から削除する。
 --
 -- activity_hour は JST の「時」の始まり（例 2026-09-18 14:00:00）を
 -- そのまま入れる。user_activity_dates.activity_date が JST の日付を
@@ -40,9 +39,9 @@
 -- ような Unix 秒の列だけ。
 --
 -- 外部キーは張らない（user_activity_dates と同じ）。書き込みはリクエストの
--- 応答経路の外（async.Runner）から INSERT IGNORE で撃つので、参照先の消滅で
--- 書き込みが失敗する形にしたくない。退会したユーザーの行が残るが、集計は
--- 人数を数えるだけなので影響しない。
+-- 応答経路の外（async.Runner）から INSERT IGNORE ... SELECT users で行い、
+-- 退会済みユーザーへの遅延記録は作らない。退会時は活動日・時間帯の履歴を
+-- ユーザー削除と同じトランザクションで消す。
 CREATE TABLE user_activity_hours (
     user_id       BIGINT   NOT NULL,
     activity_hour DATETIME NOT NULL, /*JST の「時」の始まり。分・秒は常に 0*/

@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -54,6 +55,9 @@ func NewImportCoursesUseCase(courseRepo repository.CourseRepository) ImportCours
 // 進捗の更新頻度はここでは変わらない。取り込みの進捗（reportProgress）を刻んでいるのは
 // スクレイピング側（FetchCourses）で、この関数は取り終わった配列を受け取るだけ。
 func (uc *ImportCoursesInteractor) Execute(ctx context.Context, inputs []ScrapedCourseInput) (*ImportCoursesResult, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	result := &ImportCoursesResult{}
 	if len(inputs) == 0 {
 		return result, nil

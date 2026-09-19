@@ -242,8 +242,8 @@ type MessageRoomUseCases struct {
 	ListJoinedRoomIDsUseCase            roomusecase.ListJoinedRoomIDsUseCase
 	ListMyDMRoomsUseCase                roomusecase.ListMyDMRoomsUseCase
 	GetOrCreateDMRoomUseCase            roomusecase.GetOrCreateDMRoomUseCase
-	RemoveUserFromRoomUseCase           roomusecase.RemoveUserFromRoomUseCase
-	DeleteRoomUseCase                   roomusecase.DeleteRoomUseCase
+	LeaveCommunityUseCase               roomusecase.LeaveCommunityUseCase
+	DeleteOrphanedDMUseCase             roomusecase.DeleteOrphanedDMUseCase
 	JoinRoomUseCase                     roomusecase.JoinRoomUseCase
 	GetRoomUserRoleUseCase              roomusecase.GetRoomUserRoleUseCase
 	SetRoomUserRoleUseCase              roomusecase.SetRoomUserRoleUseCase
@@ -272,15 +272,14 @@ type ChatUseCases struct {
 }
 
 type CommunityUseCases struct {
-	CreateCommunityUseCase             communityusecase.CreateCommunityUseCase
-	GetCommunityUseCase                communityusecase.GetCommunityUseCase
-	UpdateCommunityUseCase             communityusecase.UpdateCommunityUseCase
-	UpdateCommunityMembersUseCase      communityusecase.UpdateCommunityMembersUseCase
-	SearchCommunityUseCase             communityusecase.SearchCommunityUseCase
-	ListMyCommunitiesUseCase           communityusecase.ListMyCommunitiesUseCase
-	ListAllCommunitiesUseCase          communityusecase.ListAllCommunitiesUseCase
-	IsSoleOwnerWithOtherMembersUseCase communityusecase.IsSoleOwnerWithOtherMembersUseCase
-	GetRandomCommunitiesUseCase        communityusecase.GetRandomCommunitiesUseCase
+	CreateCommunityUseCase        communityusecase.CreateCommunityUseCase
+	GetCommunityUseCase           communityusecase.GetCommunityUseCase
+	UpdateCommunityUseCase        communityusecase.UpdateCommunityUseCase
+	UpdateCommunityMembersUseCase communityusecase.UpdateCommunityMembersUseCase
+	SearchCommunityUseCase        communityusecase.SearchCommunityUseCase
+	ListMyCommunitiesUseCase      communityusecase.ListMyCommunitiesUseCase
+	ListAllCommunitiesUseCase     communityusecase.ListAllCommunitiesUseCase
+	GetRandomCommunitiesUseCase   communityusecase.GetRandomCommunitiesUseCase
 }
 
 type CourseUseCases struct {

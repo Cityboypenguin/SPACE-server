@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -33,9 +34,10 @@ func NewListCoursesUseCase(courseRepo repository.CourseRepository) ListCoursesUs
 	return &ListCoursesInteractor{courseRepo: courseRepo}
 }
 
-// Execute lists courses for the admin course-management screen (auth/admin-role check
-// is done by the resolver, matching AdminTriggerCourseImport's convention).
 func (uc *ListCoursesInteractor) Execute(ctx context.Context, param ListCoursesParam) ([]*model.Course, int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, 0, err
+	}
 	return uc.courseRepo.ListCourses(ctx, repository.ListCoursesParam{
 		Year:      param.Year,
 		Semester:  param.Semester,

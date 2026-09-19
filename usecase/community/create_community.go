@@ -2,8 +2,8 @@ package community
 
 import (
 	"context"
+	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -18,11 +18,10 @@ var _ CreateCommunityUseCase = &CreateCommunityInteractor{}
 
 type CreateCommunityInteractor struct {
 	communityRepo repository.CommunityRepository
-	mediaRepo     repository.MediaRepository
 }
 
-func NewCreateCommunityUseCase(communityRepo repository.CommunityRepository, mediaRepo repository.MediaRepository) CreateCommunityUseCase {
-	return &CreateCommunityInteractor{communityRepo: communityRepo, mediaRepo: mediaRepo}
+func NewCreateCommunityUseCase(communityRepo repository.CommunityRepository) CreateCommunityUseCase {
+	return &CreateCommunityInteractor{communityRepo: communityRepo}
 }
 
 func (uc *CreateCommunityInteractor) Execute(ctx context.Context, name, description string, avatarKey *string) (*model.Community, error) {
@@ -31,21 +30,27 @@ func (uc *CreateCommunityInteractor) Execute(ctx context.Context, name, descript
 		return nil, err
 	}
 
-	var avatarMediaID *int64
+	var avatar *repository.UpdateCommunityAvatarParam
 	if avatarKey != nil && *avatarKey != "" {
-		media := &model.Media{
+		if err := validateCommunityAvatarKey(claims.ID, *avatarKey); err != nil {
+			return nil, err
+		}
+		avatar = &repository.UpdateCommunityAvatarParam{
 			UploaderUserID: claims.ID,
 			StorageKey:     *avatarKey,
 			ContentType:    contentTypeFromKey(*avatarKey),
-			CreatedAt:      time.Now(),
 		}
-		if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
-			return nil, err
-		}
-		avatarMediaID = &media.ID
 	}
 
-	return uc.communityRepo.SaveCommunityWithRoom(ctx, name, description, avatarMediaID, claims.ID)
+	return uc.communityRepo.SaveCommunityWithRoom(ctx, name, description, avatar, claims.ID)
+}
+
+func validateCommunityAvatarKey(userID int64, key string) error {
+	prefix := fmt.Sprintf("community-icons/%d/", userID)
+	if !strings.HasPrefix(key, prefix) {
+		return fmt.Errorf("invalid community avatar key")
+	}
+	return nil
 }
 
 func contentTypeFromKey(key string) string {

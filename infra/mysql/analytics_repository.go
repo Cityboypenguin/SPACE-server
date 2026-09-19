@@ -448,7 +448,7 @@ func (r *MySQLAnalyticsRepository) GetCommunityAnalytics(ctx context.Context, q 
 		LEFT JOIN room_users ru ON ru.room_id = c.room_id
 		LEFT JOIN messages m ON m.room_id = c.room_id AND m.deleted_at IS NULL
 		GROUP BY c.id, c.name
-		ORDER BY member_count DESC
+		ORDER BY member_count DESC, c.id ASC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err

@@ -167,6 +167,23 @@ func TestUpdateCommunityMembers_StillRejectsLosingTheLastOwner(t *testing.T) {
 	}
 }
 
+func TestUpdateCommunityMembers_RejectsUnknownAction(t *testing.T) {
+	roomUsers := &countingRoomUserRepo{roles: map[int64]string{1: model.RoomUserRoleOwner}}
+	uc := NewUpdateCommunityMembersUseCase(
+		&stubCommunityRepo{community: &model.Community{ID: 10, RoomID: 20}},
+		roomUsers,
+		inlineTxManager{},
+	)
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
+
+	if err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 2, Action: MemberAction("unknown")}}); err == nil {
+		t.Fatal("unknown action must be rejected")
+	}
+	if roomUsers.roleCalls != 0 || roomUsers.removeCalls != 0 {
+		t.Fatal("an invalid action must not write")
+	}
+}
+
 func TestUpdateCommunityMembers_ConcurrentDemotionsKeepAnOwner(t *testing.T) {
 	roomUsers := &countingRoomUserRepo{roles: map[int64]string{
 		1: model.RoomUserRoleOwner,

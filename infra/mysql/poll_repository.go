@@ -102,7 +102,7 @@ func (r *MySQLPollRepository) ListPollsByRoomID(ctx context.Context, roomID int6
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT id, room_id, author_user_id, author_role, question, allow_multiple_choice, deadline, created_at, updated_at
-		 FROM polls WHERE room_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		 FROM polls WHERE room_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		roomID, q.Limit, q.Offset,
 	)
 	if err != nil {

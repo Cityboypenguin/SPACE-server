@@ -148,7 +148,7 @@ func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsI
 		SELECT id, user_id, terms_id, consented_at
 		FROM terms_consents
 		WHERE terms_id = ?
-		ORDER BY consented_at DESC
+		ORDER BY consented_at DESC, id DESC
 		LIMIT ? OFFSET ?`, termsID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query terms_consents: %w", err)

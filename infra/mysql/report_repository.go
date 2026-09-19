@@ -146,7 +146,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 		}
 	}
 
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)

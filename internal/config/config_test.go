@@ -14,21 +14,42 @@ func setEnv(t *testing.T, kv map[string]string) {
 }
 
 var validProdEnv = map[string]string{
-	"DB_USER":          "u",
-	"DB_PASSWORD":      "p",
-	"DB_HOST":          "h",
-	"DB_NAME":          "n",
-	"JWT_SECRET":       "s",
-	"ALLOWED_ORIGINS":  "https://example.com",
-	"OPAQUE_ID_SECRET": "a-real-secret",
-	"MINIO_ENDPOINT":   "e",
-	"MINIO_ACCESS_KEY": "a",
-	"MINIO_SECRET_KEY": "s",
-	"MINIO_BUCKET":     "b",
-	"REDIS_HOST":       "r",
-	"SMTP_HOST":        "sh",
-	"SMTP_PORT":        "587",
-	"SMTP_FROM":        "no-reply@example.com",
+	"DB_USER":                   "u",
+	"DB_PASSWORD":               "p",
+	"DB_HOST":                   "h",
+	"DB_NAME":                   "n",
+	"JWT_SECRET":                "s",
+	"ALLOWED_ORIGINS":           "https://example.com",
+	"OPAQUE_ID_SECRET":          "a-real-secret",
+	"MINIO_ENDPOINT":            "e",
+	"MINIO_ACCESS_KEY":          "a",
+	"MINIO_SECRET_KEY":          "s",
+	"MINIO_BUCKET":              "b",
+	"REDIS_HOST":                "r",
+	"SMTP_HOST":                 "sh",
+	"SMTP_PORT":                 "587",
+	"SMTP_FROM":                 "no-reply@example.com",
+	"ACTIVITY_ARCHIVE_HMAC_KEY": "production-activity-archive-hmac-secret",
+}
+
+func TestActivityArchiveHMACKey_DevFallback(t *testing.T) {
+	t.Setenv("ACTIVITY_ARCHIVE_HMAC_KEY", "")
+	if got := ActivityArchiveHMACKey(false); got != localActivityArchiveHMACKey {
+		t.Fatalf("dev key = %q, want local fallback", got)
+	}
+	if got := ActivityArchiveHMACKey(true); got != "" {
+		t.Fatalf("production key = %q, want no fallback", got)
+	}
+}
+
+func TestValidate_ProdRequiresDedicatedActivityArchiveKey(t *testing.T) {
+	setEnv(t, validProdEnv)
+	for _, key := range []string{"", "short", localActivityArchiveHMACKey} {
+		t.Setenv("ACTIVITY_ARCHIVE_HMAC_KEY", key)
+		if err := Validate(true); err == nil || !strings.Contains(err.Error(), "ACTIVITY_ARCHIVE_HMAC_KEY") {
+			t.Fatalf("key %q: expected validation error, got %v", key, err)
+		}
+	}
 }
 
 func TestValidate_DevOnlyNeedsDBAndJWT(t *testing.T) {

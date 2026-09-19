@@ -50,7 +50,7 @@ func TestVotePoll_EmptySelectionCancelsVote(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5}}
 	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
 
-	if err := uc.Execute(authedCtx(7), 1, nil); err != nil {
+	if _, err := uc.Execute(authedCtx(7), 1, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if repo.gotUserID != 7 || len(repo.gotOptionIDs) != 0 {
@@ -62,7 +62,7 @@ func TestVotePoll_RejectsMultipleOnSingleChoicePoll(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: false}}
 	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
 
-	err := uc.Execute(authedCtx(7), 1, []int64{10, 11})
+	_, err := uc.Execute(authedCtx(7), 1, []int64{10, 11})
 	if err == nil {
 		t.Fatal("expected error selecting two options on a single-choice poll")
 	}
@@ -75,7 +75,7 @@ func TestVotePoll_AllowsMultipleOnMultiChoicePoll(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: true}}
 	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
 
-	if err := uc.Execute(authedCtx(7), 1, []int64{10, 11}); err != nil {
+	if _, err := uc.Execute(authedCtx(7), 1, []int64{10, 11}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(repo.gotOptionIDs) != 2 {
@@ -89,7 +89,7 @@ func TestVotePoll_DedupesRepeatedOptionIDs(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: false}}
 	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
 
-	if err := uc.Execute(authedCtx(7), 1, []int64{10, 10}); err != nil {
+	if _, err := uc.Execute(authedCtx(7), 1, []int64{10, 10}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(repo.gotOptionIDs) != 1 || repo.gotOptionIDs[0] != 10 {
@@ -101,7 +101,7 @@ func TestVotePoll_PropagatesArchiveRejection(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5}}
 	uc := NewVotePollUseCase(repo, &fakeRequireWritable{err: errArchived})
 
-	if err := uc.Execute(authedCtx(7), 1, []int64{10}); err != errArchived {
+	if _, err := uc.Execute(authedCtx(7), 1, []int64{10}); err != errArchived {
 		t.Fatalf("error = %v, want the archive-check error to be propagated unchanged", err)
 	}
 	if repo.gotOptionIDs != nil {
@@ -112,7 +112,7 @@ func TestVotePoll_PropagatesArchiveRejection(t *testing.T) {
 func TestVotePoll_UnknownPollNotFound(t *testing.T) {
 	uc := NewVotePollUseCase(&fakePollRepoForVote{poll: nil}, &fakeRequireWritable{})
 
-	if err := uc.Execute(authedCtx(7), 999, []int64{10}); err == nil {
+	if _, err := uc.Execute(authedCtx(7), 999, []int64{10}); err == nil {
 		t.Fatal("expected not-found error for a poll that doesn't exist")
 	}
 }

@@ -4,6 +4,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -20,8 +21,23 @@ type blockListKey struct{}
 // 見えていた。ブロックは「見たくない相手が見えない」ための機能なので、
 // 読めなかったときに素通しするのは機能の否定にあたる（フェイルオープン）。
 type blockList struct {
-	ids []int64
-	err error
+	once   sync.Once
+	repo   repository.BlockerRepository
+	userID int64
+	ids    []int64
+	err    error
+}
+
+func (b *blockList) load(ctx context.Context) {
+	b.once.Do(func() {
+		b.ids, b.err = b.repo.GetBlockedAndBlockerIDs(ctx, b.userID)
+		if b.err != nil {
+			logger.Log.Error().Err(b.err).
+				Str("component", "block_filter").
+				Int64("user_id", b.userID).
+				Msg("failed to load block list; block-filtered queries will fail closed")
+		}
+	})
 }
 
 // ErrBlockListUnavailable は、このリクエストのブロック一覧を取得できなかったこと。
@@ -31,7 +47,7 @@ type blockList struct {
 // この値を errors.Is で見られる形にしてある。
 var ErrBlockListUnavailable = errors.New("block list is unavailable for this request")
 
-// BlockFilter は、ログインユーザーのブロック/被ブロックID一覧を取得しContextに付与するEchoミドルウェアです
+// BlockFilter は遅延ロード用のブロック一覧を Context に付与する。
 func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -39,21 +55,9 @@ func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
 
 			// 直前の JWTAuth ミドルウェアで設定されたユーザー情報を Context から取得
 			if claims, ok := auth.ClaimsFromContext(ctx); ok && claims.ID != 0 {
-				// DBから自分と相手のブロック関係にある全IDを取得
-				blockedIDs, err := blockRepo.GetBlockedAndBlockerIDs(ctx, claims.ID)
-				if err != nil {
-					// ここでリクエスト全体を失敗させないのは、ブロック除外を使わない
-					// 操作（メッセージ送信など）まで巻き込むため。失敗したという事実は
-					// Context に載せ、実際に除外を使うクエリだけが失敗する。
-					logger.Log.Error().Err(err).
-						Str("component", "block_filter").
-						Int64("user_id", claims.ID).
-						Msg("failed to load block list; block-filtered queries will fail closed")
-				}
-
-				// 成否にかかわらず必ず詰める。ここで詰めないと後段からは
-				// 「未認証で除外不要」と区別が付かない。
-				ctx = context.WithValue(ctx, blockListKey{}, blockList{ids: blockedIDs, err: err})
+				// DB 取得は AppendBlockFilter が必要とした時点まで遅らせる。同じ
+				// リクエスト内で複数クエリが使っても sync.Once により1回だけ読む。
+				ctx = context.WithValue(ctx, blockListKey{}, &blockList{repo: blockRepo, userID: claims.ID})
 				// 更新した Context を Request に再セットして後続へ渡す
 				c.SetRequest(c.Request().WithContext(ctx))
 			}
@@ -71,10 +75,11 @@ func BlockFilter(blockRepo repository.BlockerRepository) echo.MiddlewareFunc {
 // 未認証リクエストでは (nil, nil) を返す。除外すべき相手が居ないだけで、
 // 取得に失敗したわけではないため。
 func BlockListFromContext(ctx context.Context) ([]int64, error) {
-	list, ok := ctx.Value(blockListKey{}).(blockList)
+	list, ok := ctx.Value(blockListKey{}).(*blockList)
 	if !ok {
 		return nil, nil
 	}
+	list.load(ctx)
 	if list.err != nil {
 		return nil, ErrBlockListUnavailable
 	}

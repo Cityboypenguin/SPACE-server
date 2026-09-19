@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -17,10 +18,16 @@ func NewManageReportUsecase(reportRepo repository.ReportRepository) *ManageRepor
 }
 
 func (u *ManageReportUsecase) Search(ctx context.Context, filter *model.ReportSearchFilter, q repository.PageQuery) ([]*model.Report, int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, 0, err
+	}
 	return u.reportRepo.Search(ctx, filter, q)
 }
 
 func (u *ManageReportUsecase) UpdateStatus(ctx context.Context, id string, status model.ReportStatus) (*model.Report, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if id == "" {
 		return nil, errors.New("report ID is required")
 	}

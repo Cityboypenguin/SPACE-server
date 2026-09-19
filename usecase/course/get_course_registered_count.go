@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -24,10 +25,10 @@ func NewGetCourseRegisteredCountUseCase(timetableRepo repository.TimetableReposi
 	return &GetCourseRegisteredCountInteractor{timetableRepo: timetableRepo}
 }
 
-// Execute is resolver-gated to admins (see Course.registeredCount in
-// schema.resolvers.go), matching this package's existing convention of leaving
-// auth/admin-role checks to the resolver rather than the use case.
 func (uc *GetCourseRegisteredCountInteractor) Execute(ctx context.Context, courseID int64) (int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return 0, err
+	}
 	return uc.timetableRepo.CountByCourseID(ctx, courseID)
 }
 
@@ -47,7 +48,9 @@ func NewGetCourseRegisteredCountsUseCase(timetableRepo repository.TimetableRepos
 	return &GetCourseRegisteredCountsInteractor{timetableRepo: timetableRepo}
 }
 
-// Execute は単体版と同じく、認可はリゾルバ側（管理者のみ）に任せる。
 func (uc *GetCourseRegisteredCountsInteractor) Execute(ctx context.Context, courseIDs []int64) (map[int64]int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return uc.timetableRepo.CountByCourseIDs(ctx, courseIDs)
 }

@@ -69,7 +69,7 @@ func (r *MySQLAnnouncementRepository) ListAll(ctx context.Context, q repository.
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, title, body, admin_id, created_at, updated_at
 		FROM announcements
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query announcements: %w", err)

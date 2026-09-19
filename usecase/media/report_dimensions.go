@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -52,5 +53,8 @@ func NewListImagesMissingDimensionsUseCase(mediaRepo repository.MediaRepository)
 }
 
 func (uc *ListImagesMissingDimensionsInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Media, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return uc.mediaRepo.ListImagesMissingDimensions(ctx, limit, offset)
 }

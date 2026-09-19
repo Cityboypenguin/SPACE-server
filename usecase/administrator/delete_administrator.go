@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -33,6 +34,9 @@ func NewDeleteAdministratorUseCase(adminRepo repository.AdministratorRepository,
 // 両方が DELETE でき、管理者が0人になった（そうなると管理画面に誰も入れない）。
 // いまは後から来たほうがロックを待ち、相手のコミット後に COUNT=1 を読むので弾かれる。
 func (uc *DeleteAdministratorInteractor) Execute(ctx context.Context, id int64) (bool, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return false, err
+	}
 	var deleted bool
 	err := uc.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		// 件数だけが要るので、行を1件取って捨てる ListAdministrators ではなく Count を使う。

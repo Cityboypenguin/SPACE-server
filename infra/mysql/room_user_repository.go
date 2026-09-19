@@ -113,7 +113,7 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 		FROM room_users ru
 		JOIN users u ON ru.user_id = u.id
 		WHERE ru.room_id = ?
-		ORDER BY ru.created_at ASC
+		ORDER BY ru.created_at ASC, ru.user_id ASC
 	`
 	rows, err := r.DB.QueryContext(ctx, query, roomID)
 	if err != nil {
@@ -206,6 +206,37 @@ func (r *MySQLRoomUserRepository) LockRoomMemberRolesForUpdate(ctx context.Conte
 	return roles, rows.Err()
 }
 
+func (r *MySQLRoomUserRepository) LockUserCommunityMembershipsForUpdate(ctx context.Context, userID int64) (map[int64]string, error) {
+	tx, ok := txFromContext(ctx)
+	if !ok {
+		return nil, errors.New("LockUserCommunityMembershipsForUpdate requires a transaction")
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT ru.room_id, ru.role
+		FROM room_users ru
+		JOIN rooms r ON r.id = ru.room_id
+		WHERE ru.user_id = ? AND r.type = ?
+		ORDER BY ru.room_id
+		FOR UPDATE
+	`, userID, model.RoomTypeCommunity)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make(map[int64]string)
+	for rows.Next() {
+		var roomID int64
+		var role string
+		if err := rows.Scan(&roomID, &role); err != nil {
+			return nil, err
+		}
+		roles[roomID] = role
+	}
+	return roles, rows.Err()
+}
+
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		"DELETE FROM room_users WHERE room_id = ? AND user_id = ?",
@@ -248,7 +279,7 @@ func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userI
 		FROM rooms r
 		JOIN room_users ru ON r.id = ru.room_id
 		WHERE ru.user_id = ? AND r.type = 'dm'
-		ORDER BY r.updated_at DESC
+		ORDER BY r.updated_at DESC, r.id DESC
 		LIMIT ? OFFSET ?
 	`, userID, q.Limit, q.Offset)
 	if err != nil {

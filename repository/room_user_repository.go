@@ -48,6 +48,10 @@ type RoomUserRepository interface {
 	// locking those rows. It is for business validation only and must be called
 	// inside TxManager.RunInTx; display pagination must never use it.
 	LockRoomMemberRolesForUpdate(ctx context.Context, roomID int64) (map[int64]string, error)
+	// LockUserCommunityMembershipsForUpdate locks the target user's community
+	// memberships before account deletion decides which complete rooms to lock.
+	// It must be called inside TxManager.RunInTx.
+	LockUserCommunityMembershipsForUpdate(ctx context.Context, userID int64) (map[int64]string, error)
 	// UpdateLastRead は既読位置を進める。lastReadMessageID はそのルームの最新
 	// メッセージID（1件も無ければ nil）、readAt は既読にした時刻。
 	// 既読位置は巻き戻さない（別端末が先に進めていればそちらを残す）。

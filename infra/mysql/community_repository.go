@@ -21,7 +21,7 @@ func NewMySQLCommunityRepository(db *sql.DB) repository.CommunityRepository {
 
 // SaveCommunityWithRoom は Room・RoomUser・Community を単一トランザクションで作成する。
 // いずれかのステップで失敗した場合はロールバックし、孤立レコードを残さない。
-func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description string, avatarMediaID *int64, creatorUserID int64) (*model.Community, error) {
+func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, name, description string, avatar *repository.UpdateCommunityAvatarParam, creatorUserID int64) (*model.Community, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -30,6 +30,26 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 
 	now := time.Now()
 	nowUnix := now.Unix()
+	var avatarMediaID *int64
+	var avatarMedia *model.Media
+	if avatar != nil {
+		result, err := tx.ExecContext(ctx,
+			`INSERT INTO media (uploader_user_id, storage_key, content_type, created_at) VALUES (?, ?, ?, ?)`,
+			avatar.UploaderUserID, avatar.StorageKey, avatar.ContentType, nowUnix,
+		)
+		if err != nil {
+			return nil, err
+		}
+		mediaID, err := result.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+		avatarMediaID = &mediaID
+		avatarMedia = &model.Media{
+			ID: mediaID, UploaderUserID: avatar.UploaderUserID, StorageKey: avatar.StorageKey,
+			ContentType: avatar.ContentType, CreatedAt: now,
+		}
+	}
 
 	// 1. rooms に community room を作成
 	roomResult, err := tx.ExecContext(ctx,
@@ -75,6 +95,7 @@ func (r *MySQLCommunityRepository) SaveCommunityWithRoom(ctx context.Context, na
 		RoomID:      roomID,
 		Name:        name,
 		Description: description,
+		AvatarMedia: avatarMedia,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}, nil
@@ -108,7 +129,7 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		WHERE c.name LIKE ?
 		  AND c.room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)
-		ORDER BY c.created_at DESC
+		ORDER BY c.created_at DESC, c.id DESC
 		LIMIT ? OFFSET ?
 	`, searchParam, userID, q.Limit, q.Offset)
 	if err != nil {
@@ -174,22 +195,6 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	return tx.Commit()
 }
 
-func (r *MySQLCommunityRepository) DeleteCommunitiesWhereOnlyMember(ctx context.Context, userID int64) (int64, error) {
-	result, err := extractDB(ctx, r.DB).ExecContext(ctx, `
-		DELETE rm
-		FROM rooms rm
-		JOIN communities c ON c.room_id = rm.id
-		JOIN room_users ru ON ru.room_id = rm.id
-		WHERE rm.type = ?
-		  AND ru.user_id = ?
-		  AND (SELECT COUNT(*) FROM room_users ru2 WHERE ru2.room_id = rm.id) = 1
-	`, model.RoomTypeCommunity, userID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {
 	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities c JOIN room_users ru ON c.room_id = ru.room_id WHERE ru.user_id = ?`,
 		userID)
@@ -205,7 +210,7 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		JOIN room_users ru ON c.room_id = ru.room_id
 		WHERE ru.user_id = ?
-		ORDER BY ru.created_at DESC
+		ORDER BY ru.created_at DESC, c.id DESC
 		LIMIT ? OFFSET ?`,
 		userID, q.Limit, q.Offset,
 	)
@@ -232,7 +237,7 @@ func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, q rep
 		       c.created_at, c.updated_at
 		FROM communities c
 		LEFT JOIN media m ON m.id = c.avatar_media_id
-		ORDER BY c.created_at DESC
+		ORDER BY c.created_at DESC, c.id DESC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset,
 	)
 	if err != nil {
@@ -244,22 +249,6 @@ func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, q rep
 		return nil, 0, err
 	}
 	return communities, total, nil
-}
-
-func (r *MySQLCommunityRepository) IsSoleOwnerWithOtherMembers(ctx context.Context, userID int64) (bool, error) {
-	query := `
-		SELECT COUNT(*) FROM room_users ru
-		JOIN rooms rm ON ru.room_id = rm.id
-		WHERE ru.user_id = ? AND ru.role = ? AND rm.type = ?
-		AND (SELECT COUNT(*) FROM room_users ru2 WHERE ru2.room_id = ru.room_id AND ru2.role = ?) = 1
-		AND (SELECT COUNT(*) FROM room_users ru3 WHERE ru3.room_id = ru.room_id) > 1
-	`
-	var count int
-	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, userID, model.RoomUserRoleOwner, model.RoomTypeCommunity, model.RoomUserRoleOwner).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }
 
 func (r *MySQLCommunityRepository) FindRandom(ctx context.Context, userID int64, limit int) ([]*model.Community, error) {

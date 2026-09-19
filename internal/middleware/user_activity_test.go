@@ -254,3 +254,33 @@ func TestUserActivityRecorder_RunsThroughTheAsyncRunner(t *testing.T) {
 		t.Fatalf("expected the activity to be written once, got %d", count)
 	}
 }
+
+func TestUserActivityRecorder_RetriesAfterRunnerRejects(t *testing.T) {
+	repo := &fakeUserRepo{}
+	runner := async.NewRunnerWithLimits("test", 1, time.Second)
+	gate := make(chan struct{})
+	if !runner.TryGo(context.Background(), "busy", func(context.Context) { <-gate }) {
+		t.Fatal("blocking task must be accepted")
+	}
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	r := NewUserActivityRecorder(repo, runner)
+	r.now = func() time.Time { return now }
+	if r.Record(context.Background(), 42) {
+		t.Fatal("full runner must reject the activity record")
+	}
+	close(gate)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := runner.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !r.Record(context.Background(), 42) {
+		t.Fatal("rejected activity record must remain eligible immediately")
+	}
+	if err := runner.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if count, _ := repo.writes(); count != 1 {
+		t.Fatalf("activity writes = %d, want 1", count)
+	}
+}

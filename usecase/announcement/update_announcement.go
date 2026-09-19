@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -25,6 +26,9 @@ func NewUpdateAnnouncementUseCase(repo repository.AnnouncementRepository) *Updat
 }
 
 func (u *UpdateAnnouncementUseCase) Execute(ctx context.Context, input UpdateAnnouncementInput) (*model.Announcement, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	a, err := u.announcementRepo.FindByID(ctx, input.ID)
 	if err != nil {
 		return nil, err

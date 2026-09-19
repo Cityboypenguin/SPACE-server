@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -48,6 +49,10 @@ func (f *fakeAdminRepo) DeleteAdministrator(_ context.Context, _ int64) (bool, e
 // と「ロックを取る版で数えているか」だけを見る。
 type inlineTxManager struct{ calls int }
 
+func administratorContext() context.Context {
+	return auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "administrator"})
+}
+
 func (m *inlineTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	m.calls++
 	return fn(ctx)
@@ -74,7 +79,7 @@ func TestCountAdministrators_PropagatesError(t *testing.T) {
 
 func TestDeleteAdministrator_KeepsTheLastOne(t *testing.T) {
 	repo := &fakeAdminRepo{t: t, count: 1}
-	ok, err := NewDeleteAdministratorUseCase(repo, &inlineTxManager{}).Execute(context.Background(), 1)
+	ok, err := NewDeleteAdministratorUseCase(repo, &inlineTxManager{}).Execute(administratorContext(), 1)
 	if err == nil {
 		t.Fatal("expected an error when deleting the last administrator")
 	}
@@ -89,7 +94,7 @@ func TestDeleteAdministrator_KeepsTheLastOne(t *testing.T) {
 func TestDeleteAdministrator_DeletesWhenOthersRemain(t *testing.T) {
 	repo := &fakeAdminRepo{t: t, count: 2}
 	tx := &inlineTxManager{}
-	ok, err := NewDeleteAdministratorUseCase(repo, tx).Execute(context.Background(), 1)
+	ok, err := NewDeleteAdministratorUseCase(repo, tx).Execute(administratorContext(), 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

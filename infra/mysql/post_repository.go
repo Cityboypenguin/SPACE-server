@@ -375,7 +375,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, q repository.PageQu
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
@@ -445,7 +445,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	}
 	query += `
 		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at
-		ORDER BY score DESC, p.created_at DESC
+		ORDER BY score DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?
 	`
 	args = append(args, q.Limit, q.Offset)
@@ -760,7 +760,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repositor
 	if err != nil {
 		return nil, 0, err
 	}
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
@@ -822,7 +822,7 @@ func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, 
 	}
 	baseQuery += `
 		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, fu.id
-		ORDER BY score DESC, p.created_at DESC
+		ORDER BY score DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?
 	`
 	args = append(args, q.Limit, q.Offset)
@@ -1098,7 +1098,7 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	if err != nil {
 		return nil, 0, err
 	}
-	query += " ORDER BY f.created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY f.created_at DESC, p.id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
@@ -1157,7 +1157,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 	if err != nil {
 		return nil, 0, err
 	}
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)

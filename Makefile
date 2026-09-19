@@ -24,4 +24,4 @@ check-generated:
 		echo "gqlgen modified graph/schema.resolvers.go; restored all generated files" >&2; \
 		exit 1; \
 	fi
-	git diff --exit-code -- graph/generated.go graph/model/models_gen.go graph/schema.resolvers.go
+	git diff --exit-code -- graph/generated.go graph/model/models_gen.go

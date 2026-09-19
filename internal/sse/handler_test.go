@@ -72,7 +72,7 @@ func TestAuthenticate_ValidTicket(t *testing.T) {
 		t.Fatalf("issue: %v", err)
 	}
 
-	userID, err := authenticate(authCtx(t, "ticket=tkt-abc"), repo, nil, nil, nil)
+	userID, err := authenticate(authCtx(t, "ticket=tkt-abc"), repo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -89,11 +89,11 @@ func TestAuthenticate_TicketIsSingleUse(t *testing.T) {
 		t.Fatalf("issue: %v", err)
 	}
 
-	if _, err := authenticate(authCtx(t, "ticket=tkt-once"), repo, nil, nil, nil); err != nil {
+	if _, err := authenticate(authCtx(t, "ticket=tkt-once"), repo); err != nil {
 		t.Fatalf("first use should succeed: %v", err)
 	}
 
-	_, err := authenticate(authCtx(t, "ticket=tkt-once"), repo, nil, nil, nil)
+	_, err := authenticate(authCtx(t, "ticket=tkt-once"), repo)
 	if err == nil {
 		t.Fatal("second use of the same ticket must be rejected")
 	}
@@ -105,7 +105,7 @@ func TestAuthenticate_TicketIsSingleUse(t *testing.T) {
 // 期限切れ（＝ストアに無い）チケットが弾かれること。
 // Redis の TTL 失効はキーが消えることなので、未知のチケットと同じ扱いになる。
 func TestAuthenticate_ExpiredOrUnknownTicket(t *testing.T) {
-	_, err := authenticate(authCtx(t, "ticket=never-issued"), newFakeTicketRepo(), nil, nil, nil)
+	_, err := authenticate(authCtx(t, "ticket=never-issued"), newFakeTicketRepo())
 	if err == nil {
 		t.Fatal("unknown ticket must be rejected")
 	}
@@ -114,9 +114,9 @@ func TestAuthenticate_ExpiredOrUnknownTicket(t *testing.T) {
 	}
 }
 
-// チケットも token も無ければ 401。
+// チケットもヘッダー認証も無ければ 401。
 func TestAuthenticate_NoCredentials(t *testing.T) {
-	_, err := authenticate(authCtx(t, ""), newFakeTicketRepo(), nil, nil, nil)
+	_, err := authenticate(authCtx(t, ""), newFakeTicketRepo())
 	if err == nil {
 		t.Fatal("request without credentials must be rejected")
 	}
@@ -132,7 +132,7 @@ func TestAuthenticate_TicketStoreFailure(t *testing.T) {
 	repo := newFakeTicketRepo()
 	repo.err = context.DeadlineExceeded
 
-	_, err := authenticate(authCtx(t, "ticket=whatever"), repo, nil, nil, nil)
+	_, err := authenticate(authCtx(t, "ticket=whatever"), repo)
 	if err == nil {
 		t.Fatal("store failure must not authenticate")
 	}
@@ -148,11 +148,21 @@ func TestAuthenticate_HeaderClaimsTakePrecedence(t *testing.T) {
 	req := c.Request()
 	c.SetRequest(req.WithContext(auth.WithClaims(req.Context(), &auth.Claims{ID: 99})))
 
-	userID, err := authenticate(c, repo, nil, nil, nil)
+	userID, err := authenticate(c, repo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if userID != 99 {
 		t.Fatalf("expected userID 99, got %d", userID)
+	}
+}
+
+func TestAuthenticate_RejectsLegacyQueryToken(t *testing.T) {
+	_, err := authenticate(authCtx(t, "token=legacy-jwt"), newFakeTicketRepo())
+	if err == nil {
+		t.Fatal("legacy query token must be rejected")
+	}
+	if code := httpStatus(t, err); code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", code)
 	}
 }

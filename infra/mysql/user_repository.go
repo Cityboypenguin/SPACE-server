@@ -208,6 +208,15 @@ func (r *MySQLUserRepository) DeleteUser(ctx context.Context, id int64) (bool, e
 	return affected > 0, nil
 }
 
+func (r *MySQLUserRepository) DeleteActivityHistory(ctx context.Context, userID int64) error {
+	db := extractDB(ctx, r.DB)
+	if _, err := db.ExecContext(ctx, `DELETE FROM user_activity_dates WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, `DELETE FROM user_activity_hours WHERE user_id = ?`, userID)
+	return err
+}
+
 // --- 本人・管理者向け -------------------------------------------------------
 // ここだけが email を SELECT する（hashed_password は読まない）。
 
@@ -260,7 +269,7 @@ func (r *MySQLUserRepository) ListUserAccounts(ctx context.Context, q repository
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT `+userAccountColumns+`
 		FROM users
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?
 	`, q.Limit, q.Offset)
 	if err != nil {
@@ -486,24 +495,23 @@ func (r *MySQLUserRepository) UpdateLastActiveAt(ctx context.Context, userID int
 
 func (r *MySQLUserRepository) LogActivityDate(ctx context.Context, userID int64, jstDate string) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
-		`INSERT IGNORE INTO user_activity_dates (user_id, activity_date) VALUES (?, ?)`,
-		userID, jstDate,
+		`INSERT IGNORE INTO user_activity_dates (user_id, activity_date) SELECT id, ? FROM users WHERE id = ?`,
+		jstDate, userID,
 	)
 	return err
 }
 
 // LogActivityHour は「その人がその時間帯に活動した」を1行残す。
 //
-// この表は消す仕組みが無く、1ユーザー1日あたり最大24行（実際は活動した時間帯の数）で
-// 単調増加する。保持期間は運用要件なのでここでは決めていない。見積もりと申し送りは
-// db/migrations/070_create_user_activity_hours.up.sql のコメントに1箇所だけ書いてある。
+// 1ユーザー1日あたり最大24行（実際は活動した時間帯の数）で増えるため、
+// internal/activityarchive が400日を超えた完了済み月をCSV.gzへ退避する。
 // jstHour は JST の時の始まり（"2006-01-02 15:00:00"）。同じ時間帯の2回目以降は
 // INSERT IGNORE が主キー重複として捨てるので、呼び出し側は重複を気にしなくてよい
 // （書き込みの回数そのものは middleware 側で間引いている）。
 func (r *MySQLUserRepository) LogActivityHour(ctx context.Context, userID int64, jstHour string) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
-		`INSERT IGNORE INTO user_activity_hours (user_id, activity_hour) VALUES (?, ?)`,
-		userID, jstHour,
+		`INSERT IGNORE INTO user_activity_hours (user_id, activity_hour) SELECT id, ? FROM users WHERE id = ?`,
+		jstHour, userID,
 	)
 	return err
 }

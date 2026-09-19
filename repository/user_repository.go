@@ -56,6 +56,7 @@ type UserRepository interface {
 	// 以上、ここで書こうとすれば空文字になる）。連絡先の変更は SaveCredentials 経由。
 	UpdateUser(ctx context.Context, u *model.User) error
 	DeleteUser(ctx context.Context, id int64) (bool, error)
+	DeleteActivityHistory(ctx context.Context, userID int64) error
 	UpdateLastActiveAt(ctx context.Context, userID int64, now int64) error
 	// LogActivityDate は活動日（JST の "2006-01-02"）を1行残す。日次の
 	// activeUsers はこの履歴から数える。

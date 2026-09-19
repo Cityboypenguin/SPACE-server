@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/google/uuid"
@@ -54,10 +55,10 @@ func NewAdminCreateCourseUseCase(courseRepo repository.CourseRepository) AdminCr
 // "manual:" dedup_key so a later scrape of the same year can never match it by
 // DedupKey and treat it as already-imported for a different course, nor have this
 // row mistaken for one of the scraper's own "senshu:..." keys.
-//
-// Auth/admin-role check is done by the resolver (matching ListCoursesUseCase's
-// convention in this package).
 func (uc *AdminCreateCourseInteractor) Execute(ctx context.Context, param AdminCreateCourseParam) (*model.Course, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if !validDaysOfWeek[param.DayOfWeek] {
 		return nil, apperr.InvalidInput("曜日が不正です")
 	}

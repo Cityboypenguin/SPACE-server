@@ -124,3 +124,38 @@ func TestRunner_WaitGivesUpWhenItsContextExpires(t *testing.T) {
 	close(gate)
 	waitForDelivery(t, runner)
 }
+
+func TestRunner_RejectsWorkWhenAtCapacity(t *testing.T) {
+	runner := NewRunnerWithLimits("test", 1, time.Second)
+	gate := make(chan struct{})
+	if !runner.TryGo(context.Background(), "blocking", func(context.Context) { <-gate }) {
+		t.Fatal("first task must be accepted")
+	}
+
+	run := make(chan struct{}, 1)
+	if runner.TryGo(context.Background(), "rejected", func(context.Context) { run <- struct{}{} }) {
+		t.Fatal("task over capacity must report rejection")
+	}
+	select {
+	case <-run:
+		t.Fatal("the task over capacity must be rejected")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(gate)
+	waitForDelivery(t, runner)
+}
+
+func TestRunner_AddsATimeout(t *testing.T) {
+	runner := NewRunnerWithLimits("test", 1, 20*time.Millisecond)
+	errSeen := make(chan error, 1)
+	runner.Go(context.Background(), "timed_out", func(ctx context.Context) {
+		<-ctx.Done()
+		errSeen <- ctx.Err()
+	})
+
+	waitForDelivery(t, runner)
+	if err := <-errSeen; err != context.DeadlineExceeded {
+		t.Fatalf("task context error = %v, want deadline exceeded", err)
+	}
+}

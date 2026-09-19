@@ -64,7 +64,7 @@ func (r *MySQLInquiryRepository) FindAll(ctx context.Context, status *model.Inqu
 		query += " AND status = ?"
 		args = append(args, string(*status))
 	}
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)

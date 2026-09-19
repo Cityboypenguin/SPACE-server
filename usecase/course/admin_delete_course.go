@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -31,12 +32,14 @@ func NewAdminDeleteCourseUseCase(courseRepo repository.CourseRepository, roomRep
 // There is no separate "delete the courses row but keep the room" operation to
 // reach for - that would leave an orphaned, permanently-empty course room behind.
 //
-// Auth/admin-role check is done by the resolver (matching ListCoursesUseCase's
-// convention in this package). The resolver is also expected to have surfaced
+// The resolver is also expected to have surfaced
 // Course.registeredCount to the admin beforehand so they know how many students'
 // registrations this will take with it - this use case does not re-check that or
 // require confirmation itself.
 func (uc *AdminDeleteCourseInteractor) Execute(ctx context.Context, courseID int64) (bool, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return false, err
+	}
 	c, err := uc.courseRepo.GetCourseByID(ctx, courseID)
 	if err != nil {
 		return false, err

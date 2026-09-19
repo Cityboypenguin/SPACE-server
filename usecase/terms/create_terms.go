@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -25,6 +26,9 @@ func NewCreateTermsUseCase(termsRepo repository.TermsRepository) *CreateTermsUse
 }
 
 func (u *CreateTermsUseCase) Execute(ctx context.Context, input CreateTermsInput) (*model.TermsOfService, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	version := strings.TrimSpace(input.Version)
 	objectKey := strings.TrimSpace(input.ObjectKey)
 

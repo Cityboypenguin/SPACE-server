@@ -22,7 +22,7 @@ func NewMySQLRoomRepository(db *sql.DB) repository.RoomRepository {
 
 func (r *MySQLRoomRepository) SaveRoom(ctx context.Context, room *model.Room) error {
 	query := "INSERT INTO rooms (name, type, created_at, updated_at) VALUES (?, ?, ?, ?)"
-	result, err := r.DB.ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt.Unix(), room.UpdatedAt.Unix())
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt.Unix(), room.UpdatedAt.Unix())
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func (r *MySQLRoomRepository) SaveRoom(ctx context.Context, room *model.Room) er
 
 func (r *MySQLRoomRepository) GetRoomByID(ctx context.Context, id int64) (*model.Room, error) {
 	query := "SELECT id, name, type, created_at, updated_at FROM rooms WHERE id = ?"
-	row := r.DB.QueryRowContext(ctx, query, id)
+	row := extractDB(ctx, r.DB).QueryRowContext(ctx, query, id)
 
 	var room model.Room
 	var createdAt, updatedAt int64
@@ -50,7 +50,7 @@ func (r *MySQLRoomRepository) GetRoomByID(ctx context.Context, id int64) (*model
 
 func (r *MySQLRoomRepository) DeleteRoom(ctx context.Context, id int64) (bool, error) {
 	query := "DELETE FROM rooms WHERE id = ?"
-	result, err := r.DB.ExecContext(ctx, query, id)
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, id)
 	if err != nil {
 		return false, err
 	}
@@ -83,7 +83,7 @@ func (r *MySQLRoomRepository) GetRoomsByIDs(ctx context.Context, ids []int64) (m
 		args[i] = id
 	}
 
-	rows, err := r.DB.QueryContext(ctx, query, args...)
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

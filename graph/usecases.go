@@ -18,20 +18,18 @@ import (
 // touches one place instead of three.
 func NewCommunityUseCases(
 	communityRepo repository.CommunityRepository,
-	mediaRepo repository.MediaRepository,
 	roomUserRepo repository.RoomUserRepository,
 	txManager repository.TxManager,
 ) CommunityUseCases {
 	return CommunityUseCases{
-		CreateCommunityUseCase:             communityusecase.NewCreateCommunityUseCase(communityRepo, mediaRepo),
-		GetCommunityUseCase:                communityusecase.NewGetCommunityUseCase(communityRepo),
-		UpdateCommunityUseCase:             communityusecase.NewUpdateCommunityUseCase(communityRepo),
-		UpdateCommunityMembersUseCase:      communityusecase.NewUpdateCommunityMembersUseCase(communityRepo, roomUserRepo, txManager),
-		SearchCommunityUseCase:             communityusecase.NewSearchCommunityUseCase(communityRepo),
-		ListMyCommunitiesUseCase:           communityusecase.NewListMyCommunitiesUseCase(communityRepo),
-		ListAllCommunitiesUseCase:          communityusecase.NewListAllCommunitiesUseCase(communityRepo),
-		IsSoleOwnerWithOtherMembersUseCase: communityusecase.NewIsSoleOwnerWithOtherMembersUseCase(communityRepo),
-		GetRandomCommunitiesUseCase:        *communityusecase.NewGetRandomCommunitiesUseCase(communityRepo),
+		CreateCommunityUseCase:        communityusecase.NewCreateCommunityUseCase(communityRepo),
+		GetCommunityUseCase:           communityusecase.NewGetCommunityUseCase(communityRepo),
+		UpdateCommunityUseCase:        communityusecase.NewUpdateCommunityUseCase(communityRepo, roomUserRepo),
+		UpdateCommunityMembersUseCase: communityusecase.NewUpdateCommunityMembersUseCase(communityRepo, roomUserRepo, txManager),
+		SearchCommunityUseCase:        communityusecase.NewSearchCommunityUseCase(communityRepo),
+		ListMyCommunitiesUseCase:      communityusecase.NewListMyCommunitiesUseCase(communityRepo),
+		ListAllCommunitiesUseCase:     communityusecase.NewListAllCommunitiesUseCase(communityRepo),
+		GetRandomCommunitiesUseCase:   *communityusecase.NewGetRandomCommunitiesUseCase(communityRepo),
 	}
 }
 
