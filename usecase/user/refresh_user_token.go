@@ -40,21 +40,8 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 		return nil, errors.New("invalid refresh token")
 	}
 
-	revoked, err := uc.revokedTokenRepo.IsRevoked(ctx, refreshToken)
-	if err != nil {
-		return nil, err
-	}
-	if revoked {
-		return nil, errors.New("refresh token has been revoked")
-	}
-
-	accessToken, err := auth.GenerateAccessToken(claims.ID, claims.Role)
-	if err != nil {
-		return nil, err
-	}
-	newRefreshToken, err := auth.GenerateRefreshToken(claims.ID, claims.Role)
-	if err != nil {
-		return nil, err
+	if claims.Role == "administrator" || claims.CredentialsVersion == nil {
+		return nil, errors.New("invalid refresh token")
 	}
 
 	// 返すのは本人ぶんなので連絡先込みで引く（UserAuthPayload.user は UserAccount）。
@@ -65,9 +52,31 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 	if u == nil {
 		return nil, errors.New("user not found")
 	}
-
-	if err := uc.revokedTokenRepo.RevokeToken(ctx, refreshToken, claims.ExpiresAt.Unix()); err != nil {
+	if u.Status == model.UserStatusFrozen {
+		return nil, errors.New("account is frozen")
+	}
+	version, err := uc.userRepo.GetCredentialsVersionByID(ctx, claims.ID)
+	if err != nil {
 		return nil, err
+	}
+	if version != *claims.CredentialsVersion {
+		return nil, errors.New("refresh token has been revoked")
+	}
+	accessToken, err := auth.GenerateUserAccessToken(claims.ID, claims.Role, version)
+	if err != nil {
+		return nil, err
+	}
+	newRefreshToken, err := auth.GenerateUserRefreshToken(claims.ID, claims.Role, version)
+	if err != nil {
+		return nil, err
+	}
+
+	consumed, err := uc.revokedTokenRepo.ConsumeToken(ctx, refreshToken, claims.ExpiresAt.Unix())
+	if err != nil {
+		return nil, err
+	}
+	if !consumed {
+		return nil, errors.New("refresh token has been revoked")
 	}
 
 	return &RefreshUserTokenResult{AccessToken: accessToken, RefreshToken: newRefreshToken, User: u}, nil

@@ -76,7 +76,8 @@ type UserAccount struct {
 // 公開情報の GetUserByID を使う。認証まわりでも、秘密が要らないなら取らない。
 type UserCredentials struct {
 	UserAccount
-	HashedPassword string
+	HashedPassword     string
+	CredentialsVersion int64
 }
 
 type CreateUserParam struct {

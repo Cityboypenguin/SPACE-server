@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type AzureBlobStorageRepository struct {
@@ -94,4 +95,22 @@ func (r *AzureBlobStorageRepository) DeletePrivateObject(ctx context.Context, ob
 		return nil
 	}
 	return err
+}
+
+func (r *AzureBlobStorageRepository) ListPrivateObjects(ctx context.Context, prefix string) ([]repository.PrivateObject, error) {
+	pager := r.client.NewListBlobsFlatPager(r.privateContainerName, &azblob.ListBlobsFlatOptions{Prefix: &prefix})
+	var objects []repository.PrivateObject
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Segment.BlobItems {
+			if item.Name == nil || item.Properties == nil || item.Properties.LastModified == nil {
+				continue
+			}
+			objects = append(objects, repository.PrivateObject{Key: *item.Name, LastModified: *item.Properties.LastModified})
+		}
+	}
+	return objects, nil
 }

@@ -183,4 +183,10 @@ func (r *MySQLActivityArchiveRepository) DeleteActivityArchiveRecord(ctx context
 	return err
 }
 
+func (r *MySQLActivityArchiveRepository) IsActivityArchiveObjectReferenced(ctx context.Context, objectKey string) (bool, error) {
+	var referenced bool
+	err := r.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM user_activity_archives WHERE object_key = ?)`, objectKey).Scan(&referenced)
+	return referenced, err
+}
+
 var _ repository.ActivityArchiveRepository = (*MySQLActivityArchiveRepository)(nil)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -128,4 +129,15 @@ func (r *MinIOStorageRepository) OpenPrivateObject(ctx context.Context, objectKe
 
 func (r *MinIOStorageRepository) DeletePrivateObject(ctx context.Context, objectKey string) error {
 	return r.client.RemoveObject(ctx, r.privateBucket, objectKey, minio.RemoveObjectOptions{})
+}
+
+func (r *MinIOStorageRepository) ListPrivateObjects(ctx context.Context, prefix string) ([]repository.PrivateObject, error) {
+	var objects []repository.PrivateObject
+	for item := range r.client.ListObjects(ctx, r.privateBucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if item.Err != nil {
+			return nil, item.Err
+		}
+		objects = append(objects, repository.PrivateObject{Key: item.Key, LastModified: item.LastModified})
+	}
+	return objects, nil
 }

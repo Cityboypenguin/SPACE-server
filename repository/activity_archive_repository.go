@@ -28,4 +28,5 @@ type ActivityArchiveRepository interface {
 	FinalizeActivityArchive(ctx context.Context, archive ActivityArchive) error
 	ListExpiredActivityArchives(ctx context.Context, now time.Time) ([]ActivityArchive, error)
 	DeleteActivityArchiveRecord(ctx context.Context, month time.Time) error
+	IsActivityArchiveObjectReferenced(ctx context.Context, objectKey string) (bool, error)
 }

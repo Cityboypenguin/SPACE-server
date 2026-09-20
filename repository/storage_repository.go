@@ -17,5 +17,11 @@ type StorageRepository interface {
 type PrivateStorageRepository interface {
 	PutPrivateObject(ctx context.Context, objectKey, contentType string, body io.Reader, size int64) error
 	OpenPrivateObject(ctx context.Context, objectKey string) (io.ReadCloser, error)
+	ListPrivateObjects(ctx context.Context, prefix string) ([]PrivateObject, error)
 	DeletePrivateObject(ctx context.Context, objectKey string) error
+}
+
+type PrivateObject struct {
+	Key          string
+	LastModified time.Time
 }

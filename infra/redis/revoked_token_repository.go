@@ -31,3 +31,11 @@ func (r *RedisRevokedTokenRepository) IsRevoked(ctx context.Context, token strin
 	}
 	return result > 0, nil
 }
+
+func (r *RedisRevokedTokenRepository) ConsumeToken(ctx context.Context, token string, expiresAt int64) (bool, error) {
+	ttl := time.Until(time.Unix(expiresAt, 0))
+	if ttl <= 0 {
+		return false, nil
+	}
+	return r.client.SetNX(ctx, "revoked:"+token, "1", ttl).Result()
+}

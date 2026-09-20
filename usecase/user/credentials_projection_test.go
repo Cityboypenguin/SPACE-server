@@ -46,6 +46,11 @@ func (r *noCredentialsUserRepo) GetCredentialsByID(context.Context, int64) (*mod
 	return nil, nil
 }
 
+func (r *noCredentialsUserRepo) GetCredentialsVersionByID(context.Context, int64) (int64, error) {
+	r.fail("GetCredentialsVersionByID")
+	return 0, nil
+}
+
 func (r *noCredentialsUserRepo) SaveCredentials(context.Context, *model.UserCredentials) error {
 	r.fail("SaveCredentials")
 	return nil

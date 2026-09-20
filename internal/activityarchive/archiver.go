@@ -16,6 +16,7 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/google/uuid"
 )
 
 const (
@@ -23,6 +24,8 @@ const (
 	archiveRetentionYears = 3
 	archiveContentType    = "application/gzip"
 	archiveRetryInterval  = 5 * time.Minute
+	archiveObjectPrefix   = "analytics/user_activity_hours/"
+	orphanGracePeriod     = 2 * time.Hour
 )
 
 var errArchiveBusy = errors.New("another instance is running the activity archive job")
@@ -89,7 +92,7 @@ func (a *Archiver) runAndLog(parent context.Context) bool {
 	return true
 }
 
-func (a *Archiver) RunOnce(ctx context.Context) error {
+func (a *Archiver) RunOnce(ctx context.Context) (runErr error) {
 	release, acquired, err := a.repo.AcquireLock(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire activity archive lock: %w", err)
@@ -104,6 +107,17 @@ func (a *Archiver) RunOnce(ctx context.Context) error {
 	}()
 
 	now := a.now().In(jst)
+	defer func() {
+		cleanupCtx := ctx
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			var cancel context.CancelFunc
+			cleanupCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+			defer cancel()
+		}
+		if cleanupCtx.Err() == nil {
+			runErr = errors.Join(runErr, a.cleanupOrphans(cleanupCtx, now))
+		}
+	}()
 	cutoff := now.AddDate(0, 0, -databaseRetentionDays)
 
 	for {
@@ -140,7 +154,12 @@ func (a *Archiver) RunOnce(ctx context.Context) error {
 			cleanupArchiveFile()
 			return err
 		}
-		key := fmt.Sprintf("analytics/user_activity_hours/%04d/%02d.csv.gz", month.Year(), month.Month())
+		objectID, err := uuid.NewRandom()
+		if err != nil {
+			cleanupArchiveFile()
+			return fmt.Errorf("create activity archive object ID: %w", err)
+		}
+		key := fmt.Sprintf("%s%04d/%02d/%s.csv.gz", archiveObjectPrefix, month.Year(), month.Month(), objectID)
 		if err := a.storage.PutPrivateObject(ctx, key, archiveContentType, archiveFile, stat.Size()); err != nil {
 			cleanupArchiveFile()
 			return fmt.Errorf("upload activity archive: %w", err)
@@ -179,6 +198,30 @@ func (a *Archiver) RunOnce(ctx context.Context) error {
 		if err := a.repo.DeleteActivityArchiveRecord(ctx, archive.Month); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (a *Archiver) cleanupOrphans(ctx context.Context, now time.Time) error {
+	objects, err := a.storage.ListPrivateObjects(ctx, archiveObjectPrefix)
+	if err != nil {
+		return fmt.Errorf("list activity archive objects: %w", err)
+	}
+	for _, object := range objects {
+		if object.LastModified.IsZero() || now.Sub(object.LastModified) < orphanGracePeriod {
+			continue
+		}
+		referenced, err := a.repo.IsActivityArchiveObjectReferenced(ctx, object.Key)
+		if err != nil {
+			return fmt.Errorf("check activity archive reference %s: %w", object.Key, err)
+		}
+		if referenced {
+			continue
+		}
+		if err := a.storage.DeletePrivateObject(ctx, object.Key); err != nil {
+			return fmt.Errorf("delete orphan activity archive %s: %w", object.Key, err)
+		}
+		logger.Log.Info().Str("component", "activity_archive").Str("object_key", object.Key).Msg("deleted orphan activity archive")
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 )
 
 const otpTTL = 10 * time.Minute
+const resetRequestInterval = time.Minute
 
 type RequestPasswordResetUseCase interface {
 	Execute(ctx context.Context, email string) error
@@ -36,6 +37,13 @@ func NewRequestPasswordResetUseCase(
 }
 
 func (uc *RequestPasswordResetInteractor) Execute(ctx context.Context, email string) error {
+	allowed, err := uc.pwResetRepo.TryBeginRequest(ctx, email, resetRequestInterval)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return nil
+	}
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return err

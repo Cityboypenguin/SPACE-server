@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,15 @@ type archiveRepoFake struct {
 	deleteErr     error
 	deletes       int
 	waitForCancel bool
+	referenced    map[string]bool
+	referenceErr  error
+}
+
+func (r *archiveRepoFake) IsActivityArchiveObjectReferenced(_ context.Context, key string) (bool, error) {
+	if r.referenceErr != nil {
+		return false, r.referenceErr
+	}
+	return r.referenced[key], nil
 }
 
 func (r *archiveRepoFake) AcquireLock(context.Context) (func() error, bool, error) {
@@ -83,6 +93,13 @@ type privateStorageFake struct {
 	deleteCalls int
 	corrupt     bool
 	readError   error
+	objects     []repository.PrivateObject
+	listError   error
+	deletedKeys []string
+}
+
+func (s *privateStorageFake) ListPrivateObjects(context.Context, string) ([]repository.PrivateObject, error) {
+	return s.objects, s.listError
 }
 
 func (s *privateStorageFake) PutPrivateObject(_ context.Context, key, _ string, body io.Reader, _ int64) error {
@@ -101,9 +118,104 @@ func (s *privateStorageFake) OpenPrivateObject(context.Context, string) (io.Read
 	}
 	return io.NopCloser(bytes.NewReader(s.body)), nil
 }
-func (s *privateStorageFake) DeletePrivateObject(context.Context, string) error {
+func (s *privateStorageFake) DeletePrivateObject(_ context.Context, key string) error {
 	s.deleteCalls++
+	s.deletedKeys = append(s.deletedKeys, key)
 	return nil
+}
+
+func TestCleanupOrphansKeepsReferencedAndRecentObjects(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, jst)
+	repo := &archiveRepoFake{acquired: true, referenced: map[string]bool{"referenced": true}}
+	storage := &privateStorageFake{objects: []repository.PrivateObject{
+		{Key: "referenced", LastModified: now.Add(-24 * time.Hour)},
+		{Key: "recent", LastModified: now.Add(-time.Hour)},
+		{Key: "orphan", LastModified: now.Add(-24 * time.Hour)},
+	}}
+	a := newTestArchiver(t, repo, storage)
+	a.now = func() time.Time { return now }
+	if err := a.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(storage.deletedKeys) != 1 || storage.deletedKeys[0] != "orphan" {
+		t.Fatalf("deleted keys = %v, want only orphan", storage.deletedKeys)
+	}
+
+	storage.deletedKeys = nil
+	repo.referenceErr = errors.New("database unavailable")
+	if err := a.RunOnce(context.Background()); err == nil {
+		t.Fatal("reference lookup failure must stop orphan deletion")
+	}
+	if len(storage.deletedKeys) != 0 {
+		t.Fatalf("deleted objects despite reference lookup failure: %v", storage.deletedKeys)
+	}
+}
+
+func TestFailedArchiveUploadIsReclaimedAfterGracePeriod(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, jst)
+	oldest := time.Date(2025, 1, 2, 10, 0, 0, 0, jst)
+	repo := &archiveRepoFake{acquired: true, oldest: &oldest, rows: []repository.ActivityHour{{UserID: 7, ActivityHour: oldest}}}
+	storage := &privateStorageFake{corrupt: true}
+	a := newTestArchiver(t, repo, storage)
+	a.now = func() time.Time { return now }
+	if err := a.RunOnce(context.Background()); err == nil {
+		t.Fatal("corrupt upload was finalized")
+	}
+	failedKey := storage.key
+	repo.oldest = nil
+	storage.corrupt = false
+	storage.objects = []repository.PrivateObject{{Key: failedKey, LastModified: now}}
+	a.now = func() time.Time { return now.Add(orphanGracePeriod + time.Minute) }
+	if err := a.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(storage.deletedKeys) != 1 || storage.deletedKeys[0] != failedKey {
+		t.Fatalf("failed upload was not reclaimed: %v", storage.deletedKeys)
+	}
+}
+
+func TestCleanupOrphansRunsWhileArchiveKeepsFailing(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, jst)
+	oldest := time.Date(2025, 1, 2, 10, 0, 0, 0, jst)
+	repo := &archiveRepoFake{acquired: true, oldest: &oldest, rows: []repository.ActivityHour{{UserID: 7, ActivityHour: oldest}}}
+	storage := &privateStorageFake{
+		corrupt: true,
+		objects: []repository.PrivateObject{{Key: "old-orphan", LastModified: now.Add(-3 * time.Hour)}},
+	}
+	a := newTestArchiver(t, repo, storage)
+	a.now = func() time.Time { return now }
+	if err := a.RunOnce(context.Background()); err == nil || !strings.Contains(err.Error(), "verify activity archive") {
+		t.Fatalf("archive failure was lost: %v", err)
+	}
+	if len(storage.deletedKeys) != 1 || storage.deletedKeys[0] != "old-orphan" {
+		t.Fatalf("orphan not reclaimed during archive failure: %v", storage.deletedKeys)
+	}
+
+	storage.deletedKeys = nil
+	repo.referenceErr = errors.New("reference lookup failed")
+	err := a.RunOnce(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "verify activity archive") || !errors.Is(err, repo.referenceErr) {
+		t.Fatalf("both failures must be returned: %v", err)
+	}
+	if len(storage.deletedKeys) != 0 {
+		t.Fatalf("deleted without reference check: %v", storage.deletedKeys)
+	}
+}
+
+func TestCleanupOrphansAfterArchiveDeadline(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, jst)
+	repo := &archiveRepoFake{acquired: true, waitForCancel: true}
+	storage := &privateStorageFake{objects: []repository.PrivateObject{{Key: "old-orphan", LastModified: now.Add(-3 * time.Hour)}}}
+	a := newTestArchiver(t, repo, storage)
+	a.now = func() time.Time { return now }
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	if err := a.RunOnce(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("archive deadline was lost: %v", err)
+	}
+	if len(storage.deletedKeys) != 1 || storage.deletedKeys[0] != "old-orphan" {
+		t.Fatalf("orphan not reclaimed after deadline: %v", storage.deletedKeys)
+	}
 }
 
 func TestNewRequiresDedicatedHMACKey(t *testing.T) {
@@ -158,7 +270,7 @@ func TestRunOnceUploadsThenFinalizesACompleteMonth(t *testing.T) {
 	if err := a.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if storage.key != "analytics/user_activity_hours/2025/01.csv.gz" || len(storage.body) == 0 {
+	if !strings.HasPrefix(storage.key, "analytics/user_activity_hours/2025/01/") || !strings.HasSuffix(storage.key, ".csv.gz") || len(storage.body) == 0 {
 		t.Fatalf("unexpected upload: key=%q bytes=%d", storage.key, len(storage.body))
 	}
 	if repo.finalized == nil || repo.finalized.RowCount != 1 || repo.finalized.SHA256 == "" {
@@ -166,6 +278,25 @@ func TestRunOnceUploadsThenFinalizesACompleteMonth(t *testing.T) {
 	}
 	if want := a.now().AddDate(archiveRetentionYears, 0, 0); !repo.finalized.ExpiresAt.Equal(want) {
 		t.Fatalf("expires at %v, want %v", repo.finalized.ExpiresAt, want)
+	}
+}
+
+func TestArchiveRetriesUseDistinctObjectKeys(t *testing.T) {
+	oldest := time.Date(2025, 1, 2, 10, 0, 0, 0, jst)
+	storage := &privateStorageFake{}
+	repo := &archiveRepoFake{oldest: &oldest, rows: []repository.ActivityHour{{UserID: 7, ActivityHour: oldest}}, acquired: true}
+	a := newTestArchiver(t, repo, storage)
+	a.now = func() time.Time { return time.Date(2026, 9, 19, 12, 0, 0, 0, jst) }
+	if err := a.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	first := storage.key
+	repo.oldest = &oldest
+	if err := a.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if first == storage.key {
+		t.Fatal("archive retries must not overwrite a previously uploaded object")
 	}
 }
 

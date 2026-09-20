@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"os"
 	"strconv"
@@ -10,9 +12,10 @@ import (
 )
 
 type Claims struct {
-	ID        int64  `json:"id"`
-	Role      string `json:"role"`
-	TokenType string `json:"tokenType"`
+	ID                 int64  `json:"id"`
+	Role               string `json:"role"`
+	TokenType          string `json:"tokenType"`
+	CredentialsVersion *int64 `json:"credentialsVersion,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -36,15 +39,20 @@ func tokenExpirationMinutes(envKey string, defaultMinutes int) int {
 func jwtIssuer() string   { return os.Getenv("JWT_ISSUER") }
 func jwtAudience() string { return os.Getenv("JWT_AUDIENCE") }
 
-func generateTokenWithType(id int64, role string, tokenType string, expirationMinutes int) (string, error) {
+func generateTokenWithType(id int64, role string, tokenType string, expirationMinutes int, credentialsVersion *int64) (string, error) {
 	secret := jwtSecret()
 	if len(secret) == 0 {
 		return "", errors.New("JWT_SECRET environment variable must be set")
 	}
 
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return "", err
+	}
 	registered := jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expirationMinutes) * time.Minute)),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		ID:        hex.EncodeToString(nonce[:]),
 	}
 	if iss := jwtIssuer(); iss != "" {
 		registered.Issuer = iss
@@ -54,10 +62,11 @@ func generateTokenWithType(id int64, role string, tokenType string, expirationMi
 	}
 
 	claims := Claims{
-		ID:               id,
-		Role:             role,
-		TokenType:        tokenType,
-		RegisteredClaims: registered,
+		ID:                 id,
+		Role:               role,
+		TokenType:          tokenType,
+		CredentialsVersion: credentialsVersion,
+		RegisteredClaims:   registered,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -83,12 +92,20 @@ func validateTokenWithType(tokenString string, expectedType string) (*Claims, er
 
 func GenerateAccessToken(id int64, role string) (string, error) {
 	expirationMinutes := tokenExpirationMinutes("JWT_EXPIRATION_MINUTES", 60)
-	return generateTokenWithType(id, role, "access", expirationMinutes)
+	return generateTokenWithType(id, role, "access", expirationMinutes, nil)
 }
 
 func GenerateRefreshToken(id int64, role string) (string, error) {
 	expirationMinutes := tokenExpirationMinutes("JWT_REFRESH_EXPIRATION_MINUTES", 60*24*30)
-	return generateTokenWithType(id, role, "refresh", expirationMinutes)
+	return generateTokenWithType(id, role, "refresh", expirationMinutes, nil)
+}
+
+func GenerateUserAccessToken(id int64, role string, version int64) (string, error) {
+	return generateTokenWithType(id, role, "access", tokenExpirationMinutes("JWT_EXPIRATION_MINUTES", 60), &version)
+}
+
+func GenerateUserRefreshToken(id int64, role string, version int64) (string, error) {
+	return generateTokenWithType(id, role, "refresh", tokenExpirationMinutes("JWT_REFRESH_EXPIRATION_MINUTES", 60*24*30), &version)
 }
 
 func ValidateAccessToken(tokenString string) (*Claims, error) {

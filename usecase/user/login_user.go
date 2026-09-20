@@ -51,12 +51,12 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, errors.New("account is frozen")
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Role)
+	accessToken, err := auth.GenerateUserAccessToken(user.ID, user.Role, user.CredentialsVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Role)
+	refreshToken, err := auth.GenerateUserRefreshToken(user.ID, user.Role, user.CredentialsVersion)
 	if err != nil {
 		return nil, err
 	}

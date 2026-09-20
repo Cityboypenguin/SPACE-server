@@ -67,7 +67,7 @@ func TestUserColumnProjectionsSeparateEmail(t *testing.T) {
 	if got, want := len(strings.Split(userAccountColumns, ",")), 8; got != want {
 		t.Errorf("userAccountColumns の列数 = %d, want %d", got, want)
 	}
-	if got, want := len(strings.Split(userCredentialColumns, ",")), 9; got != want {
+	if got, want := len(strings.Split(userCredentialColumns, ",")), 10; got != want {
 		t.Errorf("userCredentialColumns の列数 = %d, want %d", got, want)
 	}
 	if !strings.HasPrefix(userAccountColumns, userPublicColumns) {
@@ -130,6 +130,7 @@ func userProjectionTestDB(t *testing.T) (*sql.DB, func()) {
 			name VARCHAR(255) NOT NULL,
 			email VARCHAR(255) NOT NULL UNIQUE,
 			hashed_password VARCHAR(255) NOT NULL,
+			credentials_version BIGINT NOT NULL DEFAULT 0,
 			role VARCHAR(50) NOT NULL DEFAULT 'student',
 			status VARCHAR(50) NOT NULL DEFAULT 'active',
 			created_at BIGINT NOT NULL,

@@ -59,6 +59,10 @@ type Tracker struct {
 	mu       sync.Mutex
 	status   Status
 	onChange func(Status)
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopping bool
+	jobs     sync.WaitGroup
 }
 
 // NewTracker builds a Tracker that calls onChange (if non-nil) with a snapshot of
@@ -66,7 +70,26 @@ type Tracker struct {
 // caller can push updates (e.g. over a GraphQL subscription) instead of relying on
 // callers to poll Get.
 func NewTracker(onChange func(Status)) *Tracker {
-	return &Tracker{status: Status{State: StateIdle}, onChange: onChange}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Tracker{status: Status{State: StateIdle}, onChange: onChange, ctx: ctx, cancel: cancel}
+}
+
+func (t *Tracker) Shutdown(ctx context.Context) error {
+	t.mu.Lock()
+	t.stopping = true
+	t.cancel()
+	t.mu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		t.jobs.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (t *Tracker) Get() Status {
@@ -109,6 +132,10 @@ func (t *Tracker) SetProgress(processed, total int) {
 // t.SetProgress so it can report incremental progress while it works.
 func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress func(processed, total int)) (imported, skipped int, err error)) (Status, error) {
 	t.mu.Lock()
+	if t.stopping {
+		t.mu.Unlock()
+		return Status{}, apperr.Conflict("サーバー停止中はインポートを開始できません")
+	}
 	if t.status.State == StateRunning {
 		t.mu.Unlock()
 		return Status{}, apperr.Conflict("既にインポートを実行中です")
@@ -116,11 +143,13 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 	now := time.Now()
 	t.status = Status{State: StateRunning, Year: year, StartedAt: &now}
 	snapshot := t.status
+	t.jobs.Add(1)
 	t.mu.Unlock()
 	t.notify()
 
 	go func() {
-		bgCtx, cancel := context.WithCancel(context.Background())
+		defer t.jobs.Done()
+		bgCtx, cancel := context.WithCancel(t.ctx)
 		defer cancel()
 
 		stalled := make(chan struct{})
@@ -132,9 +161,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 			for {
 				select {
 				case <-resetStall:
-					if !timer.Stop() {
-						<-timer.C
-					}
+					timer.Stop()
 					timer.Reset(progressStallTimeout)
 				case <-timer.C:
 					close(stalled)
@@ -163,6 +190,9 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 		imported, skipped, err := run(bgCtx, reportProgress)
 		close(stopWatchdog)
 		finished := time.Now()
+		if err == nil && bgCtx.Err() != nil {
+			err = bgCtx.Err()
+		}
 
 		select {
 		case <-stalled:

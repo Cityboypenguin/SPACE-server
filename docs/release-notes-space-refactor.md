@@ -2,9 +2,23 @@
 
 ## 必須migration
 
-`070_create_user_activity_hours.up.sql` と `071_create_user_activity_archives.up.sql` は
+`070_create_user_activity_hours.up.sql`、`071_create_user_activity_archives.up.sql`、
+`072_add_credentials_version.up.sql` は
 この変更に含まれる必須migrationである。
-アプリケーションは `user_activity_hours` へ書き込むため、サーバーを更新する前に適用すること。
+アプリケーションは `user_activity_hours` へ書き込み、認証時に `users.credentials_version` を読むため、
+サーバーを更新する前に適用すること。
+
+## 認証とセッション
+
+ユーザーJWTに認証バージョンと発行ごとの一意IDを追加した。旧ユーザーJWTは
+バージョンを持たないため、デプロイ後は再ログインが必要になる。パスワードを変更すると
+MySQL内の認証バージョンがパスワードハッシュと同時に更新され、旧access/refresh tokenは失効する。
+管理者JWTも発行ごとに一意になり、削除済み管理者のトークンはDB照合で拒否される。
+refresh tokenの単回使用、リセットOTPの照合と削除、リセットトークンの消費、
+宛先別メール送信制限にはRedisの原子的操作を使う。Redis 7を維持すること。
+リセットトークン消費後にパスワード保存が失敗した場合は、再度リセット申請が必要になる。
+OTPからリセットトークンへの交換はRedis内で原子的に実行するため、保存失敗でOTPだけ
+消費されることはない。通信が応答前に途切れた場合の結果不明は再申請で復旧する。
 
 `user_activity_hours` はMySQLに400日間保持する。それより古い完了済みのJST月は月単位の
 `CSV.gz` に変換し、アップロード後に保存先のサイズとSHA-256を読み戻して照合し、
@@ -28,7 +42,9 @@ EC2デプロイ前にSecureString `/space/activity-archive-hmac-key` をSSM Para
 `MINIO_PRIVATE_BUCKET`、Azureでは `AZURE_STORAGE_PRIVATE_CONTAINER_NAME` を設定すること。
 未設定時は既存名に `-private` を付けた名前を使用する。
 EC2構成では非公開S3 bucket `space-activity-archives` を先に作成し、実行ロールに
-PutObject/GetObject/DeleteObjectを許可すること。ローカルComposeは非公開bucketを自動作成する。
+PutObject/GetObject/DeleteObjectとListBucketを許可すること。ローカルComposeは非公開bucketを自動作成する。
+アーカイブ実行時はprefixを一覧し、2時間以上前のblobについて台帳参照を確認してから
+未参照分を削除する。一覧・DB照会に失敗したときは削除せず5分後に再試行する。
 
 ## GraphQLの破壊的変更
 

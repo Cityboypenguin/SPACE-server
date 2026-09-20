@@ -682,7 +682,7 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.MetricsMiddleware())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository, userActivityRecorder))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
@@ -747,7 +747,7 @@ func main() {
 				if tokenStr == "" {
 					return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
 				}
-				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
+				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, administratorRepository)
 				if err != nil {
 					return ctx, nil, err
 				}
@@ -842,6 +842,10 @@ func main() {
 	case <-activityArchiveDone:
 	case <-shutdownCtx.Done():
 		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
+	}
+	if err := courseImportTracker.Shutdown(shutdownCtx); err != nil {
+		logger.Log.Error().Err(err).Msg("course import did not stop before shutdown; leaving DB and Redis open")
+		return
 	}
 
 	// リクエストの外で走っている処理（チャット配信・お知らせ通知・活動記録）を、

@@ -27,25 +27,16 @@ func NewVerifyPasswordResetOTPUseCase(pwResetRepo repository.PasswordResetReposi
 }
 
 func (uc *VerifyPasswordResetOTPInteractor) Execute(ctx context.Context, email, otp string) (string, error) {
-	stored, err := uc.pwResetRepo.GetOTP(ctx, email)
-	if err != nil {
-		return "", err
-	}
-	if stored == "" || stored != otp {
-		return "", errors.New("invalid or expired verification code")
-	}
-
-	if err := uc.pwResetRepo.DeleteOTP(ctx, email); err != nil {
-		return "", err
-	}
-
 	token, err := generateResetToken()
 	if err != nil {
 		return "", err
 	}
-
-	if err := uc.pwResetRepo.SaveResetToken(ctx, token, email, resetTokenTTL); err != nil {
+	consumed, err := uc.pwResetRepo.ExchangeOTPForResetToken(ctx, email, otp, token, resetTokenTTL)
+	if err != nil {
 		return "", err
+	}
+	if !consumed {
+		return "", errors.New("invalid or expired verification code")
 	}
 
 	return token, nil

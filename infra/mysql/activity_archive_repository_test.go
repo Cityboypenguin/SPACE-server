@@ -107,6 +107,12 @@ func TestFinalizeActivityArchiveRollsBackOnRowCountMismatch(t *testing.T) {
 	if hours != 0 || ledger != 1 {
 		t.Fatalf("finalize failed: hours=%d ledger=%d", hours, ledger)
 	}
+	for key, want := range map[string]bool{"archive": true, "unreferenced": false} {
+		got, err := repo.IsActivityArchiveObjectReferenced(ctx, key)
+		if err != nil || got != want {
+			t.Fatalf("reference %q = %v, err=%v, want %v", key, got, err, want)
+		}
+	}
 	expired, err := repo.ListExpiredActivityArchives(ctx, expiresAt)
 	if err != nil {
 		t.Fatal(err)

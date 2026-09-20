@@ -94,6 +94,7 @@ type UserRepository interface {
 	// GetCredentialsByID はパスワード変更時の現在パスワード照合用。
 	// 存在しなければ (nil, nil)。
 	GetCredentialsByID(ctx context.Context, id int64) (*model.UserCredentials, error)
+	GetCredentialsVersionByID(ctx context.Context, id int64) (int64, error)
 	// SaveCredentials は新規登録・パスワード変更の保存。ID が 0 なら INSERT、
 	// それ以外は hashed_password を含めた UPDATE。
 	SaveCredentials(ctx context.Context, c *model.UserCredentials) error

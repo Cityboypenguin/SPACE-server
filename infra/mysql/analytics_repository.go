@@ -297,12 +297,10 @@ func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context, fiel
 		})
 	}
 
-	// セッションデータ（user_session_summaries テーブルが存在する場合のみ）。
-	// テーブル未作成環境ではベストエフォートで無視するため、他クエリの失敗としては扱わない。
+	// セッション集計に失敗した場合は0件として返さず、呼び出し元へ伝える。
 	if fields.Wants(fieldAvgSessionDurationSeconds, fieldAvgSessionsPerDay, fieldAvgScrollDepth, fieldPageViewStats) {
 		g.Go(func() error {
-			_ = r.loadSessionStats(gctx, s, fields)
-			return nil
+			return r.loadSessionStats(gctx, s, fields)
 		})
 	}
 

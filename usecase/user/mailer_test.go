@@ -44,6 +44,15 @@ func (f *fakeUserRepo) FindByEmail(_ context.Context, _ string) (*model.User, er
 type fakePasswordResetRepo struct {
 	repository.PasswordResetRepository
 	savedOTP string
+	allowed  bool
+}
+
+func (f *fakePasswordResetRepo) TryBeginRequest(context.Context, string, time.Duration) (bool, error) {
+	if !f.allowed {
+		f.allowed = true
+		return true, nil
+	}
+	return false, nil
 }
 
 func (f *fakePasswordResetRepo) SaveOTP(_ context.Context, _, otp string, _ time.Duration) error {
@@ -84,5 +93,19 @@ func TestRequestPasswordReset_UnknownEmailSendsNothing(t *testing.T) {
 	}
 	if len(mailer.sent) != 0 {
 		t.Fatalf("sent %d mails, want none for an unknown address", len(mailer.sent))
+	}
+}
+
+func TestRequestPasswordReset_RateLimitsOneRecipient(t *testing.T) {
+	mailer := &fakeMailer{}
+	pwRepo := &fakePasswordResetRepo{}
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, pwRepo, mailer)
+	for i := 0; i < 2; i++ {
+		if err := uc.Execute(context.Background(), "u@example.com"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(mailer.sent))
 	}
 }

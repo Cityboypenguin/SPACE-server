@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -76,13 +77,15 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		if err := uc.profileRepo.SaveProfile(ctx, emptyProfile); err != nil {
 			return err
 		}
-		if uc.validationEnabled {
-			return uc.otpRepo.Delete(ctx, param.Email)
-		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+	if uc.validationEnabled {
+		if err := uc.otpRepo.Delete(ctx, param.Email); err != nil {
+			logger.Log.Error().Err(err).Msg("failed to delete registration OTP after commit")
+		}
 	}
 
 	// 返すのはハッシュを外した本人ぶん。連絡先を含めてよいのは、いま登録した

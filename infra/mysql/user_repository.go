@@ -46,7 +46,7 @@ const userPublicColumns = `id, account_id, name, role, status, created_at, updat
 const userAccountColumns = userPublicColumns + `, email`
 
 // userCredentialColumns は認証に使う列。本人・管理者向けの列に hashed_password を足しただけ。
-const userCredentialColumns = userAccountColumns + `, hashed_password`
+const userCredentialColumns = userAccountColumns + `, hashed_password, credentials_version`
 
 // scanUser は userPublicColumns の並びで1行を読む。
 func scanUser(row rowScanner) (*model.User, error) {
@@ -103,6 +103,7 @@ func scanUserCredentials(row rowScanner) (*model.UserCredentials, error) {
 		&updatedAtUnix,
 		&c.Email,
 		&c.HashedPassword,
+		&c.CredentialsVersion,
 	); err != nil {
 		return nil, err
 	}
@@ -395,6 +396,12 @@ func (r *MySQLUserRepository) GetCredentialsByID(ctx context.Context, id int64) 
 	return c, nil
 }
 
+func (r *MySQLUserRepository) GetCredentialsVersionByID(ctx context.Context, id int64) (int64, error) {
+	var version int64
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, `SELECT credentials_version FROM users WHERE id = ?`, id).Scan(&version)
+	return version, err
+}
+
 // UpdateUser は公開列だけを更新する。hashed_password は SET に入れない。
 //
 // 入れないことが要。呼び出し元（凍結・解凍・プロフィール更新）は公開情報しか
@@ -422,12 +429,15 @@ func (r *MySQLUserRepository) UpdateUser(ctx context.Context, u *model.User) err
 func (r *MySQLUserRepository) updateCredentials(ctx context.Context, c *model.UserCredentials) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		UPDATE users
-		SET account_id = ?, name = ?, email = ?, hashed_password = ?, role = ?, status = ?, updated_at = ?
+		SET account_id = ?, name = ?, email = ?,
+		    credentials_version = credentials_version + IF(hashed_password <> ?, 1, 0),
+		    hashed_password = ?, role = ?, status = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		c.AccountID,
 		c.Name,
 		c.Email,
+		c.HashedPassword,
 		c.HashedPassword,
 		c.Role,
 		c.Status,
