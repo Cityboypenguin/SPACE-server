@@ -593,20 +593,62 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		// created_at / last_active_at のような Unix 秒と違い jstOffsetSec の補正は要らない
 		// （user_activity_dates.activity_date と同じ流儀）。
 		// TIMESTAMPDIFF で最初のスロットからの経過時間＝スロット番号にして返す
-		// （負なら範囲より手前の活動）。並びは主キー (user_id, activity_hour) の順。
+		// （負なら範囲より手前の活動）。
+		//
+		// users.last_active_at を UNION で足してあるのは、user_activity_hours が
+		// migration 070 で新設される表で、本番に適用した直後は空だから。この表だけを
+		// 見ると、履歴が溜まるまで時間別グラフが 0 に落ちる。last_active_at は
+		// ユーザーごとに1値しかないので過去の時間帯ほど少なく出る（この表を足した
+		// 理由そのもの）が、「空よりは実態に近い」ので下限として重ねておく。
+		// user_activity_hours が埋まるほど UNION の重複排除でこちら側は効かなくなり、
+		// 自然に正確な値へ寄っていく。
+		// 分・秒を DATE_FORMAT で落として activity_hour と同じ「時の始まり」に揃える
+		// （そろえないと TIMESTAMPDIFF の切り捨てでスロットが1つずれる）。
 		activeUsersQuery = fmt.Sprintf(
-			`SELECT user_id, TIMESTAMPDIFF(HOUR, '%s', activity_hour) AS slot FROM user_activity_hours WHERE activity_hour >= '%s' AND activity_hour < '%s' ORDER BY user_id, activity_hour`,
-			fromT.Format(sqlDateTimeFmt), activeExtendedFrom.Format(sqlDateTimeFmt), toT.Format(sqlDateTimeFmt))
+			`SELECT user_id, slot FROM (
+				SELECT user_id, TIMESTAMPDIFF(HOUR, '%s', activity_hour) AS slot
+				FROM user_activity_hours
+				WHERE activity_hour >= '%s' AND activity_hour < '%s'
+				UNION
+				SELECT id AS user_id, TIMESTAMPDIFF(HOUR, '%s', DATE_FORMAT(FROM_UNIXTIME(last_active_at + %d), '%%Y-%%m-%%d %%H:00:00')) AS slot
+				FROM users
+				WHERE last_active_at >= %d AND last_active_at < %d
+			) a ORDER BY user_id, slot`,
+			fromT.Format(sqlDateTimeFmt), activeExtendedFrom.Format(sqlDateTimeFmt), toT.Format(sqlDateTimeFmt),
+			fromT.Format(sqlDateTimeFmt), jstOffsetSec,
+			activeExtendedFrom.Unix(), toUnix)
 	} else {
 		activeUsersWindow = activeUsersWindowDays
 		// 時間別と同じで窓のぶん手前から引く（fromT のスロットは2日前の活動まで数える）。
 		activeExtendedFrom := fromT.AddDate(0, 0, -(activeUsersWindowDays - 1)).Format(dateFmt)
 		activeExtendedTo := toT.AddDate(0, 0, -1).Format(dateFmt) // toT は翌日 00:00 なので1日戻す
 		// DATEDIFF で最初のスロットからの経過日数＝スロット番号にする
-		// （負なら範囲より手前の活動）。並びは主キー (user_id, activity_date) の順。
+		// （負なら範囲より手前の活動）。
+		//
+		// user_activity_dates だけでなく user_session_summaries と users.last_active_at も
+		// UNION で足す。user_activity_dates は migration 043 で足した表なので、それ以前に
+		// 活動していたぶんの行が無く、記録漏れもある。その期間の日次グラフが実際より
+		// 低く出るのを、セッション記録と最終活動時刻で補完する。
+		// UNION（UNION ALL ではない）なので、3つの経路が同じ (user_id, 日) を返しても
+		// 1行に潰れ、二重に数えることはない。
 		activeUsersQuery = fmt.Sprintf(
-			`SELECT user_id, DATEDIFF(activity_date, '%s') AS slot FROM user_activity_dates WHERE activity_date >= '%s' AND activity_date <= '%s' ORDER BY user_id, activity_date`,
-			fromT.Format(dateFmt), activeExtendedFrom, activeExtendedTo)
+			`SELECT user_id, slot FROM (
+				SELECT user_id, DATEDIFF(activity_date, '%s') AS slot
+				FROM user_activity_dates
+				WHERE activity_date >= '%s' AND activity_date <= '%s'
+				UNION
+				SELECT user_id, DATEDIFF(date, '%s') AS slot
+				FROM user_session_summaries
+				WHERE date >= '%s' AND date <= '%s' AND session_count > 0
+				UNION
+				SELECT id AS user_id, DATEDIFF(DATE(FROM_UNIXTIME(last_active_at + %d)), '%s') AS slot
+				FROM users
+				WHERE last_active_at >= %d AND last_active_at < %d
+			) a ORDER BY user_id, slot`,
+			fromT.Format(dateFmt), activeExtendedFrom, activeExtendedTo,
+			fromT.Format(dateFmt), activeExtendedFrom, activeExtendedTo,
+			jstOffsetSec, fromT.Format(dateFmt),
+			fromT.AddDate(0, 0, -(activeUsersWindowDays-1)).Unix(), toUnix)
 	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
