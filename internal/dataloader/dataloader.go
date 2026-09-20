@@ -43,6 +43,15 @@ type GetMessagesByIDsUseCase interface {
 type GetFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error)
 }
+type CountFavoritesByPostIDsUseCase interface {
+	Execute(ctx context.Context, postIDs []int64) (map[int64]int, error)
+}
+type ListPostIDsFavoritedByUseCase interface {
+	Execute(ctx context.Context, userID int64, postIDs []int64) (map[int64]bool, error)
+}
+type CountAnswersByQuestionIDsUseCase interface {
+	Execute(ctx context.Context, questionIDs []int64) (map[int64]int, error)
+}
 type ListMentionsByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error)
 }
@@ -75,6 +84,17 @@ type ctxKey string
 
 const loadersKey = ctxKey("dataloaders")
 
+// FavoritedByKey は Post.isFavoritedByMe の DataLoader キー。
+//
+// 閲覧者を鍵に含めるのは、答えが閲覧者ごとに違うため。ローダーはリクエストごとに
+// 作り直すので実際には1人ぶんしか入らないが、鍵に入れておけば「別の人の答えを
+// 返す」という壊れ方が原理的に起きない。バッチ関数の ctx から閲覧者を取る作りに
+// すると、その ctx がどの Load 呼び出しのものかに答えが左右される。
+type FavoritedByKey struct {
+	UserID int64
+	PostID int64
+}
+
 // AnswerPageKey は Question.answers（ページング付き）の DataLoader キー。
 //
 // 他のローダーと違ってIDだけでは足りない。GraphQL の answers フィールドは
@@ -102,6 +122,12 @@ type Loaders struct {
 	ReplyLoader         *dataloadgen.Loader[ReplyPageKey, []*model.Post]
 	AdminReplyLoader    *dataloadgen.Loader[ReplyPageKey, []*model.Post]
 	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
+	// FavoriteCountLoader / FavoritedByMeLoader は Post.favoriteCount /
+	// Post.isFavoritedByMe 用。表示に要るのはこの2つだけなので、いいね行そのものを
+	// 運ぶ FavoriteLoader は通さない（理由は repository.FavoriteRepository の
+	// CountFavoritesByPostIDs のコメント）。
+	FavoriteCountLoader *dataloadgen.Loader[int64, int]
+	FavoritedByMeLoader *dataloadgen.Loader[FavoritedByKey, bool]
 	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
 	MessageLoader *dataloadgen.Loader[int64, *model.Message]
 	// PostMentionLoader / MessageMentionLoader は本文中のメンション用。
@@ -122,6 +148,9 @@ type Loaders struct {
 	// AnswerPageLoader は Question.answers 用。回答が無い質問も
 	// 「空・Total 0」のページが返る（nil にはならない）。
 	AnswerPageLoader *dataloadgen.Loader[AnswerPageKey, *repository.AnswerPage]
+	// AnswerCountLoader は Question.answerCount 用。件数だけが要る画面が
+	// AnswerPageLoader を通さずに済むようにする。
+	AnswerCountLoader *dataloadgen.Loader[int64, int]
 	// PollOptionLoader / PollVoterCountLoader は Poll.options / Poll.voterCount 用。
 	// 選択肢が無い投票は nil スライス、投票者が居ない投票は 0 になる。
 	PollOptionLoader     *dataloadgen.Loader[int64, []*repository.PollOptionResult]
@@ -137,6 +166,43 @@ type Loaders struct {
 //
 // map に無いキーの位置は V のゼロ値（ポインタなら nil、int なら 0）になる。
 // 「見つからない」をエラーにしないのは、一覧の1件が消えていても残りは描けるようにするため。
+// batchFavoritedBy は (閲覧者, 投稿) の鍵を閲覧者ごとにまとめ直してから引く。
+//
+// 実際には1リクエストに1人ぶんしか入らないが、鍵が閲覧者を持っている以上、
+// 複数人ぶんが来ても正しく答えられる形にしておく（そうでないと、鍵に閲覧者を
+// 入れた意味が無い）。
+func batchFavoritedBy(
+	fetch func(context.Context, int64, []int64) (map[int64]bool, error),
+) func(context.Context, []FavoritedByKey) ([]bool, []error) {
+	return func(ctx context.Context, keys []FavoritedByKey) ([]bool, []error) {
+		byUser := make(map[int64][]int64)
+		for _, k := range keys {
+			byUser[k.UserID] = append(byUser[k.UserID], k.PostID)
+		}
+
+		favorited := make(map[FavoritedByKey]bool, len(keys))
+		errs := make([]error, len(keys))
+		for userID, postIDs := range byUser {
+			m, err := fetch(ctx, userID, postIDs)
+			if err != nil {
+				for i := range errs {
+					errs[i] = err
+				}
+				return make([]bool, len(keys)), errs
+			}
+			for postID, ok := range m {
+				favorited[FavoritedByKey{UserID: userID, PostID: postID}] = ok
+			}
+		}
+
+		result := make([]bool, len(keys))
+		for i, k := range keys {
+			result[i] = favorited[k]
+		}
+		return result, errs
+	}
+}
+
 func batchFromMap[K comparable, V any](
 	fetch func(context.Context, []K) (map[K]V, error),
 ) func(context.Context, []K) ([]V, []error) {
@@ -283,6 +349,9 @@ type UseCases struct {
 	GetRepliesByPostIDs            GetRepliesByPostIDsUseCase
 	GetRepliesByPostIDsIncludeDel  GetRepliesByPostIDsIncludeDeletedUseCase
 	GetFavoritesByPostIDs          GetFavoritesByPostIDsUseCase
+	CountFavoritesByPostIDs        CountFavoritesByPostIDsUseCase
+	ListPostIDsFavoritedBy         ListPostIDsFavoritedByUseCase
+	CountAnswersByQuestionIDs      CountAnswersByQuestionIDsUseCase
 	GetMessagesByIDs               GetMessagesByIDsUseCase
 	ListMentionsByPostIDs          ListMentionsByPostIDsUseCase
 	ListMentionsByMessageIDs       ListMentionsByMessageIDsUseCase
@@ -343,6 +412,8 @@ func New(uc UseCases) *Loaders {
 		ReplyLoader:         dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDs.Execute), loaderOptions...),
 		AdminReplyLoader:    dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDsIncludeDel.Execute), loaderOptions...),
 		FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(uc.GetFavoritesByPostIDs.Execute), loaderOptions...),
+		FavoriteCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountFavoritesByPostIDs.Execute), loaderOptions...),
+		FavoritedByMeLoader: dataloadgen.NewLoader(batchFavoritedBy(uc.ListPostIDsFavoritedBy.Execute), loaderOptions...),
 		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),
 
 		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
@@ -353,6 +424,7 @@ func New(uc UseCases) *Loaders {
 		QuestionLoader:          dataloadgen.NewLoader(batchFromMap(uc.GetQuestionsByIDs.Execute), loaderOptions...),
 		AnswerLoader:            dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
 		AnswerPageLoader:        dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
+		AnswerCountLoader:       dataloadgen.NewLoader(batchFromMap(uc.CountAnswersByQuestionIDs.Execute), loaderOptions...),
 		PollOptionLoader:        dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
 		PollVoterCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
 		AnonymousIdentityLoader: dataloadgen.NewLoader(batchFromMap(uc.GetAnonymousIdentities.Execute), loaderOptions...),

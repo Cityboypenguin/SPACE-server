@@ -41,9 +41,11 @@ func (r *MySQLFavoriteUserRepository) CreateFavoriteUser(ctx context.Context, fu
 	return id, nil
 }
 
+// DeleteFavoriteUser はお気に入り登録を外す。
+// ブロック（usecase/block）が作成と同じ RunInTx の中から呼ぶので extractDB を通す。
 func (r *MySQLFavoriteUserRepository) DeleteFavoriteUser(ctx context.Context, userID int64, favoriteUserID int64) (bool, error) {
 	query := "DELETE FROM favorite_users WHERE user_id = ? AND favorite_user_id = ?"
-	result, err := r.DB.ExecContext(ctx, query, userID, favoriteUserID)
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, userID, favoriteUserID)
 	if err != nil {
 		return false, err
 	}

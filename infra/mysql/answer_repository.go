@@ -101,6 +101,45 @@ func (r *MySQLAnswerRepository) ListAnswersWithLikesByQuestionID(ctx context.Con
 	return list, rows.Err()
 }
 
+// CountAnswersByQuestionIDs は質問ごとの回答件数をまとめて数える。
+// 回答の行は1つも持ち帰らないので、件数だけが要る画面はこちらを通す。
+func (r *MySQLAnswerRepository) CountAnswersByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(questionIDs))
+	args := make([]interface{}, len(questionIDs))
+	for i, id := range questionIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT question_id, COUNT(*)
+		FROM answers
+		WHERE question_id IN (%s)
+		GROUP BY question_id
+	`, strings.Join(placeholders, ","))
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var questionID int64
+		var count int
+		if err := rows.Scan(&questionID, &count); err != nil {
+			return nil, err
+		}
+		result[questionID] = count
+	}
+	return result, rows.Err()
+}
+
 func (r *MySQLAnswerRepository) CountAnswersByQuestionID(ctx context.Context, questionID int64) (int, error) {
 	var total int
 	err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM answers WHERE question_id = ?`, questionID).Scan(&total)

@@ -495,19 +495,21 @@ type ComplexityRoot struct {
 	}
 
 	Post struct {
-		Content    func(childComplexity int) int
-		CreatedAt  func(childComplexity int) int
-		DeletedAt  func(childComplexity int) int
-		Favorites  func(childComplexity int) int
-		ID         func(childComplexity int) int
-		Media      func(childComplexity int) int
-		Mentions   func(childComplexity int) int
-		Parent     func(childComplexity int) int
-		Replies    func(childComplexity int, limit *int32, offset *int32) int
-		ReplyCount func(childComplexity int) int
-		RootPost   func(childComplexity int) int
-		UpdatedAt  func(childComplexity int) int
-		User       func(childComplexity int) int
+		Content         func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		DeletedAt       func(childComplexity int) int
+		FavoriteCount   func(childComplexity int) int
+		Favorites       func(childComplexity int) int
+		ID              func(childComplexity int) int
+		IsFavoritedByMe func(childComplexity int) int
+		Media           func(childComplexity int) int
+		Mentions        func(childComplexity int) int
+		Parent          func(childComplexity int) int
+		Replies         func(childComplexity int, limit *int32, offset *int32) int
+		ReplyCount      func(childComplexity int) int
+		RootPost        func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+		User            func(childComplexity int) int
 	}
 
 	PostPage struct {
@@ -622,17 +624,18 @@ type ComplexityRoot struct {
 	}
 
 	Question struct {
-		Answers    func(childComplexity int, limit *int32, offset *int32) int
-		BestAnswer func(childComplexity int) int
-		Body       func(childComplexity int) int
-		CreatedAt  func(childComplexity int) int
-		ID         func(childComplexity int) int
-		IsAnswered func(childComplexity int) int
-		IsMine     func(childComplexity int) int
-		Media      func(childComplexity int) int
-		RoomID     func(childComplexity int) int
-		UpdatedAt  func(childComplexity int) int
-		User       func(childComplexity int) int
+		AnswerCount func(childComplexity int) int
+		Answers     func(childComplexity int, limit *int32, offset *int32) int
+		BestAnswer  func(childComplexity int) int
+		Body        func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		IsAnswered  func(childComplexity int) int
+		IsMine      func(childComplexity int) int
+		Media       func(childComplexity int) int
+		RoomID      func(childComplexity int) int
+		UpdatedAt   func(childComplexity int) int
+		User        func(childComplexity int) int
 	}
 
 	QuestionPage struct {
@@ -940,6 +943,8 @@ type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
 	RootPost(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
+	FavoriteCount(ctx context.Context, obj *model.Post) (int32, error)
+	IsFavoritedByMe(ctx context.Context, obj *model.Post) (bool, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post, limit *int32, offset *int32) ([]*model.Post, error)
 	Media(ctx context.Context, obj *model.Post) ([]*model.Media, error)
@@ -1041,6 +1046,7 @@ type QuestionResolver interface {
 
 	BestAnswer(ctx context.Context, obj *model.Question) (*model.Answer, error)
 	Answers(ctx context.Context, obj *model.Question, limit *int32, offset *int32) (*model.AnswerPage, error)
+	AnswerCount(ctx context.Context, obj *model.Question) (int32, error)
 	Media(ctx context.Context, obj *model.Question) ([]*model.Media, error)
 
 	IsMine(ctx context.Context, obj *model.Question) (bool, error)
@@ -3595,6 +3601,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.DeletedAt(childComplexity), true
+	case "Post.favoriteCount":
+		if e.ComplexityRoot.Post.FavoriteCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.FavoriteCount(childComplexity), true
 	case "Post.favorites":
 		if e.ComplexityRoot.Post.Favorites == nil {
 			break
@@ -3607,6 +3619,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.ID(childComplexity), true
+	case "Post.isFavoritedByMe":
+		if e.ComplexityRoot.Post.IsFavoritedByMe == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.IsFavoritedByMe(childComplexity), true
 	case "Post.media":
 		if e.ComplexityRoot.Post.Media == nil {
 			break
@@ -4610,6 +4628,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Users(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 
+	case "Question.answerCount":
+		if e.ComplexityRoot.Question.AnswerCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Question.AnswerCount(childComplexity), true
 	case "Question.answers":
 		if e.ComplexityRoot.Question.Answers == nil {
 			break
@@ -6192,6 +6216,10 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 		return ec.fieldContext_Post_rootPost(ctx, field)
 	case "favorites":
 		return ec.fieldContext_Post_favorites(ctx, field)
+	case "favoriteCount":
+		return ec.fieldContext_Post_favoriteCount(ctx, field)
+	case "isFavoritedByMe":
+		return ec.fieldContext_Post_isFavoritedByMe(ctx, field)
 	case "parent":
 		return ec.fieldContext_Post_parent(ctx, field)
 	case "replies":
@@ -6258,6 +6286,8 @@ func (ec *executionContext) childFields_Question(ctx context.Context, field grap
 		return ec.fieldContext_Question_bestAnswer(ctx, field)
 	case "answers":
 		return ec.fieldContext_Question_answers(ctx, field)
+	case "answerCount":
+		return ec.fieldContext_Question_answerCount(ctx, field)
 	case "media":
 		return ec.fieldContext_Question_media(ctx, field)
 	case "createdAt":
@@ -20526,6 +20556,52 @@ func (ec *executionContext) fieldContext_Post_favorites(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Post_favoriteCount(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_favoriteCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().FavoriteCount(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Post_favoriteCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Post", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Post_isFavoritedByMe(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_isFavoritedByMe(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().IsFavoritedByMe(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Post_isFavoritedByMe(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Post", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Post_parent(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24795,6 +24871,29 @@ func (ec *executionContext) fieldContext_Question_answers(ctx context.Context, f
 		return fc, err
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Question_answerCount(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Question_answerCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Question().AnswerCount(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Question_answerCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Question", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Question_media(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
@@ -33708,6 +33807,82 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "favoriteCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_favoriteCount(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "isFavoritedByMe":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_isFavoritedByMe(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "parent":
 			field := field
 
@@ -36161,6 +36336,44 @@ func (ec *executionContext) _Question(ctx context.Context, sel ast.SelectionSet,
 					}
 				}()
 				res = ec._Question_answers(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "answerCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Question_answerCount(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

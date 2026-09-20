@@ -205,3 +205,85 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, pos
 	}
 	return result, rows.Err()
 }
+
+// CountFavoritesByPostIDs は投稿ごとのいいね件数を1クエリで数える。
+//
+// GetFavoritesByPostIDs と違って行は1つも持ち帰らない。表示に要るのが件数だけの
+// 経路（一覧・詳細の LikeButton）はこちらを通す。
+func (r *MySQLFavoriteRepository) CountFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, len(postIDs))
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT post_id, COUNT(*)
+		FROM favorites
+		WHERE post_id IN (%s)
+		GROUP BY post_id
+	`, strings.Join(placeholders, ","))
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		var count int
+		if err := rows.Scan(&postID, &count); err != nil {
+			return nil, err
+		}
+		result[postID] = count
+	}
+	return result, rows.Err()
+}
+
+// ListPostIDsFavoritedBy は postIDs のうち userID がいいねしたものを返す。
+//
+// 「自分がいいねしたか」を出すためだけに全いいね行を運ぶのをやめるための口。
+// 自分の行しか見ないので、投稿のいいね数がいくつでも戻る行数は
+// 「一覧に出ている投稿のうち自分がいいねした数」で頭打ちになる。
+func (r *MySQLFavoriteRepository) ListPostIDsFavoritedBy(ctx context.Context, userID int64, postIDs []int64) (map[int64]bool, error) {
+	result := make(map[int64]bool, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, 0, len(postIDs)+1)
+	args = append(args, userID)
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT post_id
+		FROM favorites
+		WHERE user_id = ? AND post_id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		if err := rows.Scan(&postID); err != nil {
+			return nil, err
+		}
+		result[postID] = true
+	}
+	return result, rows.Err()
+}

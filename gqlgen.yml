@@ -156,6 +156,13 @@ models:
         resolver: true
       favorites:
         resolver: true
+      # 件数と「自分がいいねしたか」はリゾルバにする。モデルの素のフィールドに
+      # すると presenter 側で毎回埋めることになり、選ばれていないときも数えてしまう。
+      # リゾルバなら選ばれたぶんだけ DataLoader でまとめて引ける。
+      favoriteCount:
+        resolver: true
+      isFavoritedByMe:
+        resolver: true
       media:
         resolver: true
       rootPost:
@@ -197,6 +204,8 @@ models:
       user:
         resolver: true
       answers:
+        resolver: true
+      answerCount:
         resolver: true
       bestAnswer:
         resolver: true

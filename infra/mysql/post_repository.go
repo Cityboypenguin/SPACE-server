@@ -215,13 +215,20 @@ func createPost(ctx context.Context, execer dbtx, p *model.Post) (int64, error) 
 	return id, nil
 }
 
+// UpdatePost は本文を書き換える。
+//
+// extractDB を通すのは、呼び出し側（usecase/post の UpdatePostInteractor）が
+// 本文・ハッシュタグ・メンション・添付の更新を1つの RunInTx にまとめているため。
+// r.DB を直に叩くと、この UPDATE だけがトランザクションの外へ出て即確定し、
+// 後続のハッシュタグ／メンション更新が失敗してロールバックされても本文だけが
+// 残る。本文と、本文から導かれるタグ・メンションが食い違った状態になる。
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
 	query := `
 		UPDATE posts 
 		SET content = ?, updated_at = ? 
 		WHERE id = ? AND user_id = ? AND deleted_at IS NULL
 	`
-	res, err := r.DB.ExecContext(ctx, query, p.Content, p.UpdatedAt.Unix(), p.ID, p.UserID)
+	res, err := extractDB(ctx, r.DB).ExecContext(ctx, query, p.Content, p.UpdatedAt.Unix(), p.ID, p.UserID)
 	if err != nil {
 		return err
 	}

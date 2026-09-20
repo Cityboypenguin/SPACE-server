@@ -24,7 +24,11 @@ func (r *MySQLBlockRepository) CreateBlocker(ctx context.Context, block *model.B
 		INSERT INTO blocks (user_id, blocked_user_id, created_at)
 		VALUES (?, ?, ?)
 	`
-	result, err := r.DB.ExecContext(ctx, query,
+	// extractDB を通す。呼び出し側（usecase/block）はブロック行の作成と
+	// 双方向のお気に入り解除を1つの RunInTx にまとめているので、ここが
+	// トランザクションの外へ出ると、お気に入り解除の失敗で呼び出し元が
+	// エラーを返したのにブロックだけ成立している、という状態が残る。
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query,
 		block.UserID,
 		block.BlockedUserID,
 		block.CreatedAt.Unix(),

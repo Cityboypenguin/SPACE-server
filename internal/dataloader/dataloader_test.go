@@ -55,6 +55,13 @@ func (r *recorder) lastKeys() []int64 {
 	return r.keys[len(r.keys)-1]
 }
 
+// favoritedByFn は「閲覧者 + 投稿ID群」を取る口のアダプタ。
+type favoritedByFn func(context.Context, int64, []int64) (map[int64]bool, error)
+
+func (f favoritedByFn) Execute(ctx context.Context, userID int64, postIDs []int64) (map[int64]bool, error) {
+	return f(ctx, userID, postIDs)
+}
+
 type sliceFn[V any] func(context.Context, []int64) ([]V, error)
 
 func (f sliceFn[V]) Execute(ctx context.Context, ids []int64) ([]V, error) { return f(ctx, ids) }
@@ -111,7 +118,12 @@ func nopUseCases() UseCases {
 		ListPollOptionResultsByPollIDs: mapFn[[]*repository.PollOptionResult](func(context.Context, []int64) (map[int64][]*repository.PollOptionResult, error) {
 			return nil, nil
 		}),
-		CountPollVotersByPollIDs: mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
+		CountPollVotersByPollIDs:  mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
+		CountFavoritesByPostIDs:   mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
+		CountAnswersByQuestionIDs: mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
+		ListPostIDsFavoritedBy: favoritedByFn(func(context.Context, int64, []int64) (map[int64]bool, error) {
+			return nil, nil
+		}),
 		GetAnonymousIdentities: anonFn(func(context.Context, []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
 			return nil, nil
 		}),
@@ -295,6 +307,60 @@ func TestLoaders_ResolveManyKeysWithOneFetch(t *testing.T) {
 				for i, opts := range results {
 					if len(opts) != 1 || opts[0].Option.PollID != want[i] {
 						return errors.New("poll options came back for the wrong key")
+					}
+				}
+				return nil
+			},
+		},
+		{
+			name: "FavoriteCountLoader",
+			setup: func(uc *UseCases) *recorder {
+				rec := &recorder{}
+				uc.CountFavoritesByPostIDs = mapFn[int](func(_ context.Context, keys []int64) (map[int64]int, error) {
+					rec.record(keys)
+					out := make(map[int64]int, len(keys))
+					for _, id := range keys {
+						out[id] = int(id)
+					}
+					return out, nil
+				})
+				return rec
+			},
+			load: func(ctx context.Context, l *Loaders) error {
+				counts, err := l.FavoriteCountLoader.LoadAll(ctx, want)
+				if err != nil {
+					return err
+				}
+				for i, c := range counts {
+					if int64(c) != want[i] {
+						return errors.New("favorite count came back for the wrong key")
+					}
+				}
+				return nil
+			},
+		},
+		{
+			name: "AnswerCountLoader",
+			setup: func(uc *UseCases) *recorder {
+				rec := &recorder{}
+				uc.CountAnswersByQuestionIDs = mapFn[int](func(_ context.Context, keys []int64) (map[int64]int, error) {
+					rec.record(keys)
+					out := make(map[int64]int, len(keys))
+					for _, id := range keys {
+						out[id] = int(id)
+					}
+					return out, nil
+				})
+				return rec
+			},
+			load: func(ctx context.Context, l *Loaders) error {
+				counts, err := l.AnswerCountLoader.LoadAll(ctx, want)
+				if err != nil {
+					return err
+				}
+				for i, c := range counts {
+					if int64(c) != want[i] {
+						return errors.New("answer count came back for the wrong key")
 					}
 				}
 				return nil
@@ -626,5 +692,93 @@ func TestLoaders_SurfaceTheRealFetchError(t *testing.T) {
 	}
 	if got := FirstError(err); got != wantErr {
 		t.Fatalf("error = %v, want the original %v", got, wantErr)
+	}
+}
+
+// TestFavoritedByMeLoader_ResolvesManyKeysWithOneFetch は複合キー
+// (userID, postID) のローダーも1クエリに畳まれることを確かめる。
+//
+// 「自分がいいねしたか」は一覧の投稿ごとに呼ばれるので、ここが1件ずつになると
+// いいね行を全部運ぶのをやめた意味が無くなる（行数の代わりにクエリ数で払うだけ）。
+func TestFavoritedByMeLoader_ResolvesManyKeysWithOneFetch(t *testing.T) {
+	const viewerID = int64(7)
+	var (
+		mu       sync.Mutex
+		calls    int
+		gotUsers []int64
+		gotPosts int
+	)
+
+	uc := nopUseCases()
+	uc.ListPostIDsFavoritedBy = favoritedByFn(func(_ context.Context, userID int64, postIDs []int64) (map[int64]bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		gotUsers = append(gotUsers, userID)
+		gotPosts = len(postIDs)
+		out := make(map[int64]bool, len(postIDs))
+		for _, id := range postIDs {
+			// 偶数の投稿だけいいね済み、という答えにしておく。
+			out[id] = id%2 == 0
+		}
+		return out, nil
+	})
+
+	const n = 25
+	keys := make([]FavoritedByKey, n)
+	for i := range keys {
+		keys[i] = FavoritedByKey{UserID: viewerID, PostID: int64(i + 1)}
+	}
+
+	loaders := New(uc)
+	got, err := loaders.FavoritedByMeLoader.LoadAll(context.Background(), keys)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if calls != 1 {
+		t.Fatalf("fetch calls = %d, want 1 (N+1 が戻っている)", calls)
+	}
+	if gotPosts != n {
+		t.Fatalf("keys passed to the batch = %d, want %d (1件ずつ引いている)", gotPosts, n)
+	}
+	if len(gotUsers) != 1 || gotUsers[0] != viewerID {
+		t.Fatalf("viewer ids = %v, want [%d]", gotUsers, viewerID)
+	}
+	// 鍵と答えの対応が崩れていないこと（順番だけ合っていて中身が入れ替わる、
+	// という壊れ方を捕まえる）。
+	for i, k := range keys {
+		if want := k.PostID%2 == 0; got[i] != want {
+			t.Fatalf("post %d: favorited = %v, want %v", k.PostID, got[i], want)
+		}
+	}
+}
+
+// TestFavoritedByMeLoader_KeepsViewersApart は、鍵に閲覧者が入っている意味を
+// 確かめる。別人の答えが混ざると「他人がいいねした投稿が自分のものとして光る」。
+func TestFavoritedByMeLoader_KeepsViewersApart(t *testing.T) {
+	uc := nopUseCases()
+	uc.ListPostIDsFavoritedBy = favoritedByFn(func(_ context.Context, userID int64, postIDs []int64) (map[int64]bool, error) {
+		out := make(map[int64]bool, len(postIDs))
+		for _, id := range postIDs {
+			// 利用者1だけがいいねしている、という答え。
+			out[id] = userID == 1
+		}
+		return out, nil
+	})
+
+	loaders := New(uc)
+	got, err := loaders.FavoritedByMeLoader.LoadAll(context.Background(), []FavoritedByKey{
+		{UserID: 1, PostID: 100},
+		{UserID: 2, PostID: 100},
+	})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !got[0] {
+		t.Fatal("利用者1のいいねが落ちている")
+	}
+	if got[1] {
+		t.Fatal("利用者2に、利用者1のいいねが混ざっている")
 	}
 }

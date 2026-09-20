@@ -40,8 +40,13 @@ type AccessPolicy interface {
 // AccessPolicyDeps は権限判定に要るものだけ。ルーム・メンバー・授業の学期履修・
 // ブロック関係の4つで判定は閉じている。
 type AccessPolicyDeps struct {
-	GetRoom          roomusecase.GetRoomUseCase
+	GetRoom roomusecase.GetRoomUseCase
+	// GetRoomMemberIDs は新規送信の判定で使う。判定そのものに加えて、送信後の
+	// 配信の宛先としてメンバー一覧をそのまま持ち回すため、ここだけは全員ぶんが要る。
 	GetRoomMemberIDs roomusecase.GetUserIDsByRoomIDUseCase
+	// IsRoomMember は閲覧・編集・削除の判定で使う。在籍の有無しか要らない経路を
+	// メンバー一覧で代用すると、判定のたびにルームの人数ぶんの行が戻ってくる。
+	IsRoomMember roomusecase.IsRoomMemberUseCase
 
 	// CheckRoomWritable は授業ルームの学期・履修判定（非授業ルームは素通し）。
 	CheckRoomWritable  courseusecase.CheckRoomWritableUseCase
@@ -103,14 +108,18 @@ func (p *accessPolicy) EnsureReadAccess(ctx context.Context, roomID int64) (*mod
 // 管理者の DM 除外はここ1箇所で守る。非参加の DM は管理者でも読めず、書き換えも
 // 削除もできない。法務上の要件なので、呼び出し側の都合で緩めないこと。
 func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth.Claims, room *model.Room) error {
-	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, room.ID)
+	// 管理者判定を先に見る。DM 以外なら在籍を問わず通るので、そこまで確かめてから
+	// DB を引くのは無駄になる。判定の結果は入れ替えても変わらない。
+	if room.Type != model.RoomTypeDM && authz.IsAdminRole(claims.Role) {
+		return nil
+	}
+	// ここで要るのは「自分が入っているか」だけ。メンバー一覧を引いて探すと、
+	// 閲覧・購読・編集・削除のたびにルームの人数ぶんの行が戻る。
+	isMember, err := p.deps.IsRoomMember.Execute(ctx, room.ID, claims.ID)
 	if err != nil {
 		return fmt.Errorf("failed to verify room membership")
 	}
-	if containsInt64(memberIDs, claims.ID) {
-		return nil
-	}
-	if room.Type != model.RoomTypeDM && authz.IsAdminRole(claims.Role) {
+	if isMember {
 		return nil
 	}
 	return errors.New("forbidden: not a member of this room")

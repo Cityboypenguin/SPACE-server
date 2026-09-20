@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"log"
 	"strconv"
 	"strings"
@@ -35,7 +36,6 @@ import (
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	termsuc "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
-	"github.com/google/uuid"
 )
 
 // User is the resolver for the user field.
@@ -497,7 +497,10 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		numericParentID = &parentID
 	}
 
-	ucMediaInputs := toMediaInputs(input.MediaInputs)
+	ucMediaInputs, err := r.toMediaInputs(ctx, input.MediaInputs)
+	if err != nil {
+		return nil, err
+	}
 
 	post, err := r.CreatePostUseCase.Execute(ctx, model.CreatePostParam{
 		UserID:   claims.ID,
@@ -551,7 +554,10 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 		deletedMediaIDs = append(deletedMediaIDs, numID)
 	}
 
-	ucMediaInputs := toMediaInputs(input.NewMediaInputs)
+	ucMediaInputs, err := r.toMediaInputs(ctx, input.NewMediaInputs)
+	if err != nil {
+		return nil, err
+	}
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
 		PostID:  numericID,
@@ -802,6 +808,9 @@ func (r *mutationResolver) CreateCommunity(ctx context.Context, input gqlmodel.C
 	if err != nil {
 		return nil, err
 	}
+	if err := r.verifyUploadedObjects(ctx, derefString(input.AvatarKey)); err != nil {
+		return nil, err
+	}
 	c, err := r.CreateCommunityUseCase.Execute(ctx, input.Name, input.Description, input.AvatarKey)
 	if err != nil {
 		return nil, err
@@ -1012,7 +1021,10 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 		return nil, fmt.Errorf("invalid room id")
 	}
 
-	ucMediaInputs := toMediaInputs(mediaInputs)
+	ucMediaInputs, err := r.toMediaInputs(ctx, mediaInputs)
+	if err != nil {
+		return nil, err
+	}
 
 	q, err := r.CreateQuestionUseCase.Execute(ctx, rid, body, ucMediaInputs)
 	if err != nil {
@@ -1073,7 +1085,10 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 		return nil, fmt.Errorf("invalid question id")
 	}
 
-	ucMediaInputs := toMediaInputs(mediaInputs)
+	ucMediaInputs, err := r.toMediaInputs(ctx, mediaInputs)
+	if err != nil {
+		return nil, err
+	}
 
 	a, err := r.AnswerQuestionUseCase.Execute(ctx, qid, body, ucMediaInputs)
 	if err != nil {
@@ -1429,6 +1444,10 @@ func (r *mutationResolver) UpdateCommunity(ctx context.Context, id string, input
 		return nil, fmt.Errorf("invalid community id")
 	}
 
+	if err := r.verifyUploadedObjects(ctx, derefString(input.AvatarKey)); err != nil {
+		return nil, err
+	}
+
 	c, err := r.UpdateCommunityUseCase.Execute(ctx, numericID, communityusecase.UpdateCommunityParam{
 		Name:        input.Name,
 		Description: input.Description,
@@ -1592,6 +1611,10 @@ func (r *mutationResolver) SetAvatar(ctx context.Context, objectKey string) (*gq
 		return nil, err
 	}
 
+	if err := r.verifyUploadedObjects(ctx, objectKey); err != nil {
+		return nil, err
+	}
+
 	p, err := r.SetAvatarUseCase.Execute(ctx, claims.ID, objectKey)
 	if err != nil {
 		return nil, err
@@ -1656,10 +1679,15 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		return nil, err
 	}
 
+	ucMediaInputs, err := r.toMediaInputs(ctx, mediaInputs)
+	if err != nil {
+		return nil, err
+	}
+
 	msg, err := r.ChatCommands.SendMessage(ctx, chatusecase.SendMessageInput{
 		RoomID:         rid,
 		Content:        content,
-		MediaInputs:    toMediaInputs(mediaInputs),
+		MediaInputs:    ucMediaInputs,
 		MentionUserIDs: mentionIDs,
 		ReplyToID:      replyTo,
 	})
@@ -2139,6 +2167,10 @@ func (r *mutationResolver) CreateTermsOfService(ctx context.Context, input gqlmo
 		return nil, fmt.Errorf("invalid effectiveDate format: %w", err)
 	}
 
+	if err := r.verifyUploadedObjects(ctx, input.ObjectKey); err != nil {
+		return nil, err
+	}
+
 	t, err := r.CreateTermsUseCase.Execute(ctx, termsuc.CreateTermsInput{
 		Version:       input.Version,
 		ObjectKey:     input.ObjectKey,
@@ -2408,6 +2440,41 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gq
 		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
 	}
 	return gqlFavorites, nil
+}
+
+// FavoriteCount is the resolver for the favoriteCount field on Post.
+//
+// favorites を選んで len を数えるのと違い、いいね行は1つも運ばない。
+// 一覧では投稿の件数ぶんこれが呼ばれるので DataLoader で1クエリに畳む。
+func (r *postResolver) FavoriteCount(ctx context.Context, obj *gqlmodel.Post) (int32, error) {
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid post id")
+	}
+
+	count, err := dataloader.For(ctx).FavoriteCountLoader.Load(ctx, numericPostID)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
+}
+
+// IsFavoritedByMe is the resolver for the isFavoritedByMe field on Post.
+//
+// 未ログインでは常に false。いいねは本人にしか紐づかないので、
+// 「自分」が居なければ答えは決まる（DBを引く必要も無い）。
+func (r *postResolver) IsFavoritedByMe(ctx context.Context, obj *gqlmodel.Post) (bool, error) {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return false, fmt.Errorf("invalid post id")
+	}
+
+	return dataloader.For(ctx).FavoritedByMeLoader.Load(ctx,
+		dataloader.FavoritedByKey{UserID: claims.ID, PostID: numericPostID})
 }
 
 // Parent is the resolver for the parent field on Post.
@@ -3767,7 +3834,7 @@ func (r *queryResolver) PresignedAvatarUploadURL(ctx context.Context, contentTyp
 	if err != nil {
 		return nil, err
 	}
-	return r.presignedImageUploadURL(ctx, fmt.Sprintf("avatars/%d", claims.ID), 5*1024*1024, contentType)
+	return r.presignedUploadURL(ctx, upload.Avatar, strconv.FormatInt(claims.ID, 10), contentType)
 }
 
 // PresignedMediaUploadURL is the resolver for the presignedMediaUploadUrl field.
@@ -3776,7 +3843,7 @@ func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType
 	if err != nil {
 		return nil, err
 	}
-	return r.presignedImageUploadURL(ctx, fmt.Sprintf("media/%d", claims.ID), 20*1024*1024, contentType)
+	return r.presignedUploadURL(ctx, upload.Media, strconv.FormatInt(claims.ID, 10), contentType)
 }
 
 // PresignedCommunityIconUploadURL is the resolver for the presignedCommunityIconUploadUrl field.
@@ -3785,7 +3852,7 @@ func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, con
 	if err != nil {
 		return nil, err
 	}
-	return r.presignedImageUploadURL(ctx, fmt.Sprintf("community-icons/%d", claims.ID), 5*1024*1024, contentType)
+	return r.presignedUploadURL(ctx, upload.CommunityIcon, strconv.FormatInt(claims.ID, 10), contentType)
 }
 
 // PresignedTermsDocumentUploadURL is the resolver for the presignedTermsDocumentUploadUrl field.
@@ -3794,17 +3861,8 @@ func (r *queryResolver) PresignedTermsDocumentUploadURL(ctx context.Context) (*g
 		return nil, err
 	}
 
-	const termsDocMaxBytes = 5 * 1024 * 1024 // 5 MB
-	objectKey := fmt.Sprintf("terms/%s.md", uuid.New().String())
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, "text/markdown", 15*time.Minute, termsDocMaxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate upload url")
-	}
-
-	return &gqlmodel.PresignedUploadURL{
-		UploadURL: uploadURL,
-		ObjectKey: objectKey,
-	}, nil
+	// 規約は利用者ごとに分けない（管理者しか置けず、版で一意なので）。
+	return r.presignedUploadURL(ctx, upload.TermsDocument, "", "text/markdown")
 }
 
 // SearchReports is the resolver for the searchReports field.
@@ -4686,6 +4744,23 @@ func (r *questionResolver) BestAnswer(ctx context.Context, obj *gqlmodel.Questio
 }
 
 // Answers is the resolver for the answers field.
+// AnswerCount is the resolver for the answerCount field on Question.
+//
+// 件数だけを出す画面（管理画面の質問一覧）が answers を選ばずに済むようにするための
+// フィールド。COUNT(*) 1本で、回答の本文も投稿者も運ばない。
+func (r *questionResolver) AnswerCount(ctx context.Context, obj *gqlmodel.Question) (int32, error) {
+	qid, err := decodeGraphID(ctx, "question", obj.ID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid question id")
+	}
+
+	count, err := dataloader.For(ctx).AnswerCountLoader.Load(ctx, qid)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
+}
+
 func (r *questionResolver) Answers(ctx context.Context, obj *gqlmodel.Question, limit *int32, offset *int32) (*gqlmodel.AnswerPage, error) {
 	qid, err := decodeGraphID(ctx, "question", obj.ID)
 	if err != nil {
@@ -4772,11 +4847,14 @@ func (r *subscriptionResolver) RoomReadStatusUpdated(ctx context.Context, roomID
 	}
 
 	currentUserGraphID := encodeGraphID("user", claims.ID)
-	return subscribeTopicFunc(
+	return subscribeTopicGuarded(
 		ctx,
 		r.PubSub,
 		roomID+":read_status",
 		subscriptionScope{UserID: claims.ID, RoomID: roomID},
+		// 既読状況も「誰がどこまで読んだか」というルームの情報なので、
+		// メッセージ本体と同じく購読中も権限を確かめ直す。
+		r.roomReadAuthorizer(rid),
 		func(update *gqlmodel.RoomReadStatusUpdate) (*gqlmodel.RoomReadStatusUpdate, bool) {
 			// 自分の読み取りイベントは除外し、相手のものだけ配信
 			return update, update.UserID != currentUserGraphID
@@ -4841,10 +4919,11 @@ func (r *subscriptionResolver) PollUpdated(ctx context.Context, pollID string) (
 		return nil, err
 	}
 
-	return subscribeTopic[*gqlmodel.Poll](ctx, r.PubSub, pollID+":poll:updated", subscriptionScope{
-		UserID: claims.ID,
-		RoomID: encodeGraphID("room", p.RoomID),
-	}), nil
+	return subscribeTopicGuarded(ctx, r.PubSub, pollID+":poll:updated",
+		subscriptionScope{UserID: claims.ID, RoomID: encodeGraphID("room", p.RoomID)},
+		r.roomReadAuthorizer(p.RoomID),
+		func(poll *gqlmodel.Poll) (*gqlmodel.Poll, bool) { return poll, true },
+	), nil
 }
 
 // PollDeleted is the resolver for the pollDeleted field.

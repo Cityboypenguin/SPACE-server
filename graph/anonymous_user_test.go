@@ -140,6 +140,24 @@ func TestAnonymousUserForCourseRoom_NeverFallsBackToTheRealName(t *testing.T) {
 				users:   map[int64]*model.User{authorID: realUser(authorID, authorName)},
 			},
 		},
+		// ルームが引けないと種別が確かめられない。「授業ルームではない」と
+		// 同じ扱いにすると、授業ルームの投稿者が実名で出る。
+		{
+			name: "ルームの取得が失敗した（DB障害）",
+			opts: fixtureOpts{
+				roomErr:    errors.New("db is down"),
+				identities: map[repository.RoomUserKey]*model.RoomAnonymousIdentity{},
+				users:      map[int64]*model.User{authorID: realUser(authorID, authorName)},
+			},
+		},
+		{
+			name: "ルームの行が引けなかった",
+			opts: fixtureOpts{
+				rooms:      map[int64]*model.Room{},
+				identities: map[repository.RoomUserKey]*model.RoomAnonymousIdentity{},
+				users:      map[int64]*model.User{authorID: realUser(authorID, authorName)},
+			},
+		},
 	}
 
 	for _, tt := range tests {

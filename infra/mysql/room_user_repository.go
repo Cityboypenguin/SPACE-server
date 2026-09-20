@@ -245,6 +245,23 @@ func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID
 	return err
 }
 
+// IsRoomMember は room_users の1行の有無だけを見る。
+//
+// (room_id, user_id) の一意制約がそのまま使えるので、索引だけで答えが出て
+// 行は1行も読まない。SELECT 1 ... LIMIT 1 ではなく EXISTS にしてあるのは、
+// 行が無いときに ErrNoRows の分岐を書かずに済むため。
+func (r *MySQLRoomUserRepository) IsRoomMember(ctx context.Context, roomID, userID int64) (bool, error) {
+	var exists bool
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM room_users WHERE room_id = ? AND user_id = ?)",
+		roomID, userID,
+	).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error) {
 	query := "SELECT user_id FROM room_users WHERE room_id = ?"
 	rows, err := r.DB.QueryContext(ctx, query, roomID)

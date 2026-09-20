@@ -95,6 +95,20 @@ func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey 
 	return u.String(), nil
 }
 
+// StatObject は保存済みオブジェクトの実寸と Content-Type を返す。
+// 署名付き PUT では上限を縛れないので、受け入れ時にここで実物を測る
+// （repository.StorageRepository のコメント参照）。
+func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error) {
+	info, err := r.client.StatObject(ctx, r.bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return repository.ObjectInfo{}, repository.ErrObjectNotFound
+		}
+		return repository.ObjectInfo{}, err
+	}
+	return repository.ObjectInfo{Size: info.Size, ContentType: info.ContentType}, nil
+}
+
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 	if r.bucketLookup == minio.BucketLookupDNS {
 		u, err := url.Parse(r.publicEndpoint)

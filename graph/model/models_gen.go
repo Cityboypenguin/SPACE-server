@@ -458,19 +458,21 @@ type PollPage struct {
 }
 
 type Post struct {
-	ID         string      `json:"ID"`
-	Content    string      `json:"content"`
-	CreatedAt  string      `json:"createdAt"`
-	UpdatedAt  string      `json:"updatedAt"`
-	DeletedAt  *string     `json:"deletedAt,omitempty"`
-	ReplyCount int32       `json:"replyCount"`
-	User       *User       `json:"user"`
-	RootPost   *Post       `json:"rootPost,omitempty"`
-	Favorites  []*Favorite `json:"favorites"`
-	Parent     *Post       `json:"parent,omitempty"`
-	Replies    []*Post     `json:"replies"`
-	Media      []*Media    `json:"media"`
-	Mentions   []*Mention  `json:"mentions"`
+	ID              string      `json:"ID"`
+	Content         string      `json:"content"`
+	CreatedAt       string      `json:"createdAt"`
+	UpdatedAt       string      `json:"updatedAt"`
+	DeletedAt       *string     `json:"deletedAt,omitempty"`
+	ReplyCount      int32       `json:"replyCount"`
+	User            *User       `json:"user"`
+	RootPost        *Post       `json:"rootPost,omitempty"`
+	Favorites       []*Favorite `json:"favorites"`
+	FavoriteCount   int32       `json:"favoriteCount"`
+	IsFavoritedByMe bool        `json:"isFavoritedByMe"`
+	Parent          *Post       `json:"parent,omitempty"`
+	Replies         []*Post     `json:"replies"`
+	Media           []*Media    `json:"media"`
+	Mentions        []*Mention  `json:"mentions"`
 }
 
 type PostPage struct {
@@ -496,17 +498,18 @@ type Query struct {
 }
 
 type Question struct {
-	ID         string      `json:"ID"`
-	RoomID     string      `json:"roomID"`
-	User       *User       `json:"user"`
-	Body       string      `json:"body"`
-	IsAnswered bool        `json:"isAnswered"`
-	BestAnswer *Answer     `json:"bestAnswer,omitempty"`
-	Answers    *AnswerPage `json:"answers"`
-	Media      []*Media    `json:"media"`
-	CreatedAt  string      `json:"createdAt"`
-	UpdatedAt  string      `json:"updatedAt"`
-	IsMine     bool        `json:"isMine"`
+	ID          string      `json:"ID"`
+	RoomID      string      `json:"roomID"`
+	User        *User       `json:"user"`
+	Body        string      `json:"body"`
+	IsAnswered  bool        `json:"isAnswered"`
+	BestAnswer  *Answer     `json:"bestAnswer,omitempty"`
+	Answers     *AnswerPage `json:"answers"`
+	AnswerCount int32       `json:"answerCount"`
+	Media       []*Media    `json:"media"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
+	IsMine      bool        `json:"isMine"`
 }
 
 type QuestionPage struct {

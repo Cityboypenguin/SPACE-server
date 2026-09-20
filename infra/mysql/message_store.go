@@ -90,8 +90,12 @@ func (r *MySQLMessageRepository) UpdateMessage(ctx context.Context, m *model.Mes
 	if err != nil {
 		return err
 	}
+	// extractDB を通すのは UpdatePost と同じ理由。呼び出し側
+	// （usecase/chat/internal/messagestore）が本文とメンションの貼り直しを1つの
+	// RunInTx にまとめているので、ここで r.DB を直に叩くと本文だけ先に確定し、
+	// メンションの更新が失敗しても巻き戻らない。
 	query := "UPDATE messages SET content = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL"
-	_, err = r.DB.ExecContext(ctx, query, content, m.UpdatedAt.Unix(), m.ID)
+	_, err = extractDB(ctx, r.DB).ExecContext(ctx, query, content, m.UpdatedAt.Unix(), m.ID)
 	return err
 }
 

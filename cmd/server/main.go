@@ -70,6 +70,25 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
+// newInstanceID はこの台（このプロセス）を指す一意な文字列を作る。
+//
+// 用途は「Redis に置いた印を持っているのは誰か」を見分けること。ホスト名だけだと、
+// 同じ台で入れ替えたときに前のプロセスの印を新しいプロセスが自分のものと
+// 取り違える。起動ごとに変わる値を混ぜておく。
+func newInstanceID() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown"
+	}
+	return fmt.Sprintf("%s-%d-%d", host, os.Getpid(), time.Now().UnixNano())
+}
+
+// pubsubChannelPrefix は subscription の配信に使う Redis チャンネル名の接頭辞。
+//
+// 同じ Redis を別の環境（検証と本番）で共有してしまったときに、片方の
+// メッセージがもう片方の購読者へ流れないようにするための区切り。
+const pubsubChannelPrefix = "space:pubsub:"
+
 func main() {
 	isProd := os.Getenv("APP_ENV") == "production"
 
@@ -134,10 +153,31 @@ func main() {
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	courseRepository := mysql.NewMySQLCourseRepository(database)
-	ps := pubsub.New()
-	courseImportTracker := courseimport.NewTracker(func(status courseimport.Status) {
-		ps.Publish(graph.CourseImportStatusTopic, status)
-	})
+	instanceID := newInstanceID()
+
+	// Redis はここで繋ぐ。subscription の配信（下の chatBus）が Redis に乗るので、
+	// PubSub より先に用意する必要がある。
+	redisClient, err := infraredis.New()
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
+	}
+
+	// subscription の配信は Redis 経由にする。GraphQL の subscription は WebSocket
+	// なので購読者は1台に貼り付くが、メッセージを送る利用者は別の台に当たりうる。
+	// プロセス内の PubSub だけだと、送った台に繋がっている購読者にしか届かない
+	// （しかもエラーにはならないので、1台で動かしている間は誰も気づけない）。
+	chatBus := infraredis.NewBus(redisClient, graph.NewPubSubCodec(), pubsubChannelPrefix)
+	ps := pubsub.Bus(chatBus)
+
+	// 取り込みの排他と進捗も Redis に置く。自分の台のメモリだけを見ていると、
+	// 管理者2人が別々の台に当たったときに同じ取り込みが2本走り、管理画面が
+	// 始めた台と違う台へ繋がると進捗が見えない（どちらも片方の台では正常に見える）。
+	courseImportTracker := courseimport.NewTracker(
+		infraredis.NewCourseImportStore(redisClient, instanceID),
+		func(status courseimport.Status) {
+			ps.Publish(graph.CourseImportStatusTopic, status)
+		},
+	)
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
 	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
 	courseRoomReadRepository := mysql.NewMySQLCourseRoomReadRepository(database)
@@ -237,11 +277,9 @@ func main() {
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
 	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
 	getFavoritesByPostIDsUseCase := favoriteusecase.NewGetFavoritesByPostIDsUseCase(favoriteRepository)
+	countFavoritesByPostIDsUseCase := favoriteusecase.NewCountFavoritesByPostIDsUseCase(favoriteRepository)
+	listPostIDsFavoritedByUseCase := favoriteusecase.NewListPostIDsFavoritedByUseCase(favoriteRepository)
 
-	redisClient, err := infraredis.New()
-	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
-	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
 	passwordResetRepository := infraredis.NewRedisPasswordResetRepository(redisClient)
 	// SSE(/events) の接続チケット。Redis に置くのは寿命(30秒)の管理を任せられるのと、
@@ -296,6 +334,7 @@ func main() {
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
+	isRoomMemberUseCase := roomusecase.NewIsRoomMemberUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
 	searchRoomUsersUseCase := roomusecase.NewSearchRoomUsersUseCase(roomUserRepository)
 	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
@@ -364,7 +403,19 @@ func main() {
 	manageInquiryUseCase := inquiryusecase.NewManageInquiryUsecase(inquiryRepository)
 
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
-	sseBroker := sse.NewBroker()
+	// SSE も台またぎにする。接続はどこか1台に貼り付くが、通知を作る操作は
+	// 別の台に当たりうるので、プロセス内の配信だけだと通知を作った台に
+	// 繋がっていない利用者にはベルが光らない。
+	//
+	// 採番と履歴も Redis に置く。同じ利用者のタブが別々の台に繋がったときに
+	// それぞれが1から数えると、同じIDの別イベントができて、Last-Event-ID からの
+	// リプレイが狂う。
+	//
+	// Broker と Fanout は互いを必要とするので、Broker を先に作って
+	// 配信口を後から挿す。
+	sseBroker := sse.NewBrokerWithStore(infraredis.NewSSEStore(redisClient), nil)
+	sseFanout := infraredis.NewSSEFanout(redisClient, pubsubChannelPrefix, sseBroker.DeliverLocal)
+	sseBroker.SetFanout(sseFanout)
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
@@ -379,6 +430,7 @@ func main() {
 	getQuestionsByIDsUseCase := questionusecase.NewGetQuestionsByIDsUseCase(questionRepository)
 	getAnswersByIDsUseCase := answerusecase.NewGetAnswersByIDsUseCase(answerRepository)
 	listAnswerPagesByQuestionIDsUseCase := answerusecase.NewListAnswerPagesByQuestionIDsUseCase(answerRepository)
+	countAnswersByQuestionIDsUseCase := answerusecase.NewCountAnswersByQuestionIDsUseCase(answerRepository)
 	listPollOptionResultsByPollIDsUseCase := pollusecase.NewListPollOptionResultsByPollIDsUseCase(pollRepository)
 	countPollVotersByPollIDsUseCase := pollusecase.NewCountPollVotersByPollIDsUseCase(pollRepository)
 	getAnonymousIdentitiesUseCase := anonusecase.NewGetAnonymousIdentitiesUseCase(roomAnonymousIdentityRepository)
@@ -449,6 +501,7 @@ func main() {
 	chatAccessPolicy := chatusecase.NewAccessPolicy(chatusecase.AccessPolicyDeps{
 		GetRoom:            getRoomUseCase,
 		GetRoomMemberIDs:   getUserIDsByRoomIDUseCase,
+		IsRoomMember:       isRoomMemberUseCase,
 		CheckRoomWritable:  checkRoomWritableUseCase,
 		CheckBlockRelation: checkBlockRelationUseCase,
 	})
@@ -700,6 +753,8 @@ func main() {
 		GetRepliesByPostIDs:            getRepliesByPostIDsUseCase,
 		GetRepliesByPostIDsIncludeDel:  getRepliesByPostIDsIncludeDeletedUseCase,
 		GetFavoritesByPostIDs:          getFavoritesByPostIDsUseCase,
+		CountFavoritesByPostIDs:        countFavoritesByPostIDsUseCase,
+		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
 		GetMessagesByIDs:               getMessagesByIDsUseCase,
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
@@ -707,6 +762,7 @@ func main() {
 		GetQuestionsByIDs:              getQuestionsByIDsUseCase,
 		GetAnswersByIDs:                getAnswersByIDsUseCase,
 		ListAnswerPagesByQuestionIDs:   listAnswerPagesByQuestionIDsUseCase,
+		CountAnswersByQuestionIDs:      countAnswersByQuestionIDsUseCase,
 		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
 		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
 		GetAnonymousIdentities:         getAnonymousIdentitiesUseCase,
@@ -719,7 +775,10 @@ func main() {
 
 	// GraphQL server with WebSocket transport
 	gqlServer := handler.New(
-		graph.NewExecutableSchema(
+		// NewWeightedExecutableSchema は生成コードに「一覧は返却件数ぶん重い」を
+		// 足したもの（graph/complexity.go）。素の NewExecutableSchema を使うと
+		// 上限が選んだフィールドの数しか見なくなる。
+		graph.NewWeightedExecutableSchema(
 			graph.Config{
 				Resolvers: resolver,
 			},
@@ -776,7 +835,9 @@ func main() {
 	gqlServer.AddTransport(transport.GET{})
 	gqlServer.AddTransport(transport.POST{})
 	gqlServer.AddTransport(transport.MultipartForm{})
-	gqlServer.Use(extension.FixedComplexityLimit(300))
+	// 上限の決め方は graph.ComplexityLimit のコメント参照。ここへ直接数字を
+	// 書かないのは、上限とその根拠（複雑度のテスト）を離さないため。
+	gqlServer.Use(extension.FixedComplexityLimit(graph.ComplexityLimit))
 
 	// エラーメッセージ本文ではなく extensions.code を API 契約にする。
 	// クライアントは文言ではなくコードで分岐できるので、文言変更で壊れない。
@@ -862,6 +923,13 @@ func main() {
 
 	if err := database.Close(); err != nil {
 		logger.Log.Error().Err(err).Msg("database close error")
+	}
+	// Bus と SSE の配信口は Redis クライアントより先に閉じる（購読を握っているため）。
+	if err := chatBus.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("pubsub bus close error")
+	}
+	if err := sseFanout.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("sse fanout close error")
 	}
 	if err := redisClient.Close(); err != nil {
 		logger.Log.Error().Err(err).Msg("redis close error")

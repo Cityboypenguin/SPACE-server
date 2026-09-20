@@ -15,6 +15,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/opaqueid"
+	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
@@ -73,15 +74,16 @@ func (r *Resolver) updateCommunityMembers(ctx context.Context, communityID int64
 // チャット表示まわりで「取れなくても画面は返す」取得の失敗ログに使う lookup 名。
 // 配信側の chatDelivery* と同じく、grep する側が経路で絞れるよう1箇所に集める。
 const (
-	chatLookupCourseRoom      = "course_room_lookup"
-	chatLookupAnonymousLabel  = "anonymous_label_lookup"
-	chatLookupQuestionRoom    = "question_room_lookup"
-	chatLookupPollAuthorRole  = "poll_author_role_lookup"
-	chatLookupBlockRelation   = "block_relation_lookup"
-	chatLookupBlockedUserIDs  = "blocked_user_ids_lookup"
-	chatLookupLastMessages    = "last_messages_lookup"
-	chatLookupReadStatus      = "read_status_lookup"
-	chatLookupReadStatusBatch = "read_status_batch_lookup"
+	chatLookupCourseRoom         = "course_room_lookup"
+	chatLookupAnonymousLabel     = "anonymous_label_lookup"
+	chatLookupQuestionRoom       = "question_room_lookup"
+	chatLookupPollAuthorRole     = "poll_author_role_lookup"
+	chatLookupBlockRelation      = "block_relation_lookup"
+	chatLookupBlockedUserIDs     = "blocked_user_ids_lookup"
+	chatLookupLastMessages       = "last_messages_lookup"
+	chatLookupReadStatus         = "read_status_lookup"
+	chatLookupReadStatusBatch    = "read_status_batch_lookup"
+	chatLookupNotificationTarget = "notification_target_lookup"
 )
 
 // logChatLookup はリゾルバ側のベストエフォートな取得失敗を、必ず同じ形で残す。
@@ -176,8 +178,9 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 }
 
 // anonymousUserForCourseRoom returns the synthetic User to display for authorUserID
-// when roomID is a course-type room (F-05), or nil for every other room type so the
-// caller falls back to showing the real user. Used by the message/question/answer/poll
+// when roomID is a course-type room (F-05), or nil once we know it is some other
+// room type, so the caller falls back to showing the real user. Used by the
+// message/question/answer/poll
 // user field resolvers. This lives in helpers.go (not schema.resolvers.go) because
 // gqlgen comments out any function in the resolver file that isn't a recognized
 // resolver stub on every `gqlgen generate` run.
@@ -187,8 +190,14 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 // 表示時に GetOrCreate を呼んでいて、読むだけのクエリが DB に書き込む副作用を
 // 持っていた。
 //
-// 行が引けなかった場合でも実名にはフォールバックせず、番号なしの「匿名」を返す
-// （理由は anonymousPlaceholderUser のコメント）。
+// 実名へ倒すのは「授業ルームではないと分かった」ときだけ。分からなかったとき
+// （ルームIDが解けない・ルームが引けない・匿名IDが引けない）は番号なしの「匿名」を
+// 返す（理由は anonymousPlaceholderUser のコメント）。
+//
+// 「分からない」を実名側へ倒してはいけない。実名の漏えいは取り消せないのに対し、
+// 非授業ルームが一時的に「匿名」と出るのは、その場かぎりの表示崩れで済む。
+// 障害中に DM が「匿名」になるのは目に見えて分かるが、授業ルームが実名になるのは
+// 画面上は正常に見えるため誰も気づけない。
 //
 // ルームも匿名IDも DataLoader 経由で引く。理由は2つある。
 //   - 一覧（メッセージ・質問・回答・投票）では項目ごとにこの関数が呼ばれるので、
@@ -203,20 +212,25 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string, authorUserID int64) *gqlmodel.User {
 	rid, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
-		return nil
+		// ルームIDが解けないと種別を確かめようがない。自前で符号化したIDなので
+		// 通常は起きないが、起きたときに実名を出す口にはしない。
+		logChatLookup(err, chatLookupCourseRoom).
+			Str("room_graph_id", roomID).
+			Int64("author_user_id", authorUserID).
+			Msg("failed to decode the room id; hiding the author instead of showing the real user")
+		return anonymousPlaceholderUser()
 	}
 
 	room, err := dataloader.For(ctx).RoomLoader.Load(ctx, rid)
 	if err != nil || room == nil {
-		// ルーム種別が引けないと「授業ルームではない」と同じ扱いになり、匿名の
-		// はずの投稿者が実名で出る。表示を落とすほどではないので nil を返して
-		// 従来どおり続けるが、匿名性に関わる失敗なので黙って捨てない。
-		// ローダーは不存在を nil で返す（エラーにしない）ので、両方ここで拾う。
+		// ここで nil を返すと「授業ルームではない」と同じ扱いになり、匿名のはずの
+		// 投稿者が実名で出る。種別が確かめられない以上、授業ルームかもしれないので
+		// 匿名側へ倒す。ローダーは不存在を nil で返す（エラーにしない）ので両方ここで拾う。
 		logChatLookup(err, chatLookupCourseRoom).
 			Int64("room_id", rid).
 			Int64("author_user_id", authorUserID).
-			Msg("failed to load the room; falling back to showing the real user")
-		return nil
+			Msg("failed to load the room; hiding the author instead of showing the real user")
+		return anonymousPlaceholderUser()
 	}
 	if room.Type != model.RoomTypeCourse {
 		return nil
@@ -251,6 +265,21 @@ func (r *Resolver) requireRoomReadAccess(ctx context.Context, roomID int64) (*mo
 	return r.ChatAccess.EnsureReadAccess(ctx, roomID)
 }
 
+// roomReadAuthorizer は購読中の再確認に渡す関数を作る。
+//
+// 開始時の判定と同じ requireRoomReadAccess を呼ぶだけ。同じ1本を通すのが要で、
+// 「入るときの条件」と「居続けてよい条件」が別々に書かれると、片方だけ厳しくした
+// ときにもう片方が置いていかれる（退出後も購読だけ生き続ける、が正にそれ）。
+//
+// ctx は購読ごとに渡し直す（転送ループが持っている購読の ctx を使う）。
+// ここで閉じ込めてしまうと、購読が切れた後も古い ctx で判定してしまう。
+func (r *Resolver) roomReadAuthorizer(roomID int64) func(context.Context) error {
+	return func(ctx context.Context) error {
+		_, err := r.requireRoomReadAccess(ctx, roomID)
+		return err
+	}
+}
+
 // questionSubscription handles the auth/access guard and PubSub fan-out for
 // room-scoped question subscriptions (added, updated), mirroring messageSubscription.
 func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID, topic string) (<-chan *gqlmodel.Question, error) {
@@ -266,7 +295,11 @@ func (r *subscriptionResolver) questionSubscription(ctx context.Context, roomID,
 		return nil, err
 	}
 
-	return subscribeTopic[*gqlmodel.Question](ctx, r.PubSub, topic, subscriptionScope{UserID: claims.ID, RoomID: roomID}), nil
+	return subscribeTopicGuarded(ctx, r.PubSub, topic,
+		subscriptionScope{UserID: claims.ID, RoomID: roomID},
+		r.roomReadAuthorizer(rid),
+		func(q *gqlmodel.Question) (*gqlmodel.Question, bool) { return q, true },
+	), nil
 }
 
 // roomPollSubscription はルーム単位の投票購読（added / deleted）の認証・権限判定と
@@ -285,7 +318,11 @@ func (r *subscriptionResolver) roomPollSubscription(ctx context.Context, roomID,
 		return nil, err
 	}
 
-	return subscribeTopic[*gqlmodel.Poll](ctx, r.PubSub, topic, subscriptionScope{UserID: claims.ID, RoomID: roomID}), nil
+	return subscribeTopicGuarded(ctx, r.PubSub, topic,
+		subscriptionScope{UserID: claims.ID, RoomID: roomID},
+		r.roomReadAuthorizer(rid),
+		func(p *gqlmodel.Poll) (*gqlmodel.Poll, bool) { return p, true },
+	), nil
 }
 
 // answerSubscription handles the auth/access guard and PubSub fan-out for
@@ -311,10 +348,11 @@ func (r *subscriptionResolver) answerSubscription(ctx context.Context, questionI
 		return nil, err
 	}
 
-	return subscribeTopic[*gqlmodel.Answer](ctx, r.PubSub, topic, subscriptionScope{
-		UserID: claims.ID,
-		RoomID: encodeGraphID("room", q.RoomID),
-	}), nil
+	return subscribeTopicGuarded(ctx, r.PubSub, topic,
+		subscriptionScope{UserID: claims.ID, RoomID: encodeGraphID("room", q.RoomID)},
+		r.roomReadAuthorizer(q.RoomID),
+		func(a *gqlmodel.Answer) (*gqlmodel.Answer, bool) { return a, true },
+	), nil
 }
 
 func requireAuth(ctx context.Context) (*auth.Claims, error) {
@@ -750,26 +788,47 @@ func (r *queryResolver) blockedUsersToGQL(ctx context.Context, blockers []*model
 	return result, nil
 }
 
-// presignedImageUploadURL generates a presigned put URL for image uploads.
-// prefix is the storage path prefix without trailing slash (e.g., "avatars/123").
-func (r *queryResolver) presignedImageUploadURL(ctx context.Context, prefix string, maxBytes int64, contentType string) (*gqlmodel.PresignedUploadURL, error) {
-	extMap := map[string]string{
-		"image/jpeg":    ".jpg",
-		"image/png":     ".png",
-		"image/webp":    ".webp",
-		"image/gif":     ".gif",
-		"image/svg+xml": ".svg",
-	}
-	ext, ok := extMap[contentType]
+// presignedUploadURL generates a presigned put URL for one upload kind.
+//
+// 上限も受け付ける Content-Type も kind（internal/upload）から取る。ここへ数字を
+// 直接書くと、受け入れ時の検査（upload.Verify）と食い違う。食い違いは「URLは
+// 出るのに保存できない」という形で出るので、書いた本人には気づきにくい。
+//
+// ownerSegment はキーの2段目（利用者ごとに分けるため）。空なら省く。
+func (r *queryResolver) presignedUploadURL(ctx context.Context, kind upload.Kind, ownerSegment string, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	ext, ok := kind.Ext(contentType)
 	if !ok {
 		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}
-	objectKey := fmt.Sprintf("%s/%s%s", prefix, uuid.New().String(), ext)
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, maxBytes)
+	objectKey := fmt.Sprintf("%s/%s%s", kind.Prefix, uuid.New().String(), ext)
+	if ownerSegment != "" {
+		objectKey = fmt.Sprintf("%s/%s/%s%s", kind.Prefix, ownerSegment, uuid.New().String(), ext)
+	}
+	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}
 	return &gqlmodel.PresignedUploadURL{UploadURL: uploadURL, ObjectKey: objectKey}, nil
+}
+
+// verifyUploadedObjects は、利用者が申告したオブジェクトキーを受け入れてよいかを
+// 確かめる。署名付きURLでは上限を強制できないので、実際の強制はここだけで効く
+// （理由は internal/upload のパッケージコメント）。
+//
+// 添付を受け取るすべてのミューテーションがこの1本を通る。入口ごとに書くと、
+// 後から足した入口だけ検査が抜ける。
+//
+// 空文字は「指定なし」として素通しする（省略可能なアバターキーの経路があるため）。
+func (r *Resolver) verifyUploadedObjects(ctx context.Context, objectKeys ...string) error {
+	for _, key := range objectKeys {
+		if key == "" {
+			continue
+		}
+		if err := upload.Verify(ctx, r.StorageRepository, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // messageSubscription handles the common auth/membership guard and PubSub fan-out
@@ -788,7 +847,11 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 		return nil, err
 	}
 
-	return subscribeTopic[*gqlmodel.Message](ctx, r.PubSub, topic, subscriptionScope{UserID: claims.ID, RoomID: roomID}), nil
+	return subscribeTopicGuarded(ctx, r.PubSub, topic,
+		subscriptionScope{UserID: claims.ID, RoomID: roomID},
+		r.roomReadAuthorizer(rid),
+		func(m *gqlmodel.Message) (*gqlmodel.Message, bool) { return m, true },
+	), nil
 }
 
 // toNullableInt32 は nil を保ったまま int を GraphQL の Int（*int32）へ変換する。
@@ -810,31 +873,53 @@ func toNullableInt(v *int32) *int {
 	return &converted
 }
 
-// toMediaInputs は GraphQL の添付入力をユースケース層の形へ変換する。
-// 添付を受け取る全ミューテーション（投稿・編集・メッセージ・質問・回答）が同じ
-// 変換をするため、ここに集約して Media の属性追加時に触る箇所を1つに保つ。
-func toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.MediaInput {
+// toMediaInputs は GraphQL の添付入力をユースケース層の形へ変換し、そのついでに
+// 実際に置かれたオブジェクトが上限と種別に収まっていることを確かめる。
+//
+// 変換と検査を同じ関数にしてあるのは、添付を受け取る全ミューテーション
+// （投稿・編集・メッセージ・質問・回答）がこの変換を必ず通るから。別の関数に
+// 分けると、変換だけ呼んで検査を呼び忘れた入口ができる。
+//
+// 検査は添付1件につきストレージへの問い合わせ1回。添付の枚数は数枚なので
+// 直列のままにしてある。
+func (r *Resolver) toMediaInputs(ctx context.Context, inputs []*gqlmodel.MediaUploadInput) ([]model.MediaInput, error) {
 	var result []model.MediaInput
 	for _, m := range inputs {
 		if m == nil {
 			continue
 		}
+		if err := r.verifyUploadedObjects(ctx, m.ObjectKey); err != nil {
+			return nil, err
+		}
 		result = append(result, model.MediaInput{
-			StorageKey:  m.ObjectKey,
+			StorageKey: m.ObjectKey,
+			// ContentType は利用者の申告ではなく、実際に置かれたものを使いたいが、
+			// ここを変えると既存レコードとの整合が要る。申告と実物の食い違いは
+			// verifyUploadedObjects が弾くので、受け入れられた時点で両者は
+			// 同じ種別（画像なら画像）に収まっている。
 			ContentType: m.ContentType,
 			Width:       toNullableInt(m.Width),
 			Height:      toNullableInt(m.Height),
 		})
 	}
-	return result
+	return result, nil
 }
 
 // notificationTargetMessage resolves the Notification/NotificationGroup targetMessage
 // field: the chat message a reply notification points at. 削除済み・対象が
-// メッセージ以外なら nil を返す。
+// メッセージ以外・いま読む権限が無いなら nil を返す。
 //
 // 返す Message は messageResolver 経由で解決されるので、授業内チャットなら user
 // フィールドは自動的に匿名表示になる。
+//
+// 通知に対象メッセージのIDが載っているからといって、本文を返してよい理由にはならない。
+// 通知は配信時点の権限で作られるので、受け取ってから退出・キックされた利用者の手元にも
+// 残る。ここで権限を見ないと、messages クエリなら拒否される本文を、通知の targetMessage
+// という別の口から取り出せてしまう。権限判定は messages クエリと同じ
+// requireRoomReadAccess（ChatAccess.EnsureReadAccess）を通し、判定を二重に書かない。
+//
+// 読めないことと消えたことを言い分けない（どちらも nil）。言い分けると「その部屋に
+// そのメッセージが在る」ことだけが通知の受け手に伝わってしまう。
 func (r *Resolver) notificationTargetMessage(ctx context.Context, targetType *string, targetID *string) (*gqlmodel.Message, error) {
 	if targetType == nil || *targetType != notificationTargetTypeMessage || targetID == nil {
 		return nil, nil
@@ -845,6 +930,18 @@ func (r *Resolver) notificationTargetMessage(ctx context.Context, targetType *st
 	}
 	msg, err := dataloader.For(ctx).MessageLoader.Load(ctx, numericID)
 	if err != nil || msg == nil {
+		return nil, nil
+	}
+	if _, err := r.requireRoomReadAccess(ctx, msg.RoomID); err != nil {
+		// 退出・キックのあとに古い通知を開いただけ、というのが通常の経路なので
+		// Error では残さない（DB障害も同じ枝に入るが、その場合は
+		// EnsureReadAccess の内側が Error を出している）。
+		logger.Log.Debug().Err(err).
+			Str("component", "chat_resolver").
+			Str("lookup", chatLookupNotificationTarget).
+			Int64("room_id", msg.RoomID).
+			Int64("message_id", msg.ID).
+			Msg("hiding a notification target message the caller may no longer read")
 		return nil, nil
 	}
 	return toGraphMessage(msg), nil
@@ -911,4 +1008,13 @@ func decodeMentionUserIDs(ctx context.Context, mentionUserIDs []string) ([]int64
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// derefString は省略可能な入力を、verifyUploadedObjects が「指定なし」として
+// 扱える空文字に潰す。
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

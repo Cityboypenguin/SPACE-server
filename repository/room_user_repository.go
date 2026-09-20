@@ -14,6 +14,17 @@ type RoomUserRepository interface {
 	// メンバー編集のようにまとめて外す経路で使う。
 	RemoveUsersFromRoom(ctx context.Context, roomID int64, userIDs []int64) error
 	GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error)
+	// IsRoomMember は userID が roomID に在籍しているかだけを返す。
+	//
+	// 権限判定は「自分が入っているか」しか要らないのに、以前は
+	// GetUserIDsByRoomID でルーム全員のIDを持ち帰ってから線形探索していた。
+	// 閲覧・購読・編集・削除のたびに走る経路なので、1万人のコミュニティでは
+	// 1回の判定で1万行を運んでいたことになる。行数に依らない EXISTS 1本にする。
+	//
+	// 宛先の一覧が要る経路（送信後の配信・既読通知）は引き続き
+	// GetUserIDsByRoomID を使う。そちらは全員ぶんが結果そのものなので、
+	// この口では置き換えられない。
+	IsRoomMember(ctx context.Context, roomID, userID int64) (bool, error)
 	ListUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64][]*model.User, error)
 	// SearchRoomUsersByPrefix is the bounded display search used by mention
 	// suggestions. It does not replace complete membership validation APIs.

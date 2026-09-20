@@ -306,7 +306,15 @@ type Post {
   replyCount: Int!
   user: User!
   rootPost: Post
+  # favorites は「誰がいいねしたか」の一覧。表示に要るのは件数と自分の有無だけなので、
+  # 一覧・詳細のクエリは favoriteCount / isFavoritedByMe を使うこと。
+  # 人気の投稿ではいいねが数千件になり、一覧ではそれが投稿の件数ぶん応答に乗る。
   favorites: [Favorite!]!
+  # favoriteCount は COUNT(*) 1本、isFavoritedByMe は自分の行だけを見る。
+  # どちらも投稿のいいね数に依らず一定の大きさで返る。
+  favoriteCount: Int!
+  # 未ログインでは常に false（いいねは本人にしか紐づかない）。
+  isFavoritedByMe: Boolean!
   parent: Post
   replies(limit: Int = 50, offset: Int = 0): [Post!]!
   media: [Media!]!
@@ -927,7 +935,10 @@ type Question {
   body: String!
   isAnswered: Boolean!
   bestAnswer: Answer
+  # answers は回答本文の一覧。件数だけが要る画面は answerCount を使うこと
+  # （管理画面の質問一覧は、件数を出すために回答本文を全部取っていた）。
   answers(limit: Int = 20, offset: Int = 0): AnswerPage!
+  answerCount: Int!
   media: [Media!]!
   createdAt: String!
   updatedAt: String!

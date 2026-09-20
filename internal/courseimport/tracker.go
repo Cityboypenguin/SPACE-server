@@ -56,8 +56,11 @@ type Status struct {
 }
 
 type Tracker struct {
-	mu       sync.Mutex
+	mu sync.Mutex
+	// status はこの台が走らせている取り込みの状態。共有の記録は store 側にあり、
+	// ここはその写し（進捗の組み立てと、store が引けなかったときの控え）。
 	status   Status
+	store    Store
 	onChange func(Status)
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -69,9 +72,15 @@ type Tracker struct {
 // the status every time it changes - Start, SetProgress, and completion - so a
 // caller can push updates (e.g. over a GraphQL subscription) instead of relying on
 // callers to poll Get.
-func NewTracker(onChange func(Status)) *Tracker {
+//
+// store は状態の置き場（Store のコメント参照）。nil ならプロセス内に置く
+// （台が1つの構成向け。台を増やすなら Redis の実装を渡すこと）。
+func NewTracker(store Store, onChange func(Status)) *Tracker {
+	if store == nil {
+		store = NewMemoryStore()
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Tracker{status: Status{State: StateIdle}, onChange: onChange, ctx: ctx, cancel: cancel}
+	return &Tracker{status: Status{State: StateIdle}, store: store, onChange: onChange, ctx: ctx, cancel: cancel}
 }
 
 func (t *Tracker) Shutdown(ctx context.Context) error {
@@ -92,10 +101,20 @@ func (t *Tracker) Shutdown(ctx context.Context) error {
 	}
 }
 
+// Get は現在の状態を返す。
+//
+// 共有の記録を見るので、取り込みを始めた台とは別の台へ聞いても同じ答えが返る。
+// 引けなかったときだけ自分の台の写しを返す（管理画面が真っ白になるより、
+// 少し古いかもしれない値を出す方がまし）。
 func (t *Tracker) Get() Status {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.status
+	status, err := t.store.Load(t.ctx)
+	if err != nil {
+		logger.Log.Error().Err(err).Msg("failed to load the course import status; falling back to this instance's copy")
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		return t.status
+	}
+	return status
 }
 
 // notify reads the current status under the lock and then calls onChange with that
@@ -121,7 +140,15 @@ func (t *Tracker) SetProgress(processed, total int) {
 	}
 	t.status.Processed = processed
 	t.status.Total = total
+	snapshot := t.status
 	t.mu.Unlock()
+
+	// 共有の記録も進める。ここで実行中の印の寿命も延びるので、進捗が出ている
+	// 限り他の台から横取りされることはない（止まれば印が切れて、別の台が
+	// 取り込みを始められるようになる）。
+	if err := t.store.Update(t.ctx, snapshot); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to record course import progress")
+	}
 	t.notify()
 }
 
@@ -136,13 +163,25 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 		t.mu.Unlock()
 		return Status{}, apperr.Conflict("サーバー停止中はインポートを開始できません")
 	}
-	if t.status.State == StateRunning {
-		t.mu.Unlock()
+	t.mu.Unlock()
+
+	// 実行中かどうかは共有の記録で決める。自分の台のメモリだけを見ていると、
+	// 管理者2人が別々の台に当たったときに同じ取り込みが2本走る。
+	now := time.Now()
+	snapshot := Status{State: StateRunning, Year: year, StartedAt: &now}
+	acquired, err := t.store.TryStart(t.ctx, snapshot)
+	if err != nil {
+		// 取れたかどうかが分からないまま走らせない。二重起動は、同じ年度の
+		// 授業を2回取り込むという後始末の要る壊れ方になる。
+		logger.Log.Error().Err(err).Msg("failed to take the course import lock")
+		return Status{}, apperr.Conflict("インポートの状態を確認できませんでした")
+	}
+	if !acquired {
 		return Status{}, apperr.Conflict("既にインポートを実行中です")
 	}
-	now := time.Now()
-	t.status = Status{State: StateRunning, Year: year, StartedAt: &now}
-	snapshot := t.status
+
+	t.mu.Lock()
+	t.status = snapshot
 	t.jobs.Add(1)
 	t.mu.Unlock()
 	t.notify()
@@ -208,15 +247,33 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 		startedAt := t.status.StartedAt
 		if err != nil {
 			t.status = Status{State: StateFailed, Year: year, ErrorMessage: err.Error(), StartedAt: startedAt, FinishedAt: &finished}
+			final := t.status
 			t.mu.Unlock()
 			logger.Log.Error().Err(err).Int("year", year).Msg("course import failed")
-			t.notify()
+			t.finish(final)
 			return
 		}
 		t.status = Status{State: StateSucceeded, Year: year, Imported: imported, Skipped: skipped, StartedAt: startedAt, FinishedAt: &finished}
+		final := t.status
 		t.mu.Unlock()
-		t.notify()
+		t.finish(final)
 	}()
 
 	return snapshot, nil
+}
+
+// finish は最終状態を共有の記録へ書き、実行中の印を外してから通知する。
+//
+// 印を外し損ねると、この台が終わっているのに他の台から「既に実行中です」と
+// 見え続ける。Redis の実装では印に寿命を持たせてあるので、書き込みに失敗しても
+// 寿命が切れれば解ける（その間は取り込みを始められない、で済む）。
+//
+// 停止用の ctx（t.ctx）ではなく context.Background() を使う。サーバー停止に
+// 伴う終了では t.ctx は既に切れているので、そのまま使うと最終状態を
+// 書き残せず、状態が RUNNING のまま取り残される。
+func (t *Tracker) finish(final Status) {
+	if err := t.store.Finish(context.Background(), final); err != nil {
+		logger.Log.Error().Err(err).Msg("failed to record the course import result")
+	}
+	t.notify()
 }

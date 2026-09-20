@@ -44,6 +44,14 @@ type AnswerRepository interface {
 	// their like counts, ordered by like count descending (ties broken by createdAt
 	// ascending) so the most-liked answers surface first (F-04-2 いいねの多い回答を上に表示)。
 	ListAnswersWithLikesByQuestionID(ctx context.Context, questionID, viewerUserID int64, limit, offset int) ([]*AnswerWithLikes, error)
+	// CountAnswersByQuestionIDs は質問ごとの回答件数を1クエリで数える。
+	//
+	// 件数しか要らない画面（管理画面の質問一覧）のための口。以前はそこが
+	// answers(limit: 200) で回答本文と投稿者を全部取り、その len を件数にしていた。
+	// 質問200件 × 回答200件で最大4万行が1回の応答に乗っていた。
+	//
+	// 回答が0件の質問は key ごと欠ける（int のゼロ値がそのまま正しい）。
+	CountAnswersByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64]int, error)
 	// CountAnswersByQuestionID returns questionID's total answer count, for pagination.
 	CountAnswersByQuestionID(ctx context.Context, questionID int64) (int, error)
 	// UpdateAnswerBody edits an answer's body, scoped to authorUserID so only the

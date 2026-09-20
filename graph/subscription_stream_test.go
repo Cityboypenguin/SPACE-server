@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"sync"
 	"testing"
@@ -47,10 +48,10 @@ func TestSubscribeTopic_DeliversEachSubscriptionPayload(t *testing.T) {
 
 	scope := subscriptionScope{UserID: 7, RoomID: "room-1"}
 
-	messages := subscribeTopic[*gqlmodel.Message](ctx, ps, "room-1:message:added", scope)
-	questions := subscribeTopic[*gqlmodel.Question](ctx, ps, "room-1:question:added", scope)
-	answers := subscribeTopic[*gqlmodel.Answer](ctx, ps, "question-1:answer:added", scope)
-	polls := subscribeTopic[*gqlmodel.Poll](ctx, ps, "room-1:poll:added", scope)
+	messages := subscribeTopicFunc(ctx, ps, "room-1:message:added", scope, identity[*gqlmodel.Message])
+	questions := subscribeTopicFunc(ctx, ps, "room-1:question:added", scope, identity[*gqlmodel.Question])
+	answers := subscribeTopicFunc(ctx, ps, "question-1:answer:added", scope, identity[*gqlmodel.Answer])
+	polls := subscribeTopicFunc(ctx, ps, "room-1:poll:added", scope, identity[*gqlmodel.Poll])
 
 	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m1"})
 	ps.Publish("room-1:question:added", &gqlmodel.Question{ID: "q1"})
@@ -77,7 +78,7 @@ func TestSubscribeTopic_IgnoresForeignPayloadTypes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := subscribeTopic[*gqlmodel.Message](ctx, ps, "room-1:message:added", subscriptionScope{UserID: 1})
+	ch := subscribeTopicFunc(ctx, ps, "room-1:message:added", subscriptionScope{UserID: 1}, identity[*gqlmodel.Message])
 
 	ps.Publish("room-1:message:added", "not a message")
 	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m2"})
@@ -136,7 +137,7 @@ func TestSubscribeTopic_ClosesAndUnsubscribesOnContextDone(t *testing.T) {
 	ps := pubsub.New()
 	ctx, cancel := context.WithCancel(context.Background())
 
-	ch := subscribeTopic[*gqlmodel.Message](ctx, ps, "room-1:message:added", subscriptionScope{UserID: 1})
+	ch := subscribeTopicFunc(ctx, ps, "room-1:message:added", subscriptionScope{UserID: 1}, identity[*gqlmodel.Message])
 	cancel()
 
 	select {
@@ -184,7 +185,7 @@ func TestSubscribeTopic_UnsubscribesWhenSendBlocksAndContextIsCanceled(t *testin
 	src := newCountingSource()
 	ctx, cancel := context.WithCancel(context.Background())
 
-	out := subscribeTopic[*gqlmodel.Message](ctx, src, "room-1:message:added", subscriptionScope{UserID: 1})
+	out := subscribeTopicFunc(ctx, src, "room-1:message:added", subscriptionScope{UserID: 1}, identity[*gqlmodel.Message])
 
 	// 1件目は out のバッファへ入り、2件目の送信でループが止まる。
 	src.ch <- &gqlmodel.Message{ID: "m1"}
@@ -218,5 +219,165 @@ func TestSubscribeTopic_UnsubscribesWhenSendBlocksAndContextIsCanceled(t *testin
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("subscription channel was not closed after cancellation")
+	}
+}
+
+// --- 購読中の権限の確かめ直し（項目2） ------------------------------------
+
+// shortenAccessRecheck はテストのあいだだけ確かめ直しの間隔を縮める。
+func shortenAccessRecheck(t *testing.T, d time.Duration) {
+	t.Helper()
+	prev := accessRecheckInterval
+	accessRecheckInterval = d
+	t.Cleanup(func() { accessRecheckInterval = prev })
+}
+
+// TestSubscribeTopicGuarded_StopsDeliveringOnceAccessIsRevoked は項目2の本体。
+//
+// 権限は購読を始めるときにしか見ていなかったので、退出・キックされた利用者の
+// 繋ぎっぱなしのタブに、その部屋の新着が流れ続けていた。普通に使っている限り
+// 画面には出ないため、見て気づける壊れ方ではない。
+func TestSubscribeTopicGuarded_StopsDeliveringOnceAccessIsRevoked(t *testing.T) {
+	shortenAccessRecheck(t, time.Millisecond)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	allowed := true
+	authorize := func(context.Context) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if allowed {
+			return nil
+		}
+		return errors.New("forbidden: not a member of this room")
+	}
+
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"}, authorize, identity[*gqlmodel.Message])
+
+	// 在籍しているうちは届く。
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "before"})
+	if got := recvWithin(t, out); got.ID != "before" {
+		t.Fatalf("id = %q, want before", got.ID)
+	}
+
+	// ここでキックされたとする。
+	mu.Lock()
+	allowed = false
+	mu.Unlock()
+
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "after"})
+
+	// 権限を失ったあとの新着は届かず、購読そのものが終わる
+	// （チャンネルが閉じることで gqlgen 側の subscription も完了する）。
+	select {
+	case got, ok := <-out:
+		if ok {
+			t.Fatalf("権限を失ったあとに %+v が配信された", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("購読が終わらない（チャンネルが閉じていない）")
+	}
+}
+
+// TestSubscribeTopicGuarded_KeepsDeliveringWhileAuthorized は、確かめ直しが
+// 正当な購読まで切ってしまわないことを確かめる。
+func TestSubscribeTopicGuarded_KeepsDeliveringWhileAuthorized(t *testing.T) {
+	shortenAccessRecheck(t, time.Millisecond)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"},
+		func(context.Context) error { return nil },
+		identity[*gqlmodel.Message])
+
+	for _, id := range []string{"m1", "m2", "m3"} {
+		time.Sleep(2 * time.Millisecond)
+		ps.Publish("room-1:message:added", &gqlmodel.Message{ID: id})
+		if got := recvWithin(t, out); got.ID != id {
+			t.Fatalf("id = %q, want %q", got.ID, id)
+		}
+	}
+}
+
+// TestSubscribeTopicGuarded_ThrottlesTheRecheck は、確かめ直しが配信のたびには
+// 走らないことを確かめる。賑やかな部屋では「メッセージ数 × 購読者数」だけ
+// 判定が走ることになり、これは権限の正しさではなく費用の問題として効いてくる。
+func TestSubscribeTopicGuarded_ThrottlesTheRecheck(t *testing.T) {
+	// 間隔を長くして、このテストの間は1度も確かめ直しが起きないようにする。
+	shortenAccessRecheck(t, time.Hour)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	calls := 0
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"},
+		func(context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			return nil
+		},
+		identity[*gqlmodel.Message])
+
+	for i := range 5 {
+		ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m"})
+		recvWithin(t, out)
+		_ = i
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("recheck calls = %d, want 0（開始時に判定したばかりなので間隔内は引き直さない）", calls)
+	}
+}
+
+// TestSubscribeTopicGuarded_SkipsTheRecheckForFilteredEvents は、絞り込みで
+// 落とす値のために判定を走らせないことを確かめる。既読の購読は自分のイベントを
+// 落とすので、自分が読むたびに判定が走ると無駄が大きい。
+func TestSubscribeTopicGuarded_SkipsTheRecheckForFilteredEvents(t *testing.T) {
+	shortenAccessRecheck(t, time.Millisecond)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	calls := 0
+	out := subscribeTopicGuarded(ctx, ps, "room-1:read_status",
+		subscriptionScope{UserID: 7, RoomID: "room-1"},
+		func(context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			return nil
+		},
+		func(m *gqlmodel.Message) (*gqlmodel.Message, bool) {
+			// 全部落とす（自分のイベントだけが流れてきた状況に相当）。
+			return m, false
+		})
+
+	for range 5 {
+		time.Sleep(2 * time.Millisecond)
+		ps.Publish("room-1:read_status", &gqlmodel.Message{ID: "mine"})
+	}
+	expectNothing(t, out)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("recheck calls = %d, want 0（配信しない値のために判定しない）", calls)
 	}
 }

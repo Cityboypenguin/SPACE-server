@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -46,49 +47,55 @@ type Client struct {
 	ch chan Event
 }
 
-// userHistory は1ユーザーぶんのイベント履歴と、そのユーザー向けの採番、
-// 最後に書き足した時刻。
-// 時刻を持つのは、接続が無くなったユーザーの履歴を捨ててよいか判断するため。
-//
-// nextID がここ（ユーザー単位）にあるのは、履歴がユーザー単位だから。
-// 以前は Broker が全ユーザー共通の連番を持っていたので、
-//
-//	利用者A のイベント: id=1, id=7, id=23, ...
-//
-// のように**自分宛のID列が飛び飛び**になっていた。間の 2..6 は他人宛に消費された
-// ぶんで、A の履歴には最初から存在しない。それでも SSE の仕様上 Last-Event-ID は
-// 「最後に受け取った id」しか運べないので、受け手からは「欠番＝取りこぼし」と
-// 区別がつかない。実際サーバ側のリプレイ判定（hist[0].ID > lastEventID+1）も
-// この欠番で誤爆し、正常な再接続のたびに「取りこぼしたかもしれない」警告を
-// 吐いていた。IDを配る単位と、履歴を持つ単位は揃っていなければならない。
-type userHistory struct {
-	events []Event
-	// nextID は次に払い出すイベントID。1 から始まり、このユーザー宛の
-	// PublishToUser のたびに1つずつ増える（＝欠番が出ない）。
-	nextID    int
-	updatedAt time.Time
-}
-
 // Broker はユーザーごとの SSE クライアント接続を管理し、イベントを配信する。
 type Broker struct {
-	mu      sync.Mutex
+	mu sync.Mutex
+	// clients はこの台に繋がっているクライアント。ここだけは台ごとに持つ
+	// （SSE の接続はどこか1台に貼り付くので、共有しようがない）。
 	clients map[int64][]*Client
-	// history はユーザーごとの直近イベント履歴（再接続時リプレイ用）と採番。
-	// 採番も含めてここに持つ理由は userHistory の型コメント参照。
-	history map[int64]*userHistory
 
-	// now はテストで時間を進めるための差し替え口（履歴の期限切れを待たずに試すため）。
-	now func() time.Time
-	// lastSweep は履歴の掃除を最後に走らせた時刻。
-	lastSweep time.Time
+	// store は採番と履歴の置き場（Store のコメント参照）。
+	store Store
+	// fanout はイベントを全ての台へ配る口。台が1つなら自分へ返すだけ。
+	fanout Fanout
 }
 
+// NewBroker は台が1つの構成向けの Broker を返す（採番も履歴も配信もプロセス内）。
 func NewBroker() *Broker {
-	return &Broker{
-		clients: make(map[int64][]*Client),
-		history: make(map[int64]*userHistory),
-		now:     time.Now,
+	return NewBrokerWithStore(NewMemoryStore(), nil)
+}
+
+// SetFanout は配信口を後から挿す。
+//
+// 台をまたぐ配信口は「受け取ったものをこの Broker へ渡す」ために Broker を
+// 必要とし、Broker は配る先としてその配信口を必要とする。先に Broker を作って
+// から挿せるようにしてあるのはそのため。サーバーの組み立て時に一度だけ呼ぶ。
+func (b *Broker) SetFanout(f Fanout) {
+	if f == nil {
+		return
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.fanout = f
+}
+
+// NewBrokerWithStore は採番・履歴の置き場と、台またぎの配信口を指定して Broker を作る。
+//
+// fanout が nil なら、配信はこの台のクライアントにだけ届く。台を増やす構成では
+// Redis の実装（infra/redis）を渡すこと。渡さないと、通知を作った台に繋がって
+// いない利用者にはベルが光らない（エラーにはならないので気づきにくい）。
+func NewBrokerWithStore(store Store, fanout Fanout) *Broker {
+	if store == nil {
+		store = NewMemoryStore()
+	}
+	b := &Broker{clients: make(map[int64][]*Client), store: store}
+	if fanout == nil {
+		// 自分へ返すだけの配線。Publish 側の分岐を無くすために、台が1つでも
+		// 必ず fanout を通す（通さない近道を作ると、そちらだけ直し忘れる）。
+		fanout = localFanout{b}
+	}
+	b.fanout = fanout
+	return b
 }
 
 // Subscribe はクライアントを登録し、lastEventID より新しい未配信イベントを返す。
@@ -103,59 +110,32 @@ func (b *Broker) Subscribe(userID int64, lastEventID int) (*Client, []Event, err
 		return nil, nil, fmt.Errorf("too many SSE connections for user %d (limit: %d)", userID, maxSSEConnectionsPerUser)
 	}
 	c := &Client{ch: make(chan Event, 32)}
-	var missed []Event
-	if lastEventID >= 0 {
-		h := b.history[userID]
-		switch {
-		case h == nil:
-			// このユーザーの履歴そのものが無い。サーバー再起動直後か、無接続のまま
-			// historyTTL を過ぎて掃除された後。どちらもリプレイできるものは無い。
-			// 通知の本体は DB にあるので、クライアントが接続後に一覧を取り直す。
-			// 珍しくない（TTL 超えの切断は日常的に起きる）ので警告にはしない。
-			logger.Log.Debug().
-				Int64("userID", userID).
-				Int("lastEventID", lastEventID).
-				Msg("SSE reconnect with no history for this user: nothing to replay")
-		case lastEventID >= h.nextID:
-			// クライアントが名乗るIDが、このユーザーの採番より先に居る。
-			// ＝サーバーが再起動して採番が 1 に戻った後、既に何件か配り直している。
-			// 採番はユーザー単位なので、他人宛の配信でここへ来ることはない。
-			logger.Log.Warn().
-				Int64("userID", userID).
-				Int("lastEventID", lastEventID).
-				Int("currentNextID", h.nextID).
-				Msg("SSE reconnect after server restart: Last-Event-ID exceeds this user's counter, skipping replay")
-		default:
-			hist := h.events
-			// lastEventID が履歴の保持範囲外（historySize 件超の切断）かチェックしてログ警告。
-			// 採番がユーザー単位になったので、ここが立つのは本当に evict された時だけ
-			// （以前は他人宛に消費された欠番でも立っていた）。
-			if len(hist) > 0 && hist[0].ID > lastEventID+1 {
-				logger.Log.Warn().
-					Int64("userID", userID).
-					Int("lastEventID", lastEventID).
-					Int("oldestHistoryID", hist[0].ID).
-					Msg("SSE replay gap: some events evicted from history; client may have missed notifications")
-			}
-			for _, ev := range hist {
-				if ev.ID > lastEventID {
-					missed = append(missed, ev)
-				}
-			}
-		}
-	}
 	b.clients[userID] = append(b.clients[userID], c)
 	b.mu.Unlock()
+
+	// リプレイは置き場に聞く。台をまたぐ構成では、別の台で起きたイベントも
+	// ここから戻ってくる（自分の台のメモリだけを見ていると「履歴が無い」になる）。
+	missed, err := b.store.Replay(context.Background(), userID, lastEventID)
+	if err != nil {
+		// リプレイできなくても接続は張る。通知の本体は DB にあるので、
+		// クライアントは接続後に一覧を取り直せる。
+		logger.Log.Error().Err(err).
+			Int64("userID", userID).
+			Int("lastEventID", lastEventID).
+			Msg("failed to replay missed SSE events; connecting without replay")
+		missed = nil
+	}
+
 	metrics.Global.IncSSEConnections()
 	return c, missed, nil
 }
 
 func (b *Broker) Unsubscribe(userID int64, c *Client) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	// 切断のたびに掃除の機会を作る（接続が無くなったユーザーの履歴を捨てられるのは
 	// ここから先なので、切断は掃除を回す自然なきっかけになる）。
-	defer b.sweepHistoryLocked(b.now())
+	defer b.releaseIdleHistory()
+	defer b.mu.Unlock()
 	list := b.clients[userID]
 	for i, cl := range list {
 		if cl == c {
@@ -196,111 +176,97 @@ func (b *Broker) PublishNotificationsChangedToUser(userID int64) {
 		// クライアント側の JSON.parse が空文字で失敗する）。
 		Data: map[string]any{},
 	}
-	b.mu.Lock()
-	clients := make([]*Client, len(b.clients[userID]))
-	copy(clients, b.clients[userID])
-	b.mu.Unlock()
-
-	for _, c := range clients {
-		select {
-		case c.ch <- ev:
-		default:
-		}
-	}
+	b.publish(Envelope{UserID: userID, Event: ev})
 }
 
 // Broadcast は現在接続中の全ユーザーにイベントを送信する。
 // terms_updated など全員対象のシステムイベントに使う。履歴には記録しない。
 func (b *Broker) Broadcast(eventType string, data map[string]any) {
-	ev := Event{Type: eventType, Data: data}
-	b.mu.Lock()
-	var all []*Client
-	for _, clients := range b.clients {
-		all = append(all, clients...)
-	}
-	b.mu.Unlock()
-
-	for _, c := range all {
-		select {
-		case c.ch <- ev:
-		default:
-		}
-	}
+	// UserID 0 は「全員へ」。履歴には積まないので採番もしない。
+	b.publish(Envelope{UserID: 0, Event: Event{Type: eventType, Data: data}})
 }
 
 func (b *Broker) PublishToUser(userID int64, eventType string, data map[string]any) {
+	// 採番と履歴は置き場に任せる。台をまたぐ構成では、同じ利用者のタブが
+	// 別々の台に繋がっても連番が1本に保たれる（それぞれの台が1から数えると、
+	// 同じIDの別イベントができて Last-Event-ID からのリプレイが狂う）。
+	ev, err := b.store.Append(context.Background(), userID, eventType, data)
+	if err != nil {
+		// 採番できなければ履歴も残らない。配るのはやめる（ID 0 のまま配ると、
+		// 受け取ったクライアントの Last-Event-ID が巻き戻る）。通知の本体は
+		// DB にあるので、クライアントが次に一覧を取り直せば追いつく。
+		logger.Log.Error().Err(err).
+			Int64("userID", userID).
+			Str("eventType", eventType).
+			Msg("failed to record an SSE event; not delivering it")
+		return
+	}
+
+	b.publish(Envelope{UserID: userID, Event: ev})
+	b.releaseIdleHistory()
+}
+
+// publish はイベントを配信口へ渡す。台が1つなら自分のクライアントへ、
+// 台が複数なら全ての台を経由して各台のクライアントへ届く。
+func (b *Broker) publish(env Envelope) {
 	b.mu.Lock()
-	// 履歴に追加（直近 historySize 件を保持）。採番も履歴と同じ単位＝ユーザーごと。
-	now := b.now()
-	h := b.history[userID]
-	if h == nil {
-		h = &userHistory{nextID: 1}
-		b.history[userID] = h
-	}
-	id := h.nextID
-	h.nextID++
-
-	ev := Event{ID: id, Type: eventType, Data: data}
-
-	h.events = append(h.events, ev)
-	if len(h.events) > historySize {
-		h.events = h.events[len(h.events)-historySize:]
-	}
-	h.updatedAt = now
-	b.sweepHistoryLocked(now)
-
-	clients := make([]*Client, len(b.clients[userID]))
-	copy(clients, b.clients[userID])
+	fanout := b.fanout
 	b.mu.Unlock()
 
-	for _, c := range clients {
+	if err := fanout.Publish(context.Background(), env); err != nil {
+		logger.Log.Error().Err(err).
+			Int64("userID", env.UserID).
+			Str("eventType", env.Event.Type).
+			Msg("failed to fan out an SSE event")
+	}
+}
+
+// DeliverLocal はこの台に繋がっているクライアントへイベントを渡す。
+//
+// 配信口（Fanout）から呼ばれる。台をまたぐ実装では、他の台で起きたイベントも
+// ここへ入ってくる。UserID 0 は全員宛。
+func (b *Broker) DeliverLocal(env Envelope) {
+	b.mu.Lock()
+	var targets []*Client
+	if env.UserID == 0 {
+		for _, clients := range b.clients {
+			targets = append(targets, clients...)
+		}
+	} else {
+		targets = make([]*Client, len(b.clients[env.UserID]))
+		copy(targets, b.clients[env.UserID])
+	}
+	b.mu.Unlock()
+
+	for _, c := range targets {
 		select {
-		case c.ch <- ev:
+		case c.ch <- env.Event:
 		default:
-			// チャンネルバッファ満杯。イベントは履歴に残るため次回再接続時にリプレイされる。
+			// チャンネルバッファ満杯。履歴に積んだイベント（ID>0）は
+			// 次回再接続時にリプレイされる。
 			logger.Log.Warn().
-				Int64("userID", userID).
-				Int("eventID", id).
-				Str("eventType", eventType).
+				Int64("userID", env.UserID).
+				Int("eventID", env.Event.ID).
+				Str("eventType", env.Event.Type).
 				Msg("SSE channel buffer full: event dropped for active client, will replay on reconnect")
 		}
 	}
 }
 
-// sweepHistoryLocked は「もう誰も取りに来ない履歴」を捨てる。b.mu を持った状態で呼ぶこと。
+// releaseIdleHistory は「接続が1本も無くなった利用者」の履歴を捨てる機会を作る。
+// 接続の有無はこの台しか知らないので、判断材料として渡す。
 //
-// 捨てる条件は2つとも満たすとき:
-//   - そのユーザーの接続が1本も無い（接続中なら、そのまま配信される／再接続の途中）
-//   - 最後にイベントを書き足してから historyTTL を過ぎている
-//
-// 接続中のユーザーの履歴は残すが、こちらは1ユーザー historySize 件・接続数にも
-// 上限（maxSSEConnectionsPerUser）があるので、増え続けることはない。
-// 増え続けていたのは「接続していないユーザーのキーを一度も消していなかった」部分。
-func (b *Broker) sweepHistoryLocked(now time.Time) {
-	if now.Sub(b.lastSweep) < historySweepInterval {
-		return
-	}
-	b.lastSweep = now
-	for userID, h := range b.history {
-		if len(b.clients[userID]) > 0 {
-			continue
-		}
-		if now.Sub(h.updatedAt) >= historyTTL {
-			delete(b.history, userID)
-		}
-	}
+// 台をまたぐ構成では「この台に繋がっていない」だけでは捨ててよい根拠にならない
+// （別の台に繋がっているかもしれない）。Redis の実装は寿命で消すので、
+// 渡された判定を使わない。
+func (b *Broker) releaseIdleHistory() {
+	b.store.ReleaseIfIdle(context.Background(), func(userID int64) bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return len(b.clients[userID]) > 0
+	})
 }
 
-// ConnectedUserIDs はいま SSE を張っている利用者のIDを返す。
-//
-// 全員宛の配信（お知らせ）で「誰に送るか」を決めるために使う。以前はお知らせの
-// 作成が全アクティブユーザーぶんのイベントを PublishToUser で流しており、接続して
-// いない人のぶんまで履歴（history）に積まれていた。履歴の用途は「切断中のぶんを
-// 再接続時にリプレイする」ことだけなので、一度も繋いでいない人の履歴は
-// historyTTL の間ただメモリを占める。宛先を接続中に絞ればその山ごと消える。
-//
-// 返すのは呼んだ時点のスナップショット。返した直後に切れた人が混ざりうるが、
-// 配信は「送れなければ捨てる」（select の default 節）ので害は無い。
 func (b *Broker) ConnectedUserIDs() []int64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()

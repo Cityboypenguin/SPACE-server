@@ -66,6 +66,28 @@ func (r *AzureBlobStorageRepository) PresignedPutURL(_ context.Context, objectKe
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
 }
 
+// StatObject は保存済み BLOB の実寸と Content-Type を返す。
+// SAS ではサイズを縛れないので、受け入れ時にここで実物を測る
+// （repository.StorageRepository のコメント参照）。
+func (r *AzureBlobStorageRepository) StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error) {
+	blob := r.client.ServiceClient().NewContainerClient(r.containerName).NewBlobClient(objectKey)
+	props, err := blob.GetProperties(ctx, nil)
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return repository.ObjectInfo{}, repository.ErrObjectNotFound
+		}
+		return repository.ObjectInfo{}, err
+	}
+	info := repository.ObjectInfo{}
+	if props.ContentLength != nil {
+		info.Size = *props.ContentLength
+	}
+	if props.ContentType != nil {
+		info.ContentType = *props.ContentType
+	}
+	return info, nil
+}
+
 func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
 	return fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s",
 		r.accountName, r.containerName, objectKey)

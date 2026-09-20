@@ -130,9 +130,13 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 	return result, rows.Err()
 }
 
+// DeleteMediaByIDAndUserID は添付を1件消す。投稿の編集（usecase/post）が
+// 本文更新と同じ RunInTx の中から呼ぶので、隣の DeleteQuestionMedia などと同じく
+// extractDB を通す。ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても
+// 添付だけ消えたままになる。
 func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
 	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
-	_, err := r.DB.ExecContext(ctx, query, mediaID, userID)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, mediaID, userID)
 	return err
 }
 
@@ -161,8 +165,11 @@ func (r *MySQLMediaRepository) DeleteAnswerMedia(ctx context.Context, answerID, 
 func (r *MySQLMediaRepository) GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error) {
 	query := `SELECT MAX(position) FROM post_media WHERE post_id = ?`
 
+	// 読み取りだが extractDB を通す。投稿の編集は同じトランザクションの中で
+	// この最大値を見てから添付を足すので、外の接続で読むとトランザクション内の
+	// 変更が見えず、位置が重なる。
 	var maxPos sql.NullInt32
-	err := r.DB.QueryRowContext(ctx, query, postID).Scan(&maxPos)
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, postID).Scan(&maxPos)
 	if err != nil {
 		return 0, err
 	}

@@ -42,6 +42,31 @@ func (f *fakeMembers) Execute(_ context.Context, roomID int64) ([]int64, error) 
 	return f.byRoom[roomID], nil
 }
 
+// fakeIsMember は在籍の有無だけを返す口。同じ byRoom を見る fakeMembers を
+// 内側に持たせてあるので、fake の答えが2つの口で食い違うことはない。
+//
+// 引いた回数は自分で数える（fakeMembers.calls は触らない）。本番では
+// 「一覧を引いた」と「在籍だけ見た」はDBにかかる負荷がまるで違うので、
+// テストでも別々に数えられないと、片方をもう片方へ戻す変更に気づけない。
+type fakeIsMember struct {
+	members *fakeMembers
+	calls   int
+}
+
+func (f *fakeIsMember) Execute(ctx context.Context, roomID, userID int64) (bool, error) {
+	f.calls++
+	ids, err := f.members.byRoomIDs(ctx, roomID)
+	if err != nil {
+		return false, err
+	}
+	return containsInt64(ids, userID), nil
+}
+
+// byRoomIDs は fakeMembers.calls を増やさずに同じ答えを返す内部の口。
+func (f *fakeMembers) byRoomIDs(_ context.Context, roomID int64) ([]int64, error) {
+	return f.byRoom[roomID], nil
+}
+
 type fakeRoomUserRole struct{ role string }
 
 func (f *fakeRoomUserRole) Execute(_ context.Context, _, _ int64) (string, error) {
@@ -269,6 +294,7 @@ type harness struct {
 	reads    ReadReceiptService
 
 	members       *fakeMembers
+	isMember      *fakeIsMember
 	readStatus    *fakeRoomReadStatus
 	courseRead    *fakeReadStatus
 	markRead      *fakeMarkRead
@@ -323,10 +349,12 @@ func newHarness() *harness {
 		events:        &fakeEvents{},
 		blockRelation: &fakeCheckBlockRelation{},
 	}
+	h.isMember = &fakeIsMember{members: h.members}
 	getRoom := &fakeGetRoom{rooms: rooms}
 	h.accessDeps = AccessPolicyDeps{
 		GetRoom:            getRoom,
 		GetRoomMemberIDs:   h.members,
+		IsRoomMember:       h.isMember,
 		CheckRoomWritable:  h.checkWritable,
 		CheckBlockRelation: h.blockRelation,
 	}
@@ -897,16 +925,51 @@ func TestReadStatusOfAuthorizedRoom_DoesNotRecheckMembership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	before := h.members.calls
+	beforeList, beforeExists := h.members.calls, h.isMember.calls
 
 	if _, err := h.reads.ReadStatusOfAuthorizedRoom(ctxAsUser(10), room); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if h.members.calls != before {
-		t.Fatalf("membership lookups = %d, want no additional lookup after EnsureReadAccess (was %d)", h.members.calls, before)
+	if h.members.calls != beforeList || h.isMember.calls != beforeExists {
+		t.Fatalf("membership lookups = %d list / %d exists, want no additional lookup after EnsureReadAccess (was %d / %d)",
+			h.members.calls, h.isMember.calls, beforeList, beforeExists)
 	}
 	if h.readStatus.calls != 1 {
 		t.Fatalf("read status loads = %d, want 1", h.readStatus.calls)
+	}
+}
+
+// TestEnsureReadAccess_DoesNotLoadTheWholeMemberList は、閲覧判定が
+// ルーム全員のIDを持ち帰らないことを確かめる。
+//
+// 在籍の有無しか要らない判定をメンバー一覧で代用すると、閲覧・購読のたびに
+// コミュニティの人数に比例した行がDBから戻る。正しさは変わらないので
+// 普通のテストでは気づけず、人数が増えてから効いてくる。
+func TestEnsureReadAccess_DoesNotLoadTheWholeMemberList(t *testing.T) {
+	h := newHarness()
+
+	if _, err := h.access.EnsureReadAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.members.calls != 0 {
+		t.Fatalf("member list loads = %d, want 0 (在籍の有無だけで足りる)", h.members.calls)
+	}
+	if h.isMember.calls != 1 {
+		t.Fatalf("membership existence checks = %d, want 1", h.isMember.calls)
+	}
+}
+
+// TestEnsureWriteAccess_StillLoadsTheMemberList は、送信の判定だけは
+// メンバー一覧を引き続き引くことを確かめる（配信の宛先としてそのまま使うため）。
+// ここまで EXISTS に倒すと、送信のたびに宛先を引き直すことになる。
+func TestEnsureWriteAccess_StillLoadsTheMemberList(t *testing.T) {
+	h := newHarness()
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.members.calls != 1 {
+		t.Fatalf("member list loads = %d, want 1 (宛先に使う)", h.members.calls)
 	}
 }
 

@@ -126,7 +126,10 @@ type Resolver struct {
 
 	SSEBroker *sse.Broker
 
-	PubSub *pubsub.PubSub
+	// PubSub は subscription の配信口。プロセス内の実装と Redis 経由の実装を
+	// 差し替えられるよう、具体型ではなく pubsub.Bus で受ける（台を増やすと、
+	// 送った台に繋がっていない購読者へ届かなくなるため）。
+	PubSub pubsub.Bus
 
 	// CourseImportStatusTracker publishes to CourseImportStatusTopic via PubSub on
 	// every state/progress change (see cmd/server/main.go), which

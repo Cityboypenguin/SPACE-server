@@ -728,6 +728,19 @@ func (f *fakeGetRoomMemberIDs) Execute(_ context.Context, roomID int64) ([]int64
 	return f.members[roomID], nil
 }
 
+// fakeIsRoomMember は在籍の有無だけを返す口。同じ members を見るので、
+// fakeGetRoomMemberIDs と答えが食い違うことはない。
+type fakeIsRoomMember struct{ members map[int64][]int64 }
+
+func (f *fakeIsRoomMember) Execute(_ context.Context, roomID, userID int64) (bool, error) {
+	for _, id := range f.members[roomID] {
+		if id == userID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 type fakeCheckRoomWritable struct{}
 
 func (fakeCheckRoomWritable) Execute(context.Context, int64) error { return nil }
@@ -775,6 +788,7 @@ func newRoomQueryFixture(memberIDs []int64) *roomQueryFixture {
 	access := chatusecase.NewAccessPolicy(chatusecase.AccessPolicyDeps{
 		GetRoom:            &fakeGetRoom{rooms: map[int64]*model.Room{7: room}},
 		GetRoomMemberIDs:   &fakeGetRoomMemberIDs{members: map[int64][]int64{7: memberIDs}},
+		IsRoomMember:       &fakeIsRoomMember{members: map[int64][]int64{7: memberIDs}},
 		CheckRoomWritable:  fakeCheckRoomWritable{},
 		CheckBlockRelation: &fakeCheckBlockRelation{},
 	})

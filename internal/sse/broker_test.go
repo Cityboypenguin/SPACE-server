@@ -1,6 +1,8 @@
 package sse
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -89,16 +91,22 @@ func TestSubscribe_MaxConnectionsPerUser(t *testing.T) {
 }
 
 // newTestBroker は時計を手で進められる Broker を返す（履歴の期限切れを待たずに試すため）。
+//
+// 採番と履歴は Store 側にあるので、差し替えるのはそちらの時計。
 func newTestBroker(now *time.Time) *Broker {
-	b := NewBroker()
-	b.now = func() time.Time { return *now }
-	return b
+	store := NewMemoryStore()
+	store.now = func() time.Time { return *now }
+	return NewBrokerWithStore(store, nil)
 }
 
+// testStore は newTestBroker が挿した置き場を取り出す（履歴の中身を覗くため）。
+func testStore(b *Broker) *MemoryStore { return b.store.(*MemoryStore) }
+
 func historyLen(b *Broker) int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return len(b.history)
+	s := testStore(b)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.history)
 }
 
 // 接続が無いユーザーの履歴が、期限切れのあと捨てられること。
@@ -181,9 +189,10 @@ func TestHistory_KeptWhileConnected(t *testing.T) {
 	now = now.Add(historyTTL + time.Minute)
 	b.PublishToUser(2, "notification", map[string]any{"n": 2}) // 掃除のきっかけ
 
-	b.mu.Lock()
-	_, kept := b.history[1]
-	b.mu.Unlock()
+	st := testStore(b)
+	st.mu.Lock()
+	_, kept := st.history[1]
+	st.mu.Unlock()
 	if !kept {
 		t.Fatal("a connected user's history must not be released")
 	}
@@ -322,5 +331,180 @@ func TestSubscribe_AfterHistorySweep_RestartsNumbering(t *testing.T) {
 	}
 	if ev2.ID != 1 {
 		t.Fatalf("event id = %d, want 1 (numbering restarts with the history)", ev2.ID)
+	}
+}
+
+// --- 台をまたいだ配信（項目9） --------------------------------------------
+
+// sharedFanout は複数の Broker を1本の配信口へ繋いだもの。
+// 「同じ Redis を見ている複数の台」に相当する。
+type sharedFanout struct {
+	mu        sync.Mutex
+	brokers   []*Broker
+	published int
+}
+
+func (f *sharedFanout) attach(b *Broker) {
+	f.mu.Lock()
+	f.brokers = append(f.brokers, b)
+	f.mu.Unlock()
+	b.SetFanout(f)
+}
+
+func (f *sharedFanout) Publish(_ context.Context, env Envelope) error {
+	f.mu.Lock()
+	targets := make([]*Broker, len(f.brokers))
+	copy(targets, f.brokers)
+	f.published++
+	f.mu.Unlock()
+
+	for _, b := range targets {
+		b.DeliverLocal(env)
+	}
+	return nil
+}
+
+// newClusteredBrokers は同じ置き場・同じ配信口を共有する台を n 台作る。
+func newClusteredBrokers(n int) []*Broker {
+	store := NewMemoryStore()
+	fanout := &sharedFanout{}
+	brokers := make([]*Broker, n)
+	for i := range brokers {
+		b := NewBrokerWithStore(store, nil)
+		fanout.attach(b)
+		brokers[i] = b
+	}
+	return brokers
+}
+
+// TestPublishToUser_ReachesClientsOnOtherInstances は項目9の本体。
+//
+// SSE の接続はどこか1台に貼り付くが、通知を作る操作は別の台に当たりうる。
+// 配信が自分の台のクライアントにしか届かないと、通知を作った台に繋がって
+// いない利用者にはベルが光らない。エラーにはならないので、1台で動かして
+// いる間は誰も気づけない。
+func TestPublishToUser_ReachesClientsOnOtherInstances(t *testing.T) {
+	instances := newClusteredBrokers(2)
+	instanceA, instanceB := instances[0], instances[1]
+
+	// 利用者は2台目に繋がっている。
+	client, _, err := instanceB.Subscribe(1, -1)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	// 通知は1台目で作られた。
+	instanceA.PublishToUser(1, "notification", map[string]any{"n": 1})
+
+	select {
+	case ev := <-client.ch:
+		if ev.Type != "notification" {
+			t.Fatalf("type = %q, want notification", ev.Type)
+		}
+		if ev.Data["n"] != 1 {
+			t.Fatalf("data = %+v", ev.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("別の台で起きた通知が届かない")
+	}
+}
+
+// TestBroadcast_ReachesClientsOnOtherInstances は全員宛の配信（規約更新など）。
+func TestBroadcast_ReachesClientsOnOtherInstances(t *testing.T) {
+	instances := newClusteredBrokers(2)
+	instanceA, instanceB := instances[0], instances[1]
+
+	clientOnA, _, err := instanceA.Subscribe(1, -1)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	clientOnB, _, err := instanceB.Subscribe(2, -1)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	instanceA.Broadcast("terms_updated", map[string]any{"version": "2.0"})
+
+	for name, c := range map[string]*Client{"1台目": clientOnA, "2台目": clientOnB} {
+		select {
+		case ev := <-c.ch:
+			if ev.Type != "terms_updated" {
+				t.Fatalf("%s: type = %q", name, ev.Type)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("%s に全員宛の配信が届かない", name)
+		}
+	}
+}
+
+// TestPublishToUser_EventIDsStayUniqueAcrossInstances は採番が台をまたいで
+// 1本に保たれることを確かめる。
+//
+// それぞれの台が1から数えると、同じIDの別イベントができる。SSE の再接続は
+// Last-Event-ID しか運べないので、リプレイの起点が狂って取りこぼしや
+// 二重配信になる。
+func TestPublishToUser_EventIDsStayUniqueAcrossInstances(t *testing.T) {
+	instances := newClusteredBrokers(2)
+
+	client, _, err := instances[0].Subscribe(1, -1)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	// 1台目→2台目→1台目 の順に発行する。
+	for i, instance := range []*Broker{instances[0], instances[1], instances[0]} {
+		instance.PublishToUser(1, "notification", map[string]any{"i": i})
+	}
+
+	seen := make(map[int]bool)
+	for range 3 {
+		select {
+		case ev := <-client.ch:
+			if seen[ev.ID] {
+				t.Fatalf("ID %d が2回使われた（台ごとに採番している）", ev.ID)
+			}
+			seen[ev.ID] = true
+		case <-time.After(time.Second):
+			t.Fatal("配信が届かない")
+		}
+	}
+	for id := 1; id <= 3; id++ {
+		if !seen[id] {
+			t.Fatalf("ID %d が抜けている: %v", id, seen)
+		}
+	}
+}
+
+// TestSubscribe_ReplaysEventsPublishedByAnotherInstance は、別の台で起きた
+// イベントも再接続時にリプレイされることを確かめる。
+//
+// 履歴が台ごとだと、1台目で起きたイベントは2台目へ再接続したタブからは
+// 「履歴が無い」ことになり、切断中のぶんが丸ごと抜ける。
+func TestSubscribe_ReplaysEventsPublishedByAnotherInstance(t *testing.T) {
+	instances := newClusteredBrokers(2)
+	instanceA, instanceB := instances[0], instances[1]
+
+	// 1台目に繋いで1件受け取り、切断する。
+	client, _, err := instanceA.Subscribe(1, -1)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	instanceA.PublishToUser(1, "notification", map[string]any{"n": 1})
+	first := <-client.ch
+	instanceA.Unsubscribe(1, client)
+
+	// 切断中に、別の台でイベントが起きる。
+	instanceB.PublishToUser(1, "notification", map[string]any{"n": 2})
+
+	// 2台目へ繋ぎ直すと、切断中のぶんが戻ってくる。
+	_, missed, err := instanceB.Subscribe(1, first.ID)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if len(missed) != 1 {
+		t.Fatalf("replayed = %d 件, want 1（別の台で起きたぶんが抜けている）", len(missed))
+	}
+	if missed[0].Data["n"] != 2 {
+		t.Fatalf("replayed = %+v", missed[0].Data)
 	}
 }
