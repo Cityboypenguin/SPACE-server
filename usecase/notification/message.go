@@ -27,7 +27,7 @@ const (
 	MessageMentionedInPost = "投稿であなたがメンションされました"
 	MessageRepliedToPost   = "あなたの投稿に返信がありました"
 	MessageFavoritedPost   = "あなたの投稿がいいねされました"
-	MessageFollowed        = "あなたがフォローされました"
+	MessageFollowed        = "あなたがお気に入りされました"
 
 	MessagePromotedToCommunityOwner  = "コミュニティのオーナーに昇格しました"
 	MessageDemotedFromCommunityOwner = "コミュニティのオーナーから降格されました"
