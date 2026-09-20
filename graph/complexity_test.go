@@ -120,7 +120,8 @@ const postFields = `
   replyCount
   deletedAt
   user { ID name accountID avatarUrl }
-  favorites { ID user { ID } }
+  favoriteCount
+  isFavoritedByMe
   media { ID url contentType width height }
   mentions { user { ID name accountID avatarUrl } text }
 `
@@ -244,9 +245,12 @@ func TestComplexity_AllowsTheHeaviestRealQuery(t *testing.T) {
 	t.Logf("チャット履歴(limit 200)の複雑度 = %d（上限 %d）", got, ComplexityLimit)
 }
 
-// TestComplexity_LimitHasHeadroomOverRealQueries は、上限が実クエリに対して
-// 余裕を持っていることを確かめる。ぴったりに寄せると、フィールドを1つ足しただけで
-// 本番が落ちる。
+// TestComplexity_LimitHasHeadroomOverRealQueries は、上限が「いま実際に
+// 投げられているクエリ」に対して余裕を持っていることを確かめる。
+//
+// ぴったりに寄せると、画面にフィールドを1つ足しただけで本番が落ちる。
+// 上の TestComplexity_AllowsTheHeaviestRealQuery が「サーバーが許す最大でも
+// 通る」を見るのに対し、こちらは「普段の使い方に余裕がある」を見る。
 func TestComplexity_LimitHasHeadroomOverRealQueries(t *testing.T) {
 	query := `
 	query ListMessages($roomID: ID!, $limit: Int) {
@@ -257,8 +261,59 @@ func TestComplexity_LimitHasHeadroomOverRealQueries(t *testing.T) {
 	  }
 	}`
 
-	got := calcComplexity(t, query, map[string]any{"roomID": "1", "limit": 200})
-	if got*3/2 > ComplexityLimit {
-		t.Fatalf("一番重い実クエリの複雑度 = %d、上限 = %d。1.5倍の余裕が無い", got, ComplexityLimit)
+	// 50 はチャット画面と管理画面がいま渡している件数
+	// （SPACE-client の listMessages / adminMessagePageSize）。
+	got := calcComplexity(t, query, map[string]any{"roomID": "1", "limit": 50})
+	if got*3 > ComplexityLimit {
+		t.Fatalf("普段のクエリの複雑度 = %d、上限 = %d。3倍の余裕が無い", got, ComplexityLimit)
+	}
+	t.Logf("普段のチャット履歴(limit 50)の複雑度 = %d（上限 %d）", got, ComplexityLimit)
+}
+
+// TestComplexity_UsesTheEffectiveLimit は、複雑度がサーバーの実際の頭打ちに
+// 合わせて数えられることを確かめる。
+//
+// 要求された値をそのまま使うと、丸められるはずの大きな limit が「クエリが
+// 大きすぎます」で拒否される（説明のつかないエラーになる）。
+func TestComplexity_UsesTheEffectiveLimit(t *testing.T) {
+	query := `
+	query Posts($limit: Int) {
+	  posts(limit: $limit) { items { ID content } total }
+	}`
+
+	atCap := calcComplexity(t, query, map[string]any{"limit": maxMessagePageSize})
+	absurd := calcComplexity(t, query, map[string]any{"limit": 1000000})
+	if atCap != absurd {
+		t.Fatalf("複雑度 = %d（上限ちょうど）と %d（桁違い）。サーバーは同じ件数しか返さないので同じ値になること", atCap, absurd)
+	}
+	if absurd > ComplexityLimit {
+		t.Fatalf("丸められるはずのクエリが拒否される（複雑度 %d > 上限 %d）", absurd, ComplexityLimit)
+	}
+}
+
+// TestComplexity_ChargesUncappedCollectionsAtTheirCeiling は、limit を省ける
+// コレクション（Post.favorites）が、省かれたときも件数ぶん数えられることを
+// 確かめる。
+//
+// ここが 0 に落ちると、引数を送らないだけで重み付けを回避できる。
+// 実際には unpagedCollectionCap 件まで返るので、一覧の下に置かれると
+// 「投稿の件数 × その上限」が1回の応答に乗る。
+func TestComplexity_ChargesUncappedCollectionsAtTheirCeiling(t *testing.T) {
+	withFavorites := `
+	query {
+	  topLevelPosts(limit: 100) { items { ID favorites { ID } } }
+	}`
+	withoutFavorites := `
+	query {
+	  topLevelPosts(limit: 100) { items { ID } }
+	}`
+
+	got := calcComplexity(t, withFavorites, nil)
+	base := calcComplexity(t, withoutFavorites, nil)
+	if got <= base*2 {
+		t.Fatalf("favorites 付き = %d, 無し = %d。引数を省いた favorites に重みが付いていない", got, base)
+	}
+	if got <= ComplexityLimit {
+		t.Fatalf("複雑度 = %d, want > %d（投稿100件 × いいね上限の展開は弾くこと）", got, ComplexityLimit)
 	}
 }

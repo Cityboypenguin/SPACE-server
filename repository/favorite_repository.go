@@ -14,7 +14,12 @@ type FavoriteRepository interface {
 	GetFavoriteByUserIDAndPostID(ctx context.Context, user_id int64, post_id int64) (*model.Favorite, error)
 	GetFavoritesByPostID(ctx context.Context, post_id int64) ([]*model.Favorite, error)
 	GetFavoritesByUserID(ctx context.Context, user_id int64) ([]*model.Favorite, error)
-	GetFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error)
+	// GetFavoritesByPostIDs は投稿ごとのいいねを窓（limit/offset）ぶんだけ引く。
+	//
+	// 以前は該当する全行を返していた。行数を決めるのがデータの育ち方だけなので、
+	// 人気の投稿が出た日に1回のクエリが重くなる（しかも重くなるまで誰も気づけない）。
+	// 返信一覧（GetRepliesByPostIDs）と同じく、投稿ごとに窓を切ってから返す。
+	GetFavoritesByPostIDs(ctx context.Context, postIDs []int64, q PageQuery) (map[int64][]*model.Favorite, error)
 
 	// CountFavoritesByPostIDs は投稿ごとのいいね件数を1クエリで数える。
 	//

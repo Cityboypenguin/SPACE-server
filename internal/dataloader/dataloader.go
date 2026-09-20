@@ -41,7 +41,7 @@ type GetMessagesByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
 }
 type GetFavoritesByPostIDsUseCase interface {
-	Execute(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error)
+	Execute(ctx context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error)
 }
 type CountFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64) (map[int64]int, error)
@@ -84,6 +84,12 @@ type ctxKey string
 
 const loadersKey = ctxKey("dataloaders")
 
+// FavoritePageKey は Post.favorites（ページング付き）の DataLoader キー。
+type FavoritePageKey struct {
+	PostID int64
+	Page   repository.PageQuery
+}
+
 // FavoritedByKey は Post.isFavoritedByMe の DataLoader キー。
 //
 // 閲覧者を鍵に含めるのは、答えが閲覧者ごとに違うため。ローダーはリクエストごとに
@@ -121,7 +127,10 @@ type Loaders struct {
 	AnswerMediaLoader   *dataloadgen.Loader[int64, []*model.Media]
 	ReplyLoader         *dataloadgen.Loader[ReplyPageKey, []*model.Post]
 	AdminReplyLoader    *dataloadgen.Loader[ReplyPageKey, []*model.Post]
-	FavoriteLoader      *dataloadgen.Loader[int64, []*model.Favorite]
+	// FavoriteLoader は Post.favorites 用。limit/offset も鍵に含める
+	// （同じ投稿でも窓が違えば別の結果なので、ID だけを鍵にすると先に来た方の
+	// ページを使い回す。ReplyLoader と同じ理由）。
+	FavoriteLoader *dataloadgen.Loader[FavoritePageKey, []*model.Favorite]
 	// FavoriteCountLoader / FavoritedByMeLoader は Post.favoriteCount /
 	// Post.isFavoritedByMe 用。表示に要るのはこの2つだけなので、いいね行そのものを
 	// 運ぶ FavoriteLoader は通さない（理由は repository.FavoriteRepository の
@@ -301,6 +310,40 @@ func batchAnswerPages(
 	}
 }
 
+// batchFavoritePages は Post.favorites を窓ごとにまとめて引く。
+// 作りは batchReplyPages と同じ（同じ窓の鍵をまとめて1クエリにする）。
+func batchFavoritePages(
+	fetch func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Favorite, error),
+) func(context.Context, []FavoritePageKey) ([][]*model.Favorite, []error) {
+	return func(ctx context.Context, keys []FavoritePageKey) ([][]*model.Favorite, []error) {
+		errs := make([]error, len(keys))
+		grouped := make(map[repository.PageQuery][]int64)
+		for _, key := range keys {
+			grouped[key.Page] = append(grouped[key.Page], key.PostID)
+		}
+
+		pages := make(map[FavoritePageKey][]*model.Favorite, len(keys))
+		for page, postIDs := range grouped {
+			items, err := fetch(ctx, postIDs, page)
+			if err != nil {
+				for i := range errs {
+					errs[i] = err
+				}
+				return make([][]*model.Favorite, len(keys)), errs
+			}
+			for postID, favorites := range items {
+				pages[FavoritePageKey{PostID: postID, Page: page}] = favorites
+			}
+		}
+
+		result := make([][]*model.Favorite, len(keys))
+		for i, key := range keys {
+			result[i] = pages[key]
+		}
+		return result, errs
+	}
+}
+
 func batchReplyPages(
 	fetch func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error),
 ) func(context.Context, []ReplyPageKey) ([][]*model.Post, []error) {
@@ -411,7 +454,7 @@ func New(uc UseCases) *Loaders {
 		AnswerMediaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListMediaByAnswerIDs.Execute), loaderOptions...),
 		ReplyLoader:         dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDs.Execute), loaderOptions...),
 		AdminReplyLoader:    dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDsIncludeDel.Execute), loaderOptions...),
-		FavoriteLoader:      dataloadgen.NewLoader(batchFromMap(uc.GetFavoritesByPostIDs.Execute), loaderOptions...),
+		FavoriteLoader:      dataloadgen.NewLoader(batchFavoritePages(uc.GetFavoritesByPostIDs.Execute), loaderOptions...),
 		FavoriteCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountFavoritesByPostIDs.Execute), loaderOptions...),
 		FavoritedByMeLoader: dataloadgen.NewLoader(batchFavoritedBy(uc.ListPostIDsFavoritedBy.Execute), loaderOptions...),
 		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),

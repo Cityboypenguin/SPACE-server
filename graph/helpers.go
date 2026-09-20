@@ -442,6 +442,22 @@ const (
 	// ここに当たるようになったら、それはもうページングを入れるべき合図。上限を
 	// 上げるのではなく、クライアント側の読み込み UI ごと limit/offset へ移すこと。
 	unpagedCollectionCap = 500
+
+	// maxOffset はページ送りで飛べる最大の位置。
+	//
+	// limit には上限があったが offset には無く、負数を 0 に丸めるだけだった。
+	// MySQL の OFFSET は「読み飛ばす行も読んでから捨てる」ので、費用は offset に
+	// 比例する。つまり limit を1件に絞っても offset を大きくすれば重くできる
+	// （`posts(limit: 1, offset: 10000000)`）。しかも返す件数は1件なので、
+	// クエリの複雑度にも現れない。複雑度は「返す量」を測る仕組みで、
+	// 「読み飛ばす量」は測れないため、ここで別に止める必要がある。
+	//
+	// 10000 なのは「実際の画面が到達しない」かつ「到達しても1クエリとして
+	// 耐えられる」の両方を満たす所。1ページ20件なら500ページ目に当たり、
+	// そこまで送る画面は無い。深いところまで辿りたい要件が出たら、offset では
+	// なくカーソル（直前の ID・時刻を起点にする）へ移すこと。offset を上げても
+	// 費用は線形に増え続ける。
+	maxOffset = 10000
 )
 
 // resolveUnpagedWindow は「ページングを後付けしたコレクション」の窓を決める。
@@ -453,10 +469,7 @@ const (
 // 引数を送っていないクライアントまで切れてしまうため（unpagedCollectionCap の
 // コメント参照）。
 func resolveUnpagedWindow(limit *int32, offset *int32) repository.PageQuery {
-	o := 0
-	if offset != nil && *offset > 0 {
-		o = int(*offset)
-	}
+	o := resolveOffset(offset)
 	l := unpagedCollectionCap
 	if limit != nil && *limit > 0 {
 		l = resolveLimit(limit, defaultPageSize, maxPageSize)
@@ -483,11 +496,23 @@ func resolveLimit(limit *int32, fallback, upper int) int {
 // fallback は limit 未指定時の件数で、フィールドごとの既定値をそのまま保つために
 // 呼び出し側が渡す（多くは defaultPageSize）。
 func resolvePagination(limit *int32, offset *int32, fallback int) (int, int) {
-	o := 0
-	if offset != nil && *offset > 0 {
-		o = int(*offset)
+	return resolveLimit(limit, fallback, maxPageSize), resolveOffset(offset)
+}
+
+// resolveOffset は offset を「負数は 0、上限超は maxOffset」に正規化する。
+//
+// 頭打ちにして拒否しないのは、limit と揃えるため（limit も上限超は黙って
+// 丸める）。ここだけエラーにすると、深いページへ飛んだクライアントが
+// 「リストの末尾」ではなく失敗を受け取ることになる。
+func resolveOffset(offset *int32) int {
+	if offset == nil || *offset <= 0 {
+		return 0
 	}
-	return resolveLimit(limit, fallback, maxPageSize), o
+	o := int(*offset)
+	if o > maxOffset {
+		return maxOffset
+	}
+	return o
 }
 
 // ---------------------------------------------------------------------------

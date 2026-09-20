@@ -499,7 +499,7 @@ type ComplexityRoot struct {
 		CreatedAt       func(childComplexity int) int
 		DeletedAt       func(childComplexity int) int
 		FavoriteCount   func(childComplexity int) int
-		Favorites       func(childComplexity int) int
+		Favorites       func(childComplexity int, limit *int32, offset *int32) int
 		ID              func(childComplexity int) int
 		IsFavoritedByMe func(childComplexity int) int
 		Media           func(childComplexity int) int
@@ -557,7 +557,6 @@ type ComplexityRoot struct {
 		FollowersTopLevelPosts          func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetAdministratorByID            func(childComplexity int, id string) int
 		GetBlockersByUserID             func(childComplexity int, userID string, limit *int32, offset *int32) int
-		GetCommunityMembers             func(childComplexity int, communityID string) int
 		GetFavoriteByID                 func(childComplexity int, id string) int
 		GetFavoritePostsByUserID        func(childComplexity int, userID string, limit *int32, offset *int32) int
 		GetFavoriteUsersByUserID        func(childComplexity int, userID string, limit *int32, offset *int32) int
@@ -739,10 +738,8 @@ type ComplexityRoot struct {
 		AccountID func(childComplexity int) int
 		AvatarURL func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
-		Favorites func(childComplexity int) int
 		ID        func(childComplexity int) int
 		Name      func(childComplexity int) int
-		Posts     func(childComplexity int) int
 		Role      func(childComplexity int) int
 		Status    func(childComplexity int) int
 		UpdatedAt func(childComplexity int) int
@@ -942,7 +939,7 @@ type PollResolver interface {
 type PostResolver interface {
 	User(ctx context.Context, obj *model.Post) (*model.User, error)
 	RootPost(ctx context.Context, obj *model.Post) (*model.Post, error)
-	Favorites(ctx context.Context, obj *model.Post) ([]*model.Favorite, error)
+	Favorites(ctx context.Context, obj *model.Post, limit *int32, offset *int32) ([]*model.Favorite, error)
 	FavoriteCount(ctx context.Context, obj *model.Post) (int32, error)
 	IsFavoritedByMe(ctx context.Context, obj *model.Post) (bool, error)
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
@@ -994,7 +991,6 @@ type QueryResolver interface {
 	Communities(ctx context.Context, limit *int32, offset *int32) (*model.CommunityPage, error)
 	RandomCommunities(ctx context.Context, limit int32) ([]*model.Community, error)
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
-	GetCommunityMembers(ctx context.Context, communityID string) ([]*model.CommunityMember, error)
 	CommunityMembers(ctx context.Context, communityID string, limit *int32, offset *int32) (*model.CommunityMemberPage, error)
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
@@ -3612,7 +3608,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.ComplexityRoot.Post.Favorites(childComplexity), true
+		args, err := ec.field_Post_favorites_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Post.Favorites(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Post.ID":
 		if e.ComplexityRoot.Post.ID == nil {
 			break
@@ -3987,17 +3988,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.GetBlockersByUserID(childComplexity, args["userID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
-	case "Query.getCommunityMembers":
-		if e.ComplexityRoot.Query.GetCommunityMembers == nil {
-			break
-		}
-
-		args, err := ec.field_Query_getCommunityMembers_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Query.GetCommunityMembers(childComplexity, args["communityID"].(string)), true
 	case "Query.getFavoriteByID":
 		if e.ComplexityRoot.Query.GetFavoriteByID == nil {
 			break
@@ -5150,12 +5140,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.CreatedAt(childComplexity), true
-	case "User.favorites":
-		if e.ComplexityRoot.User.Favorites == nil {
-			break
-		}
-
-		return e.ComplexityRoot.User.Favorites(childComplexity), true
 	case "User.ID":
 		if e.ComplexityRoot.User.ID == nil {
 			break
@@ -5168,12 +5152,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.Name(childComplexity), true
-	case "User.posts":
-		if e.ComplexityRoot.User.Posts == nil {
-			break
-		}
-
-		return e.ComplexityRoot.User.Posts(childComplexity), true
 	case "User.role":
 		if e.ComplexityRoot.User.Role == nil {
 			break
@@ -6478,10 +6456,6 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_User_updatedAt(ctx, field)
-	case "posts":
-		return ec.fieldContext_User_posts(ctx, field)
-	case "favorites":
-		return ec.fieldContext_User_favorites(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 }
@@ -8454,6 +8428,28 @@ func (ec *executionContext) field_Mutation_votePoll_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Post_favorites_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Post_replies_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9007,20 +9003,6 @@ func (ec *executionContext) field_Query_getAdministratorByID_args(ctx context.Co
 		return nil, err
 	}
 	args["id"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_getCommunityMembers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "communityID",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNID2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["communityID"] = arg0
 	return args, nil
 }
 
@@ -20533,7 +20515,8 @@ func (ec *executionContext) _Post_favorites(ctx context.Context, field graphql.C
 			return ec.fieldContext_Post_favorites(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Post().Favorites(ctx, obj)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Post().Favorites(ctx, obj, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*model.Favorite) graphql.Marshaler {
@@ -20543,7 +20526,7 @@ func (ec *executionContext) _Post_favorites(ctx context.Context, field graphql.C
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Post_favorites(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Post_favorites(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Post",
 		Field:      field,
@@ -20552,6 +20535,17 @@ func (ec *executionContext) fieldContext_Post_favorites(_ context.Context, field
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Favorite(ctx, field)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Post_favorites_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -22735,50 +22729,6 @@ func (ec *executionContext) fieldContext_Query_getMyRoleInCommunity(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getMyRoleInCommunity_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Query_getCommunityMembers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Query_getCommunityMembers(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().GetCommunityMembers(ctx, fc.Args["communityID"].(string))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityMember) graphql.Marshaler {
-			return ec.marshalNCommunityMember2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityMemberᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Query_getCommunityMembers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_CommunityMember(ctx, field)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_getCommunityMembers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -26876,70 +26826,6 @@ func (ec *executionContext) _User_updatedAt(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_User_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _User_posts(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_User_posts(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Posts, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.Post) graphql.Marshaler {
-			return ec.marshalNPost2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_User_posts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "User",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Post(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _User_favorites(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_User_favorites(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Favorites, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.Favorite) graphql.Marshaler {
-			return ec.marshalNFavorite2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavoriteᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_User_favorites(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "User",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Favorite(ctx, field)
-		},
-	}
-	return fc, nil
 }
 
 func (ec *executionContext) _UserAccount_ID(ctx context.Context, field graphql.CollectedField, obj *model.UserAccount) (ret graphql.Marshaler) {
@@ -35171,28 +35057,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "getCommunityMembers":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_getCommunityMembers(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx,
-					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "communityMembers":
 			field := field
 
@@ -37253,16 +37117,6 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "updatedAt":
 			out.Values[i] = ec._User_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
-		case "posts":
-			out.Values[i] = ec._User_posts(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
-		case "favorites":
-			out.Values[i] = ec._User_favorites(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

@@ -26,6 +26,20 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 // infra/mysql/user_repository.go の userPublicColumns と同じにしてある。
 const roomMemberUserColumns = `u.id, u.account_id, u.name, u.role, u.status, u.created_at, u.updated_at`
 
+// roomMemberUserSelectColumns は roomMemberUserColumns を、CTE から選び直すときの
+// 名前（テーブル別名が付かない）に直したもの。並びは必ず揃えること。
+const roomMemberUserSelectColumns = `id, account_id, name, role, status, created_at, updated_at`
+
+// roomMemberListCap は Room.user が1ルームあたり返す参加者の上限。
+//
+// このフィールドは DM の相手表示に使うもので、ページングの口を持たない
+// （コミュニティのメンバー一覧は communityMembers がページング付きで担当する）。
+// 上限が無いと、参加者の人数がそのまま1回のクエリと応答の大きさになる。
+//
+// graph/helpers.go の unpagedCollectionCap と同じ値・同じ考え方。実データが
+// ここに届かないので普段の見え方は変わらず、青天井だけが無くなる。
+const roomMemberListCap = 500
+
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
 	now := time.Now().Unix()
 	query := "INSERT IGNORE INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
@@ -328,19 +342,33 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 		return result, nil
 	}
 
+	// ルームごとに roomMemberListCap 件で切る。切らないと、参加者の人数が
+	// そのまま1回のクエリと応答の大きさになる（大きなコミュニティのルームを
+	// 開いた日に効いてくる。しかも重くなるまで誰も気づけない）。
+	//
+	// ROW_NUMBER() で切るのは、LIMIT が結果全体にしか掛からないため。
+	// そのままでは「ルームごとに N 件」にならず、1つの大きなルームが窓を
+	// 食い潰して他のルームの参加者が0件になる。
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
 	query := fmt.Sprintf(`
-		SELECT ru.room_id, `+roomMemberUserColumns+`
-		FROM room_users ru
-		JOIN users u ON ru.user_id = u.id
-		WHERE ru.room_id IN (%s)
-		ORDER BY ru.room_id ASC, ru.created_at ASC
+		WITH ranked AS (
+			SELECT ru.room_id, `+roomMemberUserColumns+`,
+			       ROW_NUMBER() OVER (PARTITION BY ru.room_id ORDER BY ru.created_at ASC) AS row_num
+			FROM room_users ru
+			JOIN users u ON ru.user_id = u.id
+			WHERE ru.room_id IN (%s)
+		)
+		SELECT room_id, `+roomMemberUserSelectColumns+`
+		FROM ranked
+		WHERE row_num <= ?
+		ORDER BY room_id ASC, row_num ASC
 	`, placeholders)
 
-	args := make([]interface{}, len(roomIDs))
-	for i, roomID := range roomIDs {
-		args[i] = roomID
+	args := make([]interface{}, 0, len(roomIDs)+1)
+	for _, roomID := range roomIDs {
+		args = append(args, roomID)
 	}
+	args = append(args, roomMemberListCap)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {

@@ -2423,13 +2423,19 @@ func (r *postResolver) RootPost(ctx context.Context, obj *gqlmodel.Post) (*gqlmo
 }
 
 // Favorites is the resolver for the favorites field on Post.
-func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmodel.Favorite, error) {
+func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post, limit *int32, offset *int32) ([]*gqlmodel.Favorite, error) {
 	numericPostID, err := decodeGraphID(ctx, "post", obj.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post id")
 	}
 
-	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, numericPostID)
+	// limit を送らなくても unpagedCollectionCap で頭打ちになる。引数を後から
+	// 足したフィールドなので、送っていないクライアントの見え方は変えない
+	// （理由は graph/helpers.go の unpagedCollectionCap のコメント）。
+	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, dataloader.FavoritePageKey{
+		PostID: numericPostID,
+		Page:   resolveUnpagedWindow(limit, offset),
+	})
 	if err != nil {
 		return nil, err
 	}

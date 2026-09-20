@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLFavoriteRepository struct {
@@ -166,27 +167,39 @@ func (r *MySQLFavoriteRepository) DeleteFavoriteByUserIDAndPostID(ctx context.Co
 	return affected > 0, nil
 }
 
-// GetFavoritesByPostIDs は複数のPostIDに紐づくいいねを1回のSQLで取得する
-func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error) {
+// GetFavoritesByPostIDs は複数のPostIDに紐づくいいねを1回のSQLで、投稿ごとに
+// 窓（limit/offset）を切って取得する。
+//
+// 窓を切るのに ROW_NUMBER() を使うのは、返信一覧（GetRepliesByPostIDs）と同じ理由。
+// LIMIT は結果全体にしか掛からないので、そのままでは「投稿ごとに N 件」にならず、
+// 1つの人気投稿が窓を食い潰して他の投稿のいいねが0件になる。
+func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error) {
 	if len(postIDs) == 0 {
 		return make(map[int64][]*model.Favorite), nil
 	}
 
 	placeholders := make([]string, len(postIDs))
-	args := make([]interface{}, len(postIDs))
+	args := make([]interface{}, 0, len(postIDs)+2)
 	for i, id := range postIDs {
 		placeholders[i] = "?"
-		args[i] = id
+		args = append(args, id)
 	}
+	args = append(args, q.Offset, q.Offset+q.Limit)
 
 	query := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT id, user_id, post_id, created_at,
+			       ROW_NUMBER() OVER (PARTITION BY post_id ORDER BY created_at DESC, id DESC) AS row_num
+			FROM favorites
+			WHERE post_id IN (%s)
+		)
 		SELECT id, user_id, post_id, created_at
-		FROM favorites
-		WHERE post_id IN (%s)
-		ORDER BY created_at DESC, id DESC
+		FROM ranked
+		WHERE row_num > ? AND row_num <= ?
+		ORDER BY post_id, row_num
 	`, strings.Join(placeholders, ","))
 
-	rows, err := r.DB.QueryContext(ctx, query, args...)
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +209,6 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, pos
 	for rows.Next() {
 		var f model.Favorite
 		var createdAtUnix int64
-		// ※DBのカラム構成に合わせてScanする
 		if err := rows.Scan(&f.ID, &f.UserID, &f.PostID, &createdAtUnix); err != nil {
 			return nil, err
 		}

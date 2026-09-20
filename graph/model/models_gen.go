@@ -659,16 +659,14 @@ type UpdateUserInput struct {
 }
 
 type User struct {
-	ID        string      `json:"ID"`
-	AccountID string      `json:"accountID"`
-	Name      string      `json:"name"`
-	Role      string      `json:"role"`
-	Status    string      `json:"status"`
-	AvatarURL *string     `json:"avatarUrl,omitempty"`
-	CreatedAt string      `json:"createdAt"`
-	UpdatedAt string      `json:"updatedAt"`
-	Posts     []*Post     `json:"posts"`
-	Favorites []*Favorite `json:"favorites"`
+	ID        string  `json:"ID"`
+	AccountID string  `json:"accountID"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role"`
+	Status    string  `json:"status"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 type UserAccount struct {

@@ -99,7 +99,6 @@ type Query {
   communities(limit: Int = 20, offset: Int = 0): CommunityPage!
   randomCommunities(limit: Int!): [Community!]!
   getMyRoleInCommunity(communityID: ID!): String!
-  getCommunityMembers(communityID: ID!): [CommunityMember!]!
     @deprecated(reason: "Use communityMembers(limit, offset); removal requires confirming no external clients use this query")
   communityMembers(
     communityID: ID!
@@ -225,8 +224,6 @@ type User {
   avatarUrl: String
   createdAt: String!
   updatedAt: String!
-  posts: [Post!]!
-  favorites: [Favorite!]!
 }
 
 # UserAccount は「本人または管理者にだけ見せるユーザー像」。User に email を足したもの。
@@ -308,8 +305,12 @@ type Post {
   rootPost: Post
   # favorites は「誰がいいねしたか」の一覧。表示に要るのは件数と自分の有無だけなので、
   # 一覧・詳細のクエリは favoriteCount / isFavoritedByMe を使うこと。
-  # 人気の投稿ではいいねが数千件になり、一覧ではそれが投稿の件数ぶん応答に乗る。
-  favorites: [Favorite!]!
+  #
+  # limit を送らない場合もサーバー側で頭打ちにする（graph/helpers.go の
+  # unpagedCollectionCap）。引数が無いままだと、人気の投稿のいいね全件が
+  # 投稿の件数ぶん応答に乗り、しかもクエリの複雑度には現れない
+  # （複雑度は limit を持つフィールドだけを件数で重み付けするため）。
+  favorites(limit: Int, offset: Int): [Favorite!]!
   # favoriteCount は COUNT(*) 1本、isFavoritedByMe は自分の行だけを見る。
   # どちらも投稿のいいね数に依らず一定の大きさで返る。
   favoriteCount: Int!
@@ -674,6 +675,12 @@ type Room {
   content: String
   name: String!
   type: String!
+  # user はそのルームの参加者。DM の相手表示に使う。
+  #
+  # ページングの口は持たない。コミュニティのメンバー一覧は communityMembers が
+  # ページング付きで担当しており、ここに窓を足すと同じものを出す経路が2つになる。
+  # 代わりにサーバー側で unpagedCollectionCap 件で頭打ちにする（大きなコミュニティの
+  # ルームを開いたときに、参加者全員が1回の応答に乗らないように）。
   user: [User!]!
   createdAt: String!
   updatedAt: String!

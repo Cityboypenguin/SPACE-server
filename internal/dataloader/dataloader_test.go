@@ -84,6 +84,13 @@ func (f replyPageFn) Execute(ctx context.Context, ids []int64, q repository.Page
 	return f(ctx, ids, q)
 }
 
+// favoritePageFn はいいね一覧（窓付き）の口のアダプタ。
+type favoritePageFn func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Favorite, error)
+
+func (f favoritePageFn) Execute(ctx context.Context, ids []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error) {
+	return f(ctx, ids, q)
+}
+
 type anonFn func(context.Context, []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error)
 
 func (f anonFn) Execute(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
@@ -103,12 +110,14 @@ func nopUseCases() UseCases {
 		ListMediaByAnswerIDs:          mapFn[[]*model.Media](func(context.Context, []int64) (map[int64][]*model.Media, error) { return nil, nil }),
 		GetRepliesByPostIDs:           replyPageFn(func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error) { return nil, nil }),
 		GetRepliesByPostIDsIncludeDel: replyPageFn(func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Post, error) { return nil, nil }),
-		GetFavoritesByPostIDs:         mapFn[[]*model.Favorite](func(context.Context, []int64) (map[int64][]*model.Favorite, error) { return nil, nil }),
-		GetMessagesByIDs:              mapFn[*model.Message](func(context.Context, []int64) (map[int64]*model.Message, error) { return nil, nil }),
-		ListMentionsByPostIDs:         mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
-		ListMentionsByMessageIDs:      mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
-		GetRoomsByIDs:                 mapFn[*model.Room](func(context.Context, []int64) (map[int64]*model.Room, error) { return nil, nil }),
-		GetQuestionsByIDs:             mapFn[*model.Question](func(context.Context, []int64) (map[int64]*model.Question, error) { return nil, nil }),
+		GetFavoritesByPostIDs: favoritePageFn(func(context.Context, []int64, repository.PageQuery) (map[int64][]*model.Favorite, error) {
+			return nil, nil
+		}),
+		GetMessagesByIDs:         mapFn[*model.Message](func(context.Context, []int64) (map[int64]*model.Message, error) { return nil, nil }),
+		ListMentionsByPostIDs:    mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
+		ListMentionsByMessageIDs: mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
+		GetRoomsByIDs:            mapFn[*model.Room](func(context.Context, []int64) (map[int64]*model.Room, error) { return nil, nil }),
+		GetQuestionsByIDs:        mapFn[*model.Question](func(context.Context, []int64) (map[int64]*model.Question, error) { return nil, nil }),
 		GetAnswersByIDs: mapFn[*repository.AnswerWithLikes](func(context.Context, []int64) (map[int64]*repository.AnswerWithLikes, error) {
 			return nil, nil
 		}),
@@ -780,5 +789,94 @@ func TestFavoritedByMeLoader_KeepsViewersApart(t *testing.T) {
 	}
 	if got[1] {
 		t.Fatal("利用者2に、利用者1のいいねが混ざっている")
+	}
+}
+
+// TestFavoriteLoader_ResolvesManyKeysWithOneFetchAndPassesTheWindow は
+// Post.favorites の読み込みを確かめる。見たいのは2つ。
+//
+//   - 投稿が何件あってもバッチ関数の呼び出しは1回（N+1 が戻っていない）
+//   - 窓（limit/offset）がそのまま下まで渡る
+//
+// 窓が落ちると、引数を送らない呼び出しでも頭打ちが効かなくなり、
+// 人気の投稿のいいね全件が応答に乗る。SQL まで届いて初めて効く値なので、
+// 途中で落としても上位のテストでは気づけない。
+func TestFavoriteLoader_ResolvesManyKeysWithOneFetchAndPassesTheWindow(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		calls   int
+		gotKeys int
+		gotPage repository.PageQuery
+	)
+
+	want := repository.PageQuery{Limit: 500, Offset: 0}
+	uc := nopUseCases()
+	uc.GetFavoritesByPostIDs = favoritePageFn(func(_ context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		gotKeys = len(postIDs)
+		gotPage = q
+		out := make(map[int64][]*model.Favorite, len(postIDs))
+		for _, id := range postIDs {
+			out[id] = []*model.Favorite{{ID: id, PostID: id}}
+		}
+		return out, nil
+	})
+
+	const n = 25
+	keys := make([]FavoritePageKey, n)
+	for i := range keys {
+		keys[i] = FavoritePageKey{PostID: int64(i + 1), Page: want}
+	}
+
+	got, err := New(uc).FavoriteLoader.LoadAll(context.Background(), keys)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("fetch calls = %d, want 1 (N+1 が戻っている)", calls)
+	}
+	if gotKeys != n {
+		t.Fatalf("keys passed to the batch = %d, want %d (1件ずつ引いている)", gotKeys, n)
+	}
+	if gotPage != want {
+		t.Fatalf("page = %+v, want %+v（窓が下まで渡っていない）", gotPage, want)
+	}
+	for i, favorites := range got {
+		if len(favorites) != 1 || favorites[0].PostID != keys[i].PostID {
+			t.Fatalf("投稿 %d の結果が入れ替わっている: %+v", keys[i].PostID, favorites)
+		}
+	}
+}
+
+// TestFavoriteLoader_KeepsWindowsApart は、同じ投稿でも窓が違えば別の結果として
+// 扱うことを確かめる。鍵に窓を含めていないと、先に来た方のページを使い回す。
+func TestFavoriteLoader_KeepsWindowsApart(t *testing.T) {
+	uc := nopUseCases()
+	uc.GetFavoritesByPostIDs = favoritePageFn(func(_ context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error) {
+		out := make(map[int64][]*model.Favorite, len(postIDs))
+		for _, id := range postIDs {
+			// offset を結果に混ぜて、どの窓の答えかが見えるようにする。
+			out[id] = []*model.Favorite{{ID: int64(q.Offset), PostID: id}}
+		}
+		return out, nil
+	})
+
+	got, err := New(uc).FavoriteLoader.LoadAll(context.Background(), []FavoritePageKey{
+		{PostID: 1, Page: repository.PageQuery{Limit: 10, Offset: 0}},
+		{PostID: 1, Page: repository.PageQuery{Limit: 10, Offset: 10}},
+	})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got[0][0].ID != 0 {
+		t.Fatalf("1ページ目 = offset %d, want 0", got[0][0].ID)
+	}
+	if got[1][0].ID != 10 {
+		t.Fatalf("2ページ目 = offset %d, want 10（1ページ目を使い回している）", got[1][0].ID)
 	}
 }
