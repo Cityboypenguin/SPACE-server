@@ -5,31 +5,46 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 )
 
 type UpdatePostUseCase interface {
-	Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []MediaInput, deletedMediaIDs []int64) (*model.Post, error)
+	Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (*model.Post, error)
 }
 
 var _ UpdatePostUseCase = &UpdatePostInteractor{}
 
 type UpdatePostInteractor struct {
-	postRepo  repository.PostRepository
-	mediaRepo repository.MediaRepository
-	txManager repository.TxManager
+	postRepo              repository.PostRepository
+	mediaRepo             repository.MediaRepository
+	userRepo              repository.UserRepository
+	blockerRepo           repository.BlockerRepository
+	txManager             repository.TxManager
+	notificationPublisher notificationuc.NotificationPublisher
 }
 
-func NewUpdatePostUseCase(postRepo repository.PostRepository, mediaRepo repository.MediaRepository, txManager repository.TxManager) *UpdatePostInteractor {
+func NewUpdatePostUseCase(
+	postRepo repository.PostRepository,
+	mediaRepo repository.MediaRepository,
+	userRepo repository.UserRepository,
+	blockerRepo repository.BlockerRepository,
+	txManager repository.TxManager,
+	notificationPublisher notificationuc.NotificationPublisher,
+) *UpdatePostInteractor {
 	return &UpdatePostInteractor{
-		postRepo:  postRepo,
-		mediaRepo: mediaRepo,
-		txManager: txManager,
+		postRepo:              postRepo,
+		mediaRepo:             mediaRepo,
+		userRepo:              userRepo,
+		blockerRepo:           blockerRepo,
+		txManager:             txManager,
+		notificationPublisher: notificationPublisher,
 	}
 }
 
-func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
+func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
 	if param.Content != nil {
 		if err := validatePostContent(*param.Content); err != nil {
 			return nil, err
@@ -51,6 +66,26 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 		return nil, fmt.Errorf("post not found or unauthorized")
 	}
 
+	// 本文が変わるときだけメンションを解決し直す。
+	// 既に通知済みの相手には再通知しないよう、編集前のメンションを控えておく。
+	var newMentions []*model.Mention
+	alreadyNotified := make(map[int64]struct{})
+	if param.Content != nil {
+		before, err := uc.postRepo.ListMentionsByPostIDs(ctx, []int64{post.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range before[post.ID] {
+			alreadyNotified[m.UserID] = struct{}{}
+		}
+
+		newMentions, err = ResolveMentions(ctx, uc.userRepo, uc.blockerRepo, *param.Content, param.UserID)
+		if err != nil {
+			logger.Log.Error().Err(err).Msg("failed to resolve mentions")
+			newMentions = nil
+		}
+	}
+
 	if err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
 
 		post.UpdatePost(param)
@@ -69,6 +104,17 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 					return err
 				}
 			}
+
+			// メンションも同様に貼り直す。本文から消えたメンションは行ごと消えるため、
+			// 表示側のリンクも自動的に消える。
+			if err := uc.postRepo.DeletePostMentionsByPostID(ctx, post.ID); err != nil {
+				return err
+			}
+			if len(newMentions) > 0 {
+				if err := uc.postRepo.CreatePostMentions(ctx, post.ID, newMentions); err != nil {
+					return err
+				}
+			}
 		}
 
 		for _, mediaID := range deletedMediaIDs {
@@ -83,29 +129,30 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 				return err
 			}
 
-			for i, input := range newMediaInputs {
-				media := &model.Media{
-					UploaderUserID: param.UserID,
-					StorageKey:     input.StorageKey,
-					ContentType:    input.ContentType,
-					CreatedAt:      post.UpdatedAt,
-				}
-
-				if err := uc.mediaRepo.CreateMedia(ctx, media); err != nil {
-					return err
-				}
-
-				newPosition := currentMaxPos + 1 + i
-
-				if err := uc.mediaRepo.CreatePostMedia(ctx, post.ID, media.ID, newPosition); err != nil {
-					return err
-				}
+			// 追加ぶんは既存の添付の後ろへ続ける（開始位置が currentMaxPos+1）。
+			// 作成時と同じく media 行1本・紐付け1本にまとめる。
+			medias := model.NewMediaBatch(param.UserID, newMediaInputs, post.UpdatedAt)
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
+				return err
+			}
+			if err := uc.mediaRepo.CreatePostMediaBatch(ctx, post.ID, model.MediaIDs(medias), currentMaxPos+1); err != nil {
+				return err
 			}
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	// 編集で新しく追加されたメンションだけ通知する（既にメンション済みの相手は再通知しない）。
+	added := make([]*model.Mention, 0, len(newMentions))
+	for _, m := range newMentions {
+		if _, ok := alreadyNotified[m.UserID]; ok {
+			continue
+		}
+		added = append(added, m)
+	}
+	NotifyMentions(ctx, uc.notificationPublisher, added, post.ID, param.UserID, nil)
 
 	return post, nil
 }

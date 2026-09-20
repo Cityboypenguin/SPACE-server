@@ -6,7 +6,6 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	"github.com/go-sql-driver/mysql"
 )
 
 type BlockUserUseCase interface {
@@ -43,7 +42,9 @@ func (uc *blockUserInteractor) Execute(ctx context.Context, blockerID, blockedID
 		}
 		blockID, err = uc.blockRepo.CreateBlocker(txCtx, block)
 		if err != nil {
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1062 {
+			// 既にブロック済みなら成功として扱う（ブロックは冪等）。
+			// ドライバのエラー番号ではなく、リポジトリ共通の番兵で判定する。
+			if errors.Is(err, repository.ErrDuplicateKey) {
 				return nil
 			}
 			return err

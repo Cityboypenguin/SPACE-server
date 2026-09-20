@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -24,19 +25,26 @@ func NewRedisEmailOTPRepository(client *redis.Client) repository.EmailOTPReposit
 	return &RedisEmailOTPRepository{client: client}
 }
 
+func emailOTPKey(email string) string {
+	return otpKeyPrefix + strings.ToLower(strings.TrimSpace(email))
+}
+func emailOTPRateKey(email string) string {
+	return otpRateLimitPrefix + strings.ToLower(strings.TrimSpace(email))
+}
+
 func (r *RedisEmailOTPRepository) Save(ctx context.Context, otp *model.EmailOTP) error {
-	return r.client.Set(ctx, otpKeyPrefix+otp.Email, otp.Code, otpTTL).Err()
+	return r.client.Set(ctx, emailOTPKey(otp.Email), otp.Code, otpTTL).Err()
 }
 
 func (r *RedisEmailOTPRepository) FindLatestByEmail(ctx context.Context, email string) (*model.EmailOTP, error) {
-	code, err := r.client.Get(ctx, otpKeyPrefix+email).Result()
+	code, err := r.client.Get(ctx, emailOTPKey(email)).Result()
 	if err == redis.Nil {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	ttl, err := r.client.TTL(ctx, otpKeyPrefix+email).Result()
+	ttl, err := r.client.TTL(ctx, emailOTPKey(email)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -48,17 +56,9 @@ func (r *RedisEmailOTPRepository) FindLatestByEmail(ctx context.Context, email s
 }
 
 func (r *RedisEmailOTPRepository) Delete(ctx context.Context, email string) error {
-	return r.client.Del(ctx, otpKeyPrefix+email).Err()
+	return r.client.Del(ctx, emailOTPKey(email)).Err()
 }
 
-func (r *RedisEmailOTPRepository) IsRateLimited(ctx context.Context, email string) (bool, error) {
-	exists, err := r.client.Exists(ctx, otpRateLimitPrefix+email).Result()
-	if err != nil {
-		return false, err
-	}
-	return exists > 0, nil
-}
-
-func (r *RedisEmailOTPRepository) MarkRateLimited(ctx context.Context, email string) error {
-	return r.client.Set(ctx, otpRateLimitPrefix+email, "1", otpRateLimitTTL).Err()
+func (r *RedisEmailOTPRepository) TryBeginSend(ctx context.Context, email string) (bool, error) {
+	return r.client.SetNX(ctx, emailOTPRateKey(email), "1", otpRateLimitTTL).Result()
 }

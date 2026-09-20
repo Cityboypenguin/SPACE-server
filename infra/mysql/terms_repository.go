@@ -110,13 +110,16 @@ func (r *MySQLTermsRepository) FindFuture(ctx context.Context) ([]*model.TermsOf
 	return list, rows.Err()
 }
 
-func (r *MySQLTermsRepository) FindAll(ctx context.Context) ([]*model.TermsOfService, error) {
+func (r *MySQLTermsRepository) FindAll(ctx context.Context, q repository.PageQuery) ([]*model.TermsOfService, error) {
+	// effective_date は同日に2版が入りうるので、id を第2キーに足して並びを固定する
+	// （窓を切るときに順序がぶれるとページ間で重複と抜けが出る）。
 	query := `
 		SELECT id, version, object_key, effective_date, created_at
 		FROM terms_of_service
-		ORDER BY effective_date DESC
+		ORDER BY effective_date DESC, id DESC
+		LIMIT ? OFFSET ?
 	`
-	rows, err := r.DB.QueryContext(ctx, query)
+	rows, err := r.DB.QueryContext(ctx, query, q.Limit, q.Offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query terms_of_service: %w", err)
 	}
@@ -135,9 +138,9 @@ func (r *MySQLTermsRepository) FindAll(ctx context.Context) ([]*model.TermsOfSer
 	return list, rows.Err()
 }
 
-func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64, limit, offset int) ([]*model.TermsConsent, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM terms_consents WHERE terms_id = ?`, termsID).Scan(&total); err != nil {
+func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsID int64, q repository.PageQuery) ([]*model.TermsConsent, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM terms_consents WHERE terms_id = ?`, termsID)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count terms_consents: %w", err)
 	}
 
@@ -145,8 +148,8 @@ func (r *MySQLTermsRepository) FindConsentsByTermsID(ctx context.Context, termsI
 		SELECT id, user_id, terms_id, consented_at
 		FROM terms_consents
 		WHERE terms_id = ?
-		ORDER BY consented_at DESC
-		LIMIT ? OFFSET ?`, termsID, limit, offset)
+		ORDER BY consented_at DESC, id DESC
+		LIMIT ? OFFSET ?`, termsID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query terms_consents: %w", err)
 	}

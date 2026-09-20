@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -16,11 +17,17 @@ func NewManageInquiryUsecase(inquiryRepo repository.InquiryRepository) *ManageIn
 	return &ManageInquiryUsecase{inquiryRepo: inquiryRepo}
 }
 
-func (u *ManageInquiryUsecase) Search(ctx context.Context, status *model.InquiryStatus, limit, offset int) ([]*model.Inquiry, int, error) {
-	return u.inquiryRepo.FindAll(ctx, status, limit, offset)
+func (u *ManageInquiryUsecase) Search(ctx context.Context, status *model.InquiryStatus, q repository.PageQuery) ([]*model.Inquiry, int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, 0, err
+	}
+	return u.inquiryRepo.FindAll(ctx, status, q)
 }
 
 func (u *ManageInquiryUsecase) GetByID(ctx context.Context, id string) (*model.Inquiry, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if id == "" {
 		return nil, errors.New("inquiry ID is required")
 	}
@@ -28,6 +35,9 @@ func (u *ManageInquiryUsecase) GetByID(ctx context.Context, id string) (*model.I
 }
 
 func (u *ManageInquiryUsecase) UpdateStatus(ctx context.Context, id string, status model.InquiryStatus) (*model.Inquiry, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if id == "" {
 		return nil, errors.New("inquiry ID is required")
 	}

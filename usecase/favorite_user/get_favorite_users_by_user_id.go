@@ -8,7 +8,7 @@ import (
 )
 
 type GetFavoriteUsersByUserIDUseCase interface {
-	Execute(ctx context.Context, userID int64) ([]*model.FavoriteUser, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, error)
 }
 
 var _ GetFavoriteUsersByUserIDUseCase = &getFavoriteUsersByUserIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetFavoriteUsersByUserIDUseCase(favoriteUserRepo repository.FavoriteUser
 	}
 }
 
-func (uc *getFavoriteUsersByUserIDInteractor) Execute(ctx context.Context, userID int64) ([]*model.FavoriteUser, error) {
-	return uc.favoriteUserRepo.GetFavoriteUsersByUserID(ctx, userID)
+func (uc *getFavoriteUsersByUserIDInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, error) {
+	return uc.favoriteUserRepo.GetFavoriteUsersByUserID(ctx, userID, q)
 }

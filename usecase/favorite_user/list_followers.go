@@ -8,7 +8,7 @@ import (
 )
 
 type ListFollowersUseCase interface {
-	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error)
 }
 
 var _ ListFollowersUseCase = &listFollowersInteractor{}
@@ -23,6 +23,6 @@ func NewListFollowersUseCase(favoriteUserRepo repository.FavoriteUserRepository)
 	}
 }
 
-func (uc *listFollowersInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.FavoriteUser, int, error) {
-	return uc.favoriteUserRepo.ListFollowers(ctx, userID, limit, offset)
+func (uc *listFollowersInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error) {
+	return uc.favoriteUserRepo.ListFollowers(ctx, userID, q)
 }

@@ -8,7 +8,7 @@ import (
 )
 
 type SearchPostsUseCase interface {
-	Execute(ctx context.Context, query string) ([]*model.Post, error)
+	Execute(ctx context.Context, query string, q repository.PageQuery) ([]*model.Post, error)
 }
 
 var _ SearchPostsUseCase = &SearchPostsInteractor{}
@@ -23,8 +23,8 @@ func NewSearchPostsUseCase(postRepo repository.PostRepository) SearchPostsUseCas
 	}
 }
 
-func (uc *SearchPostsInteractor) Execute(ctx context.Context, query string) ([]*model.Post, error) {
-	posts, err := uc.postRepo.SearchPosts(ctx, query)
+func (uc *SearchPostsInteractor) Execute(ctx context.Context, query string, q repository.PageQuery) ([]*model.Post, error) {
+	posts, err := uc.postRepo.SearchPosts(ctx, query, q)
 	if err != nil {
 		return nil, err
 	}

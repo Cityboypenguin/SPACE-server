@@ -8,7 +8,7 @@ import (
 )
 
 type GetFeedPostsUseCase interface {
-	Execute(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error)
+	Execute(ctx context.Context, viewerID int64, q repository.PageQuery) ([]*model.Post, int, error)
 }
 
 var _ GetFeedPostsUseCase = &GetFeedPostsInteractor{}
@@ -21,6 +21,6 @@ func NewGetFeedPostsUseCase(postRepo repository.PostRepository) GetFeedPostsUseC
 	return &GetFeedPostsInteractor{postRepo: postRepo}
 }
 
-func (uc *GetFeedPostsInteractor) Execute(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error) {
-	return uc.postRepo.GetFeedPosts(ctx, viewerID, limit, offset)
+func (uc *GetFeedPostsInteractor) Execute(ctx context.Context, viewerID int64, q repository.PageQuery) ([]*model.Post, int, error) {
+	return uc.postRepo.GetFeedPosts(ctx, viewerID, q)
 }

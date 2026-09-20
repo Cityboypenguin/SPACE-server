@@ -10,6 +10,7 @@ import (
 )
 
 const otpTTL = 10 * time.Minute
+const resetRequestInterval = time.Minute
 
 type RequestPasswordResetUseCase interface {
 	Execute(ctx context.Context, email string) error
@@ -18,9 +19,9 @@ type RequestPasswordResetUseCase interface {
 var _ RequestPasswordResetUseCase = &RequestPasswordResetInteractor{}
 
 type RequestPasswordResetInteractor struct {
-	userRepo      repository.UserRepository
-	pwResetRepo   repository.PasswordResetRepository
-	mailer        repository.Mailer
+	userRepo    repository.UserRepository
+	pwResetRepo repository.PasswordResetRepository
+	mailer      repository.Mailer
 }
 
 func NewRequestPasswordResetUseCase(
@@ -36,6 +37,13 @@ func NewRequestPasswordResetUseCase(
 }
 
 func (uc *RequestPasswordResetInteractor) Execute(ctx context.Context, email string) error {
+	allowed, err := uc.pwResetRepo.TryBeginRequest(ctx, email, resetRequestInterval)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return nil
+	}
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return err
@@ -54,7 +62,11 @@ func (uc *RequestPasswordResetInteractor) Execute(ctx context.Context, email str
 		return err
 	}
 
-	return uc.mailer.SendPasswordResetOTP(ctx, email, otp)
+	// 件名・本文はこの用途の文言なのでユースケース側に置く。
+	// Mailer は「1通送る」だけを知っていればよい。
+	subject := "パスワードリセット認証コード"
+	body := fmt.Sprintf("認証コード: %s\n\nこのコードは10分間有効です。\n心当たりがない場合は無視してください。", otp)
+	return uc.mailer.Send(ctx, email, subject, body)
 }
 
 func generateOTP() (string, error) {

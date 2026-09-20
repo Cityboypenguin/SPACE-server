@@ -2,7 +2,6 @@ package favorite
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
@@ -48,19 +47,17 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 		return nil, fmt.Errorf("ユーザーは自分の投稿をお気に入りにできません")
 	}
 
-	exist, err := uc.favoriteRepo.GetFavoriteByUserIDAndPostID(ctx, param.UserID, param.PostID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-
-	if exist != nil {
-		return nil, fmt.Errorf("すでにお気に入りに登録されています")
-	}
-
 	favorite := model.CreateFavorite(param)
 
+	// 二重登録の検出は DB の UNIQUE 制約 (favorites.unique_user_post) に任せる。
+	// 以前はここで GetFavoriteByUserIDAndPostID してから INSERT していたが、
+	// 確認と挿入の間に同じユーザーの2回目のリクエストが割り込めるため競合を防げず、
+	// 結局 INSERT が 1062 で落ちていた。エラー文言と戻り値は従来どおり。
 	id, err := uc.favoriteRepo.CreateFavorite(ctx, favorite)
 	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateKey) {
+			return nil, fmt.Errorf("すでにお気に入りに登録されています")
+		}
 		return nil, err
 	}
 
@@ -76,7 +73,7 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 			ActorID:    &param.UserID,
 			TargetType: &targetType,
 			TargetID:   &param.PostID,
-			Message:    "あなたの投稿がいいねされました",
+			Message:    notificationuc.MessageFavoritedPost,
 		}); err != nil {
 			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
 		}

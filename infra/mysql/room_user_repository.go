@@ -20,6 +20,26 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 	return &MySQLRoomUserRepository{DB: db}
 }
 
+// roomMemberUserColumns は room_users から JOIN して出すユーザーの列。
+// users.hashed_password も users.email も含めない（ここは完全な表示系で、
+// ルームのメンバー一覧に他人の連絡先を載せる理由がひとつも無い）。列の並びは
+// infra/mysql/user_repository.go の userPublicColumns と同じにしてある。
+const roomMemberUserColumns = `u.id, u.account_id, u.name, u.role, u.status, u.created_at, u.updated_at`
+
+// roomMemberUserSelectColumns は roomMemberUserColumns を、CTE から選び直すときの
+// 名前（テーブル別名が付かない）に直したもの。並びは必ず揃えること。
+const roomMemberUserSelectColumns = `id, account_id, name, role, status, created_at, updated_at`
+
+// roomMemberListCap は Room.user が1ルームあたり返す参加者の上限。
+//
+// このフィールドは DM の相手表示に使うもので、ページングの口を持たない
+// （コミュニティのメンバー一覧は communityMembers がページング付きで担当する）。
+// 上限が無いと、参加者の人数がそのまま1回のクエリと応答の大きさになる。
+//
+// graph/helpers.go の unpagedCollectionCap と同じ値・同じ考え方。実データが
+// ここに届かないので普段の見え方は変わらず、青天井だけが無くなる。
+const roomMemberListCap = 500
+
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
 	now := time.Now().Unix()
 	query := "INSERT IGNORE INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
@@ -51,6 +71,44 @@ func (r *MySQLRoomUserRepository) SetRoomUserRole(ctx context.Context, roomID, u
 	return err
 }
 
+// SetRoomUserRoles は同じ役割へ変える相手をまとめて1本の UPDATE にする。
+//
+// メンバー編集はチェックした人数ぶんの操作がまとめて届くので、以前は
+// 人数ぶんの UPDATE / DELETE がトランザクションの中で順に走っていた。
+// 正しさは保たれていたが、往復はそのまま人数に比例していた。
+func (r *MySQLRoomUserRepository) SetRoomUserRoles(ctx context.Context, roomID int64, userIDs []int64, role string) error {
+	now := time.Now().Unix()
+	db := extractDB(ctx, r.DB)
+	return inChunks(userIDs, 1, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)+3)
+		args = append(args, role, now, roomID)
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		_, err := db.ExecContext(ctx,
+			"UPDATE room_users SET role = ?, updated_at = ? WHERE room_id = ? AND user_id IN ("+inPlaceholders(len(chunk))+")",
+			args...,
+		)
+		return err
+	})
+}
+
+func (r *MySQLRoomUserRepository) RemoveUsersFromRoom(ctx context.Context, roomID int64, userIDs []int64) error {
+	db := extractDB(ctx, r.DB)
+	return inChunks(userIDs, 1, func(chunk []int64) error {
+		args := make([]any, 0, len(chunk)+1)
+		args = append(args, roomID)
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		_, err := db.ExecContext(ctx,
+			"DELETE FROM room_users WHERE room_id = ? AND user_id IN ("+inPlaceholders(len(chunk))+")",
+			args...,
+		)
+		return err
+	})
+}
+
 func (r *MySQLRoomUserRepository) CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error) {
 	var count int
 	err := r.DB.QueryRowContext(ctx,
@@ -60,13 +118,16 @@ func (r *MySQLRoomUserRepository) CountRoomUsersByRole(ctx context.Context, room
 	return count, err
 }
 
+// ListRoomMembersWithRoles はメンバーの表示用。列は公開情報だけ
+// （以前は u.hashed_password まで取っていた。メンバー一覧は完全な表示系なので、
+// 秘密を載せる理由がひとつも無い）。
 func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error) {
 	query := `
-		SELECT u.id, u.account_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at, ru.role
+		SELECT ` + roomMemberUserColumns + `, ru.role
 		FROM room_users ru
 		JOIN users u ON ru.user_id = u.id
 		WHERE ru.room_id = ?
-		ORDER BY ru.created_at ASC
+		ORDER BY ru.created_at ASC, ru.user_id ASC
 	`
 	rows, err := r.DB.QueryContext(ctx, query, roomID)
 	if err != nil {
@@ -80,7 +141,7 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 		var roomRole string
 		var createdAt, updatedAt int64
 		if err := rows.Scan(
-			&u.ID, &u.AccountID, &u.Name, &u.Email, &u.HashedPassword,
+			&u.ID, &u.AccountID, &u.Name,
 			&u.Role, &u.Status, &createdAt, &updatedAt, &roomRole,
 		); err != nil {
 			return nil, err
@@ -92,12 +153,127 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 	return members, rows.Err()
 }
 
+func (r *MySQLRoomUserRepository) ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.RoomMember, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM room_users WHERE room_id = ?`, roomID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT `+roomMemberUserColumns+`, ru.role
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id = ?
+		ORDER BY ru.created_at ASC, ru.user_id ASC
+		LIMIT ? OFFSET ?
+	`, roomID, q.Limit, q.Offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	members := make([]*model.RoomMember, 0, q.Limit)
+	for rows.Next() {
+		var user model.User
+		var role string
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&user.ID, &user.AccountID, &user.Name, &user.Role, &user.Status,
+			&createdAt, &updatedAt, &role,
+		); err != nil {
+			return nil, 0, err
+		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
+		members = append(members, &model.RoomMember{User: &user, Role: role})
+	}
+	return members, total, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) LockRoomMemberRolesForUpdate(ctx context.Context, roomID int64) (map[int64]string, error) {
+	tx, ok := txFromContext(ctx)
+	if !ok {
+		return nil, errors.New("LockRoomMemberRolesForUpdate requires a transaction")
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT user_id, role
+		FROM room_users
+		WHERE room_id = ?
+		ORDER BY user_id
+		FOR UPDATE
+	`, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make(map[int64]string)
+	for rows.Next() {
+		var userID int64
+		var role string
+		if err := rows.Scan(&userID, &role); err != nil {
+			return nil, err
+		}
+		roles[userID] = role
+	}
+	return roles, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) LockUserCommunityMembershipsForUpdate(ctx context.Context, userID int64) (map[int64]string, error) {
+	tx, ok := txFromContext(ctx)
+	if !ok {
+		return nil, errors.New("LockUserCommunityMembershipsForUpdate requires a transaction")
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT ru.room_id, ru.role
+		FROM room_users ru
+		JOIN rooms r ON r.id = ru.room_id
+		WHERE ru.user_id = ? AND r.type = ?
+		ORDER BY ru.room_id
+		FOR UPDATE
+	`, userID, model.RoomTypeCommunity)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make(map[int64]string)
+	for rows.Next() {
+		var roomID int64
+		var role string
+		if err := rows.Scan(&roomID, &role); err != nil {
+			return nil, err
+		}
+		roles[roomID] = role
+	}
+	return roles, rows.Err()
+}
+
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		"DELETE FROM room_users WHERE room_id = ? AND user_id = ?",
 		roomID, userID,
 	)
 	return err
+}
+
+// IsRoomMember は room_users の1行の有無だけを見る。
+//
+// (room_id, user_id) の一意制約がそのまま使えるので、索引だけで答えが出て
+// 行は1行も読まない。SELECT 1 ... LIMIT 1 ではなく EXISTS にしてあるのは、
+// 行が無いときに ErrNoRows の分岐を書かずに済むため。
+func (r *MySQLRoomUserRepository) IsRoomMember(ctx context.Context, roomID, userID int64) (bool, error) {
+	var exists bool
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM room_users WHERE room_id = ? AND user_id = ?)",
+		roomID, userID,
+	).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
 }
 
 func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error) {
@@ -122,12 +298,10 @@ func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID
 	return ids, nil
 }
 
-func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Room, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM rooms r JOIN room_users ru ON r.id = ru.room_id WHERE ru.user_id = ? AND r.type = 'dm'`,
-		userID,
-	).Scan(&total); err != nil {
+func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Room, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM rooms r JOIN room_users ru ON r.id = ru.room_id WHERE ru.user_id = ? AND r.type = 'dm'`,
+		userID)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -136,9 +310,9 @@ func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userI
 		FROM rooms r
 		JOIN room_users ru ON r.id = ru.room_id
 		WHERE ru.user_id = ? AND r.type = 'dm'
-		ORDER BY r.updated_at DESC
+		ORDER BY r.updated_at DESC, r.id DESC
 		LIMIT ? OFFSET ?
-	`, userID, limit, offset)
+	`, userID, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -168,19 +342,33 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 		return result, nil
 	}
 
+	// ルームごとに roomMemberListCap 件で切る。切らないと、参加者の人数が
+	// そのまま1回のクエリと応答の大きさになる（大きなコミュニティのルームを
+	// 開いた日に効いてくる。しかも重くなるまで誰も気づけない）。
+	//
+	// ROW_NUMBER() で切るのは、LIMIT が結果全体にしか掛からないため。
+	// そのままでは「ルームごとに N 件」にならず、1つの大きなルームが窓を
+	// 食い潰して他のルームの参加者が0件になる。
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
 	query := fmt.Sprintf(`
-		SELECT ru.room_id, u.id, u.account_id, u.name, u.email, u.hashed_password, u.role, u.status, u.created_at, u.updated_at
-		FROM room_users ru
-		JOIN users u ON ru.user_id = u.id
-		WHERE ru.room_id IN (%s)
-		ORDER BY ru.room_id ASC, ru.created_at ASC
+		WITH ranked AS (
+			SELECT ru.room_id, `+roomMemberUserColumns+`,
+			       ROW_NUMBER() OVER (PARTITION BY ru.room_id ORDER BY ru.created_at ASC) AS row_num
+			FROM room_users ru
+			JOIN users u ON ru.user_id = u.id
+			WHERE ru.room_id IN (%s)
+		)
+		SELECT room_id, `+roomMemberUserSelectColumns+`
+		FROM ranked
+		WHERE row_num <= ?
+		ORDER BY room_id ASC, row_num ASC
 	`, placeholders)
 
-	args := make([]interface{}, len(roomIDs))
-	for i, roomID := range roomIDs {
-		args[i] = roomID
+	args := make([]interface{}, 0, len(roomIDs)+1)
+	for _, roomID := range roomIDs {
+		args = append(args, roomID)
 	}
+	args = append(args, roomMemberListCap)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -197,8 +385,6 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 			&user.ID,
 			&user.AccountID,
 			&user.Name,
-			&user.Email,
-			&user.HashedPassword,
 			&user.Role,
 			&user.Status,
 			&createdAt,
@@ -217,53 +403,158 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 	return result, nil
 }
 
-func (r *MySQLRoomUserRepository) FindDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error) {
+func (r *MySQLRoomUserRepository) SearchRoomUsersByPrefix(ctx context.Context, roomID int64, prefix string, limit int) ([]*model.User, error) {
 	query := `
-		SELECT r.id, r.name, r.type, r.created_at, r.updated_at
-		FROM rooms r
-		JOIN room_users ru1 ON r.id = ru1.room_id AND ru1.user_id = ?
-		JOIN room_users ru2 ON r.id = ru2.room_id AND ru2.user_id = ?
-		WHERE r.type = 'dm'
-		LIMIT 1
+		SELECT ` + roomMemberUserColumns + `
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.room_id = ?
+		  AND u.status = ?
+		  AND (u.name LIKE ? ESCAPE '\\' OR u.account_id LIKE ? ESCAPE '\\')
+		ORDER BY u.name ASC, u.id ASC
+		LIMIT ?
 	`
-	row := r.DB.QueryRowContext(ctx, query, userID1, userID2)
-	var room model.Room
-	var createdAt, updatedAt int64
-	err := row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt)
+	prefixPattern := escapeLikePrefix(prefix) + "%"
+	rows, err := r.DB.QueryContext(ctx, query, roomID, model.UserStatusActive, prefixPattern, prefixPattern, limit)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	room.CreatedAt = time.Unix(createdAt, 0)
-	room.UpdatedAt = time.Unix(updatedAt, 0)
-	return &room, nil
+	defer rows.Close()
+
+	users := make([]*model.User, 0, limit)
+	for rows.Next() {
+		var user model.User
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&user.ID, &user.AccountID, &user.Name, &user.Role, &user.Status, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, err
+		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
+		users = append(users, &user)
+	}
+	return users, rows.Err()
 }
 
-func (r *MySQLRoomUserRepository) UpdateLastReadAt(ctx context.Context, roomID, userID int64, readAt int64) error {
-	query := "UPDATE room_users SET last_read_at = ? WHERE room_id = ? AND user_id = ?"
-	_, err := r.DB.ExecContext(ctx, query, readAt, roomID, userID)
+// CountUsersByRoomIDs は在籍人数だけを GROUP BY で数える。
+//
+// メンバー行を全部持ち帰って len を取るのと違い、人数しか要らない画面で
+// users テーブルへ JOIN しない（人数は room_users だけで出る）。
+func (r *MySQLRoomUserRepository) CountUsersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(roomIDs))
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	args := make([]any, len(roomIDs))
+	for i, roomID := range roomIDs {
+		args[i] = roomID
+	}
+
+	rows, err := r.DB.QueryContext(ctx, fmt.Sprintf(`
+		SELECT room_id, COUNT(*)
+		FROM room_users
+		WHERE room_id IN (%s)
+		GROUP BY room_id
+	`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var roomID int64
+		var count int
+		if err := rows.Scan(&roomID, &count); err != nil {
+			return nil, err
+		}
+		result[roomID] = count
+	}
+	return result, rows.Err()
+}
+
+// ListJoinedRoomIDs は「自分が入っているか」だけを1クエリで引く。
+func (r *MySQLRoomUserRepository) ListJoinedRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]bool, error) {
+	result := make(map[int64]bool, len(roomIDs))
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
+	args := make([]any, 0, len(roomIDs)+1)
+	args = append(args, userID)
+	for _, roomID := range roomIDs {
+		args = append(args, roomID)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, fmt.Sprintf(`
+		SELECT room_id
+		FROM room_users
+		WHERE user_id = ? AND room_id IN (%s)
+	`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var roomID int64
+		if err := rows.Scan(&roomID); err != nil {
+			return nil, err
+		}
+		result[roomID] = true
+	}
+	return result, rows.Err()
+}
+
+// UpdateLastRead は既読位置（メッセージID）と既読時刻をまとめて進める。
+// 時刻の列を残すのは GraphQL の roomReadStatus.lastReadAt が表示に使っているため
+// （API 契約は変えない）。未読判定に使うのはメッセージIDの方。
+//
+// どちらも GREATEST で進める方向にしか動かさない。既読は複数端末から打たれるので、
+// 先に進んでいる位置を後から来た小さい値で巻き戻すと未読が復活してしまう。
+func (r *MySQLRoomUserRepository) UpdateLastRead(ctx context.Context, roomID, userID int64, lastReadMessageID *int64, readAt int64) error {
+	query := fmt.Sprintf(`
+		UPDATE room_users
+		SET last_read_message_id = %s,
+		    last_read_at = GREATEST(COALESCE(last_read_at, 0), ?)
+		WHERE room_id = ? AND user_id = ?
+	`, advanceLastReadMessageIDSQL("last_read_message_id"))
+	_, err := r.DB.ExecContext(ctx, query, lastReadMessageID, readAt, roomID, userID)
 	return err
 }
 
-func (r *MySQLRoomUserRepository) GetLastReadAt(ctx context.Context, roomID, userID int64) (*int64, error) {
-	var readAt sql.NullInt64
+func (r *MySQLRoomUserRepository) GetLastRead(ctx context.Context, roomID, userID int64) (*repository.ReadPosition, error) {
+	var messageID, readAt sql.NullInt64
 	err := r.DB.QueryRowContext(ctx,
-		"SELECT last_read_at FROM room_users WHERE room_id = ? AND user_id = ?",
+		"SELECT last_read_message_id, last_read_at FROM room_users WHERE room_id = ? AND user_id = ?",
 		roomID, userID,
-	).Scan(&readAt)
+	).Scan(&messageID, &readAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if !readAt.Valid {
+	// 行はあるが一度も既読を打っていない（両方 NULL）場合は「既読位置なし」を返す。
+	if !messageID.Valid && !readAt.Valid {
 		return nil, nil
 	}
-	v := readAt.Int64
-	return &v, nil
+	return &repository.ReadPosition{
+		LastReadMessageID: nullInt64Ptr(messageID),
+		LastReadAt:        nullInt64Ptr(readAt),
+	}, nil
+}
+
+// nullInt64Ptr は NULL 可能な列を *int64 に移す小物。
+func nullInt64Ptr(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
 }
 
 func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, roomID int64) (map[int64]*int64, error) {
@@ -291,13 +582,16 @@ func (r *MySQLRoomUserRepository) GetMembersLastReadAt(ctx context.Context, room
 	return result, rows.Err()
 }
 
-func (r *MySQLRoomUserRepository) GetLastReadAtByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*int64, error) {
+// GetLastReadByRoomIDs は一覧表示用に既読位置をまとめて引く。
+// 1件取得（GetLastRead）と同じく、行はあるが両方 NULL＝一度も既読を打っていない
+// ルームは「既読位置なし」としてキーごと落とす。
+func (r *MySQLRoomUserRepository) GetLastReadByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*repository.ReadPosition, error) {
 	if len(roomIDs) == 0 {
-		return map[int64]*int64{}, nil
+		return map[int64]*repository.ReadPosition{}, nil
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(roomIDs)), ",")
 	query := fmt.Sprintf(
-		"SELECT room_id, last_read_at FROM room_users WHERE user_id = ? AND room_id IN (%s)",
+		"SELECT room_id, last_read_message_id, last_read_at FROM room_users WHERE user_id = ? AND room_id IN (%s)",
 		placeholders,
 	)
 	args := make([]interface{}, 0, 1+len(roomIDs))
@@ -311,18 +605,19 @@ func (r *MySQLRoomUserRepository) GetLastReadAtByRoomIDs(ctx context.Context, us
 	}
 	defer rows.Close()
 
-	result := make(map[int64]*int64)
+	result := make(map[int64]*repository.ReadPosition)
 	for rows.Next() {
 		var roomID int64
-		var readAt sql.NullInt64
-		if err := rows.Scan(&roomID, &readAt); err != nil {
+		var messageID, readAt sql.NullInt64
+		if err := rows.Scan(&roomID, &messageID, &readAt); err != nil {
 			return nil, err
 		}
-		if readAt.Valid {
-			v := readAt.Int64
-			result[roomID] = &v
-		} else {
-			result[roomID] = nil
+		if !messageID.Valid && !readAt.Valid {
+			continue
+		}
+		result[roomID] = &repository.ReadPosition{
+			LastReadMessageID: nullInt64Ptr(messageID),
+			LastReadAt:        nullInt64Ptr(readAt),
 		}
 	}
 	return result, rows.Err()

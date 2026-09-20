@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type MySQLFavoriteRepository struct {
@@ -16,32 +17,6 @@ type MySQLFavoriteRepository struct {
 
 func NewMySQLFavoriteRepository(db *sql.DB) *MySQLFavoriteRepository {
 	return &MySQLFavoriteRepository{DB: db}
-}
-
-func (r *MySQLFavoriteRepository) ListFavorites(ctx context.Context) ([]*model.Favorite, error) {
-	query := `SELECT id, post_id, user_id, created_at FROM favorites`
-	rows, err := r.DB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var favorites []*model.Favorite
-	for rows.Next() {
-		var favorite model.Favorite
-		var createdAtUnix int64
-		if err := rows.Scan(&favorite.ID, &favorite.PostID, &favorite.UserID, &createdAtUnix); err != nil {
-			return nil, err
-		}
-		favorite.CreatedAt = time.Unix(createdAtUnix, 0)
-		favorites = append(favorites, &favorite)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return favorites, nil
 }
 
 func (r *MySQLFavoriteRepository) GetFavoriteByID(ctx context.Context, id int64) (*model.Favorite, error) {
@@ -71,7 +46,10 @@ func (r *MySQLFavoriteRepository) CreateFavorite(ctx context.Context, f *model.F
 		f.CreatedAt.Unix(),
 	)
 	if err != nil {
-		return 0, err
+		// favorites には UNIQUE KEY unique_user_post (user_id, post_id) があるので、
+		// 二重登録はここで 1062 として返る。呼び出し側が事前 SELECT せずに済むよう
+		// repository.ErrDuplicateKey に包んで返す。
+		return 0, wrapDuplicateKey(err)
 	}
 
 	id, err := result.LastInsertId()
@@ -189,10 +167,65 @@ func (r *MySQLFavoriteRepository) DeleteFavoriteByUserIDAndPostID(ctx context.Co
 	return affected > 0, nil
 }
 
-// GetFavoritesByPostIDs は複数のPostIDに紐づくいいねを1回のSQLで取得する
-func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Favorite, error) {
+// GetFavoritesByPostIDs は複数のPostIDに紐づくいいねを1回のSQLで、投稿ごとに
+// 窓（limit/offset）を切って取得する。
+//
+// 窓を切るのに ROW_NUMBER() を使うのは、返信一覧（GetRepliesByPostIDs）と同じ理由。
+// LIMIT は結果全体にしか掛からないので、そのままでは「投稿ごとに N 件」にならず、
+// 1つの人気投稿が窓を食い潰して他の投稿のいいねが0件になる。
+func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error) {
 	if len(postIDs) == 0 {
 		return make(map[int64][]*model.Favorite), nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, 0, len(postIDs)+2)
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, q.Offset, q.Offset+q.Limit)
+
+	query := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT id, user_id, post_id, created_at,
+			       ROW_NUMBER() OVER (PARTITION BY post_id ORDER BY created_at DESC, id DESC) AS row_num
+			FROM favorites
+			WHERE post_id IN (%s)
+		)
+		SELECT id, user_id, post_id, created_at
+		FROM ranked
+		WHERE row_num > ? AND row_num <= ?
+		ORDER BY post_id, row_num
+	`, strings.Join(placeholders, ","))
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]*model.Favorite)
+	for rows.Next() {
+		var f model.Favorite
+		var createdAtUnix int64
+		if err := rows.Scan(&f.ID, &f.UserID, &f.PostID, &createdAtUnix); err != nil {
+			return nil, err
+		}
+		f.CreatedAt = time.Unix(createdAtUnix, 0)
+		result[f.PostID] = append(result[f.PostID], &f)
+	}
+	return result, rows.Err()
+}
+
+// CountFavoritesByPostIDs は投稿ごとのいいね件数を1クエリで数える。
+//
+// GetFavoritesByPostIDs と違って行は1つも持ち帰らない。表示に要るのが件数だけの
+// 経路（一覧・詳細の LikeButton）はこちらを通す。
+func (r *MySQLFavoriteRepository) CountFavoritesByPostIDs(ctx context.Context, postIDs []int64) (map[int64]int, error) {
+	result := make(map[int64]int, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
 	}
 
 	placeholders := make([]string, len(postIDs))
@@ -203,28 +236,66 @@ func (r *MySQLFavoriteRepository) GetFavoritesByPostIDs(ctx context.Context, pos
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, user_id, post_id, created_at
+		SELECT post_id, COUNT(*)
 		FROM favorites
 		WHERE post_id IN (%s)
-		ORDER BY created_at DESC
+		GROUP BY post_id
 	`, strings.Join(placeholders, ","))
 
-	rows, err := r.DB.QueryContext(ctx, query, args...)
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make(map[int64][]*model.Favorite)
 	for rows.Next() {
-		var f model.Favorite
-		var createdAtUnix int64
-		// ※DBのカラム構成に合わせてScanする
-		if err := rows.Scan(&f.ID, &f.UserID, &f.PostID, &createdAtUnix); err != nil {
+		var postID int64
+		var count int
+		if err := rows.Scan(&postID, &count); err != nil {
 			return nil, err
 		}
-		f.CreatedAt = time.Unix(createdAtUnix, 0)
-		result[f.PostID] = append(result[f.PostID], &f)
+		result[postID] = count
+	}
+	return result, rows.Err()
+}
+
+// ListPostIDsFavoritedBy は postIDs のうち userID がいいねしたものを返す。
+//
+// 「自分がいいねしたか」を出すためだけに全いいね行を運ぶのをやめるための口。
+// 自分の行しか見ないので、投稿のいいね数がいくつでも戻る行数は
+// 「一覧に出ている投稿のうち自分がいいねした数」で頭打ちになる。
+func (r *MySQLFavoriteRepository) ListPostIDsFavoritedBy(ctx context.Context, userID int64, postIDs []int64) (map[int64]bool, error) {
+	result := make(map[int64]bool, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]interface{}, 0, len(postIDs)+1)
+	args = append(args, userID)
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT post_id
+		FROM favorites
+		WHERE user_id = ? AND post_id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		if err := rows.Scan(&postID); err != nil {
+			return nil, err
+		}
+		result[postID] = true
 	}
 	return result, rows.Err()
 }

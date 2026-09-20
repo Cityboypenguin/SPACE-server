@@ -27,7 +27,10 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	`
 	args := []interface{}{id}
 
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
 	row := r.DB.QueryRowContext(ctx, query, args...)
 
 	var p model.Post
@@ -69,7 +72,10 @@ func (r *MySQLPostRepository) GetPostsByIDs(ctx context.Context, ids []int64) ([
 		WHERE id IN (%s) AND deleted_at IS NULL
 	`, strings.Join(placeholders, ","))
 
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -209,13 +215,20 @@ func createPost(ctx context.Context, execer dbtx, p *model.Post) (int64, error) 
 	return id, nil
 }
 
+// UpdatePost は本文を書き換える。
+//
+// extractDB を通すのは、呼び出し側（usecase/post の UpdatePostInteractor）が
+// 本文・ハッシュタグ・メンション・添付の更新を1つの RunInTx にまとめているため。
+// r.DB を直に叩くと、この UPDATE だけがトランザクションの外へ出て即確定し、
+// 後続のハッシュタグ／メンション更新が失敗してロールバックされても本文だけが
+// 残る。本文と、本文から導かれるタグ・メンションが食い違った状態になる。
 func (r *MySQLPostRepository) UpdatePost(ctx context.Context, p *model.Post) error {
 	query := `
 		UPDATE posts 
 		SET content = ?, updated_at = ? 
 		WHERE id = ? AND user_id = ? AND deleted_at IS NULL
 	`
-	res, err := r.DB.ExecContext(ctx, query, p.Content, p.UpdatedAt.Unix(), p.ID, p.UserID)
+	res, err := extractDB(ctx, r.DB).ExecContext(ctx, query, p.Content, p.UpdatedAt.Unix(), p.ID, p.UserID)
 	if err != nil {
 		return err
 	}
@@ -316,10 +329,6 @@ func (r *MySQLPostRepository) DeletePostsByUserID(ctx context.Context, userID in
 	return err
 }
 
-func (r *MySQLPostRepository) RecalculateReplyCounts(ctx context.Context) error {
-	return recalculatePostReplyCounts(ctx, extractDB(ctx, r.DB))
-}
-
 func (r *MySQLPostRepository) RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, `
 		WITH RECURSIVE affected_ancestors AS (
@@ -364,43 +373,17 @@ type replyCountExecer interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
-func recalculatePostReplyCounts(ctx context.Context, execer replyCountExecer) error {
-	_, err := execer.ExecContext(ctx, `
-		WITH RECURSIVE visible_descendants AS (
-			SELECT parent_id AS ancestor_id, id AS descendant_id
-			FROM posts
-			WHERE parent_id IS NOT NULL AND deleted_at IS NULL
-
-			UNION ALL
-
-			SELECT vd.ancestor_id, p.id
-			FROM visible_descendants vd
-			JOIN posts p ON p.parent_id = vd.descendant_id
-			WHERE p.deleted_at IS NULL
-		),
-		reply_counts AS (
-			SELECT ancestor_id, COUNT(*) AS reply_count
-			FROM visible_descendants
-			GROUP BY ancestor_id
-		)
-		UPDATE posts p
-		LEFT JOIN reply_counts rc ON rc.ancestor_id = p.id
-		SET p.reply_count = COALESCE(rc.reply_count, 0)
-	`)
-	return err
-}
-
-func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
-	var total int
-	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM posts`).Scan(&total); err != nil {
+func (r *MySQLPostRepository) ListPosts(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM posts`)
+	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
 		FROM posts
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		ORDER BY created_at DESC, id DESC
+		LIMIT ? OFFSET ?`, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -433,7 +416,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, limit, offset int) 
 	return posts, total, nil
 }
 
-func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM favorite_users fu
@@ -442,9 +425,12 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	`
 	var countArgs []interface{}
 	countArgs = append(countArgs, userID)
-	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -460,13 +446,16 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	`
 	var args []interface{}
 	args = append(args, userID)
-	query, args = AppendBlockFilter(ctx, query, args, "p.user_id")
+	query, args, err = AppendBlockFilter(ctx, query, args, "p.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
 	query += `
 		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at
-		ORDER BY score DESC, p.created_at DESC
+		ORDER BY score DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?
 	`
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -502,15 +491,23 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	return posts, total, rows.Err()
 }
 
-func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]*model.Post, error) {
+func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string, q repository.PageQuery) ([]*model.Post, error) {
 	searchQuery := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count, deleted_at
 		FROM posts
 		WHERE content LIKE ?  AND deleted_at IS NULL
 	`
 	args := []interface{}{"%" + query + "%"}
-	searchQuery, args = AppendBlockFilter(ctx, searchQuery, args, "user_id")
-	searchQuery += " ORDER BY created_at DESC"
+	searchQuery, args, err := AppendBlockFilter(ctx, searchQuery, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
+	// id を第2キーに足してあるのは、offset ページングで並びを固定するため。
+	// created_at は秒精度なので同時刻の投稿が普通に並ぶ。第2キーが無いと
+	// ページごとに順序が変わりうるので、「2ページ目で同じ投稿がまた出る」
+	// 「間の1件が出ない」が起きる。
+	searchQuery += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, searchQuery, args...)
 	if err != nil {
@@ -546,7 +543,7 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string) ([]
 	return posts, nil
 }
 
-func (r *MySQLPostRepository) SearchPostsByHashtag(ctx context.Context, tag string) ([]*model.Post, error) {
+func (r *MySQLPostRepository) SearchPostsByHashtag(ctx context.Context, tag string, q repository.PageQuery) ([]*model.Post, error) {
 	searchQuery := `
 		SELECT DISTINCT p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, p.deleted_at
 		FROM posts p
@@ -554,8 +551,13 @@ func (r *MySQLPostRepository) SearchPostsByHashtag(ctx context.Context, tag stri
 		WHERE h.tag = ? AND p.deleted_at IS NULL
 	`
 	args := []interface{}{tag}
-	searchQuery, args = AppendBlockFilter(ctx, searchQuery, args, "p.user_id")
-	searchQuery += " ORDER BY p.created_at DESC"
+	searchQuery, args, err := AppendBlockFilter(ctx, searchQuery, args, "p.user_id")
+	if err != nil {
+		return nil, err
+	}
+	// 第2キー（p.id）の理由は SearchPosts と同じ。
+	searchQuery += " ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, searchQuery, args...)
 	if err != nil {
@@ -698,7 +700,7 @@ func scanHashtagSuggestions(rows *sql.Rows) ([]*model.HashtagSuggestion, error) 
 	return suggestions, nil
 }
 
-func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*model.Post, error) {
+func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64, q repository.PageQuery) ([]*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
 		FROM posts
@@ -706,7 +708,15 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	`
 
 	args := []interface{}{id}
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
+	// 並びは id 昇順（＝投稿順）に固定する。以前は ORDER BY が無く、窓を足すと
+	// ページごとに順序が変わりうるので「2ページ目で同じ返信がまた出る」が起きる。
+	query += " ORDER BY id ASC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
+
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -735,12 +745,15 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64) ([]*
 	return posts, nil
 }
 
-func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
-	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -750,9 +763,12 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offs
 		WHERE parent_id IS NULL AND deleted_at IS NULL
 	`
 	var args []interface{}
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -783,12 +799,15 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, limit, offs
 
 // GetFeedPosts はハイブリッドスコアでソートされたトップレベル投稿を返す。
 // score = (いいね数×2 + 返信数×3 + 1) / (経過時間h + 2)^1.5 × フォローブースト(1.5)
-func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
-	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -804,13 +823,16 @@ func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, 
 		WHERE p.parent_id IS NULL AND p.deleted_at IS NULL
 	`
 	args := []interface{}{viewerID}
-	baseQuery, args = AppendBlockFilter(ctx, baseQuery, args, "p.user_id")
+	baseQuery, args, err = AppendBlockFilter(ctx, baseQuery, args, "p.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
 	baseQuery += `
 		GROUP BY p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.reply_count, fu.id
-		ORDER BY score DESC, p.created_at DESC
+		ORDER BY score DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?
 	`
-	args = append(args, limit, offset)
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
@@ -838,7 +860,7 @@ func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, 
 }
 
 // GetRepliesByPostIDs は複数の親PostIDに紐づく返信を1回のSQLで取得する
-func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
+func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error) {
 	if len(parentIDs) == 0 {
 		return make(map[int64][]*model.Post), nil
 	}
@@ -850,14 +872,23 @@ func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`
-		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+	inner := fmt.Sprintf(`
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count,
+		       ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at ASC, id ASC) AS row_num
 		FROM posts
 		WHERE parent_id IN (%s) AND deleted_at IS NULL
 	`, strings.Join(placeholders, ","))
 
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
-	query += " ORDER BY created_at ASC"
+	inner, args, err := AppendBlockFilter(ctx, inner, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
+		FROM (` + inner + `) ranked
+		WHERE row_num > ? AND row_num <= ?
+		ORDER BY parent_id ASC, created_at ASC, id ASC`
+	args = append(args, q.Offset, q.Offset+q.Limit)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -889,7 +920,7 @@ func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs
 	return result, rows.Err()
 }
 
-func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
+func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error) {
 	if len(parentIDs) == 0 {
 		return make(map[int64][]*model.Post), nil
 	}
@@ -902,14 +933,23 @@ func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Cont
 	}
 
 	// ⭕️ AND deleted_at IS NULL を除外
-	query := fmt.Sprintf(`
-		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+	inner := fmt.Sprintf(`
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count,
+		       ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at ASC, id ASC) AS row_num
 		FROM posts
 		WHERE parent_id IN (%s)
 	`, strings.Join(placeholders, ","))
 
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
-	query += " ORDER BY created_at ASC"
+	inner, args, err := AppendBlockFilter(ctx, inner, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
+		FROM (` + inner + `) ranked
+		WHERE row_num > ? AND row_num <= ?
+		ORDER BY parent_id ASC, created_at ASC, id ASC`
+	args = append(args, q.Offset, q.Offset+q.Limit)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -984,7 +1024,10 @@ func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*m
 	args := []interface{}{postID, postID}
 
 	// ancestors（CTE結果）の user_id に対してブロックフィルターをかける
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, err
+	}
 
 	// フィルター適用後に LIMIT を追加する
 	query += " LIMIT 1"
@@ -1027,7 +1070,7 @@ func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*m
 	return &p, nil
 }
 
-func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `
 		SELECT COUNT(*) 
 		FROM favorites f
@@ -1036,10 +1079,13 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	`
 	var countArgs []interface{}
 	countArgs = append(countArgs, userID)
-	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
+	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -1051,10 +1097,16 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	`
 	var args []interface{}
 	args = append(args, userID)
-	query, args = AppendBlockFilter(ctx, query, args, "p.user_id")
-	query, args = AppendBlockFilter(ctx, query, args, "f.user_id")
-	query += " ORDER BY f.created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	query, args, err = AppendBlockFilter(ctx, query, args, "p.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	query, args, err = AppendBlockFilter(ctx, query, args, "f.user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	query += " ORDER BY f.created_at DESC, p.id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -1089,13 +1141,16 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	return posts, total, nil
 }
 
-func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
+func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL`
 	countArgs := []interface{}{userID}
-	countQuery, countArgs = AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	if err != nil {
+		return nil, 0, err
+	}
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -1105,9 +1160,12 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 		WHERE user_id = ? AND deleted_at IS NULL
 	`
 	args := []interface{}{userID}
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -1138,10 +1196,85 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 func (r *MySQLPostRepository) CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error) {
 	query := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at > ? AND user_id != ?`
 	args := []interface{}{since.Unix(), viewerID}
-	query, args = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	if err != nil {
+		return 0, err
+	}
 	var count int
 	if err := r.DB.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
+}
+
+// CreatePostMentions は投稿に紐づくメンションを一括登録する。
+// 呼び出し側でトランザクションが張られていればそれを利用する。
+// 同じ投稿で同じ相手を指す行は一意制約で弾かれるが、抽出側で重複除去済みのため
+// 実際には発生しない（INSERT IGNORE は競合時の再送を無害にするための保険）。
+func (r *MySQLPostRepository) CreatePostMentions(ctx context.Context, postID int64, mentions []*model.Mention) error {
+	if len(mentions) == 0 {
+		return nil
+	}
+
+	execer := extractDB(ctx, r.DB)
+	now := time.Now().Unix()
+
+	var sb strings.Builder
+	sb.WriteString("INSERT IGNORE INTO post_mentions (post_id, mentioned_user_id, mention_text, created_at) VALUES ")
+	args := make([]interface{}, 0, len(mentions)*4)
+	for i, m := range mentions {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("(?, ?, ?, ?)")
+		args = append(args, postID, m.UserID, m.Text, now)
+	}
+
+	_, err := execer.ExecContext(ctx, sb.String(), args...)
+	return err
+}
+
+// DeletePostMentionsByPostID は投稿に紐づく全メンションを削除する（編集時の再同期用）。
+func (r *MySQLPostRepository) DeletePostMentionsByPostID(ctx context.Context, postID int64) error {
+	execer := extractDB(ctx, r.DB)
+	_, err := execer.ExecContext(ctx, "DELETE FROM post_mentions WHERE post_id = ?", postID)
+	return err
+}
+
+// ListMentionsByPostIDs は投稿IDごとのメンション一覧を返す。
+// 投稿一覧での N+1 を避けるため DataLoader から1クエリでまとめて呼ばれる。
+func (r *MySQLPostRepository) ListMentionsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Mention, error) {
+	result := make(map[int64][]*model.Mention, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(postIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT post_id, mentioned_user_id, mention_text
+		FROM post_mentions
+		WHERE post_id IN (%s)
+		ORDER BY id ASC
+	`, placeholders)
+
+	args := make([]interface{}, len(postIDs))
+	for i, id := range postIDs {
+		args[i] = id
+	}
+
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		var m model.Mention
+		if err := rows.Scan(&postID, &m.UserID, &m.Text); err != nil {
+			return nil, err
+		}
+		result[postID] = append(result[postID], &m)
+	}
+	return result, rows.Err()
 }

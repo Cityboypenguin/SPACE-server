@@ -19,16 +19,65 @@ const (
 	UserStatusFrozen = "frozen"
 )
 
+// User は表示に使うユーザー。パスワードハッシュもメールアドレスも持たない。
+//
+// 以前は HashedPassword もこの型にあり、表示用の取得（一覧・検索・ルームの
+// メンバー・メンションの解決・DataLoader の UserLoader）まで軒並み
+// hashed_password を SELECT していた。秘密が表示系のコードパスに載ると、
+// 取り違えて外へ出す事故の可能性がその経路の数だけ増える。
+//
+// 秘密は UserCredentials にだけ置き、「この型を持っている限りハッシュを
+// 触れない」ことを型で保証する。列を落とすだけにしなかったのは、構造体の
+// フィールドが残っていると、SELECT を書き足した誰かが表示系にハッシュを
+// 載せ直せてしまうため（それはコンパイルでは止まらない）。
+//
+// # Email も同じ理由でここから外した
+//
+// 以前は「GraphQL の User.email が非 null の公開フィールドだから外せない」として
+// Email をここに残していた。その GraphQL 側を直した（User から email を外し、
+// 本人・管理者だけが辿れる UserAccount に移した）ので、前提が消えた。
+//
+// メールアドレスは本人の連絡先＝個人情報で、表示系（投稿の作者・ルームのメンバー・
+// 検索結果）には要らない。ハッシュのときと同じ扱いにする: 表示系が持つ型からは
+// フィールドごと消し、必要な経路だけが UserAccount を取る。
 type User struct {
-	ID             int64
-	AccountID      string
-	Name           string
-	Email          string
-	HashedPassword string
-	Role           string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID        int64
+	AccountID string
+	Name      string
+	Role      string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// UserAccount は本人・管理者向けのユーザー。User に連絡先（Email）を足したもの。
+//
+// これを取得してよいのは、呼び出し元が「本人」か「管理者」だと確かめられる経路だけ:
+//   - 本人: me / updateUser / loginUser / createUser
+//   - 管理者: ユーザー一覧・検索・詳細・adminUpdateUser・規約の同意者一覧
+//
+// GraphQL の UserAccount 型と1対1で対応する（graph/schema.graphqls のコメント参照）。
+// 迷ったら User を使うこと。足りなければコンパイルが止まるが、
+// 余分に持っていても何も止まらない（＝漏れる側にだけ倒れる）。
+type UserAccount struct {
+	User
+	Email string
+}
+
+// UserCredentials は認証に使う秘密を伴うユーザー。
+//
+// これを取得してよいのは認証の経路だけ:
+//   - ログイン（LoginUserUseCase）
+//   - パスワード変更時の現在パスワード照合（UpdateUserUseCase）
+//   - パスワード再設定（ResetPasswordUseCase）
+//   - 新規登録（CreateUserUseCase）
+//
+// トークン検証（internal/auth.ValidateAndVerifyToken）は凍結状態しか見ないので
+// 公開情報の GetUserByID を使う。認証まわりでも、秘密が要らないなら取らない。
+type UserCredentials struct {
+	UserAccount
+	HashedPassword     string
+	CredentialsVersion int64
 }
 
 type CreateUserParam struct {
@@ -92,7 +141,8 @@ func hashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
-func (u *User) CreateUser(param CreateUserParam) error {
+// CreateUser は新規登録。パスワードをハッシュ化するので UserCredentials 側にある。
+func (c *UserCredentials) CreateUser(param CreateUserParam) error {
 	if err := ValidateAccountID(param.AccountID); err != nil {
 		return err
 	}
@@ -105,17 +155,35 @@ func (u *User) CreateUser(param CreateUserParam) error {
 		return err
 	}
 
-	u.AccountID = param.AccountID
-	u.Name = param.Name
-	u.Email = param.Email
-	u.HashedPassword = hashedPassword
-	u.CreatedAt = param.CreatedAt
-	u.UpdatedAt = param.UpdatedAt
+	c.AccountID = param.AccountID
+	c.Name = param.Name
+	c.Email = param.Email
+	c.HashedPassword = hashedPassword
+	c.CreatedAt = param.CreatedAt
+	c.UpdatedAt = param.UpdatedAt
 
 	return nil
 }
 
-func (u *User) UpdateUser(param UpdateUserParam) error {
+// UpdateProfile は公開情報だけを更新する（表示系の更新経路用）。
+//
+// パスワードを渡されたら黙って無視せずエラーにする。無視すると「変更したのに
+// 変わっていない」という気づけない壊れ方になるので、秘密を扱える
+// UserCredentials.UpdateUser を使えと明示的に知らせる。
+//
+// メールアドレスも同じ。User は Email を持たないので、渡されても書き込む先が無い。
+// 黙って捨てず、連絡先を扱える UserAccount 経由で更新しろとエラーで知らせる。
+func (u *User) UpdateProfile(param UpdateUserParam) error {
+	if param.Password != nil {
+		return fmt.Errorf("password changes must go through UserCredentials.UpdateUser")
+	}
+	if param.Email != nil {
+		return fmt.Errorf("email changes must go through UserAccount")
+	}
+	return u.applyPublicUpdate(param)
+}
+
+func (u *User) applyPublicUpdate(param UpdateUserParam) error {
 	if param.AccountID != nil {
 		if err := ValidateAccountID(*param.AccountID); err != nil {
 			return err
@@ -128,16 +196,43 @@ func (u *User) UpdateUser(param UpdateUserParam) error {
 		}
 		u.Name = *param.Name
 	}
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
+// applyAccountUpdate は公開情報に加えてメールアドレスを更新する。
+// 埋め込んだ User の UpdateProfile は Email を拒否するので、連絡先を書けるのは
+// この経路（＝UserAccount を持っている呼び出し元）だけになる。
+func (a *UserAccount) applyAccountUpdate(param UpdateUserParam) error {
+	if err := a.applyPublicUpdate(param); err != nil {
+		return err
+	}
 	if param.Email != nil {
-		u.Email = *param.Email
+		a.Email = *param.Email
+	}
+	return nil
+}
+
+// UpdateProfile は連絡先までを更新する（本人・管理者の更新経路用）。
+// 埋め込んだ User.UpdateProfile を意図的に隠している。
+func (a *UserAccount) UpdateProfile(param UpdateUserParam) error {
+	if param.Password != nil {
+		return fmt.Errorf("password changes must go through UserCredentials.UpdateUser")
+	}
+	return a.applyAccountUpdate(param)
+}
+
+// UpdateUser は公開情報とパスワードをまとめて更新する（認証の経路用）。
+func (c *UserCredentials) UpdateUser(param UpdateUserParam) error {
+	if err := c.applyAccountUpdate(param); err != nil {
+		return err
 	}
 	if param.Password != nil {
 		hashedPassword, err := hashPassword(*param.Password)
 		if err != nil {
 			return err
 		}
-		u.HashedPassword = hashedPassword
+		c.HashedPassword = hashedPassword
 	}
-	u.UpdatedAt = time.Now()
 	return nil
 }

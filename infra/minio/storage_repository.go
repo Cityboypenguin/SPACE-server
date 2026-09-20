@@ -3,10 +3,12 @@ package miniorepo
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -15,6 +17,7 @@ type MinIOStorageRepository struct {
 	client         *minio.Client
 	presignClient  *minio.Client
 	bucket         string
+	privateBucket  string
 	publicEndpoint string
 	bucketLookup   minio.BucketLookupType
 }
@@ -24,6 +27,10 @@ func New() (*MinIOStorageRepository, error) {
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	bucket := os.Getenv("MINIO_BUCKET")
+	privateBucket := os.Getenv("MINIO_PRIVATE_BUCKET")
+	if privateBucket == "" {
+		privateBucket = bucket + "-private"
+	}
 	useSSL := os.Getenv("MINIO_USE_SSL") == "true"
 	publicEndpoint := os.Getenv("MINIO_PUBLIC_ENDPOINT")
 
@@ -69,6 +76,7 @@ func New() (*MinIOStorageRepository, error) {
 		client:         client,
 		presignClient:  presignClient,
 		bucket:         bucket,
+		privateBucket:  privateBucket,
 		publicEndpoint: publicEndpoint,
 		bucketLookup:   bucketLookup,
 	}, nil
@@ -87,6 +95,20 @@ func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey 
 	return u.String(), nil
 }
 
+// StatObject は保存済みオブジェクトの実寸と Content-Type を返す。
+// 署名付き PUT では上限を縛れないので、受け入れ時にここで実物を測る
+// （repository.StorageRepository のコメント参照）。
+func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error) {
+	info, err := r.client.StatObject(ctx, r.bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return repository.ObjectInfo{}, repository.ErrObjectNotFound
+		}
+		return repository.ObjectInfo{}, err
+	}
+	return repository.ObjectInfo{Size: info.Size, ContentType: info.ContentType}, nil
+}
+
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 	if r.bucketLookup == minio.BucketLookupDNS {
 		u, err := url.Parse(r.publicEndpoint)
@@ -99,4 +121,37 @@ func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 
 func (r *MinIOStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	return r.client.RemoveObject(ctx, r.bucket, objectKey, minio.RemoveObjectOptions{})
+}
+
+func (r *MinIOStorageRepository) PutPrivateObject(ctx context.Context, objectKey, contentType string, body io.Reader, size int64) error {
+	_, err := r.client.PutObject(ctx, r.privateBucket, objectKey, body, size, minio.PutObjectOptions{ContentType: contentType})
+	return err
+}
+
+func (r *MinIOStorageRepository) OpenPrivateObject(ctx context.Context, objectKey string) (io.ReadCloser, error) {
+	object, err := r.client.GetObject(ctx, r.privateBucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	// GetObject can defer a missing-object error until the first read.
+	if _, err := object.Stat(); err != nil {
+		_ = object.Close()
+		return nil, err
+	}
+	return object, nil
+}
+
+func (r *MinIOStorageRepository) DeletePrivateObject(ctx context.Context, objectKey string) error {
+	return r.client.RemoveObject(ctx, r.privateBucket, objectKey, minio.RemoveObjectOptions{})
+}
+
+func (r *MinIOStorageRepository) ListPrivateObjects(ctx context.Context, prefix string) ([]repository.PrivateObject, error) {
+	var objects []repository.PrivateObject
+	for item := range r.client.ListObjects(ctx, r.privateBucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if item.Err != nil {
+			return nil, item.Err
+		}
+		objects = append(objects, repository.PrivateObject{Key: item.Key, LastModified: item.LastModified})
+	}
+	return objects, nil
 }

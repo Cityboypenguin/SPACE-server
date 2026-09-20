@@ -1,0 +1,115 @@
+package answer
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
+	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+)
+
+const MaxMediaCount = 4
+
+type AnswerQuestionUseCase interface {
+	Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (*model.Answer, error)
+}
+
+var _ AnswerQuestionUseCase = &AnswerQuestionInteractor{}
+
+type AnswerQuestionInteractor struct {
+	questionRepo    repository.QuestionRepository
+	answerRepo      repository.AnswerRepository
+	mediaRepo       repository.MediaRepository
+	txManager       repository.TxManager
+	requireWritable course.RequireWritableCourseRoomUseCase
+	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
+}
+
+func NewAnswerQuestionUseCase(
+	questionRepo repository.QuestionRepository,
+	answerRepo repository.AnswerRepository,
+	mediaRepo repository.MediaRepository,
+	txManager repository.TxManager,
+	requireWritable course.RequireWritableCourseRoomUseCase,
+	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
+) AnswerQuestionUseCase {
+	return &AnswerQuestionInteractor{
+		questionRepo:    questionRepo,
+		answerRepo:      answerRepo,
+		mediaRepo:       mediaRepo,
+		txManager:       txManager,
+		requireWritable: requireWritable,
+		anonIdentity:    anonIdentity,
+	}
+}
+
+func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (*model.Answer, error) {
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(mediaInputs) > MaxMediaCount {
+		return nil, apperr.InvalidInput(fmt.Sprintf("写真は%d枚まで添付できます", MaxMediaCount))
+	}
+	if err := validateBody(body); err != nil {
+		return nil, err
+	}
+	prefix := fmt.Sprintf("media/%d/", claims.ID)
+	for _, input := range mediaInputs {
+		if !strings.HasPrefix(input.StorageKey, prefix) {
+			return nil, fmt.Errorf("invalid media key")
+		}
+	}
+
+	q, err := uc.questionRepo.GetQuestionByID(ctx, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if q == nil {
+		return nil, apperr.NotFound("質問が見つかりません")
+	}
+	if _, err := uc.requireWritable.Execute(ctx, q.RoomID); err != nil {
+		return nil, err
+	}
+
+	// 匿名ID(匿名NNN)は投稿時に確定させる（質問・投票・メッセージと同じ扱い）。
+	// 詳細は usecase/chat の ensureAnonymousIdentity のコメントを参照。
+	if _, err := uc.anonIdentity.Execute(ctx, q.RoomID, claims.ID); err != nil {
+		return nil, err
+	}
+
+	a := &model.Answer{
+		QuestionID:   questionID,
+		AuthorUserID: claims.ID,
+		AuthorRole:   model.AuthorRoleStudent,
+		Body:         body,
+	}
+
+	now := time.Now()
+	if err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
+		if err := uc.answerRepo.SaveAnswer(ctx, a); err != nil {
+			return err
+		}
+		// 添付はまとめて保存する（media 行を1本、紐付けを1本）。以前は入力1件ごとに
+		// 2往復していたので、4枚付けると8往復していた。
+		if medias := model.NewMediaBatch(claims.ID, mediaInputs, now); len(medias) > 0 {
+			if err := uc.mediaRepo.CreateMediaBatch(ctx, medias); err != nil {
+				return err
+			}
+			if err := uc.mediaRepo.CreateAnswerMediaBatch(ctx, a.ID, model.MediaIDs(medias), 0); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}

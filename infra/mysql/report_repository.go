@@ -100,7 +100,7 @@ func (r *MySQLReportRepository) UpdateStatus(ctx context.Context, id string, sta
 	return r.FindByID(ctx, id)
 }
 
-func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter, limit, offset int) ([]*model.Report, int, error) {
+func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.ReportSearchFilter, q repository.PageQuery) ([]*model.Report, int, error) {
 	countQuery := `SELECT COUNT(*) FROM user_reports WHERE 1=1`
 	var countArgs []interface{}
 
@@ -119,8 +119,8 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 		}
 	}
 
-	var total int
-	if err := r.DB.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	total, err := countForPage(ctx, r.DB, q, countQuery, countArgs...)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count reports: %w", err)
 	}
 
@@ -146,8 +146,8 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 		}
 	}
 
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	query += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+	args = append(args, q.Limit, q.Offset)
 
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {

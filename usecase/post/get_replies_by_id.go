@@ -8,7 +8,7 @@ import (
 )
 
 type GetRepliesByIDUseCase interface {
-	Execute(ctx context.Context, postID int64) ([]*model.Post, error)
+	Execute(ctx context.Context, postID int64, q repository.PageQuery) ([]*model.Post, error)
 }
 
 var _ GetRepliesByIDUseCase = &GetRepliesByIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetRepliesByIDUseCase(postRepo repository.PostRepository) GetRepliesByID
 	}
 }
 
-func (uc *GetRepliesByIDInteractor) Execute(ctx context.Context, postID int64) ([]*model.Post, error) {
-	return uc.postRepo.GetRepliesByID(ctx, postID)
+func (uc *GetRepliesByIDInteractor) Execute(ctx context.Context, postID int64, q repository.PageQuery) ([]*model.Post, error) {
+	return uc.postRepo.GetRepliesByID(ctx, postID, q)
 }

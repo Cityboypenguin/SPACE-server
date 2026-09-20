@@ -8,7 +8,7 @@ import (
 )
 
 type ListNotificationGroupsUseCase interface {
-	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.NotificationGroup, int, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.NotificationGroup, int, error)
 }
 
 var _ ListNotificationGroupsUseCase = &listNotificationGroupsInteractor{}
@@ -21,9 +21,9 @@ func NewListNotificationGroupsUseCase(repo repository.NotificationRepository) Li
 	return &listNotificationGroupsInteractor{repo: repo}
 }
 
-func (uc *listNotificationGroupsInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.NotificationGroup, int, error) {
-	if limit <= 0 {
-		limit = defaultLimit
+func (uc *listNotificationGroupsInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.NotificationGroup, int, error) {
+	if q.Limit <= 0 {
+		q.Limit = defaultLimit
 	}
-	return uc.repo.ListGroupedByUserID(ctx, userID, limit, offset)
+	return uc.repo.ListGroupedByUserID(ctx, userID, q)
 }

@@ -14,7 +14,9 @@ import (
 type LoginUserResult struct {
 	AccessToken  string
 	RefreshToken string
-	User         *model.User
+	// User はログインした本人。自分のメールアドレスは自分に見せてよいので
+	// 連絡先を含む UserAccount（GraphQL の UserAuthPayload.user に対応）。
+	User *model.UserAccount
 }
 
 type LoginUserUseCase interface {
@@ -32,7 +34,8 @@ func NewLoginUserUseCase(userRepo repository.UserRepository) LoginUserUseCase {
 }
 
 func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password string) (*LoginUserResult, error) {
-	user, err := uc.userRepo.FindByEmail(ctx, email)
+	// ログインだけが照合用のハッシュを取ってよい経路。
+	user, err := uc.userRepo.FindCredentialsByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +51,18 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, errors.New("account is frozen")
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Role)
+	accessToken, err := auth.GenerateUserAccessToken(user.ID, user.Role, user.CredentialsVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := auth.GenerateRefreshToken(user.ID, user.Role)
+	refreshToken, err := auth.GenerateUserRefreshToken(user.ID, user.Role, user.CredentialsVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: user}, nil
+	// 呼び出し元（リゾルバ）へ返すのはハッシュを外した本人ぶん。
+	// ハッシュはこの関数の外へ出さない。
+	account := user.UserAccount
+	return &LoginUserResult{AccessToken: accessToken, RefreshToken: refreshToken, User: &account}, nil
 }

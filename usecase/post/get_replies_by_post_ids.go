@@ -8,7 +8,7 @@ import (
 )
 
 type GetRepliesByPostIDsUseCase interface {
-	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
+	Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error)
 }
 
 var _ GetRepliesByPostIDsUseCase = &GetRepliesByPostIDsInteractor{}
@@ -23,6 +23,6 @@ func NewGetRepliesByPostIDsUseCase(postRepo repository.PostRepository) GetReplie
 	}
 }
 
-func (uc *GetRepliesByPostIDsInteractor) Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
-	return uc.postRepo.GetRepliesByPostIDs(ctx, parentIDs)
+func (uc *GetRepliesByPostIDsInteractor) Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error) {
+	return uc.postRepo.GetRepliesByPostIDs(ctx, parentIDs, q)
 }

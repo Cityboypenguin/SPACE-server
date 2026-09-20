@@ -5,7 +5,9 @@ import (
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 const timeFormat = "2006-01-02T15:04:05Z07:00"
@@ -23,6 +25,8 @@ func toGraphHashtagSuggestions(suggestions []*model.HashtagSuggestion) []*gqlmod
 	return result
 }
 
+// toGraphUser は「他人に見せてよいユーザー像」への変換。連絡先は載らない
+// （gqlmodel.User に Email フィールドが無いので、載せようとしても書けない）。
 func toGraphUser(user *model.User) *gqlmodel.User {
 	if user == nil {
 		return nil
@@ -31,11 +35,31 @@ func toGraphUser(user *model.User) *gqlmodel.User {
 		ID:        encodeGraphID("user", user.ID),
 		AccountID: user.AccountID,
 		Name:      user.Name,
-		Email:     user.Email,
 		Role:      user.Role,
 		Status:    user.Status,
 		CreatedAt: user.CreatedAt.Format(timeFormat),
 		UpdatedAt: user.UpdatedAt.Format(timeFormat),
+	}
+}
+
+// toGraphUserAccount は本人・管理者向けの変換。連絡先を載せる。
+//
+// 呼んでよいのは、本人か管理者しか辿れないとリゾルバで保証できるフィールドだけ
+// （graph/schema.graphqls の UserAccount のコメントに一覧がある）。
+// 表示のためにユーザーを返すだけなら toGraphUser を使うこと。
+func toGraphUserAccount(account *model.UserAccount) *gqlmodel.UserAccount {
+	if account == nil {
+		return nil
+	}
+	return &gqlmodel.UserAccount{
+		ID:        encodeGraphID("user", account.ID),
+		AccountID: account.AccountID,
+		Name:      account.Name,
+		Email:     account.Email,
+		Role:      account.Role,
+		Status:    account.Status,
+		CreatedAt: account.CreatedAt.Format(timeFormat),
+		UpdatedAt: account.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -49,7 +73,6 @@ func toGraphDeletedUserWithID(id int64) *gqlmodel.User {
 		ID:        encodeGraphID("user", id),
 		AccountID: "deleted-account",
 		Name:      deletedAccountDisplayName,
-		Email:     "",
 		Role:      "",
 		Status:    "",
 		CreatedAt: deletedAt,
@@ -99,11 +122,200 @@ func toGraphCommunity(c *model.Community, avatarURL string) *gqlmodel.Community 
 	}
 }
 
+func toGraphCourse(c *model.Course) *gqlmodel.Course {
+	if c == nil {
+		return nil
+	}
+	return &gqlmodel.Course{
+		ID:          encodeGraphID("course", c.ID),
+		RoomID:      encodeGraphID("room", c.RoomID),
+		DayOfWeek:   c.DayOfWeek,
+		Period:      int32(c.Period),
+		TeacherName: c.TeacherName,
+		CourseName:  c.CourseName,
+		Year:        int32(c.Year),
+		Semester:    c.Semester,
+		CreatedAt:   c.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphCourseImportStatus(status courseimport.Status) *gqlmodel.CourseImportStatus {
+	out := &gqlmodel.CourseImportStatus{
+		State: gqlmodel.CourseImportState(status.State),
+	}
+	if status.Year != 0 {
+		year := int32(status.Year)
+		out.Year = &year
+	}
+	if status.State == courseimport.StateSucceeded {
+		imported := int32(status.Imported)
+		skipped := int32(status.Skipped)
+		out.Imported = &imported
+		out.Skipped = &skipped
+	}
+	if status.ErrorMessage != "" {
+		out.ErrorMessage = &status.ErrorMessage
+	}
+	if status.State == courseimport.StateRunning && status.Total > 0 {
+		processed := int32(status.Processed)
+		total := int32(status.Total)
+		percent := int32(status.Processed * 100 / status.Total)
+		out.ProcessedCount = &processed
+		out.TotalCount = &total
+		out.ProgressPercent = &percent
+	}
+	if status.StartedAt != nil {
+		startedAt := status.StartedAt.Format(timeFormat)
+		out.StartedAt = &startedAt
+	}
+	if status.FinishedAt != nil {
+		finishedAt := status.FinishedAt.Format(timeFormat)
+		out.FinishedAt = &finishedAt
+	}
+	return out
+}
+
+func toGraphTimetableEntry(t *model.Timetable, course *model.Course) *gqlmodel.TimetableEntry {
+	if t == nil {
+		return nil
+	}
+	return &gqlmodel.TimetableEntry{
+		ID:        encodeGraphID("timetable", t.ID),
+		Course:    toGraphCourse(course),
+		Color:     gqlmodel.TimetableEntryColor(t.Color),
+		CreatedAt: t.CreatedAt.Format(timeFormat),
+	}
+}
+
+// toGraphAnonymousUser builds a synthetic User for a course-room author, using the
+// per-room anonymous identity instead of the real account. The ID is derived from
+// the identity row (not the real user ID), so it cannot be correlated with the
+// user's identity elsewhere in the app.
+func toGraphAnonymousUser(identity *model.RoomAnonymousIdentity) *gqlmodel.User {
+	if identity == nil {
+		return nil
+	}
+	createdAt := identity.CreatedAt.Format(timeFormat)
+	return &gqlmodel.User{
+		ID:        encodeGraphID("anon", identity.ID),
+		AccountID: "",
+		Name:      identity.Label,
+		Role:      "",
+		Status:    "",
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
+	}
+}
+
+// anonymousPlaceholderLabel は匿名IDの行が見つからないときに使う、番号なしの
+// 匿名ラベル。実名の代わりに出す安全側の表示名。
+const anonymousPlaceholderLabel = "匿名"
+
+// anonymousPlaceholderUser は授業ルームなのに匿名IDの行が見つからないときの表示。
+//
+// ここで実名（実ユーザー）にフォールバックしてはいけない。授業内チャットは
+// 匿名が前提なので、行が引けなかっただけで実名が出てしまうと匿名性が壊れる。
+// 番号を持たない「匿名」ラベルに退化させるのが安全側の倒し方。
+// 通常は投稿時に必ず採番される（usecase/chat の ensureAnonymousIdentity）ので、
+// ここに来るのは採番前の古いデータか、採番に失敗した投稿だけ。
+func anonymousPlaceholderUser() *gqlmodel.User {
+	return &gqlmodel.User{
+		ID:        encodeGraphID("anon", 0),
+		AccountID: "",
+		Name:      anonymousPlaceholderLabel,
+		Role:      "",
+		Status:    "",
+	}
+}
+
+// toGraphQuestion sets User/BestAnswer as ID-only placeholders (matching the
+// toGraphPost pattern): the questionResolver.User/BestAnswer field resolvers read
+// obj.User.ID / obj.BestAnswer.ID to know what to fetch (and, for User, whether to
+// anonymize it), since Question does not expose a raw askerUserID field.
+func toGraphQuestion(q *model.Question) *gqlmodel.Question {
+	if q == nil {
+		return nil
+	}
+	var bestAnswer *gqlmodel.Answer
+	if q.BestAnswerID != nil {
+		bestAnswer = &gqlmodel.Answer{ID: encodeGraphID("answer", *q.BestAnswerID)}
+	}
+	return &gqlmodel.Question{
+		ID:         encodeGraphID("question", q.ID),
+		RoomID:     encodeGraphID("room", q.RoomID),
+		User:       &gqlmodel.User{ID: encodeGraphID("user", q.AskerUserID)},
+		Body:       q.Body,
+		IsAnswered: q.IsAnswered,
+		BestAnswer: bestAnswer,
+		CreatedAt:  q.CreatedAt.Format(timeFormat),
+		UpdatedAt:  q.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphAnswer(a *model.Answer) *gqlmodel.Answer {
+	if a == nil {
+		return nil
+	}
+	return &gqlmodel.Answer{
+		ID:         encodeGraphID("answer", a.ID),
+		QuestionID: encodeGraphID("question", a.QuestionID),
+		User:       &gqlmodel.User{ID: encodeGraphID("user", a.AuthorUserID)},
+		Body:       a.Body,
+		CreatedAt:  a.CreatedAt.Format(timeFormat),
+		UpdatedAt:  a.UpdatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphAnswerWithLikes(aw *repository.AnswerWithLikes) *gqlmodel.Answer {
+	if aw == nil {
+		return nil
+	}
+	gqlA := toGraphAnswer(aw.Answer)
+	gqlA.LikeCount = int32(aw.LikeCount)
+	gqlA.LikedByMe = aw.LikedByMe
+	return gqlA
+}
+
+// toGraphPoll sets User as an ID-only placeholder (matching the toGraphPost/
+// toGraphQuestion pattern): the pollResolver.User field resolver reads obj.User.ID
+// to know what to fetch (and whether to anonymize it).
+func toGraphPoll(p *model.Poll) *gqlmodel.Poll {
+	if p == nil {
+		return nil
+	}
+	var deadline *string
+	if p.Deadline != nil {
+		formatted := p.Deadline.Format(timeFormat)
+		deadline = &formatted
+	}
+	return &gqlmodel.Poll{
+		ID:                  encodeGraphID("poll", p.ID),
+		RoomID:              encodeGraphID("room", p.RoomID),
+		User:                &gqlmodel.User{ID: encodeGraphID("user", p.AuthorUserID)},
+		Question:            p.Question,
+		AllowMultipleChoice: p.AllowMultipleChoice,
+		Deadline:            deadline,
+		CreatedAt:           p.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toGraphPollOption(o *repository.PollOptionResult) *gqlmodel.PollOption {
+	if o == nil {
+		return nil
+	}
+	return &gqlmodel.PollOption{
+		ID:        encodeGraphID("pollOption", o.Option.ID),
+		Label:     o.Option.Label,
+		VoteCount: int32(o.VoteCount),
+		VotedByMe: o.VotedByMe,
+	}
+}
+
 func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 	if msg == nil {
 		return nil
 	}
-	return &gqlmodel.Message{
+	gql := &gqlmodel.Message{
 		ID:        encodeGraphID("message", msg.ID),
 		RoomID:    encodeGraphID("room", msg.RoomID),
 		UserID:    encodeGraphID("user", msg.UserID),
@@ -111,6 +323,11 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		CreatedAt: msg.CreatedAt.Format(timeFormat),
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
+	if msg.ReplyToID != nil {
+		id := encodeGraphID("message", *msg.ReplyToID)
+		gql.ReplyToID = &id
+	}
+	return gql
 }
 
 func toGraphMedia(m *model.Media, url string) *gqlmodel.Media {
@@ -121,6 +338,8 @@ func toGraphMedia(m *model.Media, url string) *gqlmodel.Media {
 		ID:          encodeGraphID("media", m.ID),
 		URL:         url,
 		ContentType: m.ContentType,
+		Width:       toNullableInt32(m.Width),
+		Height:      toNullableInt32(m.Height),
 		CreatedAt:   m.CreatedAt.Format(timeFormat),
 	}
 }
@@ -154,8 +373,9 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 }
 
 const notificationTargetTypePost = "post"
+const notificationTargetTypeMessage = "message"
 
-func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.Notification {
+func toGraphNotification(n *model.Notification, h notificationHydration) *gqlmodel.Notification {
 	if n == nil {
 		return nil
 	}
@@ -172,14 +392,17 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, 
 	if n.TargetID != nil {
 		id := encodeGraphID(*n.TargetType, *n.TargetID)
 		gql.TargetID = &id
-		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost {
-			if p, ok := postMap[*n.TargetID]; ok {
+		if n.TargetType != nil && *n.TargetType == notificationTargetTypePost && h.postsLoaded {
+			if p, ok := h.posts[*n.TargetID]; ok {
 				gql.TargetPost = toGraphPost(p)
 			}
 		}
 	}
-	if n.ActorID != nil {
-		if u, ok := actorMap[*n.ActorID]; ok {
+	// actor を引いていないなら埋めない。actor が要求されていないときだけ
+	// 引かないので、ここが nil のままでも応答からフィールドが欠けることはない
+	// （notificationHydration のコメント参照）。
+	if n.ActorID != nil && h.actorsLoaded {
+		if u := h.actor(n.ActorID); u != nil {
 			gql.Actor = toGraphUser(u)
 		} else {
 			gql.Actor = toGraphDeletedUserWithID(*n.ActorID)
@@ -188,7 +411,7 @@ func toGraphNotification(n *model.Notification, actorMap map[int64]*model.User, 
 	return gql
 }
 
-func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*model.User, postMap map[int64]*model.Post) *gqlmodel.NotificationGroup {
+func toGraphNotificationGroup(g *model.NotificationGroup, h notificationHydration) *gqlmodel.NotificationGroup {
 	if g == nil {
 		return nil
 	}
@@ -213,14 +436,15 @@ func toGraphNotificationGroup(g *model.NotificationGroup, actorMap map[int64]*mo
 	if g.TargetID != nil {
 		id := encodeGraphID(*g.TargetType, *g.TargetID)
 		gql.TargetID = &id
-		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost {
-			if p, ok := postMap[*g.TargetID]; ok {
+		if g.TargetType != nil && *g.TargetType == notificationTargetTypePost && h.postsLoaded {
+			if p, ok := h.posts[*g.TargetID]; ok {
 				gql.TargetPost = toGraphPost(p)
 			}
 		}
 	}
-	if g.ActorID != nil {
-		if u, ok := actorMap[*g.ActorID]; ok {
+	// 通知本体と同じ扱い（toGraphNotification のコメント参照）。
+	if g.ActorID != nil && h.actorsLoaded {
+		if u := h.actor(g.ActorID); u != nil {
 			gql.Actor = toGraphUser(u)
 		} else {
 			gql.Actor = toGraphDeletedUserWithID(*g.ActorID)

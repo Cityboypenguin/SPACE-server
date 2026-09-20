@@ -14,6 +14,17 @@ import (
 // reject it here.
 const defaultOpaqueIDSecret = "space-default-opaque-id-secret"
 
+const localActivityArchiveHMACKey = "local-dev-activity-archive-hmac-key"
+
+// ActivityArchiveHMACKey keeps local startup usable without weakening production.
+func ActivityArchiveHMACKey(isProd bool) string {
+	key := os.Getenv("ACTIVITY_ARCHIVE_HMAC_KEY")
+	if key == "" && !isProd {
+		return localActivityArchiveHMACKey
+	}
+	return key
+}
+
 // Validate checks that all configuration required to run safely is present.
 // In production it enforces secrets and infrastructure endpoints; in non-prod it
 // only warns, so local development keeps working with defaults.
@@ -38,6 +49,9 @@ func Validate(isProd bool) error {
 	if isProd {
 		// Production-only hardening.
 		require("ALLOWED_ORIGINS")
+		if len(ActivityArchiveHMACKey(true)) < 32 || ActivityArchiveHMACKey(true) == localActivityArchiveHMACKey {
+			problems = append(problems, "ACTIVITY_ARCHIVE_HMAC_KEY must be a non-default secret of at least 32 bytes in production")
+		}
 
 		if secret := strings.TrimSpace(os.Getenv("OPAQUE_ID_SECRET")); secret == "" || secret == defaultOpaqueIDSecret {
 			problems = append(problems, "OPAQUE_ID_SECRET must be set to a non-default value in production")

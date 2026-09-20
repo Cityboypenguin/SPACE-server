@@ -21,8 +21,14 @@ const (
 
 // PopularHashtagsUseCase は人気タグの先読み用ユースケース。
 // items（人気上位・最大 PopularHashtagsCap 件）と total（タグの種類数）を返す。
+//
+// 窓はクライアントから受け取らない（常に PopularHashtagsCap 件）ので、
+// repository.PageQuery のうち読むのは WithTotal だけ。それでも専用の bool では
+// なく他の一覧と同じ型を取るのは、「一覧系は必ず PageQuery を受ける」という
+// 規則を例外なしにしておくため（例外を作ると、次に一覧を足す人がどちらの形に
+// 倣えばよいか分からなくなる）。
 type PopularHashtagsUseCase interface {
-	Execute(ctx context.Context) (items []*model.HashtagSuggestion, total int, err error)
+	Execute(ctx context.Context, q repository.PageQuery) (items []*model.HashtagSuggestion, total int, err error)
 }
 
 var _ PopularHashtagsUseCase = &PopularHashtagsInteractor{}
@@ -35,10 +41,14 @@ func NewPopularHashtagsUseCase(postRepo repository.PostRepository) PopularHashta
 	return &PopularHashtagsInteractor{postRepo: postRepo}
 }
 
-func (uc *PopularHashtagsInteractor) Execute(ctx context.Context) ([]*model.HashtagSuggestion, int, error) {
+func (uc *PopularHashtagsInteractor) Execute(ctx context.Context, q repository.PageQuery) ([]*model.HashtagSuggestion, int, error) {
 	items, err := uc.postRepo.ListPopularHashtags(ctx, PopularHashtagsCap)
 	if err != nil {
 		return nil, 0, err
+	}
+	// タグの種類数は posts 全件のハッシュタグを数えるので、上位 N 件を引くより重い。
+	if !q.WithTotal {
+		return items, 0, nil
 	}
 	total, err := uc.postRepo.CountDistinctHashtags(ctx)
 	if err != nil {

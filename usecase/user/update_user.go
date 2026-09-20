@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UpdateUserUseCase interface {
-	Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.User, error)
+	Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.UserAccount, error)
 }
 
 var _ UpdateUserUseCase = &UpdateUserInteractor{}
@@ -25,8 +26,17 @@ func NewUpdateUserUseCase(userRepo repository.UserRepository) UpdateUserUseCase 
 	}
 }
 
-func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.User, error) {
-	user, err := uc.userRepo.GetUserByID(ctx, id)
+func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param model.UpdateUserParam, currentPassword *string, requireCurrentPassword bool) (*model.UserAccount, error) {
+	if requireCurrentPassword {
+		if _, err := authz.RequireSelfOrAdmin(ctx, id); err != nil {
+			return nil, err
+		}
+	} else if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	// このユースケースはパスワードを変えられる（param.Password）ので、
+	// 現在パスワードの照合と保存の両方でハッシュが要る。
+	user, err := uc.userRepo.GetCredentialsByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -48,10 +58,14 @@ func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param mod
 		return nil, err
 	}
 
-	err = uc.userRepo.SaveUser(ctx, user)
+	err = uc.userRepo.SaveCredentials(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	// 返すのはパスワードハッシュを外した本人ぶん（リゾルバは toGraphUserAccount に渡す）。
+	// 呼び出し元は本人（updateUser）か管理者（adminUpdateUser）に限られるので、
+	// 連絡先を含めてよい。ハッシュだけは絶対に外に出さないので、ここで切り落とす。
+	account := user.UserAccount
+	return &account, nil
 }

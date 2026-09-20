@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
@@ -16,6 +17,9 @@ func NewDeleteAnnouncementUseCase(repo repository.AnnouncementRepository) *Delet
 }
 
 func (u *DeleteAnnouncementUseCase) Execute(ctx context.Context, id int64) error {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return err
+	}
 	a, err := u.announcementRepo.FindByID(ctx, id)
 	if err != nil {
 		return err

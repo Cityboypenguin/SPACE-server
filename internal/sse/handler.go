@@ -7,32 +7,49 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/labstack/echo/v4"
 )
 
 // NewHandler は /events 用の Echo ハンドラを返す。
-// 認証は Authorization ヘッダー（JWTAuth middleware 経由）か ?token= クエリパラメータで行う。
-// ブラウザ標準の EventSource はカスタムヘッダーを送れないため、?token= を主な認証手段とする。
-func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.HandlerFunc {
+//
+// # 認証方式（2026-09 変更）
+//
+// 認証は次の2経路。上から順に試す。
+//
+//  1. Authorization ヘッダー（JWTAuth middleware がクレームを ctx に載せている）。
+//     fetch/EventSource ポリフィルなど、ヘッダーを付けられるクライアント向け。
+//  2. ?ticket= — 使い捨ての短命チケット（issueNotificationStreamTicket で発行）。
+//     ブラウザ標準の EventSource はカスタムヘッダーを送れないため、これが本命。
+//
+// # なぜクッキーではなくチケットにしたか
+//
+// EventSource がヘッダーを送れない以上、選択肢はクッキーか URL 上のチケットだった。
+// クッキーを選ばなかったのは、このアプリが**どこでも認証クッキーを使っていない**ため:
+// アクセストークンもリフレッシュトークンもクライアントの localStorage にあり、
+// Authorization ヘッダーで送られる（SPACE-client の lib/authStorage.ts）。
+// ここだけクッキーを導入すると、
+//
+//   - ログイン・リフレッシュ・ログアウトの全経路（一般ユーザーと管理者の2系統）に
+//     Set-Cookie / 失効処理を足すことになる
+//   - クッキーは自動で付くので、/events に対する CSRF と SameSite の検討が要る
+//   - 開発はプロキシで同一オリジンだが、本番のオリジン構成に依存する設定が増える
+//
+// と、たった1つのエンドポイントのために認証基盤全体へ手が入る。
+// チケットなら追加されるのは「発行するミューテーション1つ」と「引き換え」だけで、
+// 既存の認証経路には触らない。URL に残る点は同じだが、チケットは**1回使ったら無効・
+// 30秒で失効**なので、アクセスログから拾っても再利用できない（JWT は有効期限まで
+// そのまま使えてしまう。これが元の指摘そのもの）。
+func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
 
-		// Auth: middleware が設定したクレームを優先し、なければ ?token= で検証する
-		claims, ok := auth.ClaimsFromContext(req.Context())
-		if !ok {
-			tokenStr := c.QueryParam("token")
-			if tokenStr == "" {
-				return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
-			}
-			var err error
-			claims, err = auth.ValidateAndVerifyToken(req.Context(), tokenStr, revokedTokenRepo, userRepo, pwResetRepo)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-			}
+		userID, err := authenticate(c, ticketRepo)
+		if err != nil {
+			return err
 		}
-		userID := claims.ID
 
 		res.Header().Set(echo.HeaderContentType, "text/event-stream")
 		res.Header().Set(echo.HeaderCacheControl, "no-cache")
@@ -84,14 +101,16 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 			_ = writeSSE(res.Writer, replayEv)
 		}
 
-		// 現在の未読数を送信（再接続時にバッジ数を正確に同期する）
-		unreadCount, _ := notifRepo.CountUnread(req.Context(), userID)
-		_ = writeSSE(res.Writer, Event{
-			Type: "sync",
-			Data: map[string]any{"unreadCount": unreadCount},
-			Time: now,
-		})
-
+		// 接続時にベルの未読数を数えて送るのはやめた。
+		//
+		// 以前はここで接続・再接続のたびに COUNT を撃ち、失敗したら 0 を送っていた。
+		// 0 は「未読が無い」という嘘で、DB が不調なときほどベルが静かになる
+		// （＝一番気づいてほしいときに気づけない）。
+		//
+		// 数はサーバから配らず、クライアントが接続できた時点で
+		// myUnreadNotificationCount を取りに行く（room_changed で未読数を配るのを
+		// やめたのと同じ方針）。取得が失敗すればクライアント側で失敗として扱えるので、
+		// 嘘の 0 が画面に出ることも無い。
 		flusher.Flush()
 
 		ctx := req.Context()
@@ -123,4 +142,41 @@ func NewHandler(hub *Broker, notifRepo repository.NotificationRepository, revoke
 			}
 		}
 	}
+}
+
+// authenticate は /events の接続要求から userID を取り出す。
+// 経路の優先順位と、それぞれを採る理由は NewHandler のコメントを参照。
+func authenticate(
+	c echo.Context,
+	ticketRepo repository.SSETicketRepository,
+) (int64, error) {
+	req := c.Request()
+
+	// 1. middleware が Authorization ヘッダーを検証済みならそれを使う。
+	if claims, ok := auth.ClaimsFromContext(req.Context()); ok {
+		return claims.ID, nil
+	}
+
+	// 2. 使い捨てチケット。引き換えは1回きり（Consume が取得と削除を不可分に行う）。
+	if ticket := c.QueryParam("ticket"); ticket != "" {
+		if ticketRepo == nil {
+			return 0, echo.NewHTTPError(http.StatusInternalServerError, "ticket auth unavailable")
+		}
+		userID, ok, err := ticketRepo.Consume(req.Context(), ticket)
+		if err != nil {
+			// Redis が落ちている等。「無効なチケット」と区別できないと調査で困るので
+			// ログには残すが、クライアントへは理由を返さない（チケットの有無を
+			// 探る手がかりにさせない）。
+			logger.Log.Error().Err(err).Str("component", "sse").Msg("failed to consume sse ticket")
+			return 0, echo.NewHTTPError(http.StatusInternalServerError, "failed to verify ticket")
+		}
+		if !ok {
+			// 期限切れ・使用済み・でたらめ、のどれかを区別しない。
+			// 区別して返すと、チケットの推測に使える情報になる。
+			return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired ticket")
+		}
+		return userID, nil
+	}
+
+	return 0, echo.NewHTTPError(http.StatusUnauthorized, "missing ticket")
 }

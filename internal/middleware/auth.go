@@ -1,10 +1,8 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -14,7 +12,11 @@ import (
 // JWTAuth validates Bearer tokens and injects auth claims into request context.
 // Requests without a token pass through; protected resolvers must call auth.ClaimsFromContext.
 // Requests with an invalid, revoked, or frozen-user token are rejected with 401.
-func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, pwResetRepo repository.PasswordResetRepository) echo.MiddlewareFunc {
+//
+// activity は認証できたリクエストの活動記録（最終アクセス時刻・活動日）。
+// nil なら記録しない（記録先を配線しない起動経路向け）。毎リクエスト書きに行くのは
+// activity 側が間引く（internal/middleware/user_activity.go 参照）。
+func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo repository.UserRepository, adminRepo repository.AdministratorRepository, activity *UserActivityRecorder) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			header := c.Request().Header.Get("Authorization")
@@ -23,7 +25,7 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 			}
 
 			tokenStr := strings.TrimPrefix(header, "Bearer ")
-			claims, err := auth.ValidateAndVerifyToken(c.Request().Context(), tokenStr, revokedTokenRepo, userRepo, pwResetRepo)
+			claims, err := auth.ValidateAndVerifyToken(c.Request().Context(), tokenStr, revokedTokenRepo, userRepo, adminRepo)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
@@ -31,16 +33,9 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 			ctx := auth.WithClaims(c.Request().Context(), claims)
 			c.SetRequest(c.Request().WithContext(ctx))
 
-			userID := claims.ID
-			go func() {
-				now := time.Now()
-				jst, err := time.LoadLocation("Asia/Tokyo")
-				if err != nil {
-					jst = time.FixedZone("JST", 9*60*60)
-				}
-				_ = userRepo.UpdateLastActiveAt(context.Background(), userID, now.Unix())
-				_ = userRepo.LogActivityDate(context.Background(), userID, now.In(jst).Format("2006-01-02"))
-			}()
+			if activity != nil {
+				activity.Record(ctx, claims.ID)
+			}
 
 			return next(c)
 		}

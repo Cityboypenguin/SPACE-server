@@ -1,0 +1,23 @@
+-- DM・コミュニティの既読位置をメッセージIDで持つための列。
+--
+-- 既読位置を Unix 秒（last_read_at）で持つと、既読更新と新着が同じ秒に起きたときに
+-- 「既読にした後に保存されたメッセージ」が created_at > last_read_at を満たさず未読から
+-- 漏れる。秒の中の前後関係は時刻からは分からないため、AUTO_INCREMENT で単調増加する
+-- messages.id を位置に使う。授業内チャット (course_room_reads) と同じ機構に
+-- 揃えてあり、片方だけ時刻のままにすると未読判定が2種類に分かれるので両方を移した。
+--
+-- ただし AUTO_INCREMENT が保証するのは採番順であってコミット順ではない（先に採番した
+-- トランザクションが後からコミットすると、その行が既読位置の後ろに置き去りにされる）。
+-- 残る競合窓と影響範囲は repository/read_position.go のコメントに1箇所だけ書いてある。
+--
+-- 既に稼働している表なので NULL 許容で追加し、既存行は NULL のまま置く（バックフィル
+-- しない）。NULL のときは従来どおり last_read_at を起点に数えるフォールバックがあり、
+-- 次に既読を打った時点で ID へ移行する。last_read_at は表示（GraphQL の
+-- roomReadStatus.lastReadAt）にも使われているので落とさない。
+--
+-- messages(id) への外部キーは張らない。ここに入るのは「どこまで読んだか」を表す
+-- 単調増加のしおり（watermark）で、行を引くための参照ではないため。ON DELETE SET NULL を
+-- 付けると、古いメッセージが物理削除されただけで既読位置が丸ごと失われ未読が復活する
+-- （ON DELETE RESTRICT なら削除自体を妨げる）。値が指す行が消えても m.id > 位置 の
+-- 比較は正しく効くので、参照整合性を要求する理由が無い。
+ALTER TABLE room_users ADD COLUMN last_read_message_id BIGINT NULL AFTER last_read_at;

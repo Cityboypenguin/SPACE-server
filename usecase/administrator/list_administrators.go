@@ -9,7 +9,7 @@ import (
 )
 
 type ListAdministratorsUseCase interface {
-	Execute(ctx context.Context, limit, offset int) ([]*model.Administrator, int, error)
+	Execute(ctx context.Context, q repository.PageQuery) ([]*model.Administrator, int, error)
 }
 
 var _ ListAdministratorsUseCase = &ListAdministratorsInteractor{}
@@ -24,10 +24,10 @@ func NewListAdministratorsUseCase(adminRepo repository.AdministratorRepository) 
 	}
 }
 
-func (uc *ListAdministratorsInteractor) Execute(ctx context.Context, limit, offset int) ([]*model.Administrator, int, error) {
+func (uc *ListAdministratorsInteractor) Execute(ctx context.Context, q repository.PageQuery) ([]*model.Administrator, int, error) {
 	if _, err := authz.RequireAdmin(ctx); err != nil {
 		return nil, 0, err
 	}
 
-	return uc.adminRepo.ListAdministrators(ctx, limit, offset)
+	return uc.adminRepo.ListAdministrators(ctx, q)
 }

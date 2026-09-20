@@ -8,7 +8,7 @@ import (
 )
 
 type GetFollowersTopLevelPostsByUserIDUseCase interface {
-	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error)
 }
 
 var _ GetFollowersTopLevelPostsByUserIDUseCase = &GetFollowersTopLevelPostsByUserIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetFollowersTopLevelPostsByUserIDUseCase(postRepo repository.PostReposit
 	}
 }
 
-func (uc *GetFollowersTopLevelPostsByUserIDInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
-	return uc.postRepo.GetfollowersTopLevelPostsByUserID(ctx, userID, limit, offset)
+func (uc *GetFollowersTopLevelPostsByUserIDInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
+	return uc.postRepo.GetfollowersTopLevelPostsByUserID(ctx, userID, q)
 }

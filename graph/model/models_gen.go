@@ -14,6 +14,15 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type AdminCreateCourseInput struct {
+	DayOfWeek   string `json:"dayOfWeek"`
+	Period      int32  `json:"period"`
+	TeacherName string `json:"teacherName"`
+	CourseName  string `json:"courseName"`
+	Year        int32  `json:"year"`
+	Semester    string `json:"semester"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`
@@ -103,6 +112,24 @@ type AnnouncementPage struct {
 	Total int32           `json:"total"`
 }
 
+type Answer struct {
+	ID         string   `json:"ID"`
+	QuestionID string   `json:"questionID"`
+	User       *User    `json:"user"`
+	Body       string   `json:"body"`
+	Media      []*Media `json:"media"`
+	CreatedAt  string   `json:"createdAt"`
+	UpdatedAt  string   `json:"updatedAt"`
+	IsMine     bool     `json:"isMine"`
+	LikeCount  int32    `json:"likeCount"`
+	LikedByMe  bool     `json:"likedByMe"`
+}
+
+type AnswerPage struct {
+	Items []*Answer `json:"items"`
+	Total int32     `json:"total"`
+}
+
 type Blocker struct {
 	ID            string `json:"ID"`
 	UserID        string `json:"userID"`
@@ -129,6 +156,11 @@ type CommunityMember struct {
 	Role string `json:"role"`
 }
 
+type CommunityMemberPage struct {
+	Items []*CommunityMember `json:"items"`
+	Total int32              `json:"total"`
+}
+
 type CommunityMemberUpdateInput struct {
 	UserID string                `json:"userID"`
 	Action CommunityMemberAction `json:"action"`
@@ -149,6 +181,42 @@ type CommunityStatItem struct {
 type CommunityStatsPage struct {
 	Items []*CommunityStatItem `json:"items"`
 	Total int32                `json:"total"`
+}
+
+type Course struct {
+	ID              string `json:"ID"`
+	RoomID          string `json:"roomID"`
+	DayOfWeek       string `json:"dayOfWeek"`
+	Period          int32  `json:"period"`
+	TeacherName     string `json:"teacherName"`
+	CourseName      string `json:"courseName"`
+	Year            int32  `json:"year"`
+	Semester        string `json:"semester"`
+	CreatedAt       string `json:"createdAt"`
+	RegisteredCount int32  `json:"registeredCount"`
+}
+
+type CourseImportStatus struct {
+	State           CourseImportState `json:"state"`
+	Year            *int32            `json:"year,omitempty"`
+	Imported        *int32            `json:"imported,omitempty"`
+	Skipped         *int32            `json:"skipped,omitempty"`
+	ErrorMessage    *string           `json:"errorMessage,omitempty"`
+	StartedAt       *string           `json:"startedAt,omitempty"`
+	FinishedAt      *string           `json:"finishedAt,omitempty"`
+	ProcessedCount  *int32            `json:"processedCount,omitempty"`
+	TotalCount      *int32            `json:"totalCount,omitempty"`
+	ProgressPercent *int32            `json:"progressPercent,omitempty"`
+}
+
+type CoursePage struct {
+	Items []*Course `json:"items"`
+	Total int32     `json:"total"`
+}
+
+type CourseRoomUnread struct {
+	RoomID      string `json:"roomID"`
+	UnreadCount int32  `json:"unreadCount"`
 }
 
 type CreateAdministratorInput struct {
@@ -211,6 +279,11 @@ type CreateUserInput struct {
 	Otp       string `json:"otp"`
 }
 
+type CurrentSemester struct {
+	Year     int32  `json:"year"`
+	Semester string `json:"semester"`
+}
+
 type DeleteFavoriteInput struct {
 	PostID string `json:"post_id"`
 }
@@ -265,24 +338,37 @@ type Media struct {
 	ID          string `json:"ID"`
 	URL         string `json:"url"`
 	ContentType string `json:"contentType"`
+	Width       *int32 `json:"width,omitempty"`
+	Height      *int32 `json:"height,omitempty"`
 	CreatedAt   string `json:"createdAt"`
 }
 
 type MediaUploadInput struct {
 	ObjectKey   string `json:"objectKey"`
 	ContentType string `json:"contentType"`
+	Width       *int32 `json:"width,omitempty"`
+	Height      *int32 `json:"height,omitempty"`
+}
+
+type Mention struct {
+	User *User  `json:"user"`
+	Text string `json:"text"`
 }
 
 type Message struct {
-	ID        string   `json:"ID"`
-	RoomID    string   `json:"roomID"`
-	Room      *Room    `json:"room"`
-	UserID    string   `json:"userID"`
-	User      *User    `json:"user"`
-	Content   string   `json:"content"`
-	Media     []*Media `json:"media"`
-	CreatedAt string   `json:"createdAt"`
-	UpdatedAt string   `json:"updatedAt"`
+	ID        string     `json:"ID"`
+	RoomID    string     `json:"roomID"`
+	Room      *Room      `json:"room"`
+	UserID    string     `json:"userID"`
+	User      *User      `json:"user"`
+	Content   string     `json:"content"`
+	Media     []*Media   `json:"media"`
+	CreatedAt string     `json:"createdAt"`
+	UpdatedAt string     `json:"updatedAt"`
+	IsMine    bool       `json:"isMine"`
+	ReplyToID *string    `json:"replyToID,omitempty"`
+	ReplyTo   *Message   `json:"replyTo,omitempty"`
+	Mentions  []*Mention `json:"mentions"`
 }
 
 type MessagePage struct {
@@ -295,29 +381,31 @@ type Mutation struct {
 }
 
 type Notification struct {
-	ID         string  `json:"ID"`
-	Type       string  `json:"type"`
-	Actor      *User   `json:"actor,omitempty"`
-	TargetType *string `json:"targetType,omitempty"`
-	TargetID   *string `json:"targetID,omitempty"`
-	TargetPost *Post   `json:"targetPost,omitempty"`
-	Message    string  `json:"message"`
-	IsRead     bool    `json:"isRead"`
-	CreatedAt  string  `json:"createdAt"`
+	ID            string   `json:"ID"`
+	Type          string   `json:"type"`
+	Actor         *User    `json:"actor,omitempty"`
+	TargetType    *string  `json:"targetType,omitempty"`
+	TargetID      *string  `json:"targetID,omitempty"`
+	TargetPost    *Post    `json:"targetPost,omitempty"`
+	TargetMessage *Message `json:"targetMessage,omitempty"`
+	Message       string   `json:"message"`
+	IsRead        bool     `json:"isRead"`
+	CreatedAt     string   `json:"createdAt"`
 }
 
 type NotificationGroup struct {
-	Key         string  `json:"key"`
-	Type        string  `json:"type"`
-	Actor       *User   `json:"actor,omitempty"`
-	TargetType  *string `json:"targetType,omitempty"`
-	TargetID    *string `json:"targetID,omitempty"`
-	TargetPost  *Post   `json:"targetPost,omitempty"`
-	Message     string  `json:"message"`
-	CreatedAt   string  `json:"createdAt"`
-	Count       int32   `json:"count"`
-	UnreadCount int32   `json:"unreadCount"`
-	LatestID    string  `json:"latestID"`
+	Key           string   `json:"key"`
+	Type          string   `json:"type"`
+	Actor         *User    `json:"actor,omitempty"`
+	TargetType    *string  `json:"targetType,omitempty"`
+	TargetID      *string  `json:"targetID,omitempty"`
+	TargetPost    *Post    `json:"targetPost,omitempty"`
+	TargetMessage *Message `json:"targetMessage,omitempty"`
+	Message       string   `json:"message"`
+	CreatedAt     string   `json:"createdAt"`
+	Count         int32    `json:"count"`
+	UnreadCount   int32    `json:"unreadCount"`
+	LatestID      string   `json:"latestID"`
 }
 
 type NotificationGroupPage struct {
@@ -343,19 +431,48 @@ type PageViewStat struct {
 	TotalViews         int32   `json:"totalViews"`
 }
 
+type Poll struct {
+	ID                  string        `json:"ID"`
+	RoomID              string        `json:"roomID"`
+	User                *User         `json:"user"`
+	Question            string        `json:"question"`
+	AllowMultipleChoice bool          `json:"allowMultipleChoice"`
+	Options             []*PollOption `json:"options"`
+	VoterCount          int32         `json:"voterCount"`
+	Deadline            *string       `json:"deadline,omitempty"`
+	CreatedAt           string        `json:"createdAt"`
+	IsMine              bool          `json:"isMine"`
+}
+
+type PollOption struct {
+	ID        string `json:"ID"`
+	Label     string `json:"label"`
+	VoteCount int32  `json:"voteCount"`
+	VotedByMe bool   `json:"votedByMe"`
+}
+
+type PollPage struct {
+	Items        []*Poll `json:"items"`
+	Total        int32   `json:"total"`
+	UnvotedTotal int32   `json:"unvotedTotal"`
+}
+
 type Post struct {
-	ID         string      `json:"ID"`
-	Content    string      `json:"content"`
-	CreatedAt  string      `json:"createdAt"`
-	UpdatedAt  string      `json:"updatedAt"`
-	DeletedAt  *string     `json:"deletedAt,omitempty"`
-	ReplyCount int32       `json:"replyCount"`
-	User       *User       `json:"user"`
-	RootPost   *Post       `json:"rootPost,omitempty"`
-	Favorites  []*Favorite `json:"favorites"`
-	Parent     *Post       `json:"parent,omitempty"`
-	Replies    []*Post     `json:"replies"`
-	Media      []*Media    `json:"media"`
+	ID              string      `json:"ID"`
+	Content         string      `json:"content"`
+	CreatedAt       string      `json:"createdAt"`
+	UpdatedAt       string      `json:"updatedAt"`
+	DeletedAt       *string     `json:"deletedAt,omitempty"`
+	ReplyCount      int32       `json:"replyCount"`
+	User            *User       `json:"user"`
+	RootPost        *Post       `json:"rootPost,omitempty"`
+	Favorites       []*Favorite `json:"favorites"`
+	FavoriteCount   int32       `json:"favoriteCount"`
+	IsFavoritedByMe bool        `json:"isFavoritedByMe"`
+	Parent          *Post       `json:"parent,omitempty"`
+	Replies         []*Post     `json:"replies"`
+	Media           []*Media    `json:"media"`
+	Mentions        []*Mention  `json:"mentions"`
 }
 
 type PostPage struct {
@@ -378,6 +495,26 @@ type Profile struct {
 }
 
 type Query struct {
+}
+
+type Question struct {
+	ID          string      `json:"ID"`
+	RoomID      string      `json:"roomID"`
+	User        *User       `json:"user"`
+	Body        string      `json:"body"`
+	IsAnswered  bool        `json:"isAnswered"`
+	BestAnswer  *Answer     `json:"bestAnswer,omitempty"`
+	Answers     *AnswerPage `json:"answers"`
+	AnswerCount int32       `json:"answerCount"`
+	Media       []*Media    `json:"media"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
+	IsMine      bool        `json:"isMine"`
+}
+
+type QuestionPage struct {
+	Items []*Question `json:"items"`
+	Total int32       `json:"total"`
 }
 
 type RecordSessionDataInput struct {
@@ -411,6 +548,7 @@ type Room struct {
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
+	LastReadMessageID   *string `json:"lastReadMessageID,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`
 	PartnerLastReadAt   *string `json:"partnerLastReadAt,omitempty"`
 }
@@ -434,9 +572,9 @@ type TermsConsentPage struct {
 }
 
 type TermsConsentRecord struct {
-	ID          string `json:"ID"`
-	User        *User  `json:"user"`
-	ConsentedAt string `json:"consentedAt"`
+	ID          string       `json:"ID"`
+	User        *UserAccount `json:"user"`
+	ConsentedAt string       `json:"consentedAt"`
 }
 
 type TermsConsentStatus struct {
@@ -466,6 +604,13 @@ type TimeSeriesPoint struct {
 	ActiveUsers int32  `json:"activeUsers"`
 }
 
+type TimetableEntry struct {
+	ID        string              `json:"ID"`
+	Course    *Course             `json:"course"`
+	Color     TimetableEntryColor `json:"color"`
+	CreatedAt string              `json:"createdAt"`
+}
+
 type UpdateAdministratorInput struct {
 	Name     *string `json:"name,omitempty"`
 	Email    *string `json:"email,omitempty"`
@@ -481,6 +626,12 @@ type UpdateCommunityInput struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 	AvatarKey   *string `json:"avatarKey,omitempty"`
+}
+
+type UpdateMyProfileInput struct {
+	AccountID *string `json:"accountID,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Bio       *string `json:"bio,omitempty"`
 }
 
 type UpdatePostInput struct {
@@ -508,23 +659,36 @@ type UpdateUserInput struct {
 }
 
 type User struct {
-	ID        string      `json:"ID"`
-	AccountID string      `json:"accountID"`
-	Name      string      `json:"name"`
-	Email     string      `json:"email"`
-	Role      string      `json:"role"`
-	Status    string      `json:"status"`
-	AvatarURL *string     `json:"avatarUrl,omitempty"`
-	CreatedAt string      `json:"createdAt"`
-	UpdatedAt string      `json:"updatedAt"`
-	Posts     []*Post     `json:"posts"`
-	Favorites []*Favorite `json:"favorites"`
+	ID        string  `json:"ID"`
+	AccountID string  `json:"accountID"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role"`
+	Status    string  `json:"status"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
+}
+
+type UserAccount struct {
+	ID        string `json:"ID"`
+	AccountID string `json:"accountID"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type UserAccountPage struct {
+	Items []*UserAccount `json:"items"`
+	Total int32          `json:"total"`
 }
 
 type UserAuthPayload struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refreshToken"`
-	User         *User  `json:"user"`
+	Token        string       `json:"token"`
+	RefreshToken string       `json:"refreshToken"`
+	User         *UserAccount `json:"user"`
 }
 
 type UserPage struct {
@@ -543,6 +707,11 @@ type UserReport struct {
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
 	Content      *string          `json:"content,omitempty"`
+}
+
+type UserTimetableProfile struct {
+	Visible bool              `json:"visible"`
+	Entries []*TimetableEntry `json:"entries"`
 }
 
 type CommunityMemberAction string
@@ -585,7 +754,7 @@ func (e *CommunityMemberAction) UnmarshalGQL(v any) error {
 }
 
 func (e CommunityMemberAction) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
@@ -597,6 +766,65 @@ func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
 }
 
 func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseImportState string
+
+const (
+	CourseImportStateIdle      CourseImportState = "IDLE"
+	CourseImportStateRunning   CourseImportState = "RUNNING"
+	CourseImportStateSucceeded CourseImportState = "SUCCEEDED"
+	CourseImportStateFailed    CourseImportState = "FAILED"
+)
+
+var AllCourseImportState = []CourseImportState{
+	CourseImportStateIdle,
+	CourseImportStateRunning,
+	CourseImportStateSucceeded,
+	CourseImportStateFailed,
+}
+
+func (e CourseImportState) IsValid() bool {
+	switch e {
+	case CourseImportStateIdle, CourseImportStateRunning, CourseImportStateSucceeded, CourseImportStateFailed:
+		return true
+	}
+	return false
+}
+
+func (e CourseImportState) String() string {
+	return string(e)
+}
+
+func (e *CourseImportState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseImportState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseImportState", str)
+	}
+	return nil
+}
+
+func (e CourseImportState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseImportState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseImportState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -648,7 +876,7 @@ func (e *InquiryCategory) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryCategory) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryCategory) UnmarshalJSON(b []byte) error {
@@ -705,7 +933,7 @@ func (e *InquiryStatus) UnmarshalGQL(v any) error {
 }
 
 func (e InquiryStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
@@ -764,7 +992,7 @@ func (e *ReportStatus) UnmarshalGQL(v any) error {
 }
 
 func (e ReportStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportStatus) UnmarshalJSON(b []byte) error {
@@ -821,7 +1049,7 @@ func (e *ReportTargetType) UnmarshalGQL(v any) error {
 }
 
 func (e ReportTargetType) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
@@ -833,6 +1061,61 @@ func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
 }
 
 func (e ReportTargetType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ThemePreference string
+
+const (
+	ThemePreferenceLight ThemePreference = "LIGHT"
+	ThemePreferenceDark  ThemePreference = "DARK"
+)
+
+var AllThemePreference = []ThemePreference{
+	ThemePreferenceLight,
+	ThemePreferenceDark,
+}
+
+func (e ThemePreference) IsValid() bool {
+	switch e {
+	case ThemePreferenceLight, ThemePreferenceDark:
+		return true
+	}
+	return false
+}
+
+func (e ThemePreference) String() string {
+	return string(e)
+}
+
+func (e *ThemePreference) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ThemePreference(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ThemePreference", str)
+	}
+	return nil
+}
+
+func (e ThemePreference) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ThemePreference) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ThemePreference) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -876,7 +1159,7 @@ func (e *TimeSeriesGranularity) UnmarshalGQL(v any) error {
 }
 
 func (e TimeSeriesGranularity) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
@@ -888,6 +1171,129 @@ func (e *TimeSeriesGranularity) UnmarshalJSON(b []byte) error {
 }
 
 func (e TimeSeriesGranularity) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TimetableEntryColor string
+
+const (
+	TimetableEntryColorRedVivid     TimetableEntryColor = "RED_VIVID"
+	TimetableEntryColorOrangeVivid  TimetableEntryColor = "ORANGE_VIVID"
+	TimetableEntryColorYellowVivid  TimetableEntryColor = "YELLOW_VIVID"
+	TimetableEntryColorGreenVivid   TimetableEntryColor = "GREEN_VIVID"
+	TimetableEntryColorCyanVivid    TimetableEntryColor = "CYAN_VIVID"
+	TimetableEntryColorBlueVivid    TimetableEntryColor = "BLUE_VIVID"
+	TimetableEntryColorIndigoVivid  TimetableEntryColor = "INDIGO_VIVID"
+	TimetableEntryColorPurpleVivid  TimetableEntryColor = "PURPLE_VIVID"
+	TimetableEntryColorMagentaVivid TimetableEntryColor = "MAGENTA_VIVID"
+	TimetableEntryColorRed          TimetableEntryColor = "RED"
+	TimetableEntryColorOrange       TimetableEntryColor = "ORANGE"
+	TimetableEntryColorYellow       TimetableEntryColor = "YELLOW"
+	TimetableEntryColorGreen        TimetableEntryColor = "GREEN"
+	TimetableEntryColorCyan         TimetableEntryColor = "CYAN"
+	TimetableEntryColorBlue         TimetableEntryColor = "BLUE"
+	TimetableEntryColorIndigo       TimetableEntryColor = "INDIGO"
+	TimetableEntryColorPurple       TimetableEntryColor = "PURPLE"
+	TimetableEntryColorMagenta      TimetableEntryColor = "MAGENTA"
+	TimetableEntryColorRedLight     TimetableEntryColor = "RED_LIGHT"
+	TimetableEntryColorOrangeLight  TimetableEntryColor = "ORANGE_LIGHT"
+	TimetableEntryColorYellowLight  TimetableEntryColor = "YELLOW_LIGHT"
+	TimetableEntryColorGreenLight   TimetableEntryColor = "GREEN_LIGHT"
+	TimetableEntryColorCyanLight    TimetableEntryColor = "CYAN_LIGHT"
+	TimetableEntryColorBlueLight    TimetableEntryColor = "BLUE_LIGHT"
+	TimetableEntryColorIndigoLight  TimetableEntryColor = "INDIGO_LIGHT"
+	TimetableEntryColorPurpleLight  TimetableEntryColor = "PURPLE_LIGHT"
+	TimetableEntryColorMagentaLight TimetableEntryColor = "MAGENTA_LIGHT"
+	TimetableEntryColorRedMuted     TimetableEntryColor = "RED_MUTED"
+	TimetableEntryColorOrangeMuted  TimetableEntryColor = "ORANGE_MUTED"
+	TimetableEntryColorYellowMuted  TimetableEntryColor = "YELLOW_MUTED"
+	TimetableEntryColorGreenMuted   TimetableEntryColor = "GREEN_MUTED"
+	TimetableEntryColorCyanMuted    TimetableEntryColor = "CYAN_MUTED"
+	TimetableEntryColorBlueMuted    TimetableEntryColor = "BLUE_MUTED"
+	TimetableEntryColorIndigoMuted  TimetableEntryColor = "INDIGO_MUTED"
+	TimetableEntryColorPurpleMuted  TimetableEntryColor = "PURPLE_MUTED"
+	TimetableEntryColorMagentaMuted TimetableEntryColor = "MAGENTA_MUTED"
+)
+
+var AllTimetableEntryColor = []TimetableEntryColor{
+	TimetableEntryColorRedVivid,
+	TimetableEntryColorOrangeVivid,
+	TimetableEntryColorYellowVivid,
+	TimetableEntryColorGreenVivid,
+	TimetableEntryColorCyanVivid,
+	TimetableEntryColorBlueVivid,
+	TimetableEntryColorIndigoVivid,
+	TimetableEntryColorPurpleVivid,
+	TimetableEntryColorMagentaVivid,
+	TimetableEntryColorRed,
+	TimetableEntryColorOrange,
+	TimetableEntryColorYellow,
+	TimetableEntryColorGreen,
+	TimetableEntryColorCyan,
+	TimetableEntryColorBlue,
+	TimetableEntryColorIndigo,
+	TimetableEntryColorPurple,
+	TimetableEntryColorMagenta,
+	TimetableEntryColorRedLight,
+	TimetableEntryColorOrangeLight,
+	TimetableEntryColorYellowLight,
+	TimetableEntryColorGreenLight,
+	TimetableEntryColorCyanLight,
+	TimetableEntryColorBlueLight,
+	TimetableEntryColorIndigoLight,
+	TimetableEntryColorPurpleLight,
+	TimetableEntryColorMagentaLight,
+	TimetableEntryColorRedMuted,
+	TimetableEntryColorOrangeMuted,
+	TimetableEntryColorYellowMuted,
+	TimetableEntryColorGreenMuted,
+	TimetableEntryColorCyanMuted,
+	TimetableEntryColorBlueMuted,
+	TimetableEntryColorIndigoMuted,
+	TimetableEntryColorPurpleMuted,
+	TimetableEntryColorMagentaMuted,
+}
+
+func (e TimetableEntryColor) IsValid() bool {
+	switch e {
+	case TimetableEntryColorRedVivid, TimetableEntryColorOrangeVivid, TimetableEntryColorYellowVivid, TimetableEntryColorGreenVivid, TimetableEntryColorCyanVivid, TimetableEntryColorBlueVivid, TimetableEntryColorIndigoVivid, TimetableEntryColorPurpleVivid, TimetableEntryColorMagentaVivid, TimetableEntryColorRed, TimetableEntryColorOrange, TimetableEntryColorYellow, TimetableEntryColorGreen, TimetableEntryColorCyan, TimetableEntryColorBlue, TimetableEntryColorIndigo, TimetableEntryColorPurple, TimetableEntryColorMagenta, TimetableEntryColorRedLight, TimetableEntryColorOrangeLight, TimetableEntryColorYellowLight, TimetableEntryColorGreenLight, TimetableEntryColorCyanLight, TimetableEntryColorBlueLight, TimetableEntryColorIndigoLight, TimetableEntryColorPurpleLight, TimetableEntryColorMagentaLight, TimetableEntryColorRedMuted, TimetableEntryColorOrangeMuted, TimetableEntryColorYellowMuted, TimetableEntryColorGreenMuted, TimetableEntryColorCyanMuted, TimetableEntryColorBlueMuted, TimetableEntryColorIndigoMuted, TimetableEntryColorPurpleMuted, TimetableEntryColorMagentaMuted:
+		return true
+	}
+	return false
+}
+
+func (e TimetableEntryColor) String() string {
+	return string(e)
+}
+
+func (e *TimetableEntryColor) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TimetableEntryColor(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TimetableEntryColor", str)
+	}
+	return nil
+}
+
+func (e TimetableEntryColor) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TimetableEntryColor) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TimetableEntryColor) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

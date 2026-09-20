@@ -50,7 +50,7 @@ resolver:
   # Optional: Pass in a path to a new gotpl template to use for generating resolvers
   # resolver_template: [your/path/resolver.gotpl]
   # Optional: turn on to avoid rewriting existing resolver(s) when generating
-  # preserve_resolver: false
+  preserve_resolver: true
 
 # Optional: turn on use ` + "`" + `gqlgen:"fieldName"` + "`" + ` tags in your models
 # struct_tag: json
@@ -146,6 +146,8 @@ models:
         resolver: true
   Post:
     fields:
+      mentions:
+        resolver: true
       user:
         resolver: true
       parent:
@@ -154,17 +156,32 @@ models:
         resolver: true
       favorites:
         resolver: true
+      # 件数と「自分がいいねしたか」はリゾルバにする。モデルの素のフィールドに
+      # すると presenter 側で毎回埋めることになり、選ばれていないときも数えてしまう。
+      # リゾルバなら選ばれたぶんだけ DataLoader でまとめて引ける。
+      favoriteCount:
+        resolver: true
+      isFavoritedByMe:
+        resolver: true
       media:
         resolver: true
       rootPost:
         resolver: true
   Message:
     fields:
+      mentions:
+        resolver: true
+      userID:
+        resolver: true
       user:
         resolver: true
       room:
         resolver: true
       media:
+        resolver: true
+      isMine:
+        resolver: true
+      replyTo:
         resolver: true
   Favorite:
     fields:
@@ -175,6 +192,44 @@ models:
   Notification:
     fields:
       actor:
+        resolver: true
+      targetMessage:
+        resolver: true
+  NotificationGroup:
+    fields:
+      targetMessage:
+        resolver: true
+  Question:
+    fields:
+      user:
+        resolver: true
+      answers:
+        resolver: true
+      answerCount:
+        resolver: true
+      bestAnswer:
+        resolver: true
+      media:
+        resolver: true
+      isMine:
+        resolver: true
+  Answer:
+    fields:
+      user:
+        resolver: true
+      media:
+        resolver: true
+      isMine:
+        resolver: true
+  Poll:
+    fields:
+      user:
+        resolver: true
+      options:
+        resolver: true
+      voterCount:
+        resolver: true
+      isMine:
         resolver: true
   # The GraphQL spec explicitly states that the Int type is a signed 32-bit
   # integer. Using Go int or int64 to represent it can lead to unexpected

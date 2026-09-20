@@ -44,9 +44,3 @@ func (p *Post) UpdatePost(param UpdatePostParam) {
 	}
 	p.UpdatedAt = time.Now()
 }
-
-func (p *Post) DeletePost() {
-	now := time.Now()
-	p.DeletedAt = &now
-	p.UpdatedAt = now
-}

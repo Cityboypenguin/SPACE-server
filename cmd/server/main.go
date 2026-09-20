@@ -20,15 +20,17 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	azurerepo "github.com/Cityboypenguin/SPACE-server/infra/azure"
 	infracache "github.com/Cityboypenguin/SPACE-server/infra/cache"
-	infraemail "github.com/Cityboypenguin/SPACE-server/infra/email"
 	miniorepo "github.com/Cityboypenguin/SPACE-server/infra/minio"
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
+	"github.com/Cityboypenguin/SPACE-server/internal/activityarchive"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
+	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
@@ -40,26 +42,52 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
+	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
+	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
+	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
+	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
+	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
+	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
 	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
-	"github.com/gorilla/websocket"
+	usersettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/user_settings"
+	coderws "github.com/coder/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
+
+// newInstanceID はこの台（このプロセス）を指す一意な文字列を作る。
+//
+// 用途は「Redis に置いた印を持っているのは誰か」を見分けること。ホスト名だけだと、
+// 同じ台で入れ替えたときに前のプロセスの印を新しいプロセスが自分のものと
+// 取り違える。起動ごとに変わる値を混ぜておく。
+func newInstanceID() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown"
+	}
+	return fmt.Sprintf("%s-%d-%d", host, os.Getpid(), time.Now().UnixNano())
+}
+
+// pubsubChannelPrefix は subscription の配信に使う Redis チャンネル名の接頭辞。
+//
+// 同じ Redis を別の環境（検証と本番）で共有してしまったときに、片方の
+// メッセージがもう片方の購読者へ流れないようにするための区切り。
+const pubsubChannelPrefix = "space:pubsub:"
 
 func main() {
 	isProd := os.Getenv("APP_ENV") == "production"
@@ -98,6 +126,7 @@ func main() {
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
 	systemSettingRepository := mysql.NewMySQLSystemSettingRepository(database)
+	userSettingRepository := mysql.NewMySQLUserSettingRepository(database)
 	txManager := mysql.NewMySQLTxManager(database)
 
 	if err := bootstrapInitialAdmin(context.Background(), administratorRepository); err != nil {
@@ -123,46 +152,103 @@ func main() {
 	roomRepository := mysql.NewMySQLRoomRepository(database)
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
+	courseRepository := mysql.NewMySQLCourseRepository(database)
+	instanceID := newInstanceID()
+
+	// Redis はここで繋ぐ。subscription の配信（下の chatBus）が Redis に乗るので、
+	// PubSub より先に用意する必要がある。
+	redisClient, err := infraredis.New()
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
+	}
+
+	// subscription の配信は Redis 経由にする。GraphQL の subscription は WebSocket
+	// なので購読者は1台に貼り付くが、メッセージを送る利用者は別の台に当たりうる。
+	// プロセス内の PubSub だけだと、送った台に繋がっている購読者にしか届かない
+	// （しかもエラーにはならないので、1台で動かしている間は誰も気づけない）。
+	chatBus := infraredis.NewBus(redisClient, graph.NewPubSubCodec(), pubsubChannelPrefix)
+	ps := pubsub.Bus(chatBus)
+
+	// 取り込みの排他と進捗も Redis に置く。自分の台のメモリだけを見ていると、
+	// 管理者2人が別々の台に当たったときに同じ取り込みが2本走り、管理画面が
+	// 始めた台と違う台へ繋がると進捗が見えない（どちらも片方の台では正常に見える）。
+	courseImportTracker := courseimport.NewTracker(
+		infraredis.NewCourseImportStore(redisClient, instanceID),
+		func(status courseimport.Status) {
+			ps.Publish(graph.CourseImportStatusTopic, status)
+		},
+	)
+	timetableRepository := mysql.NewMySQLTimetableRepository(database)
+	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
+	courseRoomReadRepository := mysql.NewMySQLCourseRoomReadRepository(database)
+	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize question repository")
+	}
+	answerRepository, err := mysql.NewMySQLAnswerRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize answer repository")
+	}
+	pollRepository := mysql.NewMySQLPollRepository(database)
 
 	var storageRepository repository.StorageRepository
+	var privateStorageRepository repository.PrivateStorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
-		storageRepository, err = azurerepo.New()
+		storage, storageErr := azurerepo.New()
+		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to azure blob storage")
 		}
+		storageRepository = storage
+		privateStorageRepository = storage
 	} else {
-		storageRepository, err = miniorepo.New()
+		storage, storageErr := miniorepo.New()
+		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to minio")
 		}
+		storageRepository = storage
+		privateStorageRepository = storage
 	}
+	activityArchiveRepository := mysql.NewMySQLActivityArchiveRepository(database)
+	activityArchiver, err := activityarchive.New(activityArchiveRepository, privateStorageRepository, config.ActivityArchiveHMACKey(isProd))
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize activity archive")
+	}
+	activityArchiveCtx, stopActivityArchive := context.WithCancel(context.Background())
+	activityArchiveDone := make(chan struct{})
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, communityRepository, txManager)
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, roomRepository, roomUserRepository, txManager)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
 	searchUsersUseCase := userusecase.NewSearchUsersUseCase(userRepository)
+	// 連絡先まで返す取得（本人・管理者向け）。表示系は上の3つを使う。
+	getUserAccountByIDUseCase := userusecase.NewGetUserAccountByIDUseCase(userRepository)
+	getUserAccountsByIDsUseCase := userusecase.NewGetUserAccountsByIDsUseCase(userRepository)
+	searchUserAccountsUseCase := userusecase.NewSearchUserAccountsUseCase(userRepository)
+	suggestUsersUseCase := userusecase.NewSuggestUsersUseCase(userRepository)
 	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
-	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository)
+	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
-	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository)
+	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository, txManager)
 	countAdministratorsUseCase := administrator.NewCountAdministratorsUseCase(administratorRepository)
 	getAdministratorByIDUseCase := administrator.NewGetAdministratorByIDUseCase(administratorRepository)
 	listAdministratorsUseCase := administrator.NewListAdministratorsUseCase(administratorRepository)
-	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository)
+	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository, txManager)
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
 	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
 
-	// createPostUseCase は通知発行のため notificationPublisher に依存する。
+	// createPostUseCase / updatePostUseCase は通知発行のため notificationPublisher に依存する。
 	// publisher 構築後（下方）に生成する。
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, txManager)
 	deletePostUseCase := postusecase.NewDeletePostUseCase(postRepository)
 	getPostByIDUseCase := postusecase.NewGetPostByIDUseCase(postRepository)
 	getPostsByIDsUseCase := postusecase.NewGetPostsByIDsUseCase(postRepository)
@@ -190,15 +276,16 @@ func main() {
 	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
 	getFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewGetFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
-	listFavoritesUseCase := favoriteusecase.NewListFavoritesUseCase(favoriteRepository)
 	getFavoritesByPostIDsUseCase := favoriteusecase.NewGetFavoritesByPostIDsUseCase(favoriteRepository)
+	countFavoritesByPostIDsUseCase := favoriteusecase.NewCountFavoritesByPostIDsUseCase(favoriteRepository)
+	listPostIDsFavoritedByUseCase := favoriteusecase.NewListPostIDsFavoritedByUseCase(favoriteRepository)
 
-	redisClient, err := infraredis.New()
-	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("failed to connect to redis")
-	}
 	revokedTokenRepository := infraredis.NewRedisRevokedTokenRepository(redisClient)
 	passwordResetRepository := infraredis.NewRedisPasswordResetRepository(redisClient)
+	// SSE(/events) の接続チケット。Redis に置くのは寿命(30秒)の管理を任せられるのと、
+	// 将来インスタンスを増やしたときに「発行した台と接続先の台が違う」でも引き換えが
+	// 通るようにするため（docs/realtime-scaling.md）。
+	sseTicketRepository := infraredis.NewRedisSSETicketRepository(redisClient)
 	mailer := infrasmtp.NewSMTPMailer()
 	maintenanceRepository := infraredis.NewRedisMaintenanceRepository(redisClient)
 
@@ -210,8 +297,7 @@ func main() {
 	}
 
 	emailOTPRepository := infraredis.NewRedisEmailOTPRepository(redisClient)
-	smtpEmailService := infraemail.NewSMTPEmailService()
-	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, smtpEmailService)
+	sendEmailOTPUseCase := userusecase.NewSendEmailOTPUseCase(emailOTPRepository, userRepository, mailer)
 	verifyEmailOTPUseCase := userusecase.NewVerifyEmailOTPUseCase(emailOTPRepository)
 	createUserUseCase := userusecase.NewCreateUserUseCase(userRepository, profileRepository, emailOTPRepository, txManager)
 	refreshUserTokenUseCase := userusecase.NewRefreshUserTokenUseCase(userRepository, revokedTokenRepository)
@@ -225,30 +311,58 @@ func main() {
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
 	listMediaByMessageIDsUseCase := mediausecase.NewListMediaByMessageIDsUseCase(mediaRepository)
+	listMediaByQuestionIDsUseCase := mediausecase.NewListMediaByQuestionIDsUseCase(mediaRepository)
+	listMediaByAnswerIDsUseCase := mediausecase.NewListMediaByAnswerIDsUseCase(mediaRepository)
 
 	getMessageByIDUseCase := messageusecase.NewGetMessageByIDUseCase(messageRepository)
-	sendMessageUseCase := messageusecase.NewSendMessageUseCase(messageRepository, mediaRepository, txManager)
+	getMessagesByIDsUseCase := messageusecase.NewGetMessagesByIDsUseCase(messageRepository)
+	// messageRepository は MessageReader / MessageWriter / MessageReadModel /
+	// MessageMentionStore / MessageUnreadCounter の合成実装。各ユースケースには必要な
+	// 口だけを渡す。特に書き込みの口 (MessageWriter) を渡す先は下の
+	// chatusecase.NewMessageWriters ただ1箇所に絞ること（理由は
+	// repository.MessageWriter / usecase/chat/writers.go のコメント参照）。
+	listMessagesAroundUseCase := messageusecase.NewListMessagesAroundUseCase(messageRepository, messageRepository)
+	reportMediaDimensionsUseCase := mediausecase.NewReportDimensionsUseCase(mediaRepository)
+	listImagesMissingDimensionsUseCase := mediausecase.NewListImagesMissingDimensionsUseCase(mediaRepository)
 	listMessagesUseCase := messageusecase.NewListMessagesUseCase(messageRepository)
-	deleteMessageUseCase := messageusecase.NewDeleteMessageUseCase(messageRepository)
-	updateMessageUseCase := messageusecase.NewUpdateMessageUseCase(messageRepository)
+	// メッセージの保存処理（送信・編集・削除）は usecase/chat/internal/messagestore に
+	// あり、ここから直接は組み立てられない。認可を通さず保存を叩ける口を作らないための
+	// 構造なので、束ごと受け取ってチャットサービスへ渡す（usecase/chat/writers.go 参照）。
+	chatMessageWriters := chatusecase.NewMessageWriters(messageRepository, messageRepository, messageRepository, mediaRepository, txManager)
+	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
+	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
-	createRoomUseCase := roomusecase.NewCreateRoomUseCase(roomRepository)
 	getRoomUseCase := roomusecase.NewGetRoomUseCase(roomRepository)
-	deleteRoomUseCase := roomusecase.NewDeleteRoomUseCase(roomRepository)
 	getUserIDsByRoomIDUseCase := roomusecase.NewGetUserIDsByRoomIDUseCase(roomUserRepository)
+	isRoomMemberUseCase := roomusecase.NewIsRoomMemberUseCase(roomUserRepository)
 	listUsersByRoomIDsUseCase := roomusecase.NewListUsersByRoomIDsUseCase(roomUserRepository)
+	searchRoomUsersUseCase := roomusecase.NewSearchRoomUsersUseCase(roomUserRepository)
+	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
+	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
-	addUserToRoomUseCase := roomusecase.NewAddUserToRoomUseCase(roomUserRepository)
-	removeUserFromRoomUseCase := roomusecase.NewRemoveUserFromRoomUseCase(roomUserRepository)
+	leaveCommunityUseCase := roomusecase.NewLeaveCommunityUseCase(roomRepository, roomUserRepository, txManager)
+	deleteOrphanedDMUseCase := roomusecase.NewDeleteOrphanedDMUseCase(roomRepository, roomUserRepository, txManager)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
 	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
 	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
-	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository)
+	listRoomMembersWithRolesPageUseCase := roomusecase.NewListRoomMembersWithRolesPageUseCase(roomUserRepository)
+	// 既読位置はメッセージIDで持つので、既読を打つ側は「ルームの最新メッセージID」を
+	// 引ける messageRepository も要る。
+	markRoomAsReadUseCase := roomusecase.NewMarkRoomAsReadUseCase(roomUserRepository, messageRepository)
 	getRoomReadStatusUseCase := roomusecase.NewGetRoomReadStatusUseCase(roomUserRepository, messageRepository)
+	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(courseRoomReadRepository, messageRepository)
+	// 授業ルームの学期・履修判定。チャットサービスが送信・編集・削除で使う。
+	checkRoomWritableUseCase := courseusecase.NewCheckRoomWritableUseCase(courseRepository, systemSettingRepository, timetableRepository)
+	getOrCreateAnonymousIdentityUseCase := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
+	// 採番しない読み取り専用の口。授業ルームの返信通知の文言（匿名NNN）に使う。
+	getAnonymousIdentityUseCase := anonusecase.NewGetAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
+	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(courseRoomReadRepository, messageRepository, courseRepository, timetableRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
-	getMembersUnreadCountsUseCase := roomusecase.NewGetMembersUnreadCountsUseCase(roomUserRepository, messageRepository)
+	// 授業ルームの更新通知の宛先（履修者）。未読数は数えず、IDだけを引く軽い経路
+	// （usecase/room/get_course_registrant_ids.go のコメント参照）。
+	getCourseRegistrantIDsUseCase := roomusecase.NewGetCourseRegistrantIDsUseCase(timetableRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
 	// コミュニティ系ユースケースの生成は graph.NewCommunityUseCases に集約。
@@ -256,6 +370,7 @@ func main() {
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
+	manageUserSettingUseCase := usersettingsusecase.NewManageUserSettingUsecase(userSettingRepository)
 
 	cachedAnalyticsRepo := infracache.NewCachedAnalyticsRepository(
 		mysql.NewMySQLAnalyticsRepository(database),
@@ -288,11 +403,37 @@ func main() {
 	manageInquiryUseCase := inquiryusecase.NewManageInquiryUsecase(inquiryRepository)
 
 	notificationRepository := mysql.NewMySQLNotificationRepository(database)
-	sseBroker := sse.NewBroker()
+	// SSE も台またぎにする。接続はどこか1台に貼り付くが、通知を作る操作は
+	// 別の台に当たりうるので、プロセス内の配信だけだと通知を作った台に
+	// 繋がっていない利用者にはベルが光らない。
+	//
+	// 採番と履歴も Redis に置く。同じ利用者のタブが別々の台に繋がったときに
+	// それぞれが1から数えると、同じIDの別イベントができて、Last-Event-ID からの
+	// リプレイが狂う。
+	//
+	// Broker と Fanout は互いを必要とするので、Broker を先に作って
+	// 配信口を後から挿す。
+	sseBroker := sse.NewBrokerWithStore(infraredis.NewSSEStore(redisClient), nil)
+	sseFanout := infraredis.NewSSEFanout(redisClient, pubsubChannelPrefix, sseBroker.DeliverLocal)
+	sseBroker.SetFanout(sseFanout)
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
-	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, txManager, notificationPublisher)
+	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	listPostMentionsUseCase := postusecase.NewListMentionsByPostIDsUseCase(postRepository)
+
+	// DataLoader からしか使わないバッチ取得の口。リゾルバは dataloader.For(ctx) 経由で
+	// 触るので Resolver には持たせない（単体取得と二重に持つと、片方だけ使う
+	// リゾルバが残って N+1 が戻る）。
+	getRoomsByIDsUseCase := roomusecase.NewGetRoomsByIDsUseCase(roomRepository)
+	getQuestionsByIDsUseCase := questionusecase.NewGetQuestionsByIDsUseCase(questionRepository)
+	getAnswersByIDsUseCase := answerusecase.NewGetAnswersByIDsUseCase(answerRepository)
+	listAnswerPagesByQuestionIDsUseCase := answerusecase.NewListAnswerPagesByQuestionIDsUseCase(answerRepository)
+	countAnswersByQuestionIDsUseCase := answerusecase.NewCountAnswersByQuestionIDsUseCase(answerRepository)
+	listPollOptionResultsByPollIDsUseCase := pollusecase.NewListPollOptionResultsByPollIDsUseCase(pollRepository)
+	countPollVotersByPollIDsUseCase := pollusecase.NewCountPollVotersByPollIDsUseCase(pollRepository)
+	getAnonymousIdentitiesUseCase := anonusecase.NewGetAnonymousIdentitiesUseCase(roomAnonymousIdentityRepository)
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
@@ -302,9 +443,22 @@ func main() {
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
 	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
 	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
+	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(termsRepository, sseBroker)
+
+	// リクエストの応答を待たせずに走らせる処理（チャット配信・お知らせ通知・活動記録）の
+	// 実行口。流儀は internal/async.Runner の1つだけに揃えてあり、component 名だけが違う。
+	// ここでまとめて作るのは、停止時に「全部待つ」を1箇所（asyncRunners）で書くため。
+	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
+	announcementAsyncRunner := async.NewRunner("announcement")
+	userActivityAsyncRunner := async.NewRunner("user_activity")
+	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner}
+
+	// 認証済みリクエストの活動記録。毎リクエスト DB へ書かないよう、ユーザーごとに
+	// 間引いてから Runner へ渡す（internal/middleware/user_activity.go 参照）。
+	userActivityRecorder := authmiddleware.NewUserActivityRecorder(userRepository, userActivityAsyncRunner)
 
 	announcementRepository := mysql.NewMySQLAnnouncementRepository(database)
-	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher)
+	createAnnouncementUseCase := announcementusecase.NewCreateAnnouncementUseCase(announcementRepository, notificationPublisher, announcementAsyncRunner)
 	listAnnouncementsUseCase := announcementusecase.NewListAnnouncementsUseCase(announcementRepository)
 	getAnnouncementUseCase := announcementusecase.NewGetAnnouncementUseCase(announcementRepository)
 	deleteAnnouncementUseCase := announcementusecase.NewDeleteAnnouncementUseCase(announcementRepository)
@@ -320,8 +474,64 @@ func main() {
 	deleteNotificationsUseCase := notificationuc.NewDeleteNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsUseCase := notificationuc.NewDeleteReadNotificationsUseCase(notificationRepository)
 	deleteReadNotificationsByActorUseCase := notificationuc.NewDeleteReadNotificationsByActorUseCase(notificationRepository)
+	issueStreamTicketUseCase := notificationuc.NewIssueStreamTicketUseCase(sseTicketRepository)
 
-	ps := pubsub.New()
+	// チャットの配線は publisher → 権限判定 → 各サービス → resolver の一方向。
+	// 以前は配信アダプタが *Resolver をまるごと持っていたため「resolver を作ってから
+	// サービスを差し込む」相互参照になっていた。アダプタが必要な依存だけを受け取る形に
+	// したので、resolver を組み立てる前に全部そろう。
+	//
+	// 配信のうち順序も応答時間も要らないぶん（room_changed の SSE と各種通知）だけを
+	// リクエストの外へ出す。購読中の画面へ流す PubSub は順序が崩れるとチャット本体の
+	// 並びが壊れるので、アダプタの中で同期のまま残してある（どちらがどちらかは
+	// graph/chat_events.go と usecase/chat/async_events.go のコメント参照）。
+	chatEventPublisher := graph.NewChatEventPublisher(graph.ChatEventPublisherDeps{
+		PubSub:                         ps,
+		SSEBroker:                      sseBroker,
+		NotificationPublisher:          notificationPublisher,
+		CourseRegistrantIDs:            getCourseRegistrantIDsUseCase,
+		Async:                          chatEventAsyncRunner,
+		GetMessage:                     getMessageByIDUseCase,
+		GetAnonymousIdentity:           getAnonymousIdentityUseCase,
+		MarkNotificationsAsReadByActor: markAllAsReadByActorUseCase,
+	})
+
+	// 権限判定は1つだけ作り、送信・一覧・既読の各サービスで共有する
+	// （判定の実体を複数持たせないため。usecase/chat のパッケージコメント参照）。
+	chatAccessPolicy := chatusecase.NewAccessPolicy(chatusecase.AccessPolicyDeps{
+		GetRoom:            getRoomUseCase,
+		GetRoomMemberIDs:   getUserIDsByRoomIDUseCase,
+		IsRoomMember:       isRoomMemberUseCase,
+		CheckRoomWritable:  checkRoomWritableUseCase,
+		CheckBlockRelation: checkBlockRelationUseCase,
+	})
+	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
+		Access:                       chatAccessPolicy,
+		GetRoom:                      getRoomUseCase,
+		GetRoomUserRole:              getRoomUserRoleUseCase,
+		GetMessage:                   getMessageByIDUseCase,
+		Writers:                      chatMessageWriters,
+		ResolveMentions:              resolveMessageMentionsUseCase,
+		ListMentions:                 listMessageMentionsUseCase,
+		ListMessageMedia:             listMediaByMessageIDsUseCase,
+		GetOrCreateAnonymousIdentity: getOrCreateAnonymousIdentityUseCase,
+		Events:                       chatEventPublisher,
+	})
+	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
+		Access:             chatAccessPolicy,
+		ListMessages:       listMessagesUseCase,
+		ListMessagesAround: listMessagesAroundUseCase,
+	})
+	chatReadService := chatusecase.NewReadReceiptService(chatusecase.ReadReceiptDeps{
+		Access:                  chatAccessPolicy,
+		GetRoom:                 getRoomUseCase,
+		GetRoomMemberIDs:        getUserIDsByRoomIDUseCase,
+		MarkRoomAsRead:          markRoomAsReadUseCase,
+		MarkCourseRoomAsRead:    markCourseRoomAsReadUseCase,
+		GetRoomReadStatus:       getRoomReadStatusUseCase,
+		GetCourseRoomReadStatus: getCourseRoomReadStatusUseCase,
+		Events:                  chatEventPublisher,
+	})
 
 	resolver := &graph.Resolver{
 		StorageRepository:     storageRepository,
@@ -338,6 +548,10 @@ func main() {
 			GetUserByIDUseCase:            getUserByIDUseCase,
 			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
 			SearchUsersUseCase:            searchUsersUseCase,
+			GetUserAccountByIDUseCase:     getUserAccountByIDUseCase,
+			GetUserAccountsByIDsUseCase:   getUserAccountsByIDsUseCase,
+			SearchUserAccountsUseCase:     searchUserAccountsUseCase,
+			SuggestUsersUseCase:           suggestUsersUseCase,
 			LoginUserUseCase:              loginUserUseCase,
 			RefreshUserTokenUseCase:       refreshUserTokenUseCase,
 			LogoutUserUseCase:             logoutUserUseCase,
@@ -350,8 +564,9 @@ func main() {
 		SetAvatarUseCase:    setAvatarUseCase,
 		DeleteAvatarUseCase: deleteAvatarUseCase,
 
-		GetProfileUseCase:    getProfileUseCase,
-		UpdateProfileUseCase: updateProfileUseCase,
+		GetProfileUseCase:      getProfileUseCase,
+		UpdateProfileUseCase:   updateProfileUseCase,
+		UpdateMyProfileUseCase: updateMyProfileUseCase,
 
 		GetAdministratorByIDUseCase:      getAdministratorByIDUseCase,
 		CreateAdministratorUseCase:       createAdministratorUseCase,
@@ -394,42 +609,42 @@ func main() {
 		GetFavoriteByUserIDAndPostIDUseCase:    getFavoriteByUserIDAndPostIDUseCase,
 		GetFavoritesByPostIDUseCase:            getFavoritesByPostIDUseCase,
 		GetFavoritesByUserIDUseCase:            getFavoritesByUserIDUseCase,
-		ListFavoritesUseCase:                   listFavoritesUseCase,
 
-		ListMediaByPostIDUseCase: listMediaByPostIDUseCase,
+		ListMediaByPostIDUseCase:           listMediaByPostIDUseCase,
+		ReportMediaDimensionsUseCase:       reportMediaDimensionsUseCase,
+		ListImagesMissingDimensionsUseCase: listImagesMissingDimensionsUseCase,
 
 		MessageRoomUseCases: graph.MessageRoomUseCases{
-			GetMessageByIDUseCase:           getMessageByIDUseCase,
-			SendMessageUseCase:              sendMessageUseCase,
-			ListMessagesUseCase:             listMessagesUseCase,
-			DeleteMessageUseCase:            deleteMessageUseCase,
-			UpdateMessageUseCase:            updateMessageUseCase,
-			GetLastMessagesByRoomIDsUseCase: getLastMessagesByRoomIDsUseCase,
-			CreateRoomUseCase:               createRoomUseCase,
-			GetRoomUseCase:                  getRoomUseCase,
-			DeleteRoomUseCase:               deleteRoomUseCase,
-			GetUserIDsByRoomIDUseCase:       getUserIDsByRoomIDUseCase,
-			ListUsersByRoomIDsUseCase:       listUsersByRoomIDsUseCase,
-			ListMyDMRoomsUseCase:            listMyDMRoomsUseCase,
-			GetOrCreateDMRoomUseCase:        getOrCreateDMRoomUseCase,
-			AddUserToRoomUseCase:            addUserToRoomUseCase,
-			RemoveUserFromRoomUseCase:       removeUserFromRoomUseCase,
-			JoinRoomUseCase:                 joinRoomUseCase,
-			GetRoomUserRoleUseCase:          getRoomUserRoleUseCase,
-			SetRoomUserRoleUseCase:          setRoomUserRoleUseCase,
-			ListRoomMembersWithRolesUseCase: listRoomMembersWithRolesUseCase,
-			MarkRoomAsReadUseCase:           markRoomAsReadUseCase,
-			GetRoomReadStatusUseCase:        getRoomReadStatusUseCase,
-			GetRoomReadStatusBatchUseCase:   getRoomReadStatusBatchUseCase,
-			GetMembersUnreadCountsUseCase:   getMembersUnreadCountsUseCase,
-			CountUnreadByRoomTypeUseCase:    countUnreadByRoomTypeUseCase,
+			GetMessageByIDUseCase:               getMessageByIDUseCase,
+			GetLastMessagesByRoomIDsUseCase:     getLastMessagesByRoomIDsUseCase,
+			GetRoomUseCase:                      getRoomUseCase,
+			GetUserIDsByRoomIDUseCase:           getUserIDsByRoomIDUseCase,
+			ListUsersByRoomIDsUseCase:           listUsersByRoomIDsUseCase,
+			SearchRoomUsersUseCase:              searchRoomUsersUseCase,
+			CountUsersByRoomIDsUseCase:          countUsersByRoomIDsUseCase,
+			ListJoinedRoomIDsUseCase:            listJoinedRoomIDsUseCase,
+			ListMyDMRoomsUseCase:                listMyDMRoomsUseCase,
+			GetOrCreateDMRoomUseCase:            getOrCreateDMRoomUseCase,
+			LeaveCommunityUseCase:               leaveCommunityUseCase,
+			DeleteOrphanedDMUseCase:             deleteOrphanedDMUseCase,
+			JoinRoomUseCase:                     joinRoomUseCase,
+			GetRoomUserRoleUseCase:              getRoomUserRoleUseCase,
+			SetRoomUserRoleUseCase:              setRoomUserRoleUseCase,
+			ListRoomMembersWithRolesUseCase:     listRoomMembersWithRolesUseCase,
+			ListRoomMembersWithRolesPageUseCase: listRoomMembersWithRolesPageUseCase,
+			GetRoomReadStatusBatchUseCase:       getRoomReadStatusBatchUseCase,
+			CountUnreadByRoomTypeUseCase:        countUnreadByRoomTypeUseCase,
 		},
 
-		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, mediaRepository, roomUserRepository, txManager),
+		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, roomUserRepository, txManager),
+		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
+		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
+		ManageUserSettingUsecase:     *manageUserSettingUseCase,
 		GetAnalyticsUseCase:          getAnalyticsUseCase,
 		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
 		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
@@ -460,12 +675,13 @@ func main() {
 		DeleteAnnouncementUseCase: deleteAnnouncementUseCase,
 		UpdateAnnouncementUseCase: updateAnnouncementUseCase,
 
-		CreateTermsUseCase:     createTermsUseCase,
-		GetCurrentTermsUseCase: getCurrentTermsUseCase,
-		ConsentToTermsUseCase:  consentToTermsUseCase,
-		CheckConsentUseCase:    checkConsentUseCase,
-		ListTermsUseCase:       listTermsUseCase,
-		ListConsentsUseCase:    listConsentsUseCase,
+		CreateTermsUseCase:      createTermsUseCase,
+		TermsBroadcastScheduler: termsBroadcastScheduler,
+		GetCurrentTermsUseCase:  getCurrentTermsUseCase,
+		ConsentToTermsUseCase:   consentToTermsUseCase,
+		CheckConsentUseCase:     checkConsentUseCase,
+		ListTermsUseCase:        listTermsUseCase,
+		ListConsentsUseCase:     listConsentsUseCase,
 
 		NotificationUseCases: graph.NotificationUseCases{
 			NotificationPublisher:                 notificationPublisher,
@@ -480,10 +696,20 @@ func main() {
 			DeleteNotificationsUseCase:            deleteNotificationsUseCase,
 			DeleteReadNotificationsUseCase:        deleteReadNotificationsUseCase,
 			DeleteReadNotificationsByActorUseCase: deleteReadNotificationsByActorUseCase,
+			IssueStreamTicketUseCase:              issueStreamTicketUseCase,
 		},
 		SSEBroker: sseBroker,
 
 		PubSub: ps,
+
+		CourseImportTracker: courseImportTracker,
+
+		ChatUseCases: graph.ChatUseCases{
+			ChatAccess:   chatAccessPolicy,
+			ChatCommands: chatCommandService,
+			ChatQueries:  chatQueryService,
+			ChatReads:    chatReadService,
+		},
 	}
 
 	// middleware
@@ -509,19 +735,38 @@ func main() {
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
 	e.Use(authmiddleware.GraphQLRateLimit())
 	e.Use(authmiddleware.MetricsMiddleware())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, passwordResetRepository))
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
 	e.Use(middleware.BodyLimit("21MB")) // メッセージファイル上限 20MB + マージン
-	e.Use(echo.WrapMiddleware(dataloader.Middleware(
-		getUsersByIDsUseCase,
-		listMediaByPostIDsUseCase,
-		listMediaByMessageIDsUseCase,
-		getRepliesByPostIDsUseCase,
-		getRepliesByPostIDsIncludeDeletedUseCase,
-		getFavoritesByPostIDsUseCase,
-	)))
+	// DataLoader はリクエストごとに作り直す（キャッシュがリクエスト内でだけ正しいため）。
+	// 渡す口は名前付きフィールドで指定する。同じ形のインターフェースが並ぶので、
+	// 位置引数だと取り違えてもコンパイルが通ってしまう。
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(dataloader.UseCases{
+		GetUsersByIDs:                  getUsersByIDsUseCase,
+		GetPostsByIDs:                  getPostsByIDsUseCase,
+		ListMediaByPostIDs:             listMediaByPostIDsUseCase,
+		ListMediaByMessageIDs:          listMediaByMessageIDsUseCase,
+		ListMediaByQuestionIDs:         listMediaByQuestionIDsUseCase,
+		ListMediaByAnswerIDs:           listMediaByAnswerIDsUseCase,
+		GetRepliesByPostIDs:            getRepliesByPostIDsUseCase,
+		GetRepliesByPostIDsIncludeDel:  getRepliesByPostIDsIncludeDeletedUseCase,
+		GetFavoritesByPostIDs:          getFavoritesByPostIDsUseCase,
+		CountFavoritesByPostIDs:        countFavoritesByPostIDsUseCase,
+		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
+		GetMessagesByIDs:               getMessagesByIDsUseCase,
+		ListMentionsByPostIDs:          listPostMentionsUseCase,
+		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
+		GetRoomsByIDs:                  getRoomsByIDsUseCase,
+		GetQuestionsByIDs:              getQuestionsByIDsUseCase,
+		GetAnswersByIDs:                getAnswersByIDsUseCase,
+		ListAnswerPagesByQuestionIDs:   listAnswerPagesByQuestionIDsUseCase,
+		CountAnswersByQuestionIDs:      countAnswersByQuestionIDsUseCase,
+		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
+		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
+		GetAnonymousIdentities:         getAnonymousIdentitiesUseCase,
+	})))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -530,7 +775,10 @@ func main() {
 
 	// GraphQL server with WebSocket transport
 	gqlServer := handler.New(
-		graph.NewExecutableSchema(
+		// NewWeightedExecutableSchema は生成コードに「一覧は返却件数ぶん重い」を
+		// 足したもの（graph/complexity.go）。素の NewExecutableSchema を使うと
+		// 上限が選んだフィールドの数しか見なくなる。
+		graph.NewWeightedExecutableSchema(
 			graph.Config{
 				Resolvers: resolver,
 			},
@@ -543,13 +791,10 @@ func main() {
 	wsLimiter := connlimit.NewWSLimiter()
 
 	gqlServer.AddTransport(transport.Websocket{
-		Upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return isOriginAllowed(r.Header.Get("Origin"), allowedOrigins)
-			},
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-		},
+		// gqlgen v0.17.95 で WebSocket 実装が gorilla/websocket から coder/websocket に
+		// 置き換わり、Upgrader フィールドが無くなった。オリジン検証は
+		// WebsocketImplementation を差し替えて従来どおり isOriginAllowed で行う。
+		Implementation:        newOriginCheckingWebsocketImplementation(allowedOrigins),
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
 			var userID int64
@@ -561,7 +806,7 @@ func main() {
 				if tokenStr == "" {
 					return ctx, nil, fmt.Errorf("missing authorization in websocket init payload")
 				}
-				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, passwordResetRepository)
+				claims, err := auth.ValidateAndVerifyToken(ctx, tokenStr, revokedTokenRepository, userRepository, administratorRepository)
 				if err != nil {
 					return ctx, nil, err
 				}
@@ -590,7 +835,9 @@ func main() {
 	gqlServer.AddTransport(transport.GET{})
 	gqlServer.AddTransport(transport.POST{})
 	gqlServer.AddTransport(transport.MultipartForm{})
-	gqlServer.Use(extension.FixedComplexityLimit(300))
+	// 上限の決め方は graph.ComplexityLimit のコメント参照。ここへ直接数字を
+	// 書かないのは、上限とその根拠（複雑度のテスト）を離さないため。
+	gqlServer.Use(extension.FixedComplexityLimit(graph.ComplexityLimit))
 
 	// エラーメッセージ本文ではなく extensions.code を API 契約にする。
 	// クライアントは文言ではなくコードで分岐できるので、文言変更で壊れない。
@@ -625,9 +872,13 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, notificationRepository, revokedTokenRepository, userRepository, passwordResetRepository))
+	e.GET("/events", sse.NewHandler(sseBroker, sseTicketRepository))
 
-	schedulePendingTerms(termsRepository, sseBroker)
+	termsBroadcastScheduler.SchedulePending(context.Background())
+	go func() {
+		defer close(activityArchiveDone)
+		activityArchiver.Run(activityArchiveCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -640,6 +891,7 @@ func main() {
 	<-quit
 
 	logger.Log.Info().Msg("shutting down server...")
+	stopActivityArchive()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -647,34 +899,43 @@ func main() {
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error().Err(err).Msg("server shutdown error")
 	}
+	select {
+	case <-activityArchiveDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
+	}
+	if err := courseImportTracker.Shutdown(shutdownCtx); err != nil {
+		logger.Log.Error().Err(err).Msg("course import did not stop before shutdown; leaving DB and Redis open")
+		return
+	}
+
+	// リクエストの外で走っている処理（チャット配信・お知らせ通知・活動記録）を、
+	// DB 接続を閉じる前に片付ける。ここで待たないと、処理中の書き込みが
+	// 「閉じた DB」に当たって全部失敗する。待ちきれなかったぶんは諦める
+	// （どれもベストエフォート。chat.EventPublisher 参照）。
+	for _, runner := range asyncRunners {
+		if err := runner.Wait(shutdownCtx); err != nil {
+			logger.Log.Error().Err(err).Msg("async tasks did not drain before shutdown")
+			// 1つ待ちきれなければ残りも待ちきれない（同じ shutdownCtx のため）。
+			break
+		}
+	}
 
 	if err := database.Close(); err != nil {
 		logger.Log.Error().Err(err).Msg("database close error")
+	}
+	// Bus と SSE の配信口は Redis クライアントより先に閉じる（購読を握っているため）。
+	if err := chatBus.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("pubsub bus close error")
+	}
+	if err := sseFanout.Close(); err != nil {
+		logger.Log.Error().Err(err).Msg("sse fanout close error")
 	}
 	if err := redisClient.Close(); err != nil {
 		logger.Log.Error().Err(err).Msg("redis close error")
 	}
 
 	logger.Log.Info().Msg("server stopped")
-}
-
-// schedulePendingTerms fetches all future-dated terms on startup and sets a one-shot
-// timer for each so the SSE broadcast fires exactly when each version becomes effective.
-func schedulePendingTerms(termsRepo repository.TermsRepository, broker *sse.Broker) {
-	pending, err := termsRepo.FindFuture(context.Background())
-	if err != nil {
-		logger.Log.Error().Err(err).Msg("failed to fetch pending future terms on startup")
-		return
-	}
-	for _, t := range pending {
-		version := t.Version
-		delay := time.Until(t.EffectiveDate)
-		time.AfterFunc(delay, func() {
-			broker.Broadcast("terms_updated", map[string]any{"version": version})
-			logger.Log.Info().Str("version", version).Msg("scheduled terms now effective, SSE broadcast sent")
-		})
-		logger.Log.Info().Str("version", version).Dur("delay", delay).Msg("scheduled terms broadcast timer set")
-	}
 }
 
 // errorCodeFor maps a resolver error to a stable machine-readable code exposed
@@ -729,6 +990,44 @@ func isOriginAllowed(origin string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// originCheckingWebsocketImplementation は gqlgen の WebSocket 実装をラップし、
+// ハンドシェイク前に Origin ヘッダーを isOriginAllowed で検証する。
+//
+// gqlgen v0.17.95 で transport.Websocket.Upgrader (gorilla/websocket) が廃止され、
+// 実装が coder/websocket に移行した。coder/websocket の既定のオリジン検証は
+// 「Origin のホストがリクエストホストと一致する場合のみ許可（Origin 無しは許可）」
+// であり、従来の許可リスト方式とは意味が異なる。そのため coder 側の検証は
+// InsecureSkipVerify で無効化し、代わりに従来と同一の isOriginAllowed を
+// Accept の前段で適用することで挙動を完全に保つ。
+type originCheckingWebsocketImplementation struct {
+	allowedOrigins []string
+	inner          transport.WebsocketImplementation
+}
+
+func newOriginCheckingWebsocketImplementation(allowedOrigins []string) originCheckingWebsocketImplementation {
+	return originCheckingWebsocketImplementation{
+		allowedOrigins: allowedOrigins,
+		inner: transport.CoderWebsocketImplementation{
+			AcceptOptions: coderws.AcceptOptions{
+				// オリジン検証は下の isOriginAllowed が担当するため、
+				// coder/websocket 側の既定検証は無効化する。
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+}
+
+func (i originCheckingWebsocketImplementation) Accept(
+	w http.ResponseWriter,
+	r *http.Request,
+	options transport.WebsocketAcceptOptions,
+) (transport.WebsocketConn, error) {
+	if !isOriginAllowed(r.Header.Get("Origin"), i.allowedOrigins) {
+		return nil, fmt.Errorf("websocket: request origin %q not allowed", r.Header.Get("Origin"))
+	}
+	return i.inner.Accept(w, r, options)
 }
 
 func authHeaderFromInitPayload(initPayload transport.InitPayload) string {

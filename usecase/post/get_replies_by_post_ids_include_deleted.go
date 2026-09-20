@@ -8,7 +8,7 @@ import (
 )
 
 type GetRepliesByPostIDsIncludeDeletedUseCase interface {
-	Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error)
+	Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error)
 }
 
 var _ GetRepliesByPostIDsIncludeDeletedUseCase = &GetRepliesByPostIDsIncludeDeletedInteractor{}
@@ -23,6 +23,6 @@ func NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepo repository.PostReposit
 	}
 }
 
-func (uc *GetRepliesByPostIDsIncludeDeletedInteractor) Execute(ctx context.Context, parentIDs []int64) (map[int64][]*model.Post, error) {
-	return uc.postRepo.GetRepliesByPostIDsIncludeDeleted(ctx, parentIDs)
+func (uc *GetRepliesByPostIDsIncludeDeletedInteractor) Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error) {
+	return uc.postRepo.GetRepliesByPostIDsIncludeDeleted(ctx, parentIDs, q)
 }

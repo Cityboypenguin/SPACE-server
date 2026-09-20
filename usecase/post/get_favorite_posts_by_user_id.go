@@ -8,7 +8,7 @@ import (
 )
 
 type GetFavoritePostsByUserIDUseCase interface {
-	Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error)
+	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error)
 }
 
 var _ GetFavoritePostsByUserIDUseCase = &GetFavoritePostsByUserIDInteractor{}
@@ -23,6 +23,6 @@ func NewGetFavoritePostsByUserIDUseCase(postRepo repository.PostRepository) GetF
 	}
 }
 
-func (uc *GetFavoritePostsByUserIDInteractor) Execute(ctx context.Context, userID int64, limit, offset int) ([]*model.Post, int, error) {
-	return uc.postRepo.GetFavoritePostsByUserID(ctx, userID, limit, offset)
+func (uc *GetFavoritePostsByUserIDInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
+	return uc.postRepo.GetFavoritePostsByUserID(ctx, userID, q)
 }

@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/Cityboypenguin/SPACE-server/infra/email"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -19,16 +18,16 @@ type SendEmailOTPUseCase interface {
 var _ SendEmailOTPUseCase = &SendEmailOTPInteractor{}
 
 type SendEmailOTPInteractor struct {
-	otpRepo      repository.EmailOTPRepository
-	userRepo     repository.UserRepository
-	emailService email.EmailService
+	otpRepo  repository.EmailOTPRepository
+	userRepo repository.UserRepository
+	mailer   repository.Mailer
 }
 
-func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserRepository, emailService email.EmailService) SendEmailOTPUseCase {
+func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserRepository, mailer repository.Mailer) SendEmailOTPUseCase {
 	return &SendEmailOTPInteractor{
-		otpRepo:      otpRepo,
-		userRepo:     userRepo,
-		emailService: emailService,
+		otpRepo:  otpRepo,
+		userRepo: userRepo,
+		mailer:   mailer,
 	}
 }
 
@@ -39,11 +38,11 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 	}
 
 	// 1分以内の再送信を拒否する（メール爆弾対策）
-	limited, err := uc.otpRepo.IsRateLimited(ctx, emailAddr)
+	allowed, err := uc.otpRepo.TryBeginSend(ctx, emailAddr)
 	if err != nil {
 		return err
 	}
-	if limited {
+	if !allowed {
 		return fmt.Errorf("認証コードは1分後に再送信できます")
 	}
 
@@ -54,7 +53,6 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 		return err
 	}
 	if user != nil {
-		_ = uc.otpRepo.MarkRateLimited(ctx, emailAddr)
 		return nil
 	}
 
@@ -73,14 +71,13 @@ func (uc *SendEmailOTPInteractor) Execute(ctx context.Context, emailAddr string)
 		"Senshu-Universeへの新規登録の確認コードは以下の通りです。\n\n確認コード: %s\n\nこのコードは10分間有効です。\n※このメールに心当たりがない場合は、そのまま削除してください。",
 		code,
 	)
-	if err := uc.emailService.Send(emailAddr, subject, body); err != nil {
-		return err
-	}
-
 	if err := uc.otpRepo.Save(ctx, otp); err != nil {
 		return err
 	}
-	return uc.otpRepo.MarkRateLimited(ctx, emailAddr)
+	if err := uc.mailer.Send(ctx, emailAddr, subject, body); err != nil {
+		return err
+	}
+	return nil
 }
 
 func generateOTPCode() (string, error) {

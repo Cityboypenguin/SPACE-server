@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type CreateUserUseCase interface {
-	Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error)
+	Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.UserAccount, error)
 }
 
 var _ CreateUserUseCase = &CreateUserInteractor{}
@@ -34,7 +35,7 @@ func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo reposi
 	}
 }
 
-func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.User, error) {
+func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateUserParam, otp string) (*model.UserAccount, error) {
 	if uc.validationEnabled {
 		if err := model.ValidateUserEmail(param.Email); err != nil {
 			return nil, err
@@ -51,7 +52,8 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	param.CreatedAt = now
 	param.UpdatedAt = now
 
-	user := &model.User{}
+	// 新規登録はパスワードハッシュを作る経路なので UserCredentials を使う。
+	user := &model.UserCredentials{}
 	if err := user.CreateUser(param); err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 	}
 
 	err := uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
-		if err := uc.userRepo.SaveUser(ctx, user); err != nil {
+		if err := uc.userRepo.SaveCredentials(ctx, user); err != nil {
 			return err
 		}
 		emptyProfile := &model.Profile{
@@ -75,16 +77,22 @@ func (uc *CreateUserInteractor) Execute(ctx context.Context, param model.CreateU
 		if err := uc.profileRepo.SaveProfile(ctx, emptyProfile); err != nil {
 			return err
 		}
-		if uc.validationEnabled {
-			return uc.otpRepo.Delete(ctx, param.Email)
-		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	if uc.validationEnabled {
+		if err := uc.otpRepo.Delete(ctx, param.Email); err != nil {
+			logger.Log.Error().Err(err).Msg("failed to delete registration OTP after commit")
+		}
+	}
 
-	return user, nil
+	// 返すのはハッシュを外した本人ぶん。連絡先を含めてよいのは、いま登録した
+	// 本人が自分で入力したメールアドレスだから（GraphQL の createUser は UserAccount）。
+	// ハッシュはこの関数の外へ出さない。
+	account := user.UserAccount
+	return &account, nil
 }
 
 func (uc *CreateUserInteractor) checkOTP(ctx context.Context, email, code string) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -23,6 +24,9 @@ func NewUpdateProfileUseCase(profileRepo repository.ProfileRepository) UpdatePro
 }
 
 func (uc *UpdateProfileInteractor) Execute(ctx context.Context, userID int64, param model.UpdateProfileParam) (*model.Profile, error) {
+	if _, err := authz.RequireSelfOrAdmin(ctx, userID); err != nil {
+		return nil, err
+	}
 	// 1. 倉庫係に「この人のプロフィール、もうデータベースにある？」と確認する
 	profile, err := uc.profileRepo.GetProfileByUserID(ctx, userID)
 	if err != nil {
