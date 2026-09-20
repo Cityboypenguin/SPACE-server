@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -429,7 +428,10 @@ func (p *chatEventPublisher) publishMessageReplyNotification(ctx context.Context
 		return nil
 	}
 
-	message := "あなたのメッセージに返信がありました"
+	// 「どこで返信されたか」は文言に入る（文言の組み立ては usecase/notification の担当）。
+	// 通知一覧・通知詳細・SSE のトーストはどれも message をそのまま出すので、
+	// 文言に入れておけば3箇所ぶんの組み立てが要らない。
+	message := notificationuc.MessageRepliedInRoom(room.Name)
 	notificationActorID := &actorID
 	if room.Type == model.RoomTypeCourse {
 		// 匿名IDは投稿時に確定済みなので、ここは採番せず読むだけ。行が引けなくても
@@ -444,7 +446,7 @@ func (p *chatEventPublisher) publishMessageReplyNotification(ctx context.Context
 		} else if identity != nil {
 			label = identity.Label
 		}
-		message = fmt.Sprintf("%sさんがあなたのメッセージに返信しました", label)
+		message = notificationuc.MessageAnonymousRepliedInRoom(room.Name, label)
 		notificationActorID = nil
 	}
 
@@ -484,6 +486,10 @@ func (p *chatEventPublisher) publishMentionNotifications(ctx context.Context, ro
 		return
 	}
 
+	// 「どこでメンションされたか」は文言に入る（返信通知と同じ理由。
+	// publishMessageReplyNotification のコメントを参照）。
+	message := notificationuc.MessageMentionedInRoom(room.Name)
+
 	targetType := notificationuc.TargetMessage
 	params := make([]notificationuc.PublishParams, 0, len(msg.Mentions))
 	for _, m := range msg.Mentions {
@@ -496,7 +502,7 @@ func (p *chatEventPublisher) publishMentionNotifications(ctx context.Context, ro
 			ActorID:    &actorID,
 			TargetType: &targetType,
 			TargetID:   &msg.ID,
-			Message:    "コミュニティであなたがメンションされました",
+			Message:    message,
 			Extra: map[string]any{
 				"roomID":   encodeGraphID("room", room.ID),
 				"roomType": room.Type,

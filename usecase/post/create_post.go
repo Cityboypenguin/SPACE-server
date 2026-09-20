@@ -132,7 +132,7 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 				ActorID:    &param.UserID,
 				TargetType: &targetType,
 				TargetID:   param.ParentID,
-				Message:    "あなたの投稿に返信がありました",
+				Message:    notificationuc.MessageRepliedToPost,
 			}); err != nil {
 				logger.Log.Error().Err(err).
 					Str("component", "post").

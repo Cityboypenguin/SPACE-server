@@ -49,14 +49,14 @@ func (r *Resolver) updateCommunityMembers(ctx context.Context, communityID int64
 		switch update.Action {
 		case communityusecase.MemberActionPromote:
 			param.Type = notificationuc.TypeCommunityRole
-			param.Message = "コミュニティのオーナーに昇格しました"
+			param.Message = notificationuc.MessagePromotedToCommunityOwner
 		case communityusecase.MemberActionDemote:
 			param.Type = notificationuc.TypeCommunityRole
-			param.Message = "コミュニティのオーナーから降格されました"
+			param.Message = notificationuc.MessageDemotedFromCommunityOwner
 		case communityusecase.MemberActionKick:
 			param.Type = notificationuc.TypeCommunityKick
 			param.ActorID = &claims.ID
-			param.Message = "コミュニティからキックされました"
+			param.Message = notificationuc.MessageKickedFromCommunity
 		default:
 			continue
 		}

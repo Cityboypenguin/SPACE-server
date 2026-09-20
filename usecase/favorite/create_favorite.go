@@ -73,7 +73,7 @@ func (uc *CreateFavoriteInteractor) Execute(ctx context.Context, param model.Cre
 			ActorID:    &param.UserID,
 			TargetType: &targetType,
 			TargetID:   &param.PostID,
-			Message:    "あなたの投稿がいいねされました",
+			Message:    notificationuc.MessageFavoritedPost,
 		}); err != nil {
 			logger.Log.Error().Err(err).Msg("failed to publish favorite notification")
 		}

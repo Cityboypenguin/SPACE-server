@@ -103,7 +103,7 @@ func NotifyMentions(
 			ActorID:    &actorID,
 			TargetType: &targetType,
 			TargetID:   &postID,
-			Message:    "投稿であなたがメンションされました",
+			Message:    notificationuc.MessageMentionedInPost,
 		})
 	}
 	if len(params) == 0 {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -501,3 +502,75 @@ func TestChatEventPublisher_RoomMarkedAsRead_DMTellsTheReaderNotificationsChange
 }
 
 func ptrInt64(v int64) *int64 { return &v }
+
+// 返信・メンションの通知は「どこで起きたか」を文言に持つ。
+//
+// 通知一覧もトーストも message をそのまま出すだけなので、ここに入っていないと
+// 受け取った側は通知を開くまでどのルームの話か分からない。
+func TestChatEventPublisher_MessageSent_ReplyNotificationNamesTheRoom(t *testing.T) {
+	h := newPublisherHarness()
+	room := &model.Room{ID: 5, Name: "プログラミング部", Type: model.RoomTypeCommunity}
+
+	h.publisher.MessageSent(context.Background(), chatusecase.MessageSentEvent{
+		Room:      room,
+		Message:   &model.Message{ID: 100, RoomID: 5, UserID: 10, Content: "hi", ReplyToID: ptrInt64(99)},
+		ActorID:   10,
+		MemberIDs: []int64{10, 42},
+	})
+
+	if len(h.notify.published) != 1 {
+		t.Fatalf("reply notifications = %d, want 1", len(h.notify.published))
+	}
+	got := h.notify.published[0].Message
+	if !strings.Contains(got, room.Name) {
+		t.Errorf("message = %q, want it to name the room %q", got, room.Name)
+	}
+}
+
+// 授業ルームの返信通知は、授業名を出しつつ匿名ラベルのまま（actor は載せない）。
+// 場所を言うために実名を漏らしてしまっては元も子もない。
+func TestChatEventPublisher_MessageSent_CourseReplyNotificationNamesTheCourseAndStaysAnonymous(t *testing.T) {
+	h := newPublisherHarness()
+	room := &model.Room{ID: 1, Name: "情報工学概論", Type: model.RoomTypeCourse}
+
+	h.publisher.MessageSent(context.Background(), chatusecase.MessageSentEvent{
+		Room:    room,
+		Message: &model.Message{ID: 100, RoomID: 1, UserID: 10, Content: "hi", ReplyToID: ptrInt64(99)},
+		ActorID: 10,
+	})
+
+	if len(h.notify.published) != 1 {
+		t.Fatalf("reply notifications = %d, want 1", len(h.notify.published))
+	}
+	notified := h.notify.published[0]
+	if !strings.Contains(notified.Message, room.Name) {
+		t.Errorf("message = %q, want it to name the course %q", notified.Message, room.Name)
+	}
+	if notified.ActorID != nil {
+		t.Errorf("actorID = %v, want nil in an anonymous course room", *notified.ActorID)
+	}
+}
+
+// チャットのメンション通知も同じく、どのルームでメンションされたかを文言に持つ。
+func TestChatEventPublisher_MessageSent_MentionNotificationNamesTheRoom(t *testing.T) {
+	h := newPublisherHarness()
+	room := &model.Room{ID: 5, Name: "プログラミング部", Type: model.RoomTypeCommunity}
+
+	h.publisher.MessageSent(context.Background(), chatusecase.MessageSentEvent{
+		Room: room,
+		Message: &model.Message{
+			ID: 100, RoomID: 5, UserID: 10, Content: "@ひろし hi",
+			Mentions: []*model.Mention{{UserID: 11, Text: "ひろし"}},
+		},
+		ActorID:   10,
+		MemberIDs: []int64{10, 11},
+	})
+
+	if len(h.notify.batched) != 1 {
+		t.Fatalf("mention notifications = %d, want 1", len(h.notify.batched))
+	}
+	got := h.notify.batched[0].Message
+	if !strings.Contains(got, room.Name) {
+		t.Errorf("message = %q, want it to name the room %q", got, room.Name)
+	}
+}
