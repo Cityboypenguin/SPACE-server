@@ -16,11 +16,11 @@ type GetRoomReadStatusBatchUseCase interface {
 }
 
 type getRoomReadStatusBatchUseCase struct {
-	roomUserRepo  repository.RoomUserRepository
+	roomUserRepo  repository.ReadPositionRepository
 	unreadCounter repository.MessageUnreadCounter
 }
 
-func NewGetRoomReadStatusBatchUseCase(roomUserRepo repository.RoomUserRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusBatchUseCase {
+func NewGetRoomReadStatusBatchUseCase(roomUserRepo repository.ReadPositionRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusBatchUseCase {
 	return &getRoomReadStatusBatchUseCase{roomUserRepo: roomUserRepo, unreadCounter: unreadCounter}
 }
 

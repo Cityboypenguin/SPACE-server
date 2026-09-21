@@ -349,6 +349,6 @@ type NotificationUseCases struct {
 	DeleteReadNotificationsUseCase        notificationuc.DeleteReadNotificationsUseCase
 	DeleteReadNotificationsByActorUseCase notificationuc.DeleteReadNotificationsByActorUseCase
 	// SSE(/events) 接続用の使い捨てチケットを発行する。通知の配信経路に属するので
-	// ここに置いている（internal/sse.NewHandler のコメント参照）。
+	// ここに置いている（internal/transport/ssehttp.NewHandler のコメント参照）。
 	IssueStreamTicketUseCase notificationuc.IssueStreamTicketUseCase
 }

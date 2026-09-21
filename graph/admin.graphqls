@@ -1,0 +1,225 @@
+# 管理画面。
+
+extend type Query {
+  # adminSearchUsers は管理画面のユーザー検索。同じ検索だが管理者専用で、
+  # email を含む UserAccount を返す。searchUsers に「管理者なら email も」を
+  # 足せないのは、GraphQL の型が呼び出し元の権限で変わらないため。
+  adminSearchUsers(
+    keyword: String!
+    limit: Int = 20
+    offset: Int = 0
+  ): UserAccountPage!
+  administrators(limit: Int = 20, offset: Int = 0): AdministratorPage!
+  getAdministratorByID(id: ID!): Administrator
+  searchAdministrators(name: String!): [Administrator!]!
+  adminGetFavoriteUsers(userID: ID!, limit: Int, offset: Int): [User!]!
+  adminGetBlockers(userID: ID!, limit: Int, offset: Int): [User!]!
+  adminGetAnalytics: AnalyticsSummary!
+  adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
+  adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
+  adminCourseImportStatus: CourseImportStatus!
+  adminListCourseYears: [Int!]!
+  adminGetCourse(id: ID!): Course
+  adminListCourses(
+    year: Int
+    semester: String
+    dayOfWeek: String
+    keyword: String
+    limit: Int = 20
+    offset: Int = 0
+  ): CoursePage!
+}
+
+extend type Mutation {
+  createAdministrator(input: CreateAdministratorInput!): Administrator!
+  deleteAdministrator(id: ID!): Boolean!
+  updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
+  loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
+  refreshAdministratorToken(refreshToken: String!): AdministratorAuthPayload!
+  logoutAdministrator(token: String!): Boolean!
+  # 管理者用: 任意のユーザーの時間割を操作する。
+  adminRegisterTimetableEntry(userID: ID!, courseID: ID!): TimetableEntry!
+  adminRemoveTimetableEntry(id: ID!, userID: ID!): Boolean!
+  adminSetTimetableEntryColor(id: ID!, userID: ID!, color: TimetableEntryColor!): TimetableEntry!
+  adminSetUserTimetable(
+    userID: ID!
+    year: Int!
+    semester: String!
+    baselineEntryIDs: [ID!]!
+    courseIDs: [ID!]!
+  ): [TimetableEntry!]!
+  adminDeleteQuestion(id: ID!): Boolean!
+  adminTriggerCourseImport(year: Int!): CourseImportStatus!
+  adminCreateCourse(input: AdminCreateCourseInput!): Course!
+  # Deletes the course's chat room, which cascades to the course row itself, every
+  # user's timetable registration for it, and all of the room's messages/questions/
+  # polls. Irreversible - the resolver's registeredCount on Course is meant to be
+  # shown to the admin as a confirmation prompt before calling this.
+  adminDeleteCourse(id: ID!): Boolean!
+  adminUpdateUser(id: ID!, input: UpdateUserInput!): UserAccount!
+  adminUpdateProfile(userID: ID!, input: UpdateProfileInput!): Profile!
+  adminDeletePost(id: ID!): Boolean!
+  recordSessionData(input: RecordSessionDataInput!): Boolean!
+}
+
+type Administrator {
+  ID: ID!
+  name: String!
+  email: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type AdministratorPage {
+  items: [Administrator!]!
+  total: Int!
+}
+
+type AdministratorAuthPayload {
+  token: String!
+  refreshToken: String!
+  administrator: Administrator!
+}
+
+input CreateAdministratorInput {
+  name: String!
+  email: String!
+  password: String!
+}
+
+input UpdateAdministratorInput {
+  name: String
+  email: String
+  password: String
+}
+
+type AnalyticsSummary {
+  # 基本集計
+  totalUsers: Int!
+  newUsersToday: Int!
+  newUsersThisWeek: Int!
+  newUsersThisMonth: Int!
+  frozenUsersCount: Int!
+  totalPosts: Int!
+  totalComments: Int!
+  totalDeletedPosts: Int!
+  totalLikes: Int!
+  totalCommunities: Int!
+  totalMessages: Int!
+  totalReports: Int!
+  totalBlocks: Int!
+  totalInquiries: Int!
+
+  # アクティビティ
+  currentActiveUsers: Int!
+  dau: Int!
+  wau: Int!
+  mau: Int!
+  dauMauRatio: Float!
+
+  # コンテンツ（日次）
+  postsToday: Int!
+  commentsToday: Int!
+  messagesToday: Int!
+
+  # エンゲージメント
+  avgLikesPerPost: Float!
+  avgCommentsPerPost: Float!
+
+  # 投稿種別
+  postsTextOnly: Int!
+  postsWithImage: Int!
+  postsWithVideo: Int!
+
+  # DM
+  uniqueDMSenders: Int!
+
+  # コミュニティ
+  activeCommunitiesLast30Days: Int!
+  avgCommunityMembers: Float!
+  avgCommunitiesPerUser: Float!
+
+  # ソーシャル
+  totalFollows: Int!
+  avgFollowersPerUser: Float!
+  avgFollowingPerUser: Float!
+
+  # オンボーディング
+  usersWithProfile: Int!
+  usersWithAvatar: Int!
+  usersWithPost: Int!
+  onboardingCompleteRate: Float!
+  avgTimeToFirstPostMinutes: Float!
+
+  # 通知
+  totalNotifications: Int!
+  readNotifications: Int!
+  notificationReadRate: Float!
+
+  # 通報ステータス
+  pendingReports: Int!
+  resolvedReports: Int!
+
+  # インフラ（in-memory）
+  webSocketConnections: Int!
+  sseConnections: Int!
+  errorRate5xx: Float!
+  p50ResponseTimeMs: Float!
+  p95ResponseTimeMs: Float!
+  p99ResponseTimeMs: Float!
+
+  # セッション（クライアント送信）
+  avgSessionDurationSeconds: Float!
+  avgSessionsPerDay: Float!
+  avgScrollDepth: Float!
+  pageViewStats: [PageViewStat!]!
+}
+
+type PageViewStat {
+  pagePath: String!
+  avgDurationSeconds: Float!
+  avgMaxScrollDepth: Float!
+  totalViews: Int!
+}
+
+type CommunityStatItem {
+  communityID: ID!
+  name: String!
+  memberCount: Int!
+  messageCount: Int!
+}
+
+type CommunityStatsPage {
+  items: [CommunityStatItem!]!
+  total: Int!
+}
+
+input RecordSessionDataInput {
+  sessionDurationSeconds: Int!
+  pageViews: [PageViewInput!]!
+}
+
+input PageViewInput {
+  path: String!
+  durationSeconds: Int!
+  maxScrollDepth: Int!
+}
+
+enum TimeSeriesGranularity {
+  day
+  hour
+}
+
+type TimeSeriesPoint {
+  label: String!
+  posts: Int!
+  comments: Int!
+  messages: Int!
+  newUsers: Int!
+  likes: Int!
+  activeUsers: Int!
+}
+
+type TimeSeriesData {
+  points: [TimeSeriesPoint!]!
+}

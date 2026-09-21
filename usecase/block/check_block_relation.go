@@ -3,11 +3,13 @@ package block
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type CheckBlockRelationUseCase interface {
-	Execute(ctx context.Context, userID, targetUserID int64) (bool, error)
+	Execute(ctx context.Context, targetUserID int64) (bool, error)
 }
 
 var _ CheckBlockRelationUseCase = &checkBlockRelationInteractor{}
@@ -22,6 +24,10 @@ func NewCheckBlockRelationUseCase(blockRepo repository.BlockerRepository) CheckB
 	}
 }
 
-func (uc *checkBlockRelationInteractor) Execute(ctx context.Context, userID, targetUserID int64) (bool, error) {
+func (uc *checkBlockRelationInteractor) Execute(ctx context.Context, targetUserID int64) (bool, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return false, err
+	}
 	return uc.blockRepo.ExistsBlockRelation(ctx, userID, targetUserID)
 }

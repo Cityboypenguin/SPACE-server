@@ -1,0 +1,130 @@
+# 投稿・いいね・ハッシュタグ。
+
+extend type Query {
+  posts(limit: Int = 20, offset: Int = 0): PostPage!
+  topLevelPosts(limit: Int = 20, offset: Int = 0): PostPage!
+  followersTopLevelPosts(
+    userID: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
+  newFeedPostsCount(since: String!): Int!
+  getRootPost(id: ID!): Post
+  getPostByID(id: ID!): Post
+  getPostByIDIncludeDeleted(id: ID!): Post
+  getPostsByUserID(user_id: ID!, limit: Int = 20, offset: Int = 0): PostPage!
+  # limit/offset は任意。**既定値を入れていない**のは、入れると引数を送っていない
+  # 既存のクライアントで「今まで全件返っていたものが黙って切れる」ため。
+  # 送らなかったときはサーバー側の安全弁（graph.unpagedCollectionCap）で頭打ちにする。
+  # 詳しくは helpers.go の unpagedCollectionCap のコメント参照。
+  getRepliesByPostID(post_id: ID!, limit: Int, offset: Int): [Post!]!
+  getFavoritePostsByUserID(
+    user_id: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
+  # 投稿検索は limit/offset を取る。既定値は 20 件（クライアントが1画面に出す件数と
+  # 同じ）。以前は引数が無く、条件に当たった投稿を**全件**返していた。
+  # content LIKE '%...%' はインデックスが効かないので全表走査になり、返す行数も
+  # 投稿が増えるだけ増える。1件の検索が DB とネットワークの両方を占有していた。
+  #
+  # 返り値は [Post!]!（PostPage! ではない）のまま。total はクライアントが使って
+  # いないので、型を変えずに窓だけを足してある。「次があるか」は
+  # 「返ってきた件数が limit と同じか」で判断すること。
+  searchPosts(keyword: String!, limit: Int = 20, offset: Int = 0): [Post!]!
+  searchPostsByHashtag(tag: String!, limit: Int = 20, offset: Int = 0): [Post!]!
+  popularHashtags: HashtagSuggestionPage!
+  suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
+  getFavoriteByID(id: ID!): Favorite
+}
+
+extend type Mutation {
+  createPost(input: CreatePostInput!): Post!
+  deletePost(id: ID!): Boolean!
+  updatePost(input: UpdatePostInput!): Post!
+  createFavorite(input: CreateFavoriteInput!): Favorite!
+  deleteFavorite(input: DeleteFavoriteInput!): Boolean!
+}
+
+type Post {
+  ID: ID!
+  content: String!
+  createdAt: String!
+  updatedAt: String!
+  deletedAt: String
+  replyCount: Int!
+  user: User!
+  rootPost: Post
+  # favorites は「誰がいいねしたか」の一覧。表示に要るのは件数と自分の有無だけなので、
+  # 一覧・詳細のクエリは favoriteCount / isFavoritedByMe を使うこと。
+  #
+  # limit を送らない場合もサーバー側で頭打ちにする（graph/helpers.go の
+  # unpagedCollectionCap）。引数が無いままだと、人気の投稿のいいね全件が
+  # 投稿の件数ぶん応答に乗り、しかもクエリの複雑度には現れない
+  # （複雑度は limit を持つフィールドだけを件数で重み付けするため）。
+  favorites(limit: Int, offset: Int): [Favorite!]!
+  # favoriteCount は COUNT(*) 1本、isFavoritedByMe は自分の行だけを見る。
+  # どちらも投稿のいいね数に依らず一定の大きさで返る。
+  favoriteCount: Int!
+  # 未ログインでは常に false（いいねは本人にしか紐づかない）。
+  isFavoritedByMe: Boolean!
+  parent: Post
+  replies(limit: Int = 50, offset: Int = 0): [Post!]!
+  media: [Media!]!
+  # 本文中のメンション。表示側はここに載っている text を本文と突き合わせて着色・リンク化する。
+  mentions: [Mention!]!
+}
+
+type Favorite {
+  ID: ID!
+  user: User!
+  post: Post!
+  createdAt: String!
+}
+
+input CreatePostInput {
+  content: String!
+  parent_id: ID
+  mediaInputs: [MediaUploadInput!]
+}
+
+input UpdatePostInput {
+  id: ID!
+  content: String!
+  newMediaInputs: [MediaUploadInput!]
+  deletedMediaIDs: [ID!]
+}
+
+input CreateFavoriteInput {
+  post_id: ID!
+}
+
+input DeleteFavoriteInput {
+  post_id: ID!
+}
+
+# Mention は投稿/メッセージ本文中の1件のメンション。
+# text は本文に書かれた表記のスナップショット（投稿は accountID、コミュニティは表示名）で、
+# user は書き込み時に解決したメンション先。相手が accountID や表示名を変更しても
+# 本文の文字列は変わらないため、着色は text、遷移先は user で行う。
+type Mention {
+  user: User!
+  text: String!
+}
+
+type PostPage {
+  items: [Post!]!
+  total: Int!
+}
+
+type HashtagSuggestion {
+  tag: String!
+  count: Int!
+}
+
+# items は人気上位のタグ（最大 500 件）。total はタグの種類数。
+# total <= items の件数なら全タグを先読みできている（complete）と判断できる。
+type HashtagSuggestionPage {
+  items: [HashtagSuggestion!]!
+  total: Int!
+}

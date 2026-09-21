@@ -1,6 +1,16 @@
-package graph
+// Package di は、リポジトリからユースケースを組み立てる配線。
+//
+// 以前は graph パッケージに置いてあった。GraphQL の層が「どのリポジトリから
+// どのユースケースを作るか」を知っていることになり、依存の向きが逆立ちする
+// （本来 graph は組み立て済みのものを受け取るだけでよい）。別の入口を足すときも、
+// その入口が graph を import しないと配線を再利用できなくなる。
+//
+// 返す型が graph.XxxUseCases なのは、リゾルバがその形で束ねて受け取るため。
+// di → graph の一方向で、graph は di を知らない。
+package di
 
 import (
+	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
@@ -10,6 +20,7 @@ import (
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
 	timetableusecase "github.com/Cityboypenguin/SPACE-server/usecase/timetable"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 )
 
 // NewCommunityUseCases wires every community use case from its repositories and
@@ -17,14 +28,15 @@ import (
 // the per-use-case construction boilerplate and means adding a community use case
 // touches one place instead of three.
 func NewCommunityUseCases(
+	uploads uploadusecase.Acceptor,
 	communityRepo repository.CommunityRepository,
 	roomUserRepo repository.RoomUserRepository,
 	txManager repository.TxManager,
-) CommunityUseCases {
-	return CommunityUseCases{
-		CreateCommunityUseCase:        communityusecase.NewCreateCommunityUseCase(communityRepo),
+) graph.CommunityUseCases {
+	return graph.CommunityUseCases{
+		CreateCommunityUseCase:        communityusecase.NewCreateCommunityUseCase(uploads, communityRepo),
 		GetCommunityUseCase:           communityusecase.NewGetCommunityUseCase(communityRepo),
-		UpdateCommunityUseCase:        communityusecase.NewUpdateCommunityUseCase(communityRepo, roomUserRepo),
+		UpdateCommunityUseCase:        communityusecase.NewUpdateCommunityUseCase(uploads, communityRepo, roomUserRepo),
 		UpdateCommunityMembersUseCase: communityusecase.NewUpdateCommunityMembersUseCase(communityRepo, roomUserRepo, txManager),
 		SearchCommunityUseCase:        communityusecase.NewSearchCommunityUseCase(communityRepo),
 		ListMyCommunitiesUseCase:      communityusecase.NewListMyCommunitiesUseCase(communityRepo),
@@ -46,8 +58,8 @@ func NewCourseUseCases(
 	// 授業一覧の未読バッジしか使わないので、合成インターフェースではなく
 	// 未読集計の口だけを受け取る。
 	unreadCounter repository.MessageUnreadCounter,
-) CourseUseCases {
-	return CourseUseCases{
+) graph.CourseUseCases {
+	return graph.CourseUseCases{
 		SearchCoursesUseCase:               courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
 		GetCourseByIDUseCase:               courseusecase.NewGetCourseByIDUseCase(courseRepo),
 		RegisterTimetableUseCase:           timetableusecase.NewRegisterTimetableUseCase(timetableRepo),
@@ -77,6 +89,8 @@ func NewCourseUseCases(
 // NewQuestionUseCases wires every question/answer use case (F-04-2 質問箱) from its
 // repositories, following the same grouping pattern as NewCommunityUseCases.
 func NewQuestionUseCases(
+	uploads uploadusecase.Acceptor,
+	events classroomEvents,
 	questionRepo repository.QuestionRepository,
 	answerRepo repository.AnswerRepository,
 	mediaRepo repository.MediaRepository,
@@ -86,42 +100,54 @@ func NewQuestionUseCases(
 	timetableRepo repository.TimetableRepository,
 	// 匿名ID(匿名NNN)は投稿時に確定させるので、質問・回答の作成にも採番の口が要る。
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
-) QuestionUseCases {
+) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	anonIdentity := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)
-	return QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable, anonIdentity),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(questionRepo, mediaRepo, txManager, requireWritable),
+	return graph.QuestionUseCases{
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, anonIdentity),
+		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
-		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(questionRepo, answerRepo, requireWritable),
-		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(questionRepo, requireWritable),
-		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(questionRepo),
-		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
-		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(questionRepo, answerRepo, requireWritable),
-		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
-		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(questionRepo, answerRepo, requireWritable),
+		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
+		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
+		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
+		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 	}
 }
 
 // NewPollUseCases wires every poll use case (F-04-3 投票) from its repositories,
 // following the same grouping pattern as NewCommunityUseCases.
 func NewPollUseCases(
+	events classroomEvents,
 	pollRepo repository.PollRepository,
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
 	// 匿名ID(匿名NNN)は投稿時に確定させるので、投票の作成にも採番の口が要る。
 	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
-) PollUseCases {
+) graph.PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
-	return PollUseCases{
-		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
-		VotePollUseCase:    pollusecase.NewVotePollUseCase(pollRepo, requireWritable),
-		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(pollRepo, requireWritable),
+	return graph.PollUseCases{
+		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
+		VotePollUseCase:    pollusecase.NewVotePollUseCase(events, pollRepo, requireWritable),
+		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(events, pollRepo, requireWritable),
 		ListPollsUseCase:   pollusecase.NewListPollsUseCase(pollRepo),
 		GetPollByIDUseCase: pollusecase.NewGetPollByIDUseCase(pollRepo),
 	}
+}
+
+// classroomEvents は質問・回答・投票の配信の出口をまとめて受け取るための口。
+//
+// 3つのポート（usecase/question, usecase/answer, usecase/poll の EventPublisher）を
+// 1つの実装が満たすので、配線もまとめて受け取る。graph.NewClassroomEventPublisher が
+// これを満たす。
+type classroomEvents interface {
+	questionusecase.EventPublisher
+	answerusecase.EventPublisher
+	pollusecase.EventPublisher
 }

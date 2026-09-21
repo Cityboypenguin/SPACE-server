@@ -57,7 +57,7 @@ func newUpdateQuestionFixture(attachedIDs ...int64) (*fakeQuestionRepoForUpdate,
 	for _, id := range attachedIDs {
 		mediaRepo.attached = append(mediaRepo.attached, &model.Media{ID: id})
 	}
-	uc := NewUpdateQuestionUseCase(questionRepo, mediaRepo, fakeTxManager{}, &fakeRequireWritable{})
+	uc := NewUpdateQuestionUseCase(nil, questionRepo, mediaRepo, fakeTxManager{}, &fakeRequireWritable{})
 	return questionRepo, mediaRepo, uc
 }
 

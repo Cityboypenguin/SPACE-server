@@ -26,7 +26,7 @@ func (f *fakeQuestionRepoForDelete) DeleteQuestionByAsker(_ context.Context, que
 
 func newDeleteMyQuestionFixture(writableErr error) (*fakeQuestionRepoForDelete, DeleteMyQuestionUseCase) {
 	repo := &fakeQuestionRepoForDelete{question: &model.Question{ID: 1, RoomID: 5, AskerUserID: 7}}
-	return repo, NewDeleteMyQuestionUseCase(repo, &fakeRequireWritable{err: writableErr})
+	return repo, NewDeleteMyQuestionUseCase(nil, repo, &fakeRequireWritable{err: writableErr})
 }
 
 func TestDeleteMyQuestion_RejectsWhenRoomNotWritable(t *testing.T) {

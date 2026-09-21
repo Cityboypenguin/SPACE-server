@@ -15,11 +15,11 @@ type DeleteOrphanedDMUseCase interface {
 
 type DeleteOrphanedDMInteractor struct {
 	roomRepo     repository.RoomRepository
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomRoleRepository
 	txManager    repository.TxManager
 }
 
-func NewDeleteOrphanedDMUseCase(roomRepo repository.RoomRepository, roomUserRepo repository.RoomUserRepository, txManager repository.TxManager) DeleteOrphanedDMUseCase {
+func NewDeleteOrphanedDMUseCase(roomRepo repository.RoomRepository, roomUserRepo repository.RoomRoleRepository, txManager repository.TxManager) DeleteOrphanedDMUseCase {
 	return &DeleteOrphanedDMInteractor{roomRepo: roomRepo, roomUserRepo: roomUserRepo, txManager: txManager}
 }
 

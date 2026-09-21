@@ -42,11 +42,11 @@ type GetRoomReadStatusUseCase interface {
 }
 
 type getRoomReadStatusUseCase struct {
-	roomUserRepo  repository.RoomUserRepository
+	roomUserRepo  repository.ReadPositionRepository
 	unreadCounter repository.MessageUnreadCounter
 }
 
-func NewGetRoomReadStatusUseCase(roomUserRepo repository.RoomUserRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusUseCase {
+func NewGetRoomReadStatusUseCase(roomUserRepo repository.ReadPositionRepository, unreadCounter repository.MessageUnreadCounter) GetRoomReadStatusUseCase {
 	return &getRoomReadStatusUseCase{roomUserRepo: roomUserRepo, unreadCounter: unreadCounter}
 }
 

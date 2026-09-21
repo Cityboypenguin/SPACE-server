@@ -508,3 +508,49 @@ func TestSubscribe_ReplaysEventsPublishedByAnotherInstance(t *testing.T) {
 		t.Fatalf("replayed = %+v", missed[0].Data)
 	}
 }
+
+// 配信中に切断が重なってもプロセスが落ちないこと。
+//
+// 以前は宛先を写し取ってから錠を放し、その外で送っていた。写した直後に
+// Unsubscribe がチャンネルを閉じると、閉じたチャンネルへの送信になって
+// プロセスごと panic する。SSE は「タブを閉じた」「回線が切れた」で日常的に
+// 切断が起きるので、賑やかな時間帯ほど当たりやすい。
+//
+// panic するのは配信した goroutine であって切断した側ではないため、落ちるのは
+// 無関係な利用者のリクエストを処理している最中になる。
+func TestBroker_DeliveringWhileClientsDisconnectDoesNotPanic(t *testing.T) {
+	b := NewBroker()
+
+	const userID = int64(1)
+	var wg sync.WaitGroup
+
+	// 配信し続ける側。1本だと切断側が錠を取りやすく、危ない隙間に当たりにくい。
+	stop := make(chan struct{})
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					b.DeliverLocal(Envelope{UserID: userID, Event: Event{Type: "notifications_changed"}})
+					b.DeliverLocal(Envelope{UserID: 0, Event: Event{Type: "terms_updated"}})
+				}
+			}
+		}()
+	}
+
+	// 繋いでは切る側。接続数の上限があるので、1本ずつ回す。
+	for range 5000 {
+		c, _, err := b.Subscribe(userID, -1)
+		if err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+		b.Unsubscribe(userID, c)
+	}
+
+	close(stop)
+	wg.Wait()
+}

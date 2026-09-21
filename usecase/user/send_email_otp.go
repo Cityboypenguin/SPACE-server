@@ -19,11 +19,11 @@ var _ SendEmailOTPUseCase = &SendEmailOTPInteractor{}
 
 type SendEmailOTPInteractor struct {
 	otpRepo  repository.EmailOTPRepository
-	userRepo repository.UserRepository
+	userRepo repository.UserReader
 	mailer   repository.Mailer
 }
 
-func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserRepository, mailer repository.Mailer) SendEmailOTPUseCase {
+func NewSendEmailOTPUseCase(otpRepo repository.EmailOTPRepository, userRepo repository.UserReader, mailer repository.Mailer) SendEmailOTPUseCase {
 	return &SendEmailOTPInteractor{
 		otpRepo:  otpRepo,
 		userRepo: userRepo,

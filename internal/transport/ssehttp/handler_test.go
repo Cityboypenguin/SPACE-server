@@ -1,4 +1,4 @@
-package sse
+package ssehttp
 
 import (
 	"context"
@@ -17,33 +17,33 @@ import (
 // mutex で再現する。使い回しが弾かれることを検証できるのはこの性質による。
 type fakeTicketRepo struct {
 	mu      sync.Mutex
-	tickets map[string]int64
+	tickets map[string]repository.StreamSession
 	err     error
 }
 
 func newFakeTicketRepo() *fakeTicketRepo {
-	return &fakeTicketRepo{tickets: map[string]int64{}}
+	return &fakeTicketRepo{tickets: map[string]repository.StreamSession{}}
 }
 
-func (f *fakeTicketRepo) Issue(_ context.Context, ticket string, userID int64) error {
+func (f *fakeTicketRepo) Issue(_ context.Context, ticket string, session repository.StreamSession) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.tickets[ticket] = userID
+	f.tickets[ticket] = session
 	return nil
 }
 
-func (f *fakeTicketRepo) Consume(_ context.Context, ticket string) (int64, bool, error) {
+func (f *fakeTicketRepo) Consume(_ context.Context, ticket string) (repository.StreamSession, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
-		return 0, false, f.err
+		return repository.StreamSession{}, false, f.err
 	}
-	userID, ok := f.tickets[ticket]
+	session, ok := f.tickets[ticket]
 	if !ok {
-		return 0, false, nil
+		return repository.StreamSession{}, false, nil
 	}
 	delete(f.tickets, ticket) // 1回使ったら消える
-	return userID, true, nil
+	return session, true, nil
 }
 
 var _ repository.SSETicketRepository = (*fakeTicketRepo)(nil)
@@ -68,16 +68,21 @@ func httpStatus(t *testing.T, err error) int {
 // 有効なチケットで認証が通り、発行時の userID が返ること。
 func TestAuthenticate_ValidTicket(t *testing.T) {
 	repo := newFakeTicketRepo()
-	if err := repo.Issue(context.Background(), "tkt-abc", 42); err != nil {
+	if err := repo.Issue(context.Background(), "tkt-abc", repository.StreamSession{UserID: 42, Token: "tok-42"}); err != nil {
 		t.Fatalf("issue: %v", err)
 	}
 
-	userID, err := authenticate(authCtx(t, "ticket=tkt-abc"), repo)
+	session, err := authenticate(authCtx(t, "ticket=tkt-abc"), repo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if userID != 42 {
-		t.Fatalf("expected userID 42, got %d", userID)
+	if session.UserID != 42 {
+		t.Fatalf("expected userID 42, got %d", session.UserID)
+	}
+	// トークンも一緒に引き換わること。これが無いと、接続したあとに
+	// 認証をやり直す手立てが無くなる。
+	if session.Token != "tok-42" {
+		t.Fatalf("expected the access token to come back with the ticket, got %q", session.Token)
 	}
 }
 
@@ -85,7 +90,7 @@ func TestAuthenticate_ValidTicket(t *testing.T) {
 // アクセスログに残ったチケットを拾われても繋がらない、という性質そのもの。
 func TestAuthenticate_TicketIsSingleUse(t *testing.T) {
 	repo := newFakeTicketRepo()
-	if err := repo.Issue(context.Background(), "tkt-once", 7); err != nil {
+	if err := repo.Issue(context.Background(), "tkt-once", repository.StreamSession{UserID: 7, Token: "tok-7"}); err != nil {
 		t.Fatalf("issue: %v", err)
 	}
 
@@ -146,14 +151,19 @@ func TestAuthenticate_HeaderClaimsTakePrecedence(t *testing.T) {
 	repo := newFakeTicketRepo()
 	c := authCtx(t, "")
 	req := c.Request()
-	c.SetRequest(req.WithContext(auth.WithClaims(req.Context(), &auth.Claims{ID: 99})))
+	ctx := auth.WithClaims(req.Context(), &auth.Claims{ID: 99})
+	ctx = auth.WithToken(ctx, "tok-99")
+	c.SetRequest(req.WithContext(ctx))
 
-	userID, err := authenticate(c, repo)
+	session, err := authenticate(c, repo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if userID != 99 {
-		t.Fatalf("expected userID 99, got %d", userID)
+	if session.UserID != 99 {
+		t.Fatalf("expected userID 99, got %d", session.UserID)
+	}
+	if session.Token != "tok-99" {
+		t.Fatalf("expected the middleware's token to come through, got %q", session.Token)
 	}
 }
 

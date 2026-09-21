@@ -1,0 +1,110 @@
+# 通報と問い合わせ。
+
+extend type Query {
+  searchReports(
+    filter: ReportSearchFilter
+    limit: Int = 20
+    offset: Int = 0
+  ): ReportPage!
+  searchInquiries(
+    status: InquiryStatus
+    limit: Int = 20
+    offset: Int = 0
+  ): InquiryPage!
+  getInquiry(id: ID!): Inquiry
+  isReportServiceEnabled: Boolean!
+}
+
+extend type Mutation {
+  freezeUser(id: ID!): Boolean!
+  unfreezeUser(id: ID!): Boolean!
+  createReport(input: CreateReportInput!): UserReport!
+  updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
+  createInquiry(input: CreateInquiryInput!): Inquiry!
+  updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
+  setReportServiceStatus(enabled: Boolean!): Boolean!
+}
+
+enum InquiryStatus {
+  PENDING # 未対応
+  IN_PROGRESS # 対応中
+  RESOLVED # 解決済み
+}
+
+enum InquiryCategory {
+  DM
+  POST
+  COMMUNITY
+  PASSWORD
+  LOGIN
+  OTHER
+}
+
+type Inquiry {
+  id: ID!
+  name: String!
+  email: String!
+  category: InquiryCategory!
+  subject: String!
+  content: String!
+  status: InquiryStatus!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type InquiryPage {
+  items: [Inquiry!]!
+  total: Int!
+}
+
+input CreateInquiryInput {
+  name: String!
+  email: String!
+  category: InquiryCategory!
+  subject: String!
+  content: String!
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportTargetType {
+  POST
+  USER
+  COMMUNITY
+}
+
+type UserReport {
+  ID: ID!
+  reporter: User!
+  targetType: ReportTargetType!
+  targetID: ID!
+  reason: String!
+  customReason: String
+  status: ReportStatus!
+  createdAt: String!
+  updatedAt: String!
+  content: String
+}
+
+input ReportSearchFilter {
+  status: ReportStatus
+  targetType: ReportTargetType
+  reporterID: ID
+}
+
+input CreateReportInput {
+  targetType: ReportTargetType!
+  targetID: ID! # 通報対象のID
+  reason: String! # 理由の分類
+  customReason: String # 詳細理由
+}
+
+type ReportPage {
+  items: [UserReport!]!
+  total: Int!
+}

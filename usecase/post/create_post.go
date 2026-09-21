@@ -2,7 +2,10 @@ package post
 
 import (
 	"context"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
+
 	"fmt"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"strings"
 	"time"
 
@@ -19,23 +22,25 @@ type CreatePostUseCase interface {
 var _ CreatePostUseCase = &CreatePostInteractor{}
 
 type CreatePostInteractor struct {
-	postRepo              repository.PostRepository
-	mediaRepo             repository.MediaRepository
-	userRepo              repository.UserRepository
+	uploads               uploadusecase.Acceptor
+	postRepo              postWriteRepository
+	mediaRepo             postMediaRepository
+	userRepo              repository.UserReader
 	blockerRepo           repository.BlockerRepository
 	txManager             repository.TxManager
 	notificationPublisher notificationuc.NotificationPublisher
 }
 
-func NewCreatePostUseCase(
-	postRepo repository.PostRepository,
-	mediaRepo repository.MediaRepository,
-	userRepo repository.UserRepository,
+func NewCreatePostUseCase(uploads uploadusecase.Acceptor,
+	postRepo postWriteRepository,
+	mediaRepo postMediaRepository,
+	userRepo repository.UserReader,
 	blockerRepo repository.BlockerRepository,
 	txManager repository.TxManager,
 	notificationPublisher notificationuc.NotificationPublisher,
 ) CreatePostUseCase {
 	return &CreatePostInteractor{
+		uploads:               uploads,
 		postRepo:              postRepo,
 		mediaRepo:             mediaRepo,
 		userRepo:              userRepo,
@@ -45,7 +50,15 @@ func NewCreatePostUseCase(
 	}
 }
 
-func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []model.MediaInput) (*model.Post, error) {
+func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreatePostParam, mediaInputs []model.MediaInput) (_ *model.Post, err error) {
+	// 投稿者は呼び出し元が渡す値ではなく ctx から決める。param.UserID に何が
+	// 入っていても、ここで上書きされる（他人名義の投稿を作りようがない）。
+	callerID, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	param.UserID = callerID
+
 	if strings.TrimSpace(param.Content) == "" && len(mediaInputs) == 0 {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
@@ -53,11 +66,17 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 		return nil, err
 	}
 
-	prefix := fmt.Sprintf("media/%d/", param.UserID)
-	for _, input := range mediaInputs {
-		if !strings.HasPrefix(input.StorageKey, prefix) {
-			return nil, fmt.Errorf("invalid media key")
-		}
+	// 添付の受け入れはここで通す。リゾルバの手順にしておくと、このユースケースを
+	// 直接呼ぶ経路が増えたときに検査を飛ばせてしまう。
+	//
+	// 種別と所有者の確認は受け入れの中で、ストレージに触る前に済む
+	// （internal/upload.CheckKey）。保存が成立しなければ、公開した実体は取り消す。
+	uploads := uploadusecase.Begin(uc.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	if err != nil {
+		return nil, err
 	}
 
 	// メンション解決は参照のみなのでトランザクションの外で済ませる。

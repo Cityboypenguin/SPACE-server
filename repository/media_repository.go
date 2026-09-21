@@ -6,7 +6,10 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-type MediaRepository interface {
+// メディアの口も役割ごとに分けてある（理由は PostRepository のコメント）。
+
+// MediaWriter はメディア本体の登録。
+type MediaWriter interface {
 	CreateMedia(ctx context.Context, m *model.Media) error
 
 	// CreateMediaBatch は media 行をまとめて1本の INSERT で作り、採番されたIDを
@@ -22,15 +25,28 @@ type MediaRepository interface {
 	//
 	// 1件ずつ作る版は置いていない。呼び出し側は必ず「添付の配列」を持っており、
 	// 1件ずつの口を残すと再び for の中で1件ずつ呼ぶ書き方が戻ってくるため。
+}
+
+// MediaAttachmentWriter はメディアを投稿・メッセージ・質問・回答へ紐づける。
+type MediaAttachmentWriter interface {
 	CreatePostMediaBatch(ctx context.Context, postID int64, mediaIDs []int64, startPosition int) error
 	CreateMessageMediaBatch(ctx context.Context, messageID int64, mediaIDs []int64, startPosition int) error
 	CreateQuestionMediaBatch(ctx context.Context, questionID int64, mediaIDs []int64, startPosition int) error
 	CreateAnswerMediaBatch(ctx context.Context, answerID int64, mediaIDs []int64, startPosition int) error
+	GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error)
+}
+
+// MediaReader は紐づいたメディアを引く（DataLoader 用の一括取得を含む）。
+type MediaReader interface {
 	ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error)
 	ListByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]*model.Media, error)
 	ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error)
 	ListByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error)
 	ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
+}
+
+// MediaDeleter は紐づけとメディア本体の削除。
+type MediaDeleter interface {
 	DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error
 	// DeleteQuestionMedia は questionID に添付されている mediaID を削除する（紐付けは
 	// ON DELETE CASCADE で消える）。他の質問・投稿のメディアは対象にしない。
@@ -38,10 +54,22 @@ type MediaRepository interface {
 	// DeleteAnswerMedia は answerID に添付されている mediaID を削除する（紐付けは
 	// ON DELETE CASCADE で消える）。他の回答・投稿のメディアは対象にしない。
 	DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error
-	GetMaxPostMediaPosition(ctx context.Context, postID int64) (int, error)
+}
+
+// MediaDimensionRepository は画像の縦横を後から埋める補修用（バッチが使う）。
+type MediaDimensionRepository interface {
 	// ListImagesMissingDimensions は寸法が未取得の画像メディアを ID 昇順で返す。
 	ListImagesMissingDimensions(ctx context.Context, limit, offset int) ([]*model.Media, error)
 	// SetMediaDimensionsIfUnset は寸法が未設定のときだけ記録する。
 	// 値はクライアントの観測値なので、いちど入った値を上書きさせない。
 	SetMediaDimensionsIfUnset(ctx context.Context, mediaID int64, width, height int) error
+}
+
+// MediaRepository は上記をすべて束ねた口。infra の実装と DI が使う。
+type MediaRepository interface {
+	MediaWriter
+	MediaAttachmentWriter
+	MediaReader
+	MediaDeleter
+	MediaDimensionRepository
 }

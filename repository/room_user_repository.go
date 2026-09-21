@@ -6,13 +6,21 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-type RoomUserRepository interface {
+// ルーム在籍まわりの口も役割ごとに分けてある（理由は PostRepository のコメント）。
+// RoomUserRepository はそれらを束ねたもので、infra の実装と DI が使う。
+
+// RoomMembershipWriter は在籍そのものを作る・外す口。
+type RoomMembershipWriter interface {
 	AddUserToRoom(ctx context.Context, roomID, userID int64) error
 	RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error
 
 	// RemoveUsersFromRoom は RemoveUserFromRoom の一括版（IN 句の DELETE 1本）。
 	// メンバー編集のようにまとめて外す経路で使う。
 	RemoveUsersFromRoom(ctx context.Context, roomID int64, userIDs []int64) error
+}
+
+// RoomMembershipReader は「誰が入っているか」を引く口。
+type RoomMembershipReader interface {
 	GetUserIDsByRoomID(ctx context.Context, roomID int64) ([]int64, error)
 	// IsRoomMember は userID が roomID に在籍しているかだけを返す。
 	//
@@ -44,8 +52,18 @@ type RoomUserRepository interface {
 	// コミュニティ一覧の isMember 用。人数と同じ理由で、一覧ぶんを1クエリにする。
 	// 在籍していないルームは key ごと欠ける（bool のゼロ値 false が正しい）。
 	ListJoinedRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]bool, error)
+	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
+	ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q PageQuery) ([]*model.RoomMember, int, error)
+}
+
+// DMRoomRepository は1対1ルームの取り回し。
+type DMRoomRepository interface {
 	ListDMRoomsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Room, int, error)
 	FindOrCreateDMRoom(ctx context.Context, userID1, userID2 int64) (*model.Room, error)
+}
+
+// RoomRoleRepository は役割（オーナー／メンバー）の読み書き。
+type RoomRoleRepository interface {
 	GetRoomUserRole(ctx context.Context, roomID, userID int64) (string, error)
 	SetRoomUserRole(ctx context.Context, roomID, userID int64, role string) error
 
@@ -53,8 +71,6 @@ type RoomUserRepository interface {
 	// 同じ役割へ変える人がまとめて渡ってくる経路（メンバー編集）で使う。
 	SetRoomUserRoles(ctx context.Context, roomID int64, userIDs []int64, role string) error
 	CountRoomUsersByRole(ctx context.Context, roomID int64, role string) (int, error)
-	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
-	ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q PageQuery) ([]*model.RoomMember, int, error)
 	// LockRoomMemberRolesForUpdate returns the complete membership role map while
 	// locking those rows. It is for business validation only and must be called
 	// inside TxManager.RunInTx; display pagination must never use it.
@@ -63,6 +79,10 @@ type RoomUserRepository interface {
 	// memberships before account deletion decides which complete rooms to lock.
 	// It must be called inside TxManager.RunInTx.
 	LockUserCommunityMembershipsForUpdate(ctx context.Context, userID int64) (map[int64]string, error)
+}
+
+// ReadPositionRepository は既読位置。
+type ReadPositionRepository interface {
 	// UpdateLastRead は既読位置を進める。lastReadMessageID はそのルームの最新
 	// メッセージID（1件も無ければ nil）、readAt は既読にした時刻。
 	// 既読位置は巻き戻さない（別端末が先に進めていればそちらを残す）。
@@ -79,4 +99,13 @@ type RoomUserRepository interface {
 	// 片方だけ null になると、どちらの経路で開いたかで未読ページの起点が変わる。
 	GetLastReadByRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]*ReadPosition, error)
 	GetMembersLastReadAtByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]map[int64]*int64, error)
+}
+
+// RoomUserRepository は上記をすべて束ねた口。infra の実装と DI が使う。
+type RoomUserRepository interface {
+	RoomMembershipWriter
+	RoomMembershipReader
+	DMRoomRepository
+	RoomRoleRepository
+	ReadPositionRepository
 }

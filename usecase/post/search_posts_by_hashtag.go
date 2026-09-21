@@ -15,10 +15,10 @@ type SearchPostsByHashtagUseCase interface {
 var _ SearchPostsByHashtagUseCase = &SearchPostsByHashtagInteractor{}
 
 type SearchPostsByHashtagInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostSearcher
 }
 
-func NewSearchPostsByHashtagUseCase(postRepo repository.PostRepository) SearchPostsByHashtagUseCase {
+func NewSearchPostsByHashtagUseCase(postRepo repository.PostSearcher) SearchPostsByHashtagUseCase {
 	return &SearchPostsByHashtagInteractor{
 		postRepo: postRepo,
 	}

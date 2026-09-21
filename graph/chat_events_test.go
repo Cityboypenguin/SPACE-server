@@ -130,7 +130,7 @@ func (f *fakeGetAnonymousIdentity) Execute(_ context.Context, _, _ int64) (*mode
 
 type fakeMarkAllAsReadByActor struct{ calls int }
 
-func (f *fakeMarkAllAsReadByActor) Execute(_ context.Context, _ int64, _ string, _ int64) error {
+func (f *fakeMarkAllAsReadByActor) Execute(_ context.Context, _ string, _ int64) error {
 	f.calls++
 	return nil
 }

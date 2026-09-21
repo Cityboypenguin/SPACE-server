@@ -3,12 +3,14 @@ package block
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type ListBlockersUseCase interface {
-	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, int, error)
+	Execute(ctx context.Context, q repository.PageQuery) ([]*model.Blocker, int, error)
 }
 
 var _ ListBlockersUseCase = &listBlockersInteractor{}
@@ -23,6 +25,10 @@ func NewListBlockersUseCase(blockRepo repository.BlockerRepository) ListBlockers
 	}
 }
 
-func (uc *listBlockersInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Blocker, int, error) {
+func (uc *listBlockersInteractor) Execute(ctx context.Context, q repository.PageQuery) ([]*model.Blocker, int, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
 	return uc.blockRepo.ListBlockers(ctx, userID, q)
 }

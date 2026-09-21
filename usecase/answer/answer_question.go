@@ -3,7 +3,7 @@ package answer
 import (
 	"context"
 	"fmt"
-	"strings"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
@@ -23,23 +23,27 @@ type AnswerQuestionUseCase interface {
 var _ AnswerQuestionUseCase = &AnswerQuestionInteractor{}
 
 type AnswerQuestionInteractor struct {
+	events          EventPublisher
+	uploads         uploadusecase.Acceptor
 	questionRepo    repository.QuestionRepository
 	answerRepo      repository.AnswerRepository
-	mediaRepo       repository.MediaRepository
+	mediaRepo       mediaAttachRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
 	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
 }
 
-func NewAnswerQuestionUseCase(
+func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Acceptor,
 	questionRepo repository.QuestionRepository,
 	answerRepo repository.AnswerRepository,
-	mediaRepo repository.MediaRepository,
+	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
 	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
 ) AnswerQuestionUseCase {
 	return &AnswerQuestionInteractor{
+		events:          orNoop(events),
+		uploads:         uploads,
 		questionRepo:    questionRepo,
 		answerRepo:      answerRepo,
 		mediaRepo:       mediaRepo,
@@ -49,7 +53,7 @@ func NewAnswerQuestionUseCase(
 	}
 }
 
-func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (*model.Answer, error) {
+func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int64, body string, mediaInputs []model.MediaInput) (_ *model.Answer, err error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -60,11 +64,13 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 	if err := validateBody(body); err != nil {
 		return nil, err
 	}
-	prefix := fmt.Sprintf("media/%d/", claims.ID)
-	for _, input := range mediaInputs {
-		if !strings.HasPrefix(input.StorageKey, prefix) {
-			return nil, fmt.Errorf("invalid media key")
-		}
+	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
+	uploads := uploadusecase.Begin(uc.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	if err != nil {
+		return nil, err
 	}
 
 	q, err := uc.questionRepo.GetQuestionByID(ctx, questionID)
@@ -111,5 +117,8 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 		return nil, err
 	}
 
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.AnswerCreated(ctx, a)
 	return a, nil
 }

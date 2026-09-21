@@ -15,10 +15,10 @@ type CountUsersByRoomIDsUseCase interface {
 var _ CountUsersByRoomIDsUseCase = &CountUsersByRoomIDsInteractor{}
 
 type CountUsersByRoomIDsInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewCountUsersByRoomIDsUseCase(roomUserRepo repository.RoomUserRepository) CountUsersByRoomIDsUseCase {
+func NewCountUsersByRoomIDsUseCase(roomUserRepo repository.RoomMembershipReader) CountUsersByRoomIDsUseCase {
 	return &CountUsersByRoomIDsInteractor{roomUserRepo: roomUserRepo}
 }
 
@@ -35,10 +35,10 @@ type ListJoinedRoomIDsUseCase interface {
 var _ ListJoinedRoomIDsUseCase = &ListJoinedRoomIDsInteractor{}
 
 type ListJoinedRoomIDsInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewListJoinedRoomIDsUseCase(roomUserRepo repository.RoomUserRepository) ListJoinedRoomIDsUseCase {
+func NewListJoinedRoomIDsUseCase(roomUserRepo repository.RoomMembershipReader) ListJoinedRoomIDsUseCase {
 	return &ListJoinedRoomIDsInteractor{roomUserRepo: roomUserRepo}
 }
 

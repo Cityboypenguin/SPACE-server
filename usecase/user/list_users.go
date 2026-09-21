@@ -17,10 +17,10 @@ type ListUsersUseCase interface {
 var _ ListUsersUseCase = &ListUsersInteractor{}
 
 type ListUsersInteractor struct {
-	userRepo repository.UserRepository
+	userRepo repository.UserAccountRepository
 }
 
-func NewListUsersUseCase(userRepo repository.UserRepository) ListUsersUseCase {
+func NewListUsersUseCase(userRepo repository.UserAccountRepository) ListUsersUseCase {
 	return &ListUsersInteractor{
 		userRepo: userRepo,
 	}

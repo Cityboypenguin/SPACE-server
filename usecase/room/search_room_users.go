@@ -12,10 +12,10 @@ type SearchRoomUsersUseCase interface {
 }
 
 type SearchRoomUsersInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewSearchRoomUsersUseCase(roomUserRepo repository.RoomUserRepository) SearchRoomUsersUseCase {
+func NewSearchRoomUsersUseCase(roomUserRepo repository.RoomMembershipReader) SearchRoomUsersUseCase {
 	return &SearchRoomUsersInteractor{roomUserRepo: roomUserRepo}
 }
 

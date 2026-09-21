@@ -19,12 +19,13 @@ type VotePollUseCase interface {
 var _ VotePollUseCase = &VotePollInteractor{}
 
 type VotePollInteractor struct {
+	events          EventPublisher
 	pollRepo        repository.PollRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewVotePollUseCase(pollRepo repository.PollRepository, requireWritable course.RequireWritableCourseRoomUseCase) VotePollUseCase {
-	return &VotePollInteractor{pollRepo: pollRepo, requireWritable: requireWritable}
+func NewVotePollUseCase(events EventPublisher, pollRepo repository.PollRepository, requireWritable course.RequireWritableCourseRoomUseCase) VotePollUseCase {
+	return &VotePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable}
 }
 
 // Execute replaces the caller's vote(s) on pollID with optionIDs (I-03: 投票のやり直し
@@ -65,6 +66,9 @@ func (uc *VotePollInteractor) Execute(ctx context.Context, pollID int64, optionI
 	if updated == nil {
 		return nil, errors.New("poll not found after vote update")
 	}
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.PollUpdated(ctx, updated)
 	return updated, nil
 }
 

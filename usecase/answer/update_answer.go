@@ -17,21 +17,23 @@ type UpdateAnswerUseCase interface {
 var _ UpdateAnswerUseCase = &UpdateAnswerInteractor{}
 
 type UpdateAnswerInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
 	answerRepo      repository.AnswerRepository
-	mediaRepo       repository.MediaRepository
+	mediaRepo       mediaReplaceRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewUpdateAnswerUseCase(
+func NewUpdateAnswerUseCase(events EventPublisher,
 	questionRepo repository.QuestionRepository,
 	answerRepo repository.AnswerRepository,
-	mediaRepo repository.MediaRepository,
+	mediaRepo mediaReplaceRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
 ) UpdateAnswerUseCase {
 	return &UpdateAnswerInteractor{
+		events:          orNoop(events),
 		questionRepo:    questionRepo,
 		answerRepo:      answerRepo,
 		mediaRepo:       mediaRepo,
@@ -116,5 +118,12 @@ func (uc *UpdateAnswerInteractor) Execute(ctx context.Context, answerID int64, b
 		return nil, err
 	}
 
-	return uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	updated, err := uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.AnswerUpdated(ctx, updated.Answer)
+	return updated, nil
 }

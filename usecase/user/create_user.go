@@ -18,14 +18,14 @@ type CreateUserUseCase interface {
 var _ CreateUserUseCase = &CreateUserInteractor{}
 
 type CreateUserInteractor struct {
-	userRepo          repository.UserRepository
+	userRepo          repository.UserCredentialsRepository
 	profileRepo       repository.ProfileRepository
 	otpRepo           repository.EmailOTPRepository
 	txManager         repository.TxManager
 	validationEnabled bool
 }
 
-func NewCreateUserUseCase(userRepo repository.UserRepository, profileRepo repository.ProfileRepository, otpRepo repository.EmailOTPRepository, txManager repository.TxManager) CreateUserUseCase {
+func NewCreateUserUseCase(userRepo repository.UserCredentialsRepository, profileRepo repository.ProfileRepository, otpRepo repository.EmailOTPRepository, txManager repository.TxManager) CreateUserUseCase {
 	return &CreateUserInteractor{
 		userRepo:          userRepo,
 		profileRepo:       profileRepo,

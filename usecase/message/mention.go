@@ -38,16 +38,16 @@ type ResolveMentionsUseCase interface {
 var _ ResolveMentionsUseCase = &ResolveMentionsInteractor{}
 
 type ResolveMentionsInteractor struct {
-	userRepo     repository.UserRepository
+	userRepo     repository.UserReader
 	roomRepo     repository.RoomRepository
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 	blockerRepo  repository.BlockerRepository
 }
 
 func NewResolveMentionsUseCase(
-	userRepo repository.UserRepository,
+	userRepo repository.UserReader,
 	roomRepo repository.RoomRepository,
-	roomUserRepo repository.RoomUserRepository,
+	roomUserRepo repository.RoomMembershipReader,
 	blockerRepo repository.BlockerRepository,
 ) ResolveMentionsUseCase {
 	return &ResolveMentionsInteractor{

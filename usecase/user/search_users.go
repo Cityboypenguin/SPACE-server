@@ -20,10 +20,10 @@ type SearchUsersUseCase interface {
 var _ SearchUsersUseCase = &SearchUsersInteractor{}
 
 type SearchUsersInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewSearchUsersUseCase(userRepo repository.UserRepository) SearchUsersUseCase {
+func NewSearchUsersUseCase(userRepo userDirectoryRepository) SearchUsersUseCase {
 	return &SearchUsersInteractor{
 		userRepo: userRepo,
 	}
@@ -51,10 +51,10 @@ type SearchUserAccountsUseCase interface {
 var _ SearchUserAccountsUseCase = &SearchUserAccountsInteractor{}
 
 type SearchUserAccountsInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewSearchUserAccountsUseCase(userRepo repository.UserRepository) SearchUserAccountsUseCase {
+func NewSearchUserAccountsUseCase(userRepo userDirectoryRepository) SearchUserAccountsUseCase {
 	return &SearchUserAccountsInteractor{userRepo: userRepo}
 }
 

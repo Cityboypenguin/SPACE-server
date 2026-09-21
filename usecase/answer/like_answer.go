@@ -17,13 +17,14 @@ type LikeAnswerUseCase interface {
 var _ LikeAnswerUseCase = &LikeAnswerInteractor{}
 
 type LikeAnswerInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
 	answerRepo      repository.AnswerRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewLikeAnswerUseCase(questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) LikeAnswerUseCase {
-	return &LikeAnswerInteractor{questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
+func NewLikeAnswerUseCase(events EventPublisher, questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) LikeAnswerUseCase {
+	return &LikeAnswerInteractor{events: orNoop(events), questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
 }
 
 func (uc *LikeAnswerInteractor) Execute(ctx context.Context, answerID int64) (*repository.AnswerWithLikes, error) {
@@ -39,7 +40,13 @@ func (uc *LikeAnswerInteractor) Execute(ctx context.Context, answerID int64) (*r
 	if err := uc.answerRepo.LikeAnswer(ctx, answerID, claims.ID); err != nil {
 		return nil, err
 	}
-	return uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	updated, err := uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	// 配信はここで出す（usecase/answer/events.go 参照）。
+	uc.events.AnswerUpdated(ctx, updated.Answer)
+	return updated, nil
 }
 
 type UnlikeAnswerUseCase interface {
@@ -49,13 +56,14 @@ type UnlikeAnswerUseCase interface {
 var _ UnlikeAnswerUseCase = &UnlikeAnswerInteractor{}
 
 type UnlikeAnswerInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
 	answerRepo      repository.AnswerRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewUnlikeAnswerUseCase(questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) UnlikeAnswerUseCase {
-	return &UnlikeAnswerInteractor{questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
+func NewUnlikeAnswerUseCase(events EventPublisher, questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) UnlikeAnswerUseCase {
+	return &UnlikeAnswerInteractor{events: orNoop(events), questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
 }
 
 func (uc *UnlikeAnswerInteractor) Execute(ctx context.Context, answerID int64) (*repository.AnswerWithLikes, error) {
@@ -71,7 +79,13 @@ func (uc *UnlikeAnswerInteractor) Execute(ctx context.Context, answerID int64) (
 	if err := uc.answerRepo.UnlikeAnswer(ctx, answerID, claims.ID); err != nil {
 		return nil, err
 	}
-	return uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	updated, err := uc.answerRepo.GetAnswerWithLikesByID(ctx, answerID, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	// 配信はここで出す（usecase/answer/events.go 参照）。
+	uc.events.AnswerUpdated(ctx, updated.Answer)
+	return updated, nil
 }
 
 // findAnswerInWritableRoom loads answerID and rejects the operation unless the

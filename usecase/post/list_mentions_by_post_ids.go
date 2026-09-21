@@ -16,10 +16,10 @@ type ListMentionsByPostIDsUseCase interface {
 var _ ListMentionsByPostIDsUseCase = &ListMentionsByPostIDsInteractor{}
 
 type ListMentionsByPostIDsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostMentionRepository
 }
 
-func NewListMentionsByPostIDsUseCase(postRepo repository.PostRepository) ListMentionsByPostIDsUseCase {
+func NewListMentionsByPostIDsUseCase(postRepo repository.PostMentionRepository) ListMentionsByPostIDsUseCase {
 	return &ListMentionsByPostIDsInteractor{postRepo: postRepo}
 }
 

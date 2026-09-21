@@ -1,0 +1,50 @@
+# 利用規約。
+
+extend type Query {
+  currentTerms: TermsOfService
+  myTermsConsentStatus: TermsConsentStatus!
+  # limit/offset の既定値を入れていない理由は getRepliesByPostID と同じ。
+  adminListTerms(limit: Int, offset: Int): [TermsOfService!]!
+  adminListConsents(
+    termsID: ID!
+    limit: Int = 20
+    offset: Int = 0
+  ): TermsConsentPage!
+}
+
+extend type Mutation {
+  createTermsOfService(input: CreateTermsOfServiceInput!): TermsOfService!
+  consentToTerms(termsID: ID!): Boolean!
+}
+
+type TermsOfService {
+  ID: ID!
+  version: String!
+  documentUrl: String!
+  effectiveDate: String!
+  createdAt: String!
+}
+
+type TermsConsentStatus {
+  isConsented: Boolean!
+  currentTerms: TermsOfService
+}
+
+type TermsConsentRecord {
+  ID: ID!
+  # adminListConsents（管理者専用）からしか辿れないので UserAccount。
+  # 同意者の連絡先は管理者が見る前提の台帳。
+  user: UserAccount!
+  consentedAt: String!
+}
+
+type TermsConsentPage {
+  items: [TermsConsentRecord!]!
+  total: Int!
+}
+
+input CreateTermsOfServiceInput {
+  version: String!
+  objectKey: String!
+  effectiveDate: String!
+}

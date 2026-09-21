@@ -17,10 +17,10 @@ var _ JoinRoomUseCase = &JoinRoomInteractor{}
 
 type JoinRoomInteractor struct {
 	roomRepo     repository.RoomRepository
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipWriter
 }
 
-func NewJoinRoomUseCase(roomRepo repository.RoomRepository, roomUserRepo repository.RoomUserRepository) JoinRoomUseCase {
+func NewJoinRoomUseCase(roomRepo repository.RoomRepository, roomUserRepo repository.RoomMembershipWriter) JoinRoomUseCase {
 	return &JoinRoomInteractor{roomRepo: roomRepo, roomUserRepo: roomUserRepo}
 }
 

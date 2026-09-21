@@ -378,7 +378,7 @@ func (p *chatEventPublisher) syncDMNotificationsOnRead(ctx context.Context, ev c
 		if memberID == ev.ActorID {
 			continue
 		}
-		if err := p.deps.MarkNotificationsAsReadByActor.Execute(ctx, ev.ActorID, string(notificationuc.TypeDM), memberID); err != nil {
+		if err := p.deps.MarkNotificationsAsReadByActor.Execute(ctx, string(notificationuc.TypeDM), memberID); err != nil {
 			logChatDelivery(err, chatDeliveryDMReadSync).
 				Int64("room_id", ev.Room.ID).
 				Int64("actor_id", ev.ActorID).

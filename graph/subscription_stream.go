@@ -36,12 +36,18 @@ func identity[T any](v T) (T, bool) { return v, true }
 // accessRecheckInterval は、購読中に権限を確かめ直す間隔。
 //
 // 権限は購読を開始するときに一度見ているが、購読は何時間も生き続ける。その間に
-// 退出・キック・ブロックが起きても、ループ側が何も確かめなければ新着が流れ続ける。
+// 退出・キックが起きても、ループ側が何も確かめなければ新着が流れ続ける。
 // 「もう読めない部屋の新着だけが、繋ぎっぱなしのタブに届く」という形になる。
 //
+// これは**取りこぼしの受け皿**であって、権限が変わったときの第一の手段ではない。
+// 第一の手段は subscriptionGuard.revokeTopic（権限が変わった側から合図を出し、
+// 受け取った購読がその場で確かめ直す）で、そちらは秒を待たずに効く。
+// ここが要るのは、合図を出し忘れた経路・合図が届かなかったとき（Redis の
+// 瞬断）・DB を直接いじったときのため。つまり「合図が来なくても、いずれは
+// 気づく」ための上限を決めているだけ。
+//
 // 確かめ直すのは配信の直前だけ。部屋が静かなら1度も確かめないが、それで構わない
-// （配信しないので漏れようがない）。逆に言えば、権限を失ってから実際に漏れるのは
-// 「次の配信」までで、この間隔ぶんが上限になる。
+// （配信しないので漏れようがない）。
 //
 // 毎回確かめないのは、賑やかな部屋では配信のたびに購読者の数だけ判定が走るため。
 // 判定自体は EXISTS 1本（usecase/chat の IsRoomMember）だが、それを
@@ -50,6 +56,48 @@ func identity[T any](v T) (T, bool) { return v, true }
 // const ではなく var なのはテストから短くするため（本番で書き換えてはいけない）。
 // 30秒の待ちを挟むテストは、確かめたい性質のわりに遅すぎる。
 var accessRecheckInterval = 30 * time.Second
+
+// subscriptionGuard は「この購読を続けてよいか」の判定と、その判定を急がせる合図。
+//
+// authorize だけでは、権限を失ってから気づくまでに accessRecheckInterval かかる。
+// revokeTopic は、権限を変えた側（退出・キックの処理）が「このルームのこの人たちを
+// 確かめ直せ」と伝えるためのトピック。合図を受けた購読は間隔を待たずに authorize を
+// 引き直し、通らなければその場で終わる。
+//
+// 合図そのものを「切れ」という命令にはしていない。合図が言えるのは「変わった」まで
+// で、結果どうなったか（キックされたのか、役割が変わっただけか、すぐ入り直したか）
+// を決めるのは判定1本（requireRoomReadAccess）でなければならない。合図に判断を
+// 持たせると、入口の条件と居続けてよい条件がまた2箇所に分かれる。
+type subscriptionGuard struct {
+	// authorize は購読開始時と同じ権限判定。nil なら確かめ直さない
+	// （ルームに紐づかない購読――取り込み状況のように、開始時の認証だけで
+	// 決まるもの――で使う）。
+	authorize func(context.Context) error
+	// revokeTopic は権限が変わったことを知らせるトピック。空なら合図を待たない。
+	revokeTopic string
+}
+
+// RoomAccessChanged は「このルームの、この利用者たちの閲覧権限が変わったかもしれない」
+// という合図。中身は対象の利用者IDだけで、どう変わったかは載せない
+// （判断は受け取った側が authorize でやり直す。subscriptionGuard のコメント参照）。
+//
+// 台をまたぐので pubsub の Codec に登録してある（graph/pubsub_types.go）。
+type RoomAccessChanged struct {
+	UserIDs []int64 `json:"userIDs"`
+}
+
+// affects はこの合図が userID に当たるか。UserIDs が空なら「このルーム全員」。
+func (c *RoomAccessChanged) affects(userID int64) bool {
+	if len(c.UserIDs) == 0 {
+		return true
+	}
+	for _, id := range c.UserIDs {
+		if id == userID {
+			return true
+		}
+	}
+	return false
+}
 
 // subscribeTopicFunc はルームに紐づかない購読のための入口。権限を確かめ直さない。
 //
@@ -68,25 +116,29 @@ func subscribeTopicFunc[S any, T any](
 	scope subscriptionScope,
 	convert func(S) (T, bool),
 ) <-chan T {
-	return subscribeTopicGuarded(ctx, src, topic, scope, nil, convert)
+	return subscribeTopicGuarded(ctx, src, topic, scope, subscriptionGuard{}, convert)
 }
 
 // subscribeTopicGuarded は subscribeTopicFunc に「配信し続けてよいかの確認」を足した版。
 //
-// authorize は購読開始時と同じ権限判定を渡す（nil なら確認しない。ルームに
+// guard.authorize は購読開始時と同じ権限判定を渡す（ゼロ値なら確認しない。ルームに
 // 紐づかない購読――取り込み状況のように、開始時の認証だけで決まるもの――で使う）。
 // エラーを返した時点で購読を終わらせる。チャンネルを閉じると gqlgen 側が
 // subscription を完了させるので、クライアントからは配信が止まって見える。
 //
-// 確認は「配信する値が来たとき」かつ「前回の確認から accessRecheckInterval 以上
-// 経っているとき」だけ行う。絞り込みで落とす値では確認しない（配信しないものの
-// ために判定を走らせる理由が無い）。
+// 確認が走るのは次の2つ。
+//
+//   - guard.revokeTopic に自分宛の合図が来たとき（即時。退出・キックはこちら）
+//   - 配信する値が来たとき、かつ前回の確認から accessRecheckInterval 以上
+//     経っているとき（取りこぼしの受け皿）
+//
+// 絞り込みで落とす値では確認しない（配信しないもののために判定を走らせる理由が無い）。
 func subscribeTopicGuarded[S any, T any](
 	ctx context.Context,
 	src subscriptionSource,
 	topic string,
 	scope subscriptionScope,
-	authorize func(context.Context) error,
+	guard subscriptionGuard,
 	convert func(S) (T, bool),
 ) <-chan T {
 	logSubscription(scope, topic).Msg("subscription start")
@@ -96,14 +148,76 @@ func subscribeTopicGuarded[S any, T any](
 	out := make(chan T, 1)
 	sub := src.Subscribe(topic)
 
+	// 合図の購読。判定が無い購読では張らない（nil のチャンネルは select で
+	// 永久に待つだけなので、下のループはそのまま書ける）。
+	var revoked chan interface{}
+	if guard.authorize != nil && guard.revokeTopic != "" {
+		revoked = src.Subscribe(guard.revokeTopic)
+	}
+
 	// 開始時に権限を確かめたばかりなので、そこを起点に数える。
 	lastChecked := time.Now()
 
+	// recheck は権限を引き直し、通らなければ購読を終わらせてよいかを返す。
+	recheck := func() bool {
+		if err := guard.authorize(ctx); err != nil {
+			logSubscription(scope, topic).
+				Err(err).
+				Str("reason", "access_revoked").
+				Msg("subscription end")
+			return false
+		}
+		lastChecked = time.Now()
+		return true
+	}
+
+	// handleSignal は合図1件を処理する。自分宛でなければ何もしない。
+	// 戻り値は「購読を続けてよいか」。
+	handleSignal := func(sig interface{}) bool {
+		// 型が違うものが流れてきたら、自分宛かどうか判断できない。
+		// 判断できない＝確かめる側へ倒す（黙って配り続けない）。
+		if c, ok := sig.(*RoomAccessChanged); ok && !c.affects(scope.UserID) {
+			return true
+		}
+		return recheck()
+	}
+
+	// drainSignals は「もう届いている合図」を配信の直前に全て処理する。
+	//
+	// これが要るのは、select が複数の case を同時に選べるとき**無作為に**
+	// 1つを選ぶため。キックの合図と新着メッセージが両方待っている状態では、
+	// 合図が先に処理される保証がない。メッセージ側が選ばれ、かつ前回の確認から
+	// accessRecheckInterval 以内なら、権限を失った後の1件が配信されてしまう
+	// （合図で窓は縮むが、ゼロにはならない）。
+	//
+	// 配信する値を掴んでから送る手前でここを通せば、「その時点で届いていた合図」は
+	// 必ず先に効く。届く前の合図まで効かせることはできないが、それは
+	// 「メッセージが先に届いた」だけで、競合としては本物。
+	drainSignals := func() bool {
+		for {
+			select {
+			case sig, ok := <-revoked:
+				if !ok {
+					revoked = nil
+					return true
+				}
+				if !handleSignal(sig) {
+					return false
+				}
+			default:
+				return true
+			}
+		}
+	}
+
 	go func() {
 		// 後始末は defer に寄せる。終了地点が「受信待ちでの ctx 終了」「PubSub の
-		// クローズ」「送信待ちでの ctx 終了」の3つに増えたので、各 return の手前で
-		// close(out) を書き並べると閉じ忘れが必ず出る。LIFO なので close(out) →
-		// Unsubscribe の順で走る。
+		// クローズ」「送信待ちでの ctx 終了」「権限の喪失」に増えたので、各 return の
+		// 手前で close(out) を書き並べると閉じ忘れが必ず出る。LIFO なので
+		// close(out) → Unsubscribe の順で走る。
+		if revoked != nil {
+			defer src.Unsubscribe(guard.revokeTopic, revoked)
+		}
 		defer src.Unsubscribe(topic, sub)
 		defer close(out)
 		for {
@@ -111,6 +225,16 @@ func subscribeTopicGuarded[S any, T any](
 			case <-ctx.Done():
 				logSubscription(scope, topic).Str("reason", "context_done").Msg("subscription end")
 				return
+			case sig, ok := <-revoked:
+				if !ok {
+					// 合図のトピックだけが閉じた。本体の購読は生きているので
+					// 続ける（以後は accessRecheckInterval の受け皿だけが効く）。
+					revoked = nil
+					continue
+				}
+				if !handleSignal(sig) {
+					return
+				}
 			case data, ok := <-sub:
 				if !ok {
 					logSubscription(scope, topic).Str("reason", "pubsub_closed").Msg("subscription end")
@@ -124,16 +248,16 @@ func subscribeTopicGuarded[S any, T any](
 				if !keep {
 					continue
 				}
-				// 配信する直前に、まだ読んでよいかを確かめ直す。
-				if authorize != nil && time.Since(lastChecked) >= accessRecheckInterval {
-					if err := authorize(ctx); err != nil {
-						logSubscription(scope, topic).
-							Err(err).
-							Str("reason", "access_revoked").
-							Msg("subscription end")
+				// 配信する直前に、届いている合図を先に片付ける。
+				if revoked != nil && !drainSignals() {
+					return
+				}
+				// そのうえで、間隔ぶん経っていればもう一度確かめ直す
+				// （合図が来ない経路・届かなかったときの受け皿）。
+				if guard.authorize != nil && time.Since(lastChecked) >= accessRecheckInterval {
+					if !recheck() {
 						return
 					}
-					lastChecked = time.Now()
 				}
 				// 送信もキャンセル可能にする。out はバッファ1なので、gqlgen 側が
 				// 読まないまま2件目が来るとここで止まる。以前は素の `out <- converted`

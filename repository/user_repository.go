@@ -27,10 +27,12 @@ import (
 // トークン検証（internal/auth.ValidateAndVerifyToken）は凍結状態しか見ないので
 // 公開情報の GetUserByID を使う。DataLoader の UserLoader も表示用途なので
 // GetUsersByIDs（公開情報）を使う。
-type UserRepository interface {
-	// --- 公開情報 -----------------------------------------------------------
-	// いずれも email も hashed_password も SELECT しない。
+// 区画は型としても分けてある。区画を跨いで呼べない口を渡しておけば、
+// 「表示のつもりの経路が連絡先や認証情報にも手が届く」状態そのものが無くなる
+// （規則をコメントで守るより、渡す口で守るほうが強い）。
 
+// UserReader は公開情報の取得。email も hashed_password も SELECT しない。
+type UserReader interface {
 	GetUserByID(ctx context.Context, id int64) (*model.User, error)
 	GetUsersByIDs(ctx context.Context, ids []int64) ([]*model.User, error)
 	// FindByEmail は「そのメールが登録済みか」を見るためのもの（OTP 送信・
@@ -47,6 +49,10 @@ type UserRepository interface {
 	GetUsersByAccountIDs(ctx context.Context, accountIDs []string) ([]*model.User, error)
 	// SuggestUsersByPrefix は accountID が prefix に前方一致するユーザーを返す（メンションのサジェスト用）。
 	SuggestUsersByPrefix(ctx context.Context, prefix string, limit int) ([]*model.User, error)
+}
+
+// UserWriter は公開列の更新と退会。
+type UserWriter interface {
 	// UpdateUser は公開列だけを UPDATE する。email にも hashed_password にも触れない。
 	//
 	// 触れないことが大事。以前は *model.User を受けて hashed_password = ? も
@@ -56,6 +62,10 @@ type UserRepository interface {
 	// 以上、ここで書こうとすれば空文字になる）。連絡先の変更は SaveCredentials 経由。
 	UpdateUser(ctx context.Context, u *model.User) error
 	DeleteUser(ctx context.Context, id int64) (bool, error)
+}
+
+// UserActivityRepository は活動記録（最終アクセス・活動日・活動時間帯）。
+type UserActivityRepository interface {
 	DeleteActivityHistory(ctx context.Context, userID int64) error
 	UpdateLastActiveAt(ctx context.Context, userID int64, now int64) error
 	// LogActivityDate は活動日（JST の "2006-01-02"）を1行残す。日次の
@@ -69,11 +79,11 @@ type UserRepository interface {
 	// 範囲を覆えば日次もここから導出して user_activity_dates を落とせる
 	// （db/migrations/070_create_user_activity_hours.up.sql）。
 	LogActivityHour(ctx context.Context, userID int64, jstHour string) error
+}
 
-	// --- 本人・管理者向け ---------------------------------------------------
-	// email を SELECT する。hashed_password は読まない。
-	// 呼んでよい経路は UserRepository のコメント参照。
-
+// UserAccountRepository は本人・管理者向けの取得。email を SELECT する。
+// hashed_password は読まない。呼んでよい経路は UserRepository のコメント参照。
+type UserAccountRepository interface {
 	// GetUserAccountByID は本人（me）と管理者（getUserByID）の1件取得。
 	// 表示のためにユーザーを引くだけなら GetUserByID を使うこと。
 	GetUserAccountByID(ctx context.Context, id int64) (*model.UserAccount, error)
@@ -85,10 +95,11 @@ type UserRepository interface {
 	// PageQuery.WithTotal が true のときだけ COUNT を撃つ。
 	ListUserAccounts(ctx context.Context, q PageQuery) ([]*model.UserAccount, int, error)
 	SearchUserAccountsByKeyword(ctx context.Context, keyword string, q PageQuery) ([]*model.UserAccount, int, error)
+}
 
-	// --- 認証情報 -----------------------------------------------------------
-	// hashed_password を読む／書く。呼んでよい経路は UserRepository のコメント参照。
-
+// UserCredentialsRepository は認証情報。hashed_password を読む／書く。
+// 呼んでよい経路は UserRepository のコメント参照。
+type UserCredentialsRepository interface {
 	// FindCredentialsByEmail はログイン用。存在しなければ (nil, nil)。
 	FindCredentialsByEmail(ctx context.Context, email string) (*model.UserCredentials, error)
 	// GetCredentialsByID はパスワード変更時の現在パスワード照合用。
@@ -98,4 +109,13 @@ type UserRepository interface {
 	// SaveCredentials は新規登録・パスワード変更の保存。ID が 0 なら INSERT、
 	// それ以外は hashed_password を含めた UPDATE。
 	SaveCredentials(ctx context.Context, c *model.UserCredentials) error
+}
+
+// UserRepository は上記をすべて束ねた口。infra の実装と DI が使う。
+type UserRepository interface {
+	UserReader
+	UserWriter
+	UserActivityRepository
+	UserAccountRepository
+	UserCredentialsRepository
 }

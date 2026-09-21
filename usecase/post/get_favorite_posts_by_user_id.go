@@ -14,10 +14,10 @@ type GetFavoritePostsByUserIDUseCase interface {
 var _ GetFavoritePostsByUserIDUseCase = &GetFavoritePostsByUserIDInteractor{}
 
 type GetFavoritePostsByUserIDInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostLister
 }
 
-func NewGetFavoritePostsByUserIDUseCase(postRepo repository.PostRepository) GetFavoritePostsByUserIDUseCase {
+func NewGetFavoritePostsByUserIDUseCase(postRepo repository.PostLister) GetFavoritePostsByUserIDUseCase {
 	return &GetFavoritePostsByUserIDInteractor{
 		postRepo: postRepo,
 	}

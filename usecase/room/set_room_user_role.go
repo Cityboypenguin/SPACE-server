@@ -13,10 +13,10 @@ type SetRoomUserRoleUseCase interface {
 var _ SetRoomUserRoleUseCase = &SetRoomUserRoleInteractor{}
 
 type SetRoomUserRoleInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomRoleRepository
 }
 
-func NewSetRoomUserRoleUseCase(roomUserRepo repository.RoomUserRepository) SetRoomUserRoleUseCase {
+func NewSetRoomUserRoleUseCase(roomUserRepo repository.RoomRoleRepository) SetRoomUserRoleUseCase {
 	return &SetRoomUserRoleInteractor{roomUserRepo: roomUserRepo}
 }
 

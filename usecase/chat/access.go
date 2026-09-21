@@ -218,7 +218,7 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 	// 人数ではなくルーム種別で判定する。
 	if room.Type == model.RoomTypeDM {
 		if partnerID, ok := soleOtherMember(memberIDs, claims.ID); ok {
-			isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, claims.ID, partnerID)
+			isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, partnerID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check block status")
 			}

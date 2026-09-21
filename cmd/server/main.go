@@ -32,11 +32,14 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
+	"github.com/Cityboypenguin/SPACE-server/internal/di"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/internal/metrics"
 	authmiddleware "github.com/Cityboypenguin/SPACE-server/internal/middleware"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
+	"github.com/Cityboypenguin/SPACE-server/internal/transport/ssehttp"
+	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
@@ -235,7 +238,11 @@ func main() {
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
 	updateProfileUseCase := profileusecase.NewUpdateProfileUseCase(profileRepository)
 	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
-	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(profileRepository, mediaRepository, txManager)
+	// アップロードの受け入れ（上限・種別の検査と、署名付きURLの及ばないキーへの移送）。
+	// 1つ作って、オブジェクトキーを保存するユースケース全部へ配る。
+	uploadAcceptor := upload.NewAcceptor(storageRepository)
+
+	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(uploadAcceptor, profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
 
 	createAdministratorUseCase := administrator.NewCreateAdministratorUseCase(administratorRepository, txManager)
@@ -270,8 +277,8 @@ func main() {
 	getFollowersTopLevelPostsByUserIDUseCase := postusecase.NewGetFollowersTopLevelPostsByUserIDUseCase(postRepository)
 
 	// createFavoriteUseCase も notificationPublisher に依存するため publisher 構築後に生成する。
-	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository, postRepository)
-	deleteFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewDeleteFavoriteByUserIDAndPostIDUseCase(favoriteRepository, postRepository)
+	deleteFavoriteUseCase := favoriteusecase.NewDeleteFavoriteUseCase(favoriteRepository)
+	deleteFavoriteByUserIDAndPostIDUseCase := favoriteusecase.NewDeleteFavoriteByUserIDAndPostIDUseCase(favoriteRepository)
 	getFavoriteByIDUseCase := favoriteusecase.NewGetFavoriteByIDUseCase(favoriteRepository)
 	getFavoritesByPostIDUseCase := favoriteusecase.NewGetFavoritesByPostIDUseCase(favoriteRepository)
 	getFavoritesByUserIDUseCase := favoriteusecase.NewGetFavoritesByUserIDUseCase(favoriteRepository)
@@ -328,7 +335,7 @@ func main() {
 	// メッセージの保存処理（送信・編集・削除）は usecase/chat/internal/messagestore に
 	// あり、ここから直接は組み立てられない。認可を通さず保存を叩ける口を作らないための
 	// 構造なので、束ごと受け取ってチャットサービスへ渡す（usecase/chat/writers.go 参照）。
-	chatMessageWriters := chatusecase.NewMessageWriters(messageRepository, messageRepository, messageRepository, mediaRepository, txManager)
+	chatMessageWriters := chatusecase.NewMessageWriters(uploadAcceptor, messageRepository, messageRepository, messageRepository, mediaRepository, txManager)
 	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
 	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
@@ -365,7 +372,11 @@ func main() {
 	getCourseRegistrantIDsUseCase := roomusecase.NewGetCourseRegistrantIDsUseCase(timetableRepository)
 	countUnreadByRoomTypeUseCase := roomusecase.NewCountUnreadByRoomTypeUseCase(messageRepository)
 
-	// コミュニティ系ユースケースの生成は graph.NewCommunityUseCases に集約。
+	// 質問・回答・投票の配信先。保存したユースケース自身がここへ出すので、
+	// リゾルバを通らない経路でも購読中の画面が動く。
+	classroomEvents := graph.NewClassroomEventPublisher(ps)
+
+	// リポジトリからユースケースを組み立てる配線は internal/di に集約。
 
 	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
@@ -419,8 +430,8 @@ func main() {
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
-	createPostUseCase := postusecase.NewCreatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	createPostUseCase := postusecase.NewCreatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
 	listPostMentionsUseCase := postusecase.NewListMentionsByPostIDsUseCase(postRepository)
 
 	// DataLoader からしか使わないバッチ取得の口。リゾルバは dataloader.For(ctx) 経由で
@@ -437,7 +448,7 @@ func main() {
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
-	createTermsUseCase := termsusecase.NewCreateTermsUseCase(termsRepository)
+	createTermsUseCase := termsusecase.NewCreateTermsUseCase(uploadAcceptor, termsRepository)
 	getCurrentTermsUseCase := termsusecase.NewGetCurrentTermsUseCase(termsRepository)
 	consentToTermsUseCase := termsusecase.NewConsentToTermsUseCase(termsRepository, userRepository)
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
@@ -636,10 +647,10 @@ func main() {
 			CountUnreadByRoomTypeUseCase:        countUnreadByRoomTypeUseCase,
 		},
 
-		CommunityUseCases: graph.NewCommunityUseCases(communityRepository, roomUserRepository, txManager),
-		CourseUseCases:    graph.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  graph.NewQuestionUseCases(questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
-		PollUseCases:      graph.NewPollUseCases(pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
+		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
+		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
@@ -790,6 +801,25 @@ func main() {
 
 	wsLimiter := connlimit.NewWSLimiter()
 
+	// watchSession は長寿命の接続（WebSocket / SSE）が、作られたときの権限より
+	// 長生きしないようにする見張り。
+	//
+	// HTTP はリクエストのたびに同じ検証を通るので、管理者の削除・利用者の凍結や
+	// 退会・パスワード変更・トークンの失効がその場で効く。長寿命の接続は入口で
+	// 1度しか通らないため、何も足さなければ**繋がっている限り当時の権限のまま**
+	// になる。切る手段はサーバーの再起動しか無かった。
+	//
+	// 検証そのものは HTTP と同じ auth.ValidateAndVerifyToken を呼ぶ。別の判定を
+	// 書くと、片方だけ厳しくしたときにもう片方が置いていかれる。
+	watchSession := func(ctx context.Context, token string) context.Context {
+		return auth.WatchSession(ctx, func(ctx context.Context) error {
+			_, err := auth.ValidateAndVerifyToken(ctx, token, revokedTokenRepository, userRepository, administratorRepository)
+			return err
+		}, func(err error) {
+			logger.Log.Info().Err(err).Msg("closing a long-lived connection: its authentication no longer holds")
+		})
+	}
+
 	gqlServer.AddTransport(transport.Websocket{
 		// gqlgen v0.17.95 で WebSocket 実装が gorilla/websocket から coder/websocket に
 		// 置き換わり、Upgrader フィールドが無くなった。オリジン検証は
@@ -798,8 +828,10 @@ func main() {
 		KeepAlivePingInterval: 10 * time.Second,
 		InitFunc: func(ctx context.Context, initPayload transport.InitPayload) (context.Context, *transport.InitPayload, error) {
 			var userID int64
+			var token string
 			if claims, ok := auth.ClaimsFromContext(ctx); ok {
 				userID = claims.ID
+				token, _ = auth.TokenFromContext(ctx)
 			} else {
 				authHeader := authHeaderFromInitPayload(initPayload)
 				tokenStr := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(authHeader), "Bearer "))
@@ -811,7 +843,16 @@ func main() {
 					return ctx, nil, err
 				}
 				ctx = auth.WithClaims(ctx, claims)
+				ctx = auth.WithToken(ctx, tokenStr)
 				userID = claims.ID
+				token = tokenStr
+			}
+
+			// 接続中も認証をやり直す。ここで返した ctx が接続の親になるので、
+			// 通らなくなって打ち切られると gqlgen がソケットを閉じる
+			// （購読を1つずつ止めて回る必要はない）。
+			if token != "" {
+				ctx = watchSession(ctx, token)
 			}
 
 			if err := wsLimiter.Acquire(userID); err != nil {
@@ -872,7 +913,7 @@ func main() {
 	}
 
 	// SSE
-	e.GET("/events", sse.NewHandler(sseBroker, sseTicketRepository))
+	e.GET("/events", ssehttp.NewHandler(sseBroker, sseTicketRepository, watchSession))
 
 	termsBroadcastScheduler.SchedulePending(context.Background())
 	go func() {

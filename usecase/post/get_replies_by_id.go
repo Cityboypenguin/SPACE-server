@@ -14,10 +14,10 @@ type GetRepliesByIDUseCase interface {
 var _ GetRepliesByIDUseCase = &GetRepliesByIDInteractor{}
 
 type GetRepliesByIDInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostReplyReader
 }
 
-func NewGetRepliesByIDUseCase(postRepo repository.PostRepository) GetRepliesByIDUseCase {
+func NewGetRepliesByIDUseCase(postRepo repository.PostReplyReader) GetRepliesByIDUseCase {
 	return &GetRepliesByIDInteractor{
 		postRepo: postRepo,
 	}

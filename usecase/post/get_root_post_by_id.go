@@ -14,10 +14,10 @@ type GetRootPostUseCase interface {
 var _ GetRootPostUseCase = &GetRootPostInteractor{}
 
 type GetRootPostInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostReader
 }
 
-func NewGetRootPostUseCase(postRepo repository.PostRepository) GetRootPostUseCase {
+func NewGetRootPostUseCase(postRepo repository.PostReader) GetRootPostUseCase {
 	return &GetRootPostInteractor{
 		postRepo: postRepo,
 	}

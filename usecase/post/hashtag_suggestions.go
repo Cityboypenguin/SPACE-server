@@ -34,10 +34,10 @@ type PopularHashtagsUseCase interface {
 var _ PopularHashtagsUseCase = &PopularHashtagsInteractor{}
 
 type PopularHashtagsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.HashtagRepository
 }
 
-func NewPopularHashtagsUseCase(postRepo repository.PostRepository) PopularHashtagsUseCase {
+func NewPopularHashtagsUseCase(postRepo repository.HashtagRepository) PopularHashtagsUseCase {
 	return &PopularHashtagsInteractor{postRepo: postRepo}
 }
 
@@ -65,10 +65,10 @@ type SuggestHashtagsUseCase interface {
 var _ SuggestHashtagsUseCase = &SuggestHashtagsInteractor{}
 
 type SuggestHashtagsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.HashtagRepository
 }
 
-func NewSuggestHashtagsUseCase(postRepo repository.PostRepository) SuggestHashtagsUseCase {
+func NewSuggestHashtagsUseCase(postRepo repository.HashtagRepository) SuggestHashtagsUseCase {
 	return &SuggestHashtagsInteractor{postRepo: postRepo}
 }
 

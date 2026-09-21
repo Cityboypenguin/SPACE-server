@@ -14,10 +14,10 @@ type ListMediaByMessageIDsUseCase interface {
 var _ ListMediaByMessageIDsUseCase = &ListMediaByMessageIDsInteractor{}
 
 type ListMediaByMessageIDsInteractor struct {
-	mediaRepo repository.MediaRepository
+	mediaRepo repository.MediaReader
 }
 
-func NewListMediaByMessageIDsUseCase(mediaRepo repository.MediaRepository) ListMediaByMessageIDsUseCase {
+func NewListMediaByMessageIDsUseCase(mediaRepo repository.MediaReader) ListMediaByMessageIDsUseCase {
 	return &ListMediaByMessageIDsInteractor{mediaRepo: mediaRepo}
 }
 

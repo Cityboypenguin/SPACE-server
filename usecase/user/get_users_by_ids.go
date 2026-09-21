@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type GetUsersByIDsUseCase interface {
@@ -14,10 +13,10 @@ type GetUsersByIDsUseCase interface {
 var _ GetUsersByIDsUseCase = &GetUsersByIDsInteractor{}
 
 type GetUsersByIDsInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewGetUsersByIDsUseCase(userRepo repository.UserRepository) GetUsersByIDsUseCase {
+func NewGetUsersByIDsUseCase(userRepo userDirectoryRepository) GetUsersByIDsUseCase {
 	return &GetUsersByIDsInteractor{userRepo: userRepo}
 }
 
@@ -35,10 +34,10 @@ type GetUserAccountsByIDsUseCase interface {
 var _ GetUserAccountsByIDsUseCase = &GetUserAccountsByIDsInteractor{}
 
 type GetUserAccountsByIDsInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewGetUserAccountsByIDsUseCase(userRepo repository.UserRepository) GetUserAccountsByIDsUseCase {
+func NewGetUserAccountsByIDsUseCase(userRepo userDirectoryRepository) GetUserAccountsByIDsUseCase {
 	return &GetUserAccountsByIDsInteractor{userRepo: userRepo}
 }
 

@@ -38,6 +38,25 @@ type Bus struct {
 	// 誰も見ていない部屋のメッセージまで運ぶことになる）。
 	sub *redis.PubSub
 
+	// mu は refs と、それに対応する Redis 側の購読状態をまとめて守る。
+	//
+	// Redis への SUBSCRIBE / UNSUBSCRIBE も、この錠を持ったまま行う。以前は
+	// 数を更新してから錠を放し、その外で Redis を呼んでいたため、購読と解除が
+	// 重なると順番が入れ替わりえた。
+	//
+	//	A: refs 0→1（購読する、と決める）
+	//	B: refs 1→0（解除する、と決める）
+	//	B: Redis UNSUBSCRIBE
+	//	A: Redis SUBSCRIBE
+	//
+	// この並びなら結果は正しいが、逆に走れば「購読者が居るのに Redis 側は
+	// 解除済み」になる。そうなるとその購読には他の台からの配信が二度と届かず、
+	// しかもエラーにならないので気づけない。数と Redis の状態は1つの不変条件
+	// なので、同じ錠の下で動かす必要がある。
+	//
+	// 錠の中で Redis を1往復することになるが、ここは購読の開始・終了でしか
+	// 通らない（配信 Publish も受信 receive もこの錠を取らない）ので、
+	// 1メッセージごとの費用にはならない。
 	mu sync.Mutex
 	// refs はトピックごとのプロセス内購読者数。Redis 側の購読・解除を
 	// 0↔1 の境目でだけ行うために数える。
@@ -115,20 +134,33 @@ func (b *Bus) Subscribe(topic string) chan interface{} {
 	ch := b.local.Subscribe(topic)
 
 	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	first := b.refs[topic] == 0
 	b.refs[topic]++
-	b.mu.Unlock()
+	if !first {
+		return ch
+	}
 
-	if first {
-		if err := b.sub.Subscribe(b.ctx, b.channel(topic)); err != nil {
-			// ここで失敗すると、この購読には他の台からの配信が届かなくなる。
-			// 購読自体は生かす（同じ台からの配信は届くので、1台構成と同じ状態まで
-			// 落ちるだけ）が、黙って劣化させない。
-			logger.Log.Error().Err(err).
-				Str("component", "redis_bus").
-				Str("topic", topic).
-				Msg("failed to subscribe on redis; this subscription will only see events from this instance")
-		}
+	if err := b.sub.Subscribe(b.ctx, b.channel(topic)); err != nil {
+		// 失敗しても数は戻さず、解除の責任も手放さない。go-redis は
+		// SUBSCRIBE が失敗しても「このチャンネルを購読しているつもり」の一覧に
+		// 加え、接続を張り直すたびにその一覧をまとめて購読し直す。つまり
+		// 回復はライブラリ側が勝手にやるので、こちらで数え直す必要はない。
+		//
+		// 逆に「失敗したから購読していない」と覚えて Unsubscribe を省くと、
+		// 一覧には残ったままになり、再接続のたびに購読が蘇る。誰も読んでいない
+		// トピックの配信をこの台が永久に受け取り続けることになる。
+		//
+		// 配信が戻るまでの間、この購読には**何も届かない**。以前ここには
+		// 「同じ台からの配信は届く」と書いてあったが、それは誤り。Publish は
+		// 必ず Redis を経由する（同じ値が二重に届くのを避けるため、
+		// ローカルへ直接渡す近道は意図的に作っていない）ので、Redis 側の購読が
+		// 無ければ自分の台で起きたイベントも戻ってこない。
+		logger.Log.Error().Err(err).
+			Str("component", "redis_bus").
+			Str("topic", topic).
+			Msg("failed to subscribe on redis; this subscription receives nothing until go-redis re-establishes the connection")
 	}
 	return ch
 }
@@ -137,22 +169,23 @@ func (b *Bus) Unsubscribe(topic string, ch chan interface{}) {
 	b.local.Unsubscribe(topic, ch)
 
 	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if b.refs[topic] > 0 {
 		b.refs[topic]--
 	}
-	last := b.refs[topic] == 0
-	if last {
-		delete(b.refs, topic)
+	if b.refs[topic] > 0 {
+		return
 	}
-	b.mu.Unlock()
 
-	if last {
-		if err := b.sub.Unsubscribe(b.ctx, b.channel(topic)); err != nil {
-			logger.Log.Warn().Err(err).
-				Str("component", "redis_bus").
-				Str("topic", topic).
-				Msg("failed to unsubscribe on redis")
-		}
+	// 最後の1人が抜けた。記録を先に消すのは、この後の UNSUBSCRIBE が失敗しても
+	// 「購読者ゼロ」という事実は変わらないため。
+	delete(b.refs, topic)
+	if err := b.sub.Unsubscribe(b.ctx, b.channel(topic)); err != nil {
+		logger.Log.Warn().Err(err).
+			Str("component", "redis_bus").
+			Str("topic", topic).
+			Msg("failed to unsubscribe on redis")
 	}
 }
 

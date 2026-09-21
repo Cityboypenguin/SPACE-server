@@ -3,12 +3,14 @@ package favoriteuser
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type DeleteFavoriteUserUseCase interface {
-	Execute(ctx context.Context, userID, favoriteID int64) (bool, error)
+	Execute(ctx context.Context, favoriteID int64) (bool, error)
 }
 
 var _ DeleteFavoriteUserUseCase = &deleteFavoriteUserInteractor{}
@@ -23,7 +25,11 @@ func NewDeleteFavoriteUserUseCase(favoriteUserRepo repository.FavoriteUserReposi
 	}
 }
 
-func (uc *deleteFavoriteUserInteractor) Execute(ctx context.Context, userID, favoriteID int64) (bool, error) {
+func (uc *deleteFavoriteUserInteractor) Execute(ctx context.Context, favoriteID int64) (bool, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return false, err
+	}
 	favoriteUser := &model.FavoriteUser{
 		UserID:         userID,
 		FavoriteUserID: favoriteID,

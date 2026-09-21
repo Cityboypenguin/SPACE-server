@@ -21,10 +21,10 @@ type ReportDimensionsUseCase interface {
 }
 
 type ReportDimensionsInteractor struct {
-	mediaRepo repository.MediaRepository
+	mediaRepo repository.MediaDimensionRepository
 }
 
-func NewReportDimensionsUseCase(mediaRepo repository.MediaRepository) ReportDimensionsUseCase {
+func NewReportDimensionsUseCase(mediaRepo repository.MediaDimensionRepository) ReportDimensionsUseCase {
 	return &ReportDimensionsInteractor{mediaRepo: mediaRepo}
 }
 
@@ -45,10 +45,10 @@ type ListImagesMissingDimensionsUseCase interface {
 }
 
 type ListImagesMissingDimensionsInteractor struct {
-	mediaRepo repository.MediaRepository
+	mediaRepo repository.MediaDimensionRepository
 }
 
-func NewListImagesMissingDimensionsUseCase(mediaRepo repository.MediaRepository) ListImagesMissingDimensionsUseCase {
+func NewListImagesMissingDimensionsUseCase(mediaRepo repository.MediaDimensionRepository) ListImagesMissingDimensionsUseCase {
 	return &ListImagesMissingDimensionsInteractor{mediaRepo: mediaRepo}
 }
 

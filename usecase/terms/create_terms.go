@@ -9,6 +9,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 )
 
 type CreateTermsInput struct {
@@ -18,19 +19,28 @@ type CreateTermsInput struct {
 }
 
 type CreateTermsUseCase struct {
+	uploads   uploadusecase.Acceptor
 	termsRepo repository.TermsRepository
 }
 
-func NewCreateTermsUseCase(termsRepo repository.TermsRepository) *CreateTermsUseCase {
-	return &CreateTermsUseCase{termsRepo: termsRepo}
+func NewCreateTermsUseCase(uploads uploadusecase.Acceptor, termsRepo repository.TermsRepository) *CreateTermsUseCase {
+	return &CreateTermsUseCase{uploads: uploads, termsRepo: termsRepo}
 }
 
-func (u *CreateTermsUseCase) Execute(ctx context.Context, input CreateTermsInput) (*model.TermsOfService, error) {
+func (u *CreateTermsUseCase) Execute(ctx context.Context, input CreateTermsInput) (_ *model.TermsOfService, err error) {
 	if _, err := authz.RequireAdmin(ctx); err != nil {
 		return nil, err
 	}
 	version := strings.TrimSpace(input.Version)
-	objectKey := strings.TrimSpace(input.ObjectKey)
+	// 受け入れはここで通す（リゾルバの手順にしない理由は usecase/upload 参照）。
+	// 保存が成立しなければ、公開した実体は取り消す。
+	uploads := uploadusecase.Begin(u.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	objectKey, err := uploads.Accept(ctx, uploadusecase.TermsDocument, strings.TrimSpace(input.ObjectKey))
+	if err != nil {
+		return nil, err
+	}
 
 	if version == "" || objectKey == "" {
 		return nil, errors.New("version and objectKey are required")

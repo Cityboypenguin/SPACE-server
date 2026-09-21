@@ -59,7 +59,13 @@ type Tracker struct {
 	mu sync.Mutex
 	// status はこの台が走らせている取り込みの状態。共有の記録は store 側にあり、
 	// ここはその写し（進捗の組み立てと、store が引けなかったときの控え）。
-	status   Status
+	status Status
+	// runToken は「今このトラッカーの状態を書いてよい実行」の合言葉。
+	//
+	// 印が寿命で解けた後に同じ台で次の実行が始まると、古い実行がまだ生きている
+	// まま2本が並ぶことがある。共有の記録は token で弾けるが、この台の写し
+	// （status）も古い実行に書き換えられると、管理画面の表示が実行と食い違う。
+	runToken string
 	store    Store
 	onChange func(Status)
 	ctx      context.Context
@@ -129,12 +135,13 @@ func (t *Tracker) notify() {
 	}
 }
 
-// SetProgress records how many of the total rows a RUNNING scrape has fetched so
+// setProgress records how many of the total rows a RUNNING scrape has fetched so
 // far. It is a no-op once the run has left the RUNNING state (e.g. a stray report
-// arriving after cancellation), so it never resurrects a finished status.
-func (t *Tracker) SetProgress(processed, total int) {
+// arriving after cancellation), or once this tracker has moved on to another run,
+// so it never resurrects a finished status nor overwrites a newer run's.
+func (t *Tracker) setProgress(token string, processed, total int) {
 	t.mu.Lock()
-	if t.status.State != StateRunning {
+	if t.status.State != StateRunning || t.runToken != token {
 		t.mu.Unlock()
 		return
 	}
@@ -143,10 +150,9 @@ func (t *Tracker) SetProgress(processed, total int) {
 	snapshot := t.status
 	t.mu.Unlock()
 
-	// 共有の記録も進める。ここで実行中の印の寿命も延びるので、進捗が出ている
-	// 限り他の台から横取りされることはない（止まれば印が切れて、別の台が
-	// 取り込みを始められるようになる）。
-	if err := t.store.Update(t.ctx, snapshot); err != nil {
+	// 共有の記録も進める。ここでも印の寿命は延びるが、延ばす役目そのものは
+	// 心拍（heartbeat）が持つ。進捗の報告が途切れる区間があるため。
+	if err := t.store.Update(t.ctx, token, snapshot); err != nil {
 		logger.Log.Error().Err(err).Msg("failed to record course import progress")
 	}
 	t.notify()
@@ -169,7 +175,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 	// 管理者2人が別々の台に当たったときに同じ取り込みが2本走る。
 	now := time.Now()
 	snapshot := Status{State: StateRunning, Year: year, StartedAt: &now}
-	acquired, err := t.store.TryStart(t.ctx, snapshot)
+	token, acquired, err := t.store.TryStart(t.ctx, snapshot)
 	if err != nil {
 		// 取れたかどうかが分からないまま走らせない。二重起動は、同じ年度の
 		// 授業を2回取り込むという後始末の要る壊れ方になる。
@@ -180,8 +186,14 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 		return Status{}, apperr.Conflict("既にインポートを実行中です")
 	}
 
+	// 心拍の間隔は実行を始める時点で1度だけ読む。goroutine の中で読むと、
+	// テストが間隔を差し替えるのと goroutine の起動が競合する（本番では
+	// 書き換えないので、これはテストのための取り決め）。
+	heartbeatEvery := LockHeartbeatInterval
+
 	t.mu.Lock()
 	t.status = snapshot
+	t.runToken = token
 	t.jobs.Add(1)
 	t.mu.Unlock()
 	t.notify()
@@ -193,6 +205,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 
 		stalled := make(chan struct{})
 		stopWatchdog := make(chan struct{})
+		stopHeartbeat := make(chan struct{})
 		resetStall := make(chan struct{}, 1)
 		go func() {
 			timer := time.NewTimer(progressStallTimeout)
@@ -218,15 +231,54 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 			}
 		}()
 
+		// 実行中の印を、進捗と関係なく延ばし続ける。
+		//
+		// 以前は進捗の報告でしか延びなかった。スクレイピングを終えた後の一括保存
+		// （DBへの書き込み）は報告を出さないので、そこが長引くと印が解け、
+		// まだDBへ書いている実行を残したまま別の台が次の取り込みを始められた。
+		//
+		// 心拍が「もう自分の印ではない」と分かったら、その場でこの実行を止める。
+		// 印を持っていない実行がDBを触り続けるのが、二重取り込みの実体だから。
+		//
+		// 止まったと判断された（stalled）後は延ばさない。延ばし続けると、固まった
+		// 実行が印を抱えたままになり、どの台も次を始められなくなる。
+		go func() {
+			ticker := time.NewTicker(heartbeatEvery)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopHeartbeat:
+					return
+				case <-stalled:
+					return
+				case <-ticker.C:
+					held, err := t.store.Heartbeat(t.ctx, token)
+					if err != nil {
+						// 延ばせたか分からない。次の心拍で確かめ直す
+						// （ここで止めると、Redis の瞬断で取り込みが落ちる）。
+						logger.Log.Error().Err(err).Msg("failed to extend the course import lock")
+						continue
+					}
+					if !held {
+						logger.Log.Error().Int("year", year).
+							Msg("the course import lock was taken over by another run; aborting this one")
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+
 		reportProgress := func(processed, total int) {
 			select {
 			case resetStall <- struct{}{}:
 			default:
 			}
-			t.SetProgress(processed, total)
+			t.setProgress(token, processed, total)
 		}
 
 		imported, skipped, err := run(bgCtx, reportProgress)
+		close(stopHeartbeat)
 		close(stopWatchdog)
 		finished := time.Now()
 		if err == nil && bgCtx.Err() != nil {
@@ -245,18 +297,29 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 
 		t.mu.Lock()
 		startedAt := t.status.StartedAt
+		if t.runToken != token {
+			// この台で既に次の実行が始まっている（＝印はその実行が持っている）。
+			// 共有の記録は token で弾かれるうえ、外すべき印もこちらには無いので、
+			// 写しにも記録にも触らずに降りる。
+			t.mu.Unlock()
+			logger.Log.Warn().Int("year", year).
+				Msg("this course import was superseded by a newer run on the same instance; dropping its result")
+			return
+		}
 		if err != nil {
 			t.status = Status{State: StateFailed, Year: year, ErrorMessage: err.Error(), StartedAt: startedAt, FinishedAt: &finished}
 			final := t.status
+			t.runToken = ""
 			t.mu.Unlock()
 			logger.Log.Error().Err(err).Int("year", year).Msg("course import failed")
-			t.finish(final)
+			t.finish(token, final)
 			return
 		}
 		t.status = Status{State: StateSucceeded, Year: year, Imported: imported, Skipped: skipped, StartedAt: startedAt, FinishedAt: &finished}
 		final := t.status
+		t.runToken = ""
 		t.mu.Unlock()
-		t.finish(final)
+		t.finish(token, final)
 	}()
 
 	return snapshot, nil
@@ -271,8 +334,8 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 // 停止用の ctx（t.ctx）ではなく context.Background() を使う。サーバー停止に
 // 伴う終了では t.ctx は既に切れているので、そのまま使うと最終状態を
 // 書き残せず、状態が RUNNING のまま取り残される。
-func (t *Tracker) finish(final Status) {
-	if err := t.store.Finish(context.Background(), final); err != nil {
+func (t *Tracker) finish(token string, final Status) {
+	if err := t.store.Finish(context.Background(), token, final); err != nil {
 		logger.Log.Error().Err(err).Msg("failed to record the course import result")
 	}
 	t.notify()

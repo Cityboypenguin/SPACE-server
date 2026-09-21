@@ -27,7 +27,7 @@ package messagestore
 
 import (
 	"context"
-	"fmt"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 	"strings"
 	"time"
 
@@ -57,21 +57,23 @@ var _ SendMessageUseCase = &SendMessageInteractor{}
 // (repository.MessageWriter) を配線で渡す先をここだけに絞るための分割で、
 // 意図は repository.MessageWriter と usecase/chat/writers.go のコメント参照。
 type SendMessageInteractor struct {
+	uploads      uploadusecase.Acceptor
 	reader       repository.MessageReader
 	writer       repository.MessageWriter
 	mentionStore repository.MessageMentionStore
-	mediaRepo    repository.MediaRepository
+	mediaRepo    mediaAttachRepository
 	txManager    repository.TxManager
 }
 
-func NewSendMessageUseCase(
+func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
 	reader repository.MessageReader,
 	writer repository.MessageWriter,
 	mentionStore repository.MessageMentionStore,
-	mediaRepo repository.MediaRepository,
+	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 ) SendMessageUseCase {
 	return &SendMessageInteractor{
+		uploads:      uploads,
 		reader:       reader,
 		writer:       writer,
 		mentionStore: mentionStore,
@@ -80,18 +82,23 @@ func NewSendMessageUseCase(
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (_ *model.Message, err error) {
 	content = strings.TrimSpace(content)
 	if err := validateContent(content); err != nil {
 		return nil, err
 	}
 
-	prefix := fmt.Sprintf("media/%d/", userID)
+	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
+	uploads := uploadusecase.Begin(uc.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	if err != nil {
+		return nil, err
+	}
+
 	mediaKeys := make([]string, 0, len(mediaInputs))
 	for _, input := range mediaInputs {
-		if !strings.HasPrefix(input.StorageKey, prefix) {
-			return nil, fmt.Errorf("invalid media key")
-		}
 		mediaKeys = append(mediaKeys, input.StorageKey)
 	}
 

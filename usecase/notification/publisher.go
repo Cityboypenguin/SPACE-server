@@ -90,11 +90,11 @@ type BroadcastParams struct {
 }
 
 type notificationPublisher struct {
-	repo     repository.NotificationRepository
+	repo     notificationPublishRepository
 	delivery UserEventDelivery
 }
 
-func NewNotificationPublisher(repo repository.NotificationRepository, delivery UserEventDelivery) NotificationPublisher {
+func NewNotificationPublisher(repo notificationPublishRepository, delivery UserEventDelivery) NotificationPublisher {
 	return &notificationPublisher{repo: repo, delivery: delivery}
 }
 

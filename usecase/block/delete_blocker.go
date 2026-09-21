@@ -3,11 +3,13 @@ package block
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type DeleteBlockerUseCase interface {
-	Execute(ctx context.Context, blockerID, blockedID int64) (bool, error)
+	Execute(ctx context.Context, blockedID int64) (bool, error)
 }
 
 var _ DeleteBlockerUseCase = &deleteBlockerInteractor{}
@@ -22,6 +24,10 @@ func NewDeleteBlockerUseCase(blockRepo repository.BlockerRepository) DeleteBlock
 	}
 }
 
-func (uc *deleteBlockerInteractor) Execute(ctx context.Context, blockerID int64, blockedID int64) (bool, error) {
+func (uc *deleteBlockerInteractor) Execute(ctx context.Context, blockedID int64) (bool, error) {
+	blockerID, err := authz.CallerID(ctx)
+	if err != nil {
+		return false, err
+	}
 	return uc.blockRepo.DeleteBlocker(ctx, blockerID, blockedID)
 }

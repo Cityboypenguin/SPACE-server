@@ -1,0 +1,46 @@
+# メディアとアップロード。
+
+extend type Query {
+  presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
+  presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
+  presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
+  presignedTermsDocumentUploadUrl: PresignedUploadUrl!
+  # 寸法が未取得の画像メディア。メンテナンス中に一括で埋めるツール
+  # (SPACE-client/scripts/fill-media-dimensions.mjs) が対象を列挙するために使う。
+  # 全件が埋まればこのクエリごと不要になる。
+  # Temporary operations endpoint for the media-dimension backfill. Keep until
+  # production reports zero remaining rows and that observation is recorded.
+  adminListMediaMissingDimensions(limit: Int = 200, offset: Int = 0): [Media!]!
+}
+
+extend type Mutation {
+  # 表示できた画像の実寸を記録する。アップロード時に寸法を申告する仕組みより前の
+  # メディアを埋めるための経路で、すでに寸法があるメディアには効果がない。
+  # 値は表示したブラウザの観測値で、レイアウト確保のヒントにのみ使う。
+  reportMediaDimensions(mediaID: ID!, width: Int!, height: Int!): Boolean!
+}
+
+type PresignedUploadUrl {
+  uploadUrl: String!
+  objectKey: String!
+}
+
+type Media {
+  ID: ID!
+  url: String!
+  contentType: String!
+  # 画像の実寸。表示側がロード前に領域を確保するために使う。
+  # 寸法を持たないメディアや、埋め戻し前の古いレコードでは null。
+  width: Int
+  height: Int
+  createdAt: String!
+}
+
+input MediaUploadInput {
+  objectKey: String!
+  contentType: String!
+  # 画像の実寸。クライアントがアップロード時に測って申告する。
+  # レイアウトのヒントとしてのみ使うため、欠けていても null で受け付ける。
+  width: Int
+  height: Int
+}

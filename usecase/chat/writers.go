@@ -3,6 +3,7 @@ package chat
 import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/chat/internal/messagestore"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 )
 
 // MessageWriters は認可を前提とした保存処理（送信・編集・削除）の束。
@@ -51,15 +52,23 @@ type MessageWriters struct {
 // 配線側の規律（上の「塞がっていない(1)」参照）。reader は返信先の確認と編集前の
 // 取得に使うだけなので、書き込みと分けて受け取る。
 func NewMessageWriters(
+	uploads uploadusecase.Acceptor,
 	reader repository.MessageReader,
 	writer repository.MessageWriter,
 	mentionStore repository.MessageMentionStore,
-	mediaRepo repository.MediaRepository,
+	mediaRepo chatMediaRepository,
 	txManager repository.TxManager,
 ) MessageWriters {
 	return MessageWriters{
-		send:   messagestore.NewSendMessageUseCase(reader, writer, mentionStore, mediaRepo, txManager),
+		send:   messagestore.NewSendMessageUseCase(uploads, reader, writer, mentionStore, mediaRepo, txManager),
 		update: messagestore.NewUpdateMessageUseCase(reader, writer, mentionStore, txManager),
 		delete: messagestore.NewDeleteMessageUseCase(writer),
 	}
+}
+
+// chatMediaRepository は送信時の添付保存に要る口。
+// 合成の口（repository.MediaRepository）を受け取ると、削除も一覧も触れてしまう。
+type chatMediaRepository interface {
+	repository.MediaWriter
+	repository.MediaAttachmentWriter
 }

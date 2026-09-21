@@ -3,23 +3,29 @@ package room
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type GetRoomUserRoleUseCase interface {
-	Execute(ctx context.Context, roomID, userID int64) (string, error)
+	Execute(ctx context.Context, roomID int64) (string, error)
 }
 
 var _ GetRoomUserRoleUseCase = &GetRoomUserRoleInteractor{}
 
 type GetRoomUserRoleInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomRoleRepository
 }
 
-func NewGetRoomUserRoleUseCase(roomUserRepo repository.RoomUserRepository) GetRoomUserRoleUseCase {
+func NewGetRoomUserRoleUseCase(roomUserRepo repository.RoomRoleRepository) GetRoomUserRoleUseCase {
 	return &GetRoomUserRoleInteractor{roomUserRepo: roomUserRepo}
 }
 
-func (uc *GetRoomUserRoleInteractor) Execute(ctx context.Context, roomID, userID int64) (string, error) {
+func (uc *GetRoomUserRoleInteractor) Execute(ctx context.Context, roomID int64) (string, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return "", err
+	}
 	return uc.roomUserRepo.GetRoomUserRole(ctx, roomID, userID)
 }

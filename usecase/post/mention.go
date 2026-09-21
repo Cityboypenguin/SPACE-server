@@ -26,7 +26,7 @@ const MaxMentionsPerPost = 10
 // 変更しても本文は "@旧ID" のまま残るため、表示側はこの値と突き合わせて着色する。
 func ResolveMentions(
 	ctx context.Context,
-	userRepo repository.UserRepository,
+	userRepo repository.UserReader,
 	blockerRepo repository.BlockerRepository,
 	content string,
 	authorID int64,

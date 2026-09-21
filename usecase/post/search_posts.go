@@ -14,10 +14,10 @@ type SearchPostsUseCase interface {
 var _ SearchPostsUseCase = &SearchPostsInteractor{}
 
 type SearchPostsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostSearcher
 }
 
-func NewSearchPostsUseCase(postRepo repository.PostRepository) SearchPostsUseCase {
+func NewSearchPostsUseCase(postRepo repository.PostSearcher) SearchPostsUseCase {
 	return &SearchPostsInteractor{
 		postRepo: postRepo,
 	}

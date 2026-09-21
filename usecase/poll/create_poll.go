@@ -19,17 +19,18 @@ type CreatePollUseCase interface {
 var _ CreatePollUseCase = &CreatePollInteractor{}
 
 type CreatePollInteractor struct {
+	events          EventPublisher
 	pollRepo        repository.PollRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
 }
 
-func NewCreatePollUseCase(
+func NewCreatePollUseCase(events EventPublisher,
 	pollRepo repository.PollRepository,
 	requireWritable course.RequireWritableCourseRoomUseCase,
 	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
 ) CreatePollUseCase {
-	return &CreatePollInteractor{pollRepo: pollRepo, requireWritable: requireWritable, anonIdentity: anonIdentity}
+	return &CreatePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable, anonIdentity: anonIdentity}
 }
 
 func (uc *CreatePollInteractor) Execute(ctx context.Context, roomID int64, question string, optionLabels []string, allowMultipleChoice bool, deadline *time.Time) (*model.Poll, error) {
@@ -53,7 +54,7 @@ func (uc *CreatePollInteractor) Execute(ctx context.Context, roomID int64, quest
 		return nil, err
 	}
 
-	return uc.pollRepo.CreatePoll(ctx, repository.CreatePollParam{
+	created, err := uc.pollRepo.CreatePoll(ctx, repository.CreatePollParam{
 		RoomID:              roomID,
 		AuthorUserID:        claims.ID,
 		AuthorRole:          model.AuthorRoleStudent,
@@ -62,4 +63,11 @@ func (uc *CreatePollInteractor) Execute(ctx context.Context, roomID int64, quest
 		Deadline:            deadline,
 		OptionLabels:        optionLabels,
 	})
+	if err != nil {
+		return nil, err
+	}
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.PollCreated(ctx, created)
+	return created, nil
 }

@@ -14,10 +14,10 @@ type GetPostsByIDsUseCase interface {
 var _ GetPostsByIDsUseCase = &GetPostsByIDsInteractor{}
 
 type GetPostsByIDsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostReader
 }
 
-func NewGetPostsByIDsUseCase(postRepo repository.PostRepository) GetPostsByIDsUseCase {
+func NewGetPostsByIDsUseCase(postRepo repository.PostReader) GetPostsByIDsUseCase {
 	return &GetPostsByIDsInteractor{postRepo: postRepo}
 }
 

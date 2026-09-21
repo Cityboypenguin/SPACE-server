@@ -14,10 +14,10 @@ type ListMediaByAnswerIDsUseCase interface {
 var _ ListMediaByAnswerIDsUseCase = &ListMediaByAnswerIDsInteractor{}
 
 type ListMediaByAnswerIDsInteractor struct {
-	mediaRepo repository.MediaRepository
+	mediaRepo repository.MediaReader
 }
 
-func NewListMediaByAnswerIDsUseCase(mediaRepo repository.MediaRepository) ListMediaByAnswerIDsUseCase {
+func NewListMediaByAnswerIDsUseCase(mediaRepo repository.MediaReader) ListMediaByAnswerIDsUseCase {
 	return &ListMediaByAnswerIDsInteractor{mediaRepo: mediaRepo}
 }
 

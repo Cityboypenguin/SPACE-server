@@ -1,0 +1,86 @@
+# コミュニティ。
+
+extend type Query {
+  myCommunities(limit: Int = 20, offset: Int = 0): CommunityPage!
+  searchCommunities(
+    name: String!
+    limit: Int = 20
+    offset: Int = 0
+  ): CommunityPage!
+  communities(limit: Int = 20, offset: Int = 0): CommunityPage!
+  randomCommunities(limit: Int!): [Community!]!
+  getMyRoleInCommunity(communityID: ID!): String!
+    @deprecated(reason: "Use communityMembers(limit, offset); removal requires confirming no external clients use this query")
+  communityMembers(
+    communityID: ID!
+    limit: Int = 50
+    offset: Int = 0
+  ): CommunityMemberPage!
+}
+
+extend type Mutation {
+  createCommunity(input: CreateCommunityInput!): Community!
+  updateCommunity(id: ID!, input: UpdateCommunityInput!): Community!
+  kickUserFromCommunity(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action KICK")
+  promoteToCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action PROMOTE")
+  demoteFromCommunityOwner(communityID: ID!, userID: ID!): Boolean!
+    @deprecated(reason: "Use updateCommunityMembers with action DEMOTE")
+  updateCommunityMembers(
+    communityID: ID!
+    updates: [CommunityMemberUpdateInput!]!
+  ): Boolean!
+}
+
+type Community {
+  ID: ID!
+  roomID: ID!
+  name: String!
+  description: String!
+  avatarURL: String!
+  memberCount: Int!
+  isMember: Boolean!
+  unreadCount: Int!
+  lastMessage: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type CommunityPage {
+  items: [Community!]!
+  total: Int!
+}
+
+type CommunityMember {
+  user: User!
+  role: String!
+}
+
+type CommunityMemberPage {
+  items: [CommunityMember!]!
+  total: Int!
+}
+
+input CreateCommunityInput {
+  name: String!
+  description: String!
+  avatarKey: String
+}
+
+input UpdateCommunityInput {
+  name: String
+  description: String
+  avatarKey: String
+}
+
+enum CommunityMemberAction {
+  PROMOTE
+  DEMOTE
+  KICK
+}
+
+input CommunityMemberUpdateInput {
+  userID: ID!
+  action: CommunityMemberAction!
+}

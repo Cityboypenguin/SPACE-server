@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 // GetUserByIDUseCase は表示用の1件取得。連絡先は返さない。
@@ -17,10 +16,10 @@ type GetUserByIDUseCase interface {
 var _ GetUserByIDUseCase = &GetUserByIDInteractor{}
 
 type GetUserByIDInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewGetUserByIDUseCase(userRepo repository.UserRepository) GetUserByIDUseCase {
+func NewGetUserByIDUseCase(userRepo userDirectoryRepository) GetUserByIDUseCase {
 	return &GetUserByIDInteractor{
 		userRepo: userRepo,
 	}
@@ -43,10 +42,10 @@ type GetUserAccountByIDUseCase interface {
 var _ GetUserAccountByIDUseCase = &GetUserAccountByIDInteractor{}
 
 type GetUserAccountByIDInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userDirectoryRepository
 }
 
-func NewGetUserAccountByIDUseCase(userRepo repository.UserRepository) GetUserAccountByIDUseCase {
+func NewGetUserAccountByIDUseCase(userRepo userDirectoryRepository) GetUserAccountByIDUseCase {
 	return &GetUserAccountByIDInteractor{userRepo: userRepo}
 }
 

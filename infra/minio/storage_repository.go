@@ -106,7 +106,40 @@ func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey strin
 		}
 		return repository.ObjectInfo{}, err
 	}
-	return repository.ObjectInfo{Size: info.Size, ContentType: info.ContentType}, nil
+	return repository.ObjectInfo{Size: info.Size, ContentType: info.ContentType, ETag: info.ETag}, nil
+}
+
+// CopyObject は同じバケット内でオブジェクトを写す。中身はこのプロセスを通らない
+// （S3 の COPY は保管側で完結する）。
+//
+// MatchETag で「測ったときの中身と同じなら」という条件を付ける。S3 は
+// x-amz-copy-source-if-match が一致しなければ 412 を返して何も書かない。
+//
+// 宛先側の条件（If-None-Match: *）は付けない。MinIO はこのヘッダーを黙って
+// 無視し、既に在る宛先をそのまま上書きする（実機で確認済み）。付ければ守られて
+// いるように見えて、実際には素通しになる。宛先が一度きりしか書かれないことは
+// 呼び出し側が宛先キーを毎回引き直すことで保証している
+// （internal/upload.acceptedKeyFor）。
+func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+	if srcETag == "" {
+		// 条件を付けられないなら写さない。無条件に写すと、検査してから写すまでの
+		// 隙間に差し替えられたものをそのまま公開することになる。
+		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
+	}
+	_, err := r.client.CopyObject(ctx,
+		minio.CopyDestOptions{Bucket: r.bucket, Object: dstKey},
+		minio.CopySrcOptions{Bucket: r.bucket, Object: srcKey, MatchETag: srcETag},
+	)
+	if err != nil {
+		switch minio.ToErrorResponse(err).Code {
+		case "NoSuchKey":
+			return repository.ErrObjectNotFound
+		case "PreconditionFailed":
+			return repository.ErrObjectChanged
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {

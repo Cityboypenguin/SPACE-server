@@ -1,7 +1,15 @@
-package sse
+// Package ssehttp は /events（通知の SSE）の HTTP 入口。
+//
+// internal/sse から切り出してある。あちらは「誰に何を配るか」を持つ中核で、
+// Echo も HTTP も知らなくてよい。混ぜておくと、配信の仕組みを試すのに
+// HTTP の道具立てが要るし、別の入口（別のフレームワーク・テスト用の直結）を
+// 足すときに中核ごと引きずることになる。
+package ssehttp
 
 import (
+	"context"
 	"fmt"
+	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"net/http"
 	"strconv"
 	"time"
@@ -41,15 +49,31 @@ import (
 // 既存の認証経路には触らない。URL に残る点は同じだが、チケットは**1回使ったら無効・
 // 30秒で失効**なので、アクセスログから拾っても再利用できない（JWT は有効期限まで
 // そのまま使えてしまう。これが元の指摘そのもの）。
-func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.HandlerFunc {
+//
+// # 接続したあとも確かめ直す
+//
+// 引き換えは接続の入口で1度きり。ここで終わりにすると、繋がっている間ずっと
+// そのときの権限で動き続ける（凍結・退会・ログアウト・パスワード変更のどれも
+// 効かない）。watch に渡した関数が定期的に認証をやり直し、通らなくなったら
+// 接続の ctx を終わらせる。
+
+// WatchSessionFunc は接続中に認証をやり直す口（本番では auth.WatchSession を束ねたもの）。
+//
+// internal/sse が認証の置き場（失効リスト・利用者表・管理者表）を直接知らずに
+// 済むよう、関数1つで受け取る。nil なら確かめ直さない（テストや、認証を
+// 配線しない起動経路向け）。
+type WatchSessionFunc func(ctx context.Context, token string) context.Context
+
+func NewHandler(hub *sse.Broker, ticketRepo repository.SSETicketRepository, watch WatchSessionFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		res := c.Response()
 		req := c.Request()
 
-		userID, err := authenticate(c, ticketRepo)
+		session, err := authenticate(c, ticketRepo)
 		if err != nil {
 			return err
 		}
+		userID := session.UserID
 
 		res.Header().Set(echo.HeaderContentType, "text/event-stream")
 		res.Header().Set(echo.HeaderCacheControl, "no-cache")
@@ -61,10 +85,10 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.Han
 			return echo.NewHTTPError(http.StatusInternalServerError, "streaming unsupported")
 		}
 
-		// Last-Event-ID が送られていれば再接続とみなしてリプレイする
+		// Last-sse.Event-ID が送られていれば再接続とみなしてリプレイする
 		// ヘッダーがなければ初回接続（lastEventID = -1 でリプレイなし）
 		lastEventID := -1
-		if raw := req.Header.Get("Last-Event-ID"); raw != "" {
+		if raw := req.Header.Get("Last-sse.Event-ID"); raw != "" {
 			if n, err := strconv.Atoi(raw); err == nil {
 				lastEventID = n
 			}
@@ -78,7 +102,7 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.Han
 
 		now := time.Now().Format(time.RFC3339Nano)
 
-		_ = writeSSE(res.Writer, Event{
+		_ = writeSSE(res.Writer, sse.Event{
 			ID:   0,
 			Type: "connected",
 			Data: map[string]any{"ok": true},
@@ -113,7 +137,14 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.Han
 		// 嘘の 0 が画面に出ることも無い。
 		flusher.Flush()
 
+		// 接続中も認証をやり直す。ここを足さないと、チケットを引き換えた
+		// 一瞬の権限のまま何時間でも繋がり続ける（凍結・退会・ログアウト・
+		// パスワード変更のどれも効かない）。通らなくなれば ctx が終わり、
+		// 下のループが抜けて接続が閉じる。
 		ctx := req.Context()
+		if watch != nil && session.Token != "" {
+			ctx = watch(ctx, session.Token)
+		}
 		keepAlive := time.NewTicker(15 * time.Second)
 		defer keepAlive.Stop()
 
@@ -128,7 +159,7 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.Han
 					return nil
 				}
 				flusher.Flush()
-			case ev, ok := <-cl.ch:
+			case ev, ok := <-cl.Events():
 				if !ok {
 					return nil
 				}
@@ -144,39 +175,42 @@ func NewHandler(hub *Broker, ticketRepo repository.SSETicketRepository) echo.Han
 	}
 }
 
-// authenticate は /events の接続要求から userID を取り出す。
+// authenticate は /events の接続要求から、この接続の認証の素を取り出す。
 // 経路の優先順位と、それぞれを採る理由は NewHandler のコメントを参照。
 func authenticate(
 	c echo.Context,
 	ticketRepo repository.SSETicketRepository,
-) (int64, error) {
+) (repository.StreamSession, error) {
 	req := c.Request()
 
 	// 1. middleware が Authorization ヘッダーを検証済みならそれを使う。
 	if claims, ok := auth.ClaimsFromContext(req.Context()); ok {
-		return claims.ID, nil
+		// トークンは接続中の確かめ直しに使う。取れなければ確かめ直しが効かない
+		// だけで、接続自体は張れる（middleware が検証済みなので）。
+		token, _ := auth.TokenFromContext(req.Context())
+		return repository.StreamSession{UserID: claims.ID, Token: token}, nil
 	}
 
 	// 2. 使い捨てチケット。引き換えは1回きり（Consume が取得と削除を不可分に行う）。
 	if ticket := c.QueryParam("ticket"); ticket != "" {
 		if ticketRepo == nil {
-			return 0, echo.NewHTTPError(http.StatusInternalServerError, "ticket auth unavailable")
+			return repository.StreamSession{}, echo.NewHTTPError(http.StatusInternalServerError, "ticket auth unavailable")
 		}
-		userID, ok, err := ticketRepo.Consume(req.Context(), ticket)
+		session, ok, err := ticketRepo.Consume(req.Context(), ticket)
 		if err != nil {
 			// Redis が落ちている等。「無効なチケット」と区別できないと調査で困るので
 			// ログには残すが、クライアントへは理由を返さない（チケットの有無を
 			// 探る手がかりにさせない）。
 			logger.Log.Error().Err(err).Str("component", "sse").Msg("failed to consume sse ticket")
-			return 0, echo.NewHTTPError(http.StatusInternalServerError, "failed to verify ticket")
+			return repository.StreamSession{}, echo.NewHTTPError(http.StatusInternalServerError, "failed to verify ticket")
 		}
 		if !ok {
 			// 期限切れ・使用済み・でたらめ、のどれかを区別しない。
 			// 区別して返すと、チケットの推測に使える情報になる。
-			return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired ticket")
+			return repository.StreamSession{}, echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired ticket")
 		}
-		return userID, nil
+		return session, nil
 	}
 
-	return 0, echo.NewHTTPError(http.StatusUnauthorized, "missing ticket")
+	return repository.StreamSession{}, echo.NewHTTPError(http.StatusUnauthorized, "missing ticket")
 }

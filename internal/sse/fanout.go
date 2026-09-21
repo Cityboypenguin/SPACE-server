@@ -38,15 +38,19 @@ func (f localFanout) Publish(_ context.Context, env Envelope) error {
 // --- リプレイ時のログ ------------------------------------------------------
 //
 // 置き場（Store）の実装ごとに同じことを書かないよう、ここにまとめてある。
+// 公開しているのは SelectMissed と同じ理由で、置き場の実装（infra/redis）が
+// 同じ言葉で残すため。写経すると、片方だけ文言や水準がずれる。
 
-func logReplayNoHistory(userID int64, lastEventID int) {
+// LogReplayNoHistory は「この利用者の履歴が無い」再接続を残す。
+func LogReplayNoHistory(userID int64, lastEventID int) {
 	logger.Log.Debug().
 		Int64("userID", userID).
 		Int("lastEventID", lastEventID).
 		Msg("SSE reconnect with no history for this user: nothing to replay")
 }
 
-func logReplayAfterRestart(userID int64, lastEventID, currentNextID int) {
+// LogReplayAfterRestart は「採番より先のIDを名乗る」再接続を残す。
+func LogReplayAfterRestart(userID int64, lastEventID, currentNextID int) {
 	logger.Log.Warn().
 		Int64("userID", userID).
 		Int("lastEventID", lastEventID).

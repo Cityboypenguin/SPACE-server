@@ -14,10 +14,10 @@ type ListRoomMembersWithRolesUseCase interface {
 var _ ListRoomMembersWithRolesUseCase = &ListRoomMembersWithRolesInteractor{}
 
 type ListRoomMembersWithRolesInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewListRoomMembersWithRolesUseCase(roomUserRepo repository.RoomUserRepository) ListRoomMembersWithRolesUseCase {
+func NewListRoomMembersWithRolesUseCase(roomUserRepo repository.RoomMembershipReader) ListRoomMembersWithRolesUseCase {
 	return &ListRoomMembersWithRolesInteractor{roomUserRepo: roomUserRepo}
 }
 

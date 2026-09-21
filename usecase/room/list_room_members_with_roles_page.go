@@ -12,10 +12,10 @@ type ListRoomMembersWithRolesPageUseCase interface {
 }
 
 type ListRoomMembersWithRolesPageInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewListRoomMembersWithRolesPageUseCase(roomUserRepo repository.RoomUserRepository) ListRoomMembersWithRolesPageUseCase {
+func NewListRoomMembersWithRolesPageUseCase(roomUserRepo repository.RoomMembershipReader) ListRoomMembersWithRolesPageUseCase {
 	return &ListRoomMembersWithRolesPageInteractor{roomUserRepo: roomUserRepo}
 }
 

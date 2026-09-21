@@ -256,7 +256,7 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		if room.Type != model.RoomTypeCommunity {
 			return false, errors.New("forbidden: can only delete your own messages")
 		}
-		role, err := s.deps.GetRoomUserRole.Execute(ctx, msg.RoomID, claims.ID)
+		role, err := s.deps.GetRoomUserRole.Execute(ctx, msg.RoomID)
 		if err != nil {
 			// 役割が引けないときは安全側（拒否）に倒す。挙動は従来どおりだが、
 			// オーナーの削除が DB 障害で「権限がない」に化けているのと、本当に

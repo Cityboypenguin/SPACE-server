@@ -14,10 +14,10 @@ type ListTopLevelPostsUseCase interface {
 var _ ListTopLevelPostsUseCase = &ListTopLevelPostsInteractor{}
 
 type ListTopLevelPostsInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostLister
 }
 
-func NewListTopLevelPostsUseCase(postRepo repository.PostRepository) ListTopLevelPostsUseCase {
+func NewListTopLevelPostsUseCase(postRepo repository.PostLister) ListTopLevelPostsUseCase {
 	return &ListTopLevelPostsInteractor{
 		postRepo: postRepo,
 	}

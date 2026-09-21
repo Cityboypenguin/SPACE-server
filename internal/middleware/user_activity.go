@@ -65,7 +65,7 @@ const (
 // プロセスごとの記憶なので、多重起動すると台数ぶんだけ書き込みが起きる。それでも
 // 毎リクエストよりは桁違いに少なく、DB 側の条件が最後の砦として残っている。
 type UserActivityRecorder struct {
-	users repository.UserRepository
+	users repository.UserActivityRepository
 	async *async.Runner
 
 	// now と interval はテスト用に差し替えられるようにしてある（時間を待たずに
@@ -78,7 +78,7 @@ type UserActivityRecorder struct {
 	lastSweep time.Time
 }
 
-func NewUserActivityRecorder(users repository.UserRepository, asyncRunner *async.Runner) *UserActivityRecorder {
+func NewUserActivityRecorder(users repository.UserActivityRepository, asyncRunner *async.Runner) *UserActivityRecorder {
 	return &UserActivityRecorder{
 		users:    users,
 		async:    asyncRunner,

@@ -19,13 +19,13 @@ var _ CreateFavoriteUseCase = &CreateFavoriteInteractor{}
 
 type CreateFavoriteInteractor struct {
 	favoriteRepo          repository.FavoriteRepository
-	postRepo              repository.PostRepository
+	postRepo              repository.PostReader
 	notificationPublisher notificationuc.NotificationPublisher
 }
 
 func NewCreateFavoriteUseCase(
 	favoriteRepo repository.FavoriteRepository,
-	postRepo repository.PostRepository,
+	postRepo repository.PostReader,
 	notificationPublisher notificationuc.NotificationPublisher,
 ) CreateFavoriteUseCase {
 	return &CreateFavoriteInteractor{

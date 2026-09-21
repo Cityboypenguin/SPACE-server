@@ -3,13 +3,15 @@ package block
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 // GetBlockRelatedUserIDsUseCase returns a set of user IDs that have any block
 // relation (in either direction) with the given user.
 type GetBlockRelatedUserIDsUseCase interface {
-	Execute(ctx context.Context, userID int64) (map[int64]bool, error)
+	Execute(ctx context.Context) (map[int64]bool, error)
 }
 
 type getBlockRelatedUserIDsInteractor struct {
@@ -20,7 +22,11 @@ func NewGetBlockRelatedUserIDsUseCase(blockRepo repository.BlockerRepository) Ge
 	return &getBlockRelatedUserIDsInteractor{blockRepo: blockRepo}
 }
 
-func (uc *getBlockRelatedUserIDsInteractor) Execute(ctx context.Context, userID int64) (map[int64]bool, error) {
+func (uc *getBlockRelatedUserIDsInteractor) Execute(ctx context.Context) (map[int64]bool, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	ids, err := uc.blockRepo.GetBlockedAndBlockerIDs(ctx, userID)
 	if err != nil {
 		return nil, err

@@ -80,7 +80,7 @@ func newUpdateAnswerFixture(attachedIDs ...int64) *updateAnswerFixture {
 	for _, id := range attachedIDs {
 		f.mediaRepo.attached = append(f.mediaRepo.attached, &model.Media{ID: id})
 	}
-	f.uc = NewUpdateAnswerUseCase(f.questionRepo, f.answerRepo, f.mediaRepo, fakeTxManager{}, &fakeRequireWritable{})
+	f.uc = NewUpdateAnswerUseCase(nil, f.questionRepo, f.answerRepo, f.mediaRepo, fakeTxManager{}, &fakeRequireWritable{})
 	return f
 }
 

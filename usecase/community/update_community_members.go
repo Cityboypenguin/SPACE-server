@@ -24,20 +24,27 @@ type MemberUpdate struct {
 }
 
 type UpdateCommunityMembersUseCase interface {
-	Execute(ctx context.Context, communityID int64, updates []MemberUpdate) error
+	// Execute は更新を1つのトランザクションで適用し、対象のコミュニティの
+	// ルームIDを返す。
+	//
+	// ルームIDを返すのは、呼び出し側が「誰の権限が変わったか」を知らせるため
+	// （除名された利用者の購読を即座に終わらせる。graph の
+	// publishRoomAccessChanged を参照）。ここで引いた値をそのまま返せば、
+	// 呼び出し側がコミュニティをもう一度引き直さずに済む。
+	Execute(ctx context.Context, communityID int64, updates []MemberUpdate) (roomID int64, err error)
 }
 
 var _ UpdateCommunityMembersUseCase = &UpdateCommunityMembersInteractor{}
 
 type UpdateCommunityMembersInteractor struct {
 	communityRepo repository.CommunityRepository
-	roomUserRepo  repository.RoomUserRepository
+	roomUserRepo  communityMemberRepository
 	txManager     repository.TxManager
 }
 
 func NewUpdateCommunityMembersUseCase(
 	communityRepo repository.CommunityRepository,
-	roomUserRepo repository.RoomUserRepository,
+	roomUserRepo communityMemberRepository,
 	txManager repository.TxManager,
 ) UpdateCommunityMembersUseCase {
 	return &UpdateCommunityMembersInteractor{
@@ -47,22 +54,22 @@ func NewUpdateCommunityMembersUseCase(
 	}
 }
 
-func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communityID int64, updates []MemberUpdate) error {
+func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communityID int64, updates []MemberUpdate) (int64, error) {
 	claims, err := authz.RequireAuth(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	c, err := uc.communityRepo.GetCommunityByID(ctx, communityID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if c == nil {
-		return fmt.Errorf("community not found")
+		return 0, fmt.Errorf("community not found")
 	}
 
 	if err := uc.validateUpdates(updates); err != nil {
-		return err
+		return 0, err
 	}
 
 	// 操作の種類ごとにまとめてから撃つ。以前は updates を1件ずつ回して人数ぶんの
@@ -74,7 +81,7 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 	// 「昇格と除名が同じ人に当たって順序で結果が変わる」は起きない。
 	promote, demote, kick := groupByAction(updates)
 
-	return uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
+	err = uc.txManager.RunInTx(ctx, func(ctx context.Context) error {
 		roles, err := uc.roomUserRepo.LockRoomMemberRolesForUpdate(ctx, c.RoomID)
 		if err != nil {
 			return err
@@ -110,6 +117,10 @@ func (uc *UpdateCommunityMembersInteractor) Execute(ctx context.Context, communi
 		}
 		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+	return c.RoomID, nil
 }
 
 // groupByAction は、検証済みの更新指定を操作の種類ごとの利用者IDへ振り分ける。

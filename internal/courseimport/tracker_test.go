@@ -2,6 +2,7 @@ package courseimport
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -152,5 +153,100 @@ func TestGet_SeesAnotherInstancesResultAndAllowsTheNextRun(t *testing.T) {
 		return 0, 0, nil
 	}); err != nil {
 		t.Fatalf("終了後に次の取り込みを始められない（排他が解けていない）: %v", err)
+	}
+}
+
+// shortenHeartbeat はテストのあいだだけ心拍の間隔を縮める。
+func shortenHeartbeat(t *testing.T, d time.Duration) {
+	t.Helper()
+	prev := LockHeartbeatInterval
+	LockHeartbeatInterval = d
+	t.Cleanup(func() { LockHeartbeatInterval = prev })
+}
+
+// lostLockStore は「印を取り上げられた」状態を作る Store。
+// 心拍だけが false を返し、それ以外は普通に動く。
+type lostLockStore struct {
+	MemoryStore
+}
+
+func (s *lostLockStore) Heartbeat(context.Context, string) (bool, error) { return false, nil }
+
+// TestStart_AbortsTheRunWhenTheLockIsLost は、印を失った実行がその場で
+// 止まることを確かめる。
+//
+// 印は「いまDBを触ってよいのは自分だけ」という取り決めなので、失ったまま
+// 走り続ける実行は、別の台の取り込みと並んで同じテーブルへ書くことになる。
+// 進捗を報告しない区間（スクレイピング後の一括保存）が長引くとこれが起きうる。
+func TestStart_AbortsTheRunWhenTheLockIsLost(t *testing.T) {
+	shortenHeartbeat(t, time.Millisecond)
+
+	store := &lostLockStore{}
+	tracker := NewTracker(store, nil)
+	t.Cleanup(func() { _ = tracker.Shutdown(context.Background()) })
+
+	aborted := make(chan struct{})
+	if _, err := tracker.Start(2026, func(ctx context.Context, _ func(int, int)) (int, int, error) {
+		// 報告を1つも出さないまま、止められるまで待つ（一括保存の最中に相当）。
+		<-ctx.Done()
+		close(aborted)
+		return 0, 0, ctx.Err()
+	}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	select {
+	case <-aborted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("印を失っても実行が止まらない（別の台と並んでDBへ書き続ける）")
+	}
+}
+
+// TestStart_KeepsRunningWhileTheLockIsHeld は、心拍が通っている限り実行が
+// 止められないことを確かめる。止めてしまえば上のテストは通るが、取り込みは
+// 一度も完走できなくなる。
+func TestStart_KeepsRunningWhileTheLockIsHeld(t *testing.T) {
+	shortenHeartbeat(t, time.Millisecond)
+
+	tracker := NewTracker(NewMemoryStore(), nil)
+	t.Cleanup(func() { _ = tracker.Shutdown(context.Background()) })
+
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	if _, err := tracker.Start(2026, func(ctx context.Context, _ func(int, int)) (int, int, error) {
+		select {
+		case <-release:
+			return 5, 0, nil
+		case <-ctx.Done():
+			done <- ctx.Err()
+			return 0, 0, ctx.Err()
+		}
+	}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// 心拍が何度も回るだけの時間を置く。
+	time.Sleep(50 * time.Millisecond)
+	select {
+	case err := <-done:
+		t.Fatalf("印を持っているのに止められた: %v", err)
+	default:
+	}
+
+	close(release)
+	deadline := time.After(2 * time.Second)
+	for {
+		if got := tracker.Get(); got.State == StateSucceeded {
+			if got.Imported != 5 {
+				t.Fatalf("imported = %d, want 5", got.Imported)
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("完走しない: %+v", tracker.Get())
+		default:
+		}
+		runtime.Gosched()
 	}
 }

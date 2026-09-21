@@ -1,0 +1,36 @@
+# 告知（お知らせ）。
+
+extend type Query {
+  announcements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
+  announcement(id: ID!): Announcement!
+  adminListAnnouncements(limit: Int = 20, offset: Int = 0): AnnouncementPage!
+}
+
+extend type Mutation {
+  createAnnouncement(input: CreateAnnouncementInput!): Announcement!
+  updateAnnouncement(id: ID!, input: UpdateAnnouncementInput!): Announcement!
+  deleteAnnouncement(id: ID!): Boolean!
+}
+
+type Announcement {
+  ID: ID!
+  title: String!
+  body: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input CreateAnnouncementInput {
+  title: String!
+  body: String!
+}
+
+input UpdateAnnouncementInput {
+  title: String!
+  body: String!
+}
+
+type AnnouncementPage {
+  items: [Announcement!]!
+  total: Int!
+}

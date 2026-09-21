@@ -100,13 +100,13 @@ func (s *MemoryStore) Replay(_ context.Context, userID int64, lastEventID int) (
 		// historyTTL を過ぎて掃除された後。どちらもリプレイできるものは無い。
 		// 通知の本体は DB にあるので、クライアントが接続後に一覧を取り直す。
 		// 珍しくない（TTL 超えの切断は日常的に起きる）ので警告にはしない。
-		logReplayNoHistory(userID, lastEventID)
+		LogReplayNoHistory(userID, lastEventID)
 		return nil, nil
 	case lastEventID >= h.nextID:
 		// クライアントが名乗るIDが、このユーザーの採番より先に居る。
 		// ＝サーバーが再起動して採番が 1 に戻った後、既に何件か配り直している。
 		// 採番はユーザー単位なので、他人宛の配信でここへ来ることはない。
-		logReplayAfterRestart(userID, lastEventID, h.nextID)
+		LogReplayAfterRestart(userID, lastEventID, h.nextID)
 		return nil, nil
 	default:
 		return SelectMissed(userID, lastEventID, h.events), nil

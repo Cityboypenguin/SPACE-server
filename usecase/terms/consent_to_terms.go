@@ -2,7 +2,9 @@ package terms
 
 import (
 	"context"
+
 	"errors"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -11,14 +13,18 @@ import (
 
 type ConsentToTermsUseCase struct {
 	termsRepo repository.TermsRepository
-	userRepo  repository.UserRepository
+	userRepo  repository.UserReader
 }
 
-func NewConsentToTermsUseCase(termsRepo repository.TermsRepository, userRepo repository.UserRepository) *ConsentToTermsUseCase {
+func NewConsentToTermsUseCase(termsRepo repository.TermsRepository, userRepo repository.UserReader) *ConsentToTermsUseCase {
 	return &ConsentToTermsUseCase{termsRepo: termsRepo, userRepo: userRepo}
 }
 
-func (u *ConsentToTermsUseCase) Execute(ctx context.Context, userID, termsID int64) error {
+func (u *ConsentToTermsUseCase) Execute(ctx context.Context, termsID int64) error {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return err
+	}
 	user, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
 		return err

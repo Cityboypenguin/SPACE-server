@@ -18,19 +18,21 @@ type UpdateQuestionUseCase interface {
 var _ UpdateQuestionUseCase = &UpdateQuestionInteractor{}
 
 type UpdateQuestionInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
-	mediaRepo       repository.MediaRepository
+	mediaRepo       mediaReplaceRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewUpdateQuestionUseCase(
+func NewUpdateQuestionUseCase(events EventPublisher,
 	questionRepo repository.QuestionRepository,
-	mediaRepo repository.MediaRepository,
+	mediaRepo mediaReplaceRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
 ) UpdateQuestionUseCase {
 	return &UpdateQuestionInteractor{
+		events:          orNoop(events),
 		questionRepo:    questionRepo,
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
@@ -103,7 +105,14 @@ func (uc *UpdateQuestionInteractor) Execute(ctx context.Context, questionID int6
 		return nil, err
 	}
 
-	return uc.questionRepo.GetQuestionByID(ctx, questionID)
+	updated, err := uc.questionRepo.GetQuestionByID(ctx, questionID)
+	if err != nil {
+		return nil, err
+	}
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.QuestionUpdated(ctx, updated)
+	return updated, nil
 }
 
 // requireWritableQuestionRoom rejects the operation unless the course room that

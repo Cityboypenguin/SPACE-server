@@ -48,7 +48,7 @@ func authedCtx(userID int64) context.Context {
 
 func TestVotePoll_EmptySelectionCancelsVote(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5}}
-	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewVotePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	if _, err := uc.Execute(authedCtx(7), 1, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -60,7 +60,7 @@ func TestVotePoll_EmptySelectionCancelsVote(t *testing.T) {
 
 func TestVotePoll_RejectsMultipleOnSingleChoicePoll(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: false}}
-	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewVotePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	_, err := uc.Execute(authedCtx(7), 1, []int64{10, 11})
 	if err == nil {
@@ -73,7 +73,7 @@ func TestVotePoll_RejectsMultipleOnSingleChoicePoll(t *testing.T) {
 
 func TestVotePoll_AllowsMultipleOnMultiChoicePoll(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: true}}
-	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewVotePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	if _, err := uc.Execute(authedCtx(7), 1, []int64{10, 11}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -87,7 +87,7 @@ func TestVotePoll_DedupesRepeatedOptionIDs(t *testing.T) {
 	// A single-choice poll voted with the same option repeated twice must not be
 	// rejected as "multiple options" — the repeat collapses to one real selection.
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5, AllowMultipleChoice: false}}
-	uc := NewVotePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewVotePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	if _, err := uc.Execute(authedCtx(7), 1, []int64{10, 10}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestVotePoll_DedupesRepeatedOptionIDs(t *testing.T) {
 
 func TestVotePoll_PropagatesArchiveRejection(t *testing.T) {
 	repo := &fakePollRepoForVote{poll: &model.Poll{ID: 1, RoomID: 5}}
-	uc := NewVotePollUseCase(repo, &fakeRequireWritable{err: errArchived})
+	uc := NewVotePollUseCase(nil, repo, &fakeRequireWritable{err: errArchived})
 
 	if _, err := uc.Execute(authedCtx(7), 1, []int64{10}); err != errArchived {
 		t.Fatalf("error = %v, want the archive-check error to be propagated unchanged", err)
@@ -110,7 +110,7 @@ func TestVotePoll_PropagatesArchiveRejection(t *testing.T) {
 }
 
 func TestVotePoll_UnknownPollNotFound(t *testing.T) {
-	uc := NewVotePollUseCase(&fakePollRepoForVote{poll: nil}, &fakeRequireWritable{})
+	uc := NewVotePollUseCase(nil, &fakePollRepoForVote{poll: nil}, &fakeRequireWritable{})
 
 	if _, err := uc.Execute(authedCtx(7), 999, []int64{10}); err == nil {
 		t.Fatal("expected not-found error for a poll that doesn't exist")

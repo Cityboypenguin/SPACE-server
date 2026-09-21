@@ -14,10 +14,10 @@ type GetPostByIDIncludeDeletedUseCase interface {
 var _ GetPostByIDIncludeDeletedUseCase = &GetPostByIDIncludeDeletedInteractor{}
 
 type GetPostByIDIncludeDeletedInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostReader
 }
 
-func NewGetPostByIDIncludeDeletedUseCase(postRepo repository.PostRepository) GetPostByIDIncludeDeletedUseCase {
+func NewGetPostByIDIncludeDeletedUseCase(postRepo repository.PostReader) GetPostByIDIncludeDeletedUseCase {
 	return &GetPostByIDIncludeDeletedInteractor{
 		postRepo: postRepo,
 	}

@@ -14,10 +14,10 @@ type ListUsersByRoomIDsUseCase interface {
 var _ ListUsersByRoomIDsUseCase = &ListUsersByRoomIDsInteractor{}
 
 type ListUsersByRoomIDsInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewListUsersByRoomIDsUseCase(roomUserRepo repository.RoomUserRepository) ListUsersByRoomIDsUseCase {
+func NewListUsersByRoomIDsUseCase(roomUserRepo repository.RoomMembershipReader) ListUsersByRoomIDsUseCase {
 	return &ListUsersByRoomIDsInteractor{roomUserRepo: roomUserRepo}
 }
 

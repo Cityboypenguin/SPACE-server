@@ -15,11 +15,11 @@ type LeaveCommunityUseCase interface {
 
 type LeaveCommunityInteractor struct {
 	roomRepo     repository.RoomRepository
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo leaveRoomRepository
 	txManager    repository.TxManager
 }
 
-func NewLeaveCommunityUseCase(roomRepo repository.RoomRepository, roomUserRepo repository.RoomUserRepository, txManager repository.TxManager) LeaveCommunityUseCase {
+func NewLeaveCommunityUseCase(roomRepo repository.RoomRepository, roomUserRepo leaveRoomRepository, txManager repository.TxManager) LeaveCommunityUseCase {
 	return &LeaveCommunityInteractor{roomRepo: roomRepo, roomUserRepo: roomUserRepo, txManager: txManager}
 }
 

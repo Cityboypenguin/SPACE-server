@@ -26,10 +26,10 @@ type LoginUserUseCase interface {
 var _ LoginUserUseCase = &LoginUserInteractor{}
 
 type LoginUserInteractor struct {
-	userRepo repository.UserRepository
+	userRepo repository.UserCredentialsRepository
 }
 
-func NewLoginUserUseCase(userRepo repository.UserRepository) LoginUserUseCase {
+func NewLoginUserUseCase(userRepo repository.UserCredentialsRepository) LoginUserUseCase {
 	return &LoginUserInteractor{userRepo: userRepo}
 }
 

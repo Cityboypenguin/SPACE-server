@@ -17,13 +17,14 @@ type DeleteAnswerUseCase interface {
 var _ DeleteAnswerUseCase = &DeleteAnswerInteractor{}
 
 type DeleteAnswerInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
 	answerRepo      repository.AnswerRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewDeleteAnswerUseCase(questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeleteAnswerUseCase {
-	return &DeleteAnswerInteractor{questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
+func NewDeleteAnswerUseCase(events EventPublisher, questionRepo repository.QuestionRepository, answerRepo repository.AnswerRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeleteAnswerUseCase {
+	return &DeleteAnswerInteractor{events: orNoop(events), questionRepo: questionRepo, answerRepo: answerRepo, requireWritable: requireWritable}
 }
 
 // Execute lets the answer's author delete it, unless it is currently selected as
@@ -69,5 +70,8 @@ func (uc *DeleteAnswerInteractor) Execute(ctx context.Context, answerID int64) (
 		return nil, apperr.Forbidden("自分の回答のみ削除できます")
 	}
 
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.AnswerDeleted(ctx, a)
 	return a, nil
 }

@@ -69,7 +69,7 @@ func (f *fakeMembers) byRoomIDs(_ context.Context, roomID int64) ([]int64, error
 
 type fakeRoomUserRole struct{ role string }
 
-func (f *fakeRoomUserRole) Execute(_ context.Context, _, _ int64) (string, error) {
+func (f *fakeRoomUserRole) Execute(_ context.Context, _ int64) (string, error) {
 	return f.role, nil
 }
 
@@ -91,7 +91,7 @@ type fakeCheckBlockRelation struct {
 	partnerID int64
 }
 
-func (f *fakeCheckBlockRelation) Execute(_ context.Context, _, partnerID int64) (bool, error) {
+func (f *fakeCheckBlockRelation) Execute(_ context.Context, partnerID int64) (bool, error) {
 	f.calls++
 	f.partnerID = partnerID
 	return f.blocked, nil

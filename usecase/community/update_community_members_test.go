@@ -97,7 +97,7 @@ func TestUpdateCommunityMembers_GroupsWritesByAction(t *testing.T) {
 	)
 
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
-	err := uc.Execute(ctx, 10, []MemberUpdate{
+	_, err := uc.Execute(ctx, 10, []MemberUpdate{
 		{UserID: 2, Action: MemberActionPromote},
 		{UserID: 3, Action: MemberActionPromote},
 		{UserID: 4, Action: MemberActionDemote},
@@ -135,7 +135,7 @@ func TestUpdateCommunityMembers_SkipsUnusedActions(t *testing.T) {
 	)
 
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
-	if err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 2, Action: MemberActionKick}}); err != nil {
+	if _, err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 2, Action: MemberActionKick}}); err != nil {
 		t.Fatalf("Execute returned an error: %v", err)
 	}
 	if roomUsers.roleCalls != 0 {
@@ -159,7 +159,7 @@ func TestUpdateCommunityMembers_StillRejectsLosingTheLastOwner(t *testing.T) {
 	)
 
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
-	if err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 1, Action: MemberActionDemote}}); err == nil {
+	if _, err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 1, Action: MemberActionDemote}}); err == nil {
 		t.Fatal("expected the update to be rejected")
 	}
 	if roomUsers.roleCalls != 0 || roomUsers.removeCalls != 0 {
@@ -176,7 +176,7 @@ func TestUpdateCommunityMembers_RejectsUnknownAction(t *testing.T) {
 	)
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
 
-	if err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 2, Action: MemberAction("unknown")}}); err == nil {
+	if _, err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: 2, Action: MemberAction("unknown")}}); err == nil {
 		t.Fatal("unknown action must be rejected")
 	}
 	if roomUsers.roleCalls != 0 || roomUsers.removeCalls != 0 {
@@ -202,7 +202,8 @@ func TestUpdateCommunityMembers_ConcurrentDemotionsKeepAnOwner(t *testing.T) {
 	for _, userID := range []int64{1, 2} {
 		go func(id int64) {
 			<-start
-			results <- uc.Execute(ctx, 10, []MemberUpdate{{UserID: id, Action: MemberActionDemote}})
+			_, err := uc.Execute(ctx, 10, []MemberUpdate{{UserID: id, Action: MemberActionDemote}})
+			results <- err
 		}(userID)
 	}
 	close(start)

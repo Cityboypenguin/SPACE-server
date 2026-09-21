@@ -6,7 +6,6 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -17,10 +16,10 @@ type UpdateUserUseCase interface {
 var _ UpdateUserUseCase = &UpdateUserInteractor{}
 
 type UpdateUserInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userProfileWriteRepository
 }
 
-func NewUpdateUserUseCase(userRepo repository.UserRepository) UpdateUserUseCase {
+func NewUpdateUserUseCase(userRepo userProfileWriteRepository) UpdateUserUseCase {
 	return &UpdateUserInteractor{
 		userRepo: userRepo,
 	}

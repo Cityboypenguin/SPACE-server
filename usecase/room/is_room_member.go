@@ -22,10 +22,10 @@ type IsRoomMemberUseCase interface {
 var _ IsRoomMemberUseCase = &IsRoomMemberInteractor{}
 
 type IsRoomMemberInteractor struct {
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomMembershipReader
 }
 
-func NewIsRoomMemberUseCase(roomUserRepo repository.RoomUserRepository) IsRoomMemberUseCase {
+func NewIsRoomMemberUseCase(roomUserRepo repository.RoomMembershipReader) IsRoomMemberUseCase {
 	return &IsRoomMemberInteractor{roomUserRepo: roomUserRepo}
 }
 

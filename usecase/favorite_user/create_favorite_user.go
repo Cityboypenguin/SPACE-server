@@ -2,14 +2,16 @@ package favoriteuser
 
 import (
 	"context"
+
 	"errors"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type CreateFavoriteUserUseCase interface {
-	Execute(ctx context.Context, userID, favoriteUserID int64) (int64, error)
+	Execute(ctx context.Context, favoriteUserID int64) (int64, error)
 }
 
 var _ CreateFavoriteUserUseCase = &createFavoriteUserInteractor{}
@@ -26,7 +28,11 @@ func NewCreateFavoriteUserUseCase(favoriteUserRepo repository.FavoriteUserReposi
 	}
 }
 
-func (uc *createFavoriteUserInteractor) Execute(ctx context.Context, userID, favoriteUserID int64) (int64, error) {
+func (uc *createFavoriteUserInteractor) Execute(ctx context.Context, favoriteUserID int64) (int64, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return 0, err
+	}
 	exists, err := uc.blockRepo.ExistsBlockRelation(ctx, userID, favoriteUserID)
 	if err != nil {
 		return 0, err

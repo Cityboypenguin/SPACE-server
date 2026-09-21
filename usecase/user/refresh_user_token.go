@@ -23,12 +23,12 @@ type RefreshUserTokenUseCase interface {
 var _ RefreshUserTokenUseCase = &RefreshUserTokenInteractor{}
 
 type RefreshUserTokenInteractor struct {
-	userRepo         repository.UserRepository
+	userRepo         userSessionRepository
 	revokedTokenRepo repository.RevokedTokenRepository
 }
 
 func NewRefreshUserTokenUseCase(
-	userRepo repository.UserRepository,
+	userRepo userSessionRepository,
 	revokedTokenRepo repository.RevokedTokenRepository,
 ) RefreshUserTokenUseCase {
 	return &RefreshUserTokenInteractor{userRepo: userRepo, revokedTokenRepo: revokedTokenRepo}

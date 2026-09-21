@@ -20,13 +20,13 @@ type UpdateMyProfileUseCase interface {
 }
 
 type UpdateMyProfileInteractor struct {
-	userRepo    repository.UserRepository
+	userRepo    profileUserRepository
 	profileRepo repository.ProfileRepository
 	txManager   repository.TxManager
 }
 
 func NewUpdateMyProfileUseCase(
-	userRepo repository.UserRepository,
+	userRepo profileUserRepository,
 	profileRepo repository.ProfileRepository,
 	txManager repository.TxManager,
 ) UpdateMyProfileUseCase {

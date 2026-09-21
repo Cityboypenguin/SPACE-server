@@ -3,7 +3,7 @@ package post
 import (
 	"context"
 	"fmt"
-	"strings"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -18,23 +18,25 @@ type UpdatePostUseCase interface {
 var _ UpdatePostUseCase = &UpdatePostInteractor{}
 
 type UpdatePostInteractor struct {
-	postRepo              repository.PostRepository
-	mediaRepo             repository.MediaRepository
-	userRepo              repository.UserRepository
+	uploads               uploadusecase.Acceptor
+	postRepo              postWriteRepository
+	mediaRepo             postMediaRepository
+	userRepo              repository.UserReader
 	blockerRepo           repository.BlockerRepository
 	txManager             repository.TxManager
 	notificationPublisher notificationuc.NotificationPublisher
 }
 
-func NewUpdatePostUseCase(
-	postRepo repository.PostRepository,
-	mediaRepo repository.MediaRepository,
-	userRepo repository.UserRepository,
+func NewUpdatePostUseCase(uploads uploadusecase.Acceptor,
+	postRepo postWriteRepository,
+	mediaRepo postMediaRepository,
+	userRepo repository.UserReader,
 	blockerRepo repository.BlockerRepository,
 	txManager repository.TxManager,
 	notificationPublisher notificationuc.NotificationPublisher,
 ) *UpdatePostInteractor {
 	return &UpdatePostInteractor{
+		uploads:               uploads,
 		postRepo:              postRepo,
 		mediaRepo:             mediaRepo,
 		userRepo:              userRepo,
@@ -44,18 +46,20 @@ func NewUpdatePostUseCase(
 	}
 }
 
-func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (*model.Post, error) {
+func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdatePostParam, newMediaInputs []model.MediaInput, deletedMediaIDs []int64) (_ *model.Post, err error) {
 	if param.Content != nil {
 		if err := validatePostContent(*param.Content); err != nil {
 			return nil, err
 		}
 	}
 
-	prefix := fmt.Sprintf("media/%d/", param.UserID)
-	for _, input := range newMediaInputs {
-		if !strings.HasPrefix(input.StorageKey, prefix) {
-			return nil, fmt.Errorf("invalid media key")
-		}
+	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
+	uploads := uploadusecase.Begin(uc.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	newMediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, newMediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	if err != nil {
+		return nil, err
 	}
 
 	post, err := uc.postRepo.GetPostByID(ctx, param.PostID)

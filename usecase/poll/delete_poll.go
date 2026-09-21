@@ -17,12 +17,13 @@ type DeletePollUseCase interface {
 var _ DeletePollUseCase = &DeletePollInteractor{}
 
 type DeletePollInteractor struct {
+	events          EventPublisher
 	pollRepo        repository.PollRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewDeletePollUseCase(pollRepo repository.PollRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeletePollUseCase {
-	return &DeletePollInteractor{pollRepo: pollRepo, requireWritable: requireWritable}
+func NewDeletePollUseCase(events EventPublisher, pollRepo repository.PollRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeletePollUseCase {
+	return &DeletePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable}
 }
 
 // Execute deletes a poll (and its options/votes), allowed for the poll's own
@@ -58,5 +59,8 @@ func (uc *DeletePollInteractor) Execute(ctx context.Context, pollID int64) (*mod
 	if _, err := uc.pollRepo.DeletePoll(ctx, pollID); err != nil {
 		return nil, err
 	}
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.PollDeleted(ctx, p)
 	return p, nil
 }

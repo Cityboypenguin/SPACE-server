@@ -139,7 +139,7 @@ type fakeListNotificationsUseCase struct {
 	total         int
 }
 
-func (f *fakeListNotificationsUseCase) Execute(_ context.Context, _ int64, _ repository.PageQuery) ([]*model.Notification, int, error) {
+func (f *fakeListNotificationsUseCase) Execute(_ context.Context, _ repository.PageQuery) ([]*model.Notification, int, error) {
 	f.calls++
 	return f.notifications, f.total, nil
 }
@@ -529,7 +529,7 @@ type fakeListMyDMRooms struct {
 	total int
 }
 
-func (f *fakeListMyDMRooms) Execute(_ context.Context, _ int64, _ repository.PageQuery) ([]*model.Room, int, error) {
+func (f *fakeListMyDMRooms) Execute(_ context.Context, _ repository.PageQuery) ([]*model.Room, int, error) {
 	f.calls++
 	return f.rooms, f.total, nil
 }
@@ -549,7 +549,7 @@ type fakeBlockRelatedUserIDs struct {
 	blocked map[int64]bool
 }
 
-func (f *fakeBlockRelatedUserIDs) Execute(_ context.Context, _ int64) (map[int64]bool, error) {
+func (f *fakeBlockRelatedUserIDs) Execute(_ context.Context) (map[int64]bool, error) {
 	f.calls++
 	return f.blocked, nil
 }
@@ -750,7 +750,7 @@ type fakeCheckBlockRelation struct {
 	blocked bool
 }
 
-func (f *fakeCheckBlockRelation) Execute(context.Context, int64, int64) (bool, error) {
+func (f *fakeCheckBlockRelation) Execute(context.Context, int64) (bool, error) {
 	f.calls++
 	return f.blocked, nil
 }

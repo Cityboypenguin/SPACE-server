@@ -14,10 +14,10 @@ type GetRepliesByPostIDsIncludeDeletedUseCase interface {
 var _ GetRepliesByPostIDsIncludeDeletedUseCase = &GetRepliesByPostIDsIncludeDeletedInteractor{}
 
 type GetRepliesByPostIDsIncludeDeletedInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostReplyReader
 }
 
-func NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepo repository.PostRepository) GetRepliesByPostIDsIncludeDeletedUseCase {
+func NewGetRepliesByPostIDsIncludeDeletedUseCase(postRepo repository.PostReplyReader) GetRepliesByPostIDsIncludeDeletedUseCase {
 	return &GetRepliesByPostIDsIncludeDeletedInteractor{
 		postRepo: postRepo,
 	}

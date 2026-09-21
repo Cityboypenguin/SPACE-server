@@ -30,7 +30,11 @@ func JWTAuth(revokedTokenRepo repository.RevokedTokenRepository, userRepo reposi
 				return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 			}
 
+			// トークン文字列も載せる。長寿命の接続（WebSocket / SSE）は、
+			// このリクエストで受け取ったトークンを握ったまま何時間も生きるので、
+			// 接続中に確かめ直すための元手が要る（auth.WithToken のコメント参照）。
 			ctx := auth.WithClaims(c.Request().Context(), claims)
+			ctx = auth.WithToken(ctx, tokenStr)
 			c.SetRequest(c.Request().WithContext(ctx))
 
 			if activity != nil {

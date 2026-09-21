@@ -33,7 +33,7 @@ func TestDeletePoll_RejectsWhenRoomNotWritable(t *testing.T) {
 	// 履修をやめた授業や過去の学期では、自分が作った投票でも削除できない
 	// (作成・投票と同じ扱い)。
 	repo := &fakePollRepoForDelete{poll: &model.Poll{ID: 1, RoomID: 5, AuthorUserID: 7}}
-	uc := NewDeletePollUseCase(repo, &fakeRequireWritable{err: errArchived})
+	uc := NewDeletePollUseCase(nil, repo, &fakeRequireWritable{err: errArchived})
 
 	if _, err := uc.Execute(authedCtx(7), 1); err != errArchived {
 		t.Fatalf("error = %v, want the writability-check error to be propagated unchanged", err)
@@ -45,7 +45,7 @@ func TestDeletePoll_RejectsWhenRoomNotWritable(t *testing.T) {
 
 func TestDeletePoll_AllowsAuthorWhenWritable(t *testing.T) {
 	repo := &fakePollRepoForDelete{poll: &model.Poll{ID: 1, RoomID: 5, AuthorUserID: 7}}
-	uc := NewDeletePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewDeletePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	p, err := uc.Execute(authedCtx(7), 1)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestDeletePoll_AllowsAuthorWhenWritable(t *testing.T) {
 func TestDeletePoll_AdminDeletesEvenWhenRoomNotWritable(t *testing.T) {
 	// 管理者のモデレーションは学期や履修に縛られない。
 	repo := &fakePollRepoForDelete{poll: &model.Poll{ID: 1, RoomID: 5, AuthorUserID: 7}}
-	uc := NewDeletePollUseCase(repo, &fakeRequireWritable{err: errArchived})
+	uc := NewDeletePollUseCase(nil, repo, &fakeRequireWritable{err: errArchived})
 
 	if _, err := uc.Execute(adminCtx(99), 1); err != nil {
 		t.Fatalf("unexpected error for an administrator: %v", err)
@@ -75,7 +75,7 @@ func TestDeletePoll_AdminDeletesEvenWhenRoomNotWritable(t *testing.T) {
 func TestDeletePoll_RejectsOtherUsersPoll(t *testing.T) {
 	// 権限チェックが先に効くので、書き込み可能な部屋でも他人の投票は消せない。
 	repo := &fakePollRepoForDelete{poll: &model.Poll{ID: 1, RoomID: 5, AuthorUserID: 7}}
-	uc := NewDeletePollUseCase(repo, &fakeRequireWritable{})
+	uc := NewDeletePollUseCase(nil, repo, &fakeRequireWritable{})
 
 	if _, err := uc.Execute(authedCtx(8), 1); err == nil {
 		t.Fatal("expected a forbidden error when deleting someone else's poll")

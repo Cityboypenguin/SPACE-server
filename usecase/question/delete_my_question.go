@@ -17,12 +17,13 @@ type DeleteMyQuestionUseCase interface {
 var _ DeleteMyQuestionUseCase = &DeleteMyQuestionInteractor{}
 
 type DeleteMyQuestionInteractor struct {
+	events          EventPublisher
 	questionRepo    repository.QuestionRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
 }
 
-func NewDeleteMyQuestionUseCase(questionRepo repository.QuestionRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeleteMyQuestionUseCase {
-	return &DeleteMyQuestionInteractor{questionRepo: questionRepo, requireWritable: requireWritable}
+func NewDeleteMyQuestionUseCase(events EventPublisher, questionRepo repository.QuestionRepository, requireWritable course.RequireWritableCourseRoomUseCase) DeleteMyQuestionUseCase {
+	return &DeleteMyQuestionInteractor{events: orNoop(events), questionRepo: questionRepo, requireWritable: requireWritable}
 }
 
 // Execute lets the asker delete their own question, as long as the course room is
@@ -57,5 +58,8 @@ func (uc *DeleteMyQuestionInteractor) Execute(ctx context.Context, questionID in
 		return nil, apperr.Forbidden("自分の質問のみ削除できます")
 	}
 
+	// 配信はここで出す。リゾルバの手順にしておくと、リゾルバを通らない経路では
+	// 購読中の画面が動かない（usecase/*/events.go 参照）。
+	uc.events.QuestionDeleted(ctx, q)
 	return q, nil
 }

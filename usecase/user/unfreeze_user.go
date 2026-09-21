@@ -6,7 +6,6 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type UnfreezeUserUseCase interface {
@@ -16,10 +15,10 @@ type UnfreezeUserUseCase interface {
 var _ UnfreezeUserUseCase = &UnfreezeUserInteractor{}
 
 type UnfreezeUserInteractor struct {
-	userRepo repository.UserRepository
+	userRepo userStatusRepository
 }
 
-func NewUnfreezeUserUseCase(userRepo repository.UserRepository) UnfreezeUserUseCase {
+func NewUnfreezeUserUseCase(userRepo userStatusRepository) UnfreezeUserUseCase {
 	return &UnfreezeUserInteractor{userRepo: userRepo}
 }
 

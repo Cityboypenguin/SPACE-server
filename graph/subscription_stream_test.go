@@ -256,7 +256,8 @@ func TestSubscribeTopicGuarded_StopsDeliveringOnceAccessIsRevoked(t *testing.T) 
 	}
 
 	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
-		subscriptionScope{UserID: 7, RoomID: "room-1"}, authorize, identity[*gqlmodel.Message])
+		subscriptionScope{UserID: 7, RoomID: "room-1"},
+		subscriptionGuard{authorize: authorize}, identity[*gqlmodel.Message])
 
 	// 在籍しているうちは届く。
 	time.Sleep(2 * time.Millisecond)
@@ -296,7 +297,7 @@ func TestSubscribeTopicGuarded_KeepsDeliveringWhileAuthorized(t *testing.T) {
 
 	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
 		subscriptionScope{UserID: 7, RoomID: "room-1"},
-		func(context.Context) error { return nil },
+		subscriptionGuard{authorize: func(context.Context) error { return nil }},
 		identity[*gqlmodel.Message])
 
 	for _, id := range []string{"m1", "m2", "m3"} {
@@ -323,12 +324,12 @@ func TestSubscribeTopicGuarded_ThrottlesTheRecheck(t *testing.T) {
 	calls := 0
 	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
 		subscriptionScope{UserID: 7, RoomID: "room-1"},
-		func(context.Context) error {
+		subscriptionGuard{authorize: func(context.Context) error {
 			mu.Lock()
 			defer mu.Unlock()
 			calls++
 			return nil
-		},
+		}},
 		identity[*gqlmodel.Message])
 
 	for i := range 5 {
@@ -358,12 +359,12 @@ func TestSubscribeTopicGuarded_SkipsTheRecheckForFilteredEvents(t *testing.T) {
 	calls := 0
 	out := subscribeTopicGuarded(ctx, ps, "room-1:read_status",
 		subscriptionScope{UserID: 7, RoomID: "room-1"},
-		func(context.Context) error {
+		subscriptionGuard{authorize: func(context.Context) error {
 			mu.Lock()
 			defer mu.Unlock()
 			calls++
 			return nil
-		},
+		}},
 		func(m *gqlmodel.Message) (*gqlmodel.Message, bool) {
 			// 全部落とす（自分のイベントだけが流れてきた状況に相当）。
 			return m, false
@@ -379,5 +380,205 @@ func TestSubscribeTopicGuarded_SkipsTheRecheckForFilteredEvents(t *testing.T) {
 	defer mu.Unlock()
 	if calls != 0 {
 		t.Fatalf("recheck calls = %d, want 0（配信しない値のために判定しない）", calls)
+	}
+}
+
+// --- 権限が変わったときの即時の確かめ直し ---------------------------------
+
+// TestSubscribeTopicGuarded_RechecksImmediatelyOnRevokeSignal は、合図が来たら
+// accessRecheckInterval を待たずに購読が終わることを確かめる。
+//
+// 受け皿（間隔ごとの確かめ直し）だけだと、キックされてから最大30秒のあいだ
+// その部屋の新着が開いたままのタブへ届き続ける。合図はその窓を潰すためにある。
+func TestSubscribeTopicGuarded_RechecksImmediatelyOnRevokeSignal(t *testing.T) {
+	// 受け皿は効かせない。これで「終わったのは合図のおかげ」だと言い切れる。
+	shortenAccessRecheck(t, time.Hour)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	allowed := true
+	guard := subscriptionGuard{
+		authorize: func(context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if allowed {
+				return nil
+			}
+			return errors.New("forbidden: not a member of this room")
+		},
+		revokeTopic: "room-1:access:changed",
+	}
+
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"}, guard, identity[*gqlmodel.Message])
+
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "before"})
+	if got := recvWithin(t, out); got.ID != "before" {
+		t.Fatalf("id = %q, want before", got.ID)
+	}
+
+	// キックされ、その場で合図が出る。
+	mu.Lock()
+	allowed = false
+	mu.Unlock()
+	ps.Publish("room-1:access:changed", &RoomAccessChanged{UserIDs: []int64{7}})
+
+	select {
+	case got, ok := <-out:
+		if ok {
+			t.Fatalf("合図のあとに %+v が配信された", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("合図を受けても購読が終わらない（間隔を待ってしまっている）")
+	}
+}
+
+// TestSubscribeTopicGuarded_IgnoresRevokeSignalsForOtherUsers は、他人あての
+// 合図で自分の購読まで確かめ直さないことを確かめる。
+//
+// 20人まとめてキックするようなときに全員ぶんの合図が飛ぶので、宛先で絞らないと
+// 無関係な購読者の数だけ判定が走る（賑やかな部屋ほど効いてくる）。
+func TestSubscribeTopicGuarded_IgnoresRevokeSignalsForOtherUsers(t *testing.T) {
+	shortenAccessRecheck(t, time.Hour)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	calls := 0
+	guard := subscriptionGuard{
+		authorize: func(context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			return nil
+		},
+		revokeTopic: "room-1:access:changed",
+	}
+
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"}, guard, identity[*gqlmodel.Message])
+
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:access:changed", &RoomAccessChanged{UserIDs: []int64{8, 9}})
+
+	// 合図を処理しきったことを、後続の配信が届くことで確かめる。
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m1"})
+	if got := recvWithin(t, out); got.ID != "m1" {
+		t.Fatalf("id = %q, want m1", got.ID)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("recheck calls = %d, want 0（他人あての合図では引き直さない）", calls)
+	}
+}
+
+// TestSubscribeTopicGuarded_KeepsSubscriptionWhenTheSignalWasNotARevocation は、
+// 合図が来ても権限が残っていれば購読が続くことを確かめる。
+//
+// 合図は「変わったかもしれない」までしか言わない。切るかどうかを決めるのは
+// 判定1本（requireRoomReadAccess）で、合図そのものではない。
+func TestSubscribeTopicGuarded_KeepsSubscriptionWhenTheSignalWasNotARevocation(t *testing.T) {
+	shortenAccessRecheck(t, time.Hour)
+
+	ps := pubsub.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	guard := subscriptionGuard{
+		authorize:   func(context.Context) error { return nil },
+		revokeTopic: "room-1:access:changed",
+	}
+
+	out := subscribeTopicGuarded(ctx, ps, "room-1:message:added",
+		subscriptionScope{UserID: 7, RoomID: "room-1"}, guard, identity[*gqlmodel.Message])
+
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:access:changed", &RoomAccessChanged{UserIDs: []int64{7}})
+
+	time.Sleep(2 * time.Millisecond)
+	ps.Publish("room-1:message:added", &gqlmodel.Message{ID: "m1"})
+	if got := recvWithin(t, out); got.ID != "m1" {
+		t.Fatalf("id = %q, want m1（権限が残っていれば合図では切らない）", got.ID)
+	}
+}
+
+// topicSource はトピックごとに別のチャンネルを返す購読元。
+//
+// *pubsub.PubSub と違い、購読が始まる**前**に値を積んでおける。合図と新着が
+// 両方とも待っている状態をテストから作るのに要る（本物では、goroutine が
+// 動き出す前に両方を揃えることができない）。
+type topicSource struct {
+	mu  sync.Mutex
+	chs map[string]chan interface{}
+}
+
+func newTopicSource() *topicSource {
+	return &topicSource{chs: make(map[string]chan interface{})}
+}
+
+func (s *topicSource) channel(topic string) chan interface{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.chs[topic] == nil {
+		s.chs[topic] = make(chan interface{}, 8)
+	}
+	return s.chs[topic]
+}
+
+func (s *topicSource) Subscribe(topic string) chan interface{} { return s.channel(topic) }
+
+func (s *topicSource) Unsubscribe(string, chan interface{}) {}
+
+func (s *topicSource) push(topic string, v interface{}) { s.channel(topic) <- v }
+
+// TestSubscribeTopicGuarded_DoesNotDeliverWhenASignalIsAlreadyWaiting は、
+// 合図と新着が同時に待っているときでも配信しないことを確かめる。
+//
+// select は準備できている case が複数あると無作為に1つ選ぶ。合図を別の case で
+// 待つだけでは、新着の方が先に選ばれたときに素通りしてしまう（間隔内なら
+// 確かめ直しも走らない）。配信の直前に届いている合図を片付けることで、
+// 「その時点で合図が届いていたなら必ず先に効く」まで詰められる。
+//
+// 無作為なので、1回では当たり外れが出る。繰り返して「1度も漏れない」ことを見る。
+func TestSubscribeTopicGuarded_DoesNotDeliverWhenASignalIsAlreadyWaiting(t *testing.T) {
+	// 受け皿は効かせない。効いてしまうと、合図の有無に関係なく止まる。
+	shortenAccessRecheck(t, time.Hour)
+
+	for i := range 50 {
+		func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			src := newTopicSource()
+			// 購読が始まる前に両方を積む。ループが動き出した時点で
+			// 合図も新着も待っている状態になる。
+			src.push("room-1:access:changed", &RoomAccessChanged{UserIDs: []int64{7}})
+			src.push("room-1:message:added", &gqlmodel.Message{ID: "after-kick"})
+
+			guard := subscriptionGuard{
+				authorize:   func(context.Context) error { return errors.New("forbidden: not a member of this room") },
+				revokeTopic: "room-1:access:changed",
+			}
+			out := subscribeTopicGuarded(ctx, src, "room-1:message:added",
+				subscriptionScope{UserID: 7, RoomID: "room-1"}, guard, identity[*gqlmodel.Message])
+
+			select {
+			case got, ok := <-out:
+				if ok {
+					t.Fatalf("%d 回目: キック済みなのに %+v が配信された", i, got)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatalf("%d 回目: 購読が終わらない", i)
+			}
+		}()
 	}
 }

@@ -19,13 +19,13 @@ type RequestPasswordResetUseCase interface {
 var _ RequestPasswordResetUseCase = &RequestPasswordResetInteractor{}
 
 type RequestPasswordResetInteractor struct {
-	userRepo    repository.UserRepository
+	userRepo    repository.UserReader
 	pwResetRepo repository.PasswordResetRepository
 	mailer      repository.Mailer
 }
 
 func NewRequestPasswordResetUseCase(
-	userRepo repository.UserRepository,
+	userRepo repository.UserReader,
 	pwResetRepo repository.PasswordResetRepository,
 	mailer repository.Mailer,
 ) RequestPasswordResetUseCase {

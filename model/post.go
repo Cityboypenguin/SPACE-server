@@ -17,6 +17,8 @@ type CreatePostParam struct {
 	Content   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// UserID は投稿者。呼び出し側が入れた値は使われない（CreatePostUseCase が
+	// ctx の認証情報で上書きする）。他人名義の投稿を作れる隙間を残さないため。
 	UserID    int64
 	ParentID  *int64
 	MediaKeys []string

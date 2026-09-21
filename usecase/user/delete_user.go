@@ -17,14 +17,14 @@ type DeleteUserUseCase interface {
 var _ DeleteUserUseCase = &DeleteUserInteractor{}
 
 type DeleteUserInteractor struct {
-	userRepo     repository.UserRepository
-	postRepo     repository.PostRepository
+	userRepo     userDeletionRepository
+	postRepo     repository.PostWriter
 	roomRepo     repository.RoomRepository
-	roomUserRepo repository.RoomUserRepository
+	roomUserRepo repository.RoomRoleRepository
 	txManager    repository.TxManager
 }
 
-func NewDeleteUserUseCase(userRepo repository.UserRepository, postRepo repository.PostRepository, roomRepo repository.RoomRepository, roomUserRepo repository.RoomUserRepository, txManager repository.TxManager) DeleteUserUseCase {
+func NewDeleteUserUseCase(userRepo userDeletionRepository, postRepo repository.PostWriter, roomRepo repository.RoomRepository, roomUserRepo repository.RoomRoleRepository, txManager repository.TxManager) DeleteUserUseCase {
 	return &DeleteUserInteractor{
 		userRepo:     userRepo,
 		postRepo:     postRepo,

@@ -43,9 +43,17 @@ type Event struct {
 	Time string         `json:"time"`
 }
 
+// Client は1本の接続。受け取る側（HTTP の入口）は Events() を読むだけでよい。
+//
+// チャンネルを非公開にしてあるのは、閉じるのが Broker だけであることを型で
+// 示すため。外から閉じられると、配信側が閉じたチャンネルへ送って落ちる。
 type Client struct {
 	ch chan Event
 }
+
+// Events はこの接続へ配られるイベントの受け口。
+// Broker が接続を外すと閉じる（読み手はそこで抜ける）。
+func (c *Client) Events() <-chan Event { return c.ch }
 
 // Broker はユーザーごとの SSE クライアント接続を管理し、イベントを配信する。
 type Broker struct {
@@ -225,18 +233,29 @@ func (b *Broker) publish(env Envelope) {
 //
 // 配信口（Fanout）から呼ばれる。台をまたぐ実装では、他の台で起きたイベントも
 // ここへ入ってくる。UserID 0 は全員宛。
+//
+// 配信の間ずっと b.mu を持つ。以前は宛先を写し取ってから錠を放していたが、
+// 写した直後に Unsubscribe が走ると、閉じたチャンネルへ送ってプロセスごと
+// panic する（送信側では閉じたかどうかを確かめられない。recover で握り潰すのも
+// 「閉じた後に配信した」事実を隠すだけで直っていない）。チャンネルを閉じるのは
+// Unsubscribe だけで、そちらも同じ錠の下で閉じるので、錠を持ったまま配れば
+// 閉じたチャンネルへ送りようがない。
+//
+// 錠を持ったまま配ってよいのは、ここでの送信が全て非ブロッキング（select の
+// default 付き）だから。buffer が詰まっていれば即座に捨てて次へ進むので、
+// 読み手が遅いクライアント1つで購読・切断の全体が止まることはない。
 func (b *Broker) DeliverLocal(env Envelope) {
 	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	var targets []*Client
 	if env.UserID == 0 {
 		for _, clients := range b.clients {
 			targets = append(targets, clients...)
 		}
 	} else {
-		targets = make([]*Client, len(b.clients[env.UserID]))
-		copy(targets, b.clients[env.UserID])
+		targets = b.clients[env.UserID]
 	}
-	b.mu.Unlock()
 
 	for _, c := range targets {
 		select {

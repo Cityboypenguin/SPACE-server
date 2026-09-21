@@ -3,12 +3,14 @@ package favoriteuser
 import (
 	"context"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 type ListFollowersUseCase interface {
-	Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error)
+	Execute(ctx context.Context, q repository.PageQuery) ([]*model.FavoriteUser, int, error)
 }
 
 var _ ListFollowersUseCase = &listFollowersInteractor{}
@@ -23,6 +25,10 @@ func NewListFollowersUseCase(favoriteUserRepo repository.FavoriteUserRepository)
 	}
 }
 
-func (uc *listFollowersInteractor) Execute(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.FavoriteUser, int, error) {
+func (uc *listFollowersInteractor) Execute(ctx context.Context, q repository.PageQuery) ([]*model.FavoriteUser, int, error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
 	return uc.favoriteUserRepo.ListFollowers(ctx, userID, q)
 }

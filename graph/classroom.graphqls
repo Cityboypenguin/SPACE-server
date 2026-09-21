@@ -1,0 +1,108 @@
+# 授業内の質問箱と投票。
+
+extend type Query {
+  questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
+  question(id: ID!): Question
+  polls(roomID: ID!, limit: Int = 50, offset: Int = 0): PollPage!
+  poll(id: ID!): Poll
+}
+
+extend type Mutation {
+  createQuestion(roomID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Question!
+  # deletedMediaIDs はこの質問に添付済みの写真のうち外すもの。body は写真が1枚以上
+  # 残る場合に限り空にできる（投稿時と同じ条件）。
+  updateQuestion(id: ID!, body: String!, deletedMediaIDs: [ID!]): Question!
+  deleteQuestion(id: ID!): Boolean!
+  answerQuestion(questionID: ID!, body: String!, mediaInputs: [MediaUploadInput!]): Answer!
+  # deletedMediaIDs はこの回答に添付済みの写真のうち外すもの。body は写真が1枚以上
+  # 残る場合に限り空にできる（投稿時と同じ条件）。
+  updateAnswer(id: ID!, body: String!, deletedMediaIDs: [ID!]): Answer!
+  deleteAnswer(id: ID!): Boolean!
+  likeAnswer(id: ID!): Answer!
+  unlikeAnswer(id: ID!): Answer!
+  selectBestAnswer(questionID: ID!, answerID: ID!): Question!
+  cancelBestAnswer(questionID: ID!): Question!
+  createPoll(roomID: ID!, question: String!, options: [String!]!, allowMultipleChoice: Boolean = false, deadline: String): Poll!
+  votePoll(pollID: ID!, optionIDs: [ID!]!): Poll!
+  deletePoll(pollID: ID!): Boolean!
+}
+
+extend type Subscription {
+  questionAdded(roomID: ID!): Question!
+  questionUpdated(roomID: ID!): Question!
+  questionDeleted(roomID: ID!): Question!
+  answerAdded(questionID: ID!): Answer!
+  answerUpdated(questionID: ID!): Answer!
+  answerDeleted(questionID: ID!): Answer!
+  pollAdded(roomID: ID!): Poll!
+  pollUpdated(pollID: ID!): Poll!
+  pollDeleted(roomID: ID!): Poll!
+}
+
+type Question {
+  ID: ID!
+  roomID: ID!
+  user: User!
+  body: String!
+  isAnswered: Boolean!
+  bestAnswer: Answer
+  # answers は回答本文の一覧。件数だけが要る画面は answerCount を使うこと
+  # （管理画面の質問一覧は、件数を出すために回答本文を全部取っていた）。
+  answers(limit: Int = 20, offset: Int = 0): AnswerPage!
+  answerCount: Int!
+  media: [Media!]!
+  createdAt: String!
+  updatedAt: String!
+  isMine: Boolean!
+}
+
+type Answer {
+  ID: ID!
+  questionID: ID!
+  user: User!
+  body: String!
+  media: [Media!]!
+  createdAt: String!
+  updatedAt: String!
+  isMine: Boolean!
+  likeCount: Int!
+  likedByMe: Boolean!
+}
+
+type AnswerPage {
+  items: [Answer!]!
+  total: Int!
+}
+
+type QuestionPage {
+  items: [Question!]!
+  total: Int!
+}
+
+type Poll {
+  ID: ID!
+  roomID: ID!
+  user: User!
+  question: String!
+  allowMultipleChoice: Boolean!
+  options: [PollOption!]!
+  # 投票したユーザーの人数。複数選択の投票では options の voteCount の合計が
+  # 人数を上回るため、「N人が回答済み」の表示にはこちらを使う。
+  voterCount: Int!
+  deadline: String
+  createdAt: String!
+  isMine: Boolean!
+}
+
+type PollOption {
+  ID: ID!
+  label: String!
+  voteCount: Int!
+  votedByMe: Boolean!
+}
+
+type PollPage {
+  items: [Poll!]!
+  total: Int!
+  unvotedTotal: Int!
+}

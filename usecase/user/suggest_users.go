@@ -23,10 +23,10 @@ type SuggestUsersUseCase interface {
 var _ SuggestUsersUseCase = &SuggestUsersInteractor{}
 
 type SuggestUsersInteractor struct {
-	userRepo repository.UserRepository
+	userRepo repository.UserReader
 }
 
-func NewSuggestUsersUseCase(userRepo repository.UserRepository) SuggestUsersUseCase {
+func NewSuggestUsersUseCase(userRepo repository.UserReader) SuggestUsersUseCase {
 	return &SuggestUsersInteractor{userRepo: userRepo}
 }
 

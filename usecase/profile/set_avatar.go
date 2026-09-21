@@ -2,32 +2,47 @@ package profile
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 )
 
 type SetAvatarUseCase interface {
-	Execute(ctx context.Context, userID int64, objectKey string) (*model.Profile, error)
+	Execute(ctx context.Context, objectKey string) (*model.Profile, error)
 }
 
 type SetAvatarInteractor struct {
+	uploads     uploadusecase.Acceptor
 	profileRepo repository.ProfileRepository
-	mediaRepo   repository.MediaRepository
+	mediaRepo   repository.MediaWriter
 	txManager   repository.TxManager
 }
 
-func NewSetAvatarUseCase(profileRepo repository.ProfileRepository, mediaRepo repository.MediaRepository, txManager repository.TxManager) SetAvatarUseCase {
-	return &SetAvatarInteractor{profileRepo: profileRepo, mediaRepo: mediaRepo, txManager: txManager}
+func NewSetAvatarUseCase(uploads uploadusecase.Acceptor, profileRepo repository.ProfileRepository, mediaRepo repository.MediaWriter, txManager repository.TxManager) SetAvatarUseCase {
+	return &SetAvatarInteractor{uploads: uploads, profileRepo: profileRepo, mediaRepo: mediaRepo, txManager: txManager}
 }
 
-func (uc *SetAvatarInteractor) Execute(ctx context.Context, userID int64, objectKey string) (*model.Profile, error) {
-	expectedPrefix := fmt.Sprintf("avatars/%d/", userID)
-	if !strings.HasPrefix(objectKey, expectedPrefix) {
-		return nil, fmt.Errorf("invalid object key")
+func (uc *SetAvatarInteractor) Execute(ctx context.Context, objectKey string) (_ *model.Profile, err error) {
+	userID, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 受け入れはここで通す。リゾルバの手順にしておくと、このユースケースを
+	// 直接呼ぶ経路が増えたときに検査を飛ばせてしまう。
+	//
+	// 種別と所有者の確認は受け入れの中で、ストレージに触る前に済む
+	// （internal/upload.CheckKey）。保存が成立しなければ、公開した実体は取り消す。
+	uploads := uploadusecase.Begin(uc.uploads)
+	defer uploads.DiscardOnError(ctx, &err)
+
+	objectKey, err = uploads.Accept(ctx, uploadusecase.Avatar, objectKey)
+	if err != nil {
+		return nil, err
 	}
 
 	media := &model.Media{
@@ -37,7 +52,7 @@ func (uc *SetAvatarInteractor) Execute(ctx context.Context, userID int64, object
 		CreatedAt:      time.Now(),
 	}
 	var p *model.Profile
-	err := uc.txManager.RunInTx(ctx, func(txCtx context.Context) error {
+	err = uc.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		if err := uc.mediaRepo.CreateMedia(txCtx, media); err != nil {
 			return err
 		}

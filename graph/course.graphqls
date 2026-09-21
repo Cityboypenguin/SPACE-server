@@ -1,0 +1,159 @@
+# 授業と時間割。
+
+extend type Query {
+  searchCourses(
+    dayOfWeek: String!
+    period: Int!
+    keyword: String
+    limit: Int = 50
+    offset: Int = 0
+  ): CoursePage!
+  myTimetable(year: Int, semester: String): [TimetableEntry!]!
+  # 対象ユーザーの時間割。本人・管理者以外が呼び出した場合、対象ユーザーが
+  # setTimetableProfileVisibility(false) でプロフィール非公開にしていれば
+  # 空配列を返す。空配列は「非公開」と「公開しているが未登録」を区別できないため、
+  # プロフィール画面での表示分岐には userTimetableProfile を使うこと。
+  userTimetable(userID: ID!, year: Int, semester: String): [TimetableEntry!]!
+  # 対象ユーザーの時間割とプロフィール公開設定。visible が false の場合、entries は
+  # 常に空配列（非公開のため内容は返さない）。visible が true で entries が空なのは
+  # 「公開しているが時間割が未登録」を意味する。本人・管理者は常に visible=true。
+  userTimetableProfile(userID: ID!, year: Int, semester: String): UserTimetableProfile!
+  currentSemester: CurrentSemester!
+  courseYears: [Int!]!
+  # 現在の学期の時間割に入っている授業内チャットごとの未読件数。まだ一度も開いて
+  # いない授業は、時間割に登録した時点より後を未読として数える。
+  myCourseRoomUnreadCounts: [CourseRoomUnread!]!
+}
+
+extend type Mutation {
+  registerTimetableEntry(courseID: ID!): TimetableEntry!
+  removeTimetableEntry(id: ID!): Boolean!
+  setTimetableEntryColor(id: ID!, color: TimetableEntryColor!): TimetableEntry!
+  # 「編集モード」の一括確定用。year/semester の時間割を courseIDs の内容に丸ごと
+  # 置き換える（1トランザクション）。baselineEntryIDs が現在の登録内容と一致しない
+  # 場合（他タブでの変更等）は何も変更せず CONFLICT エラーを返す。
+  setMyTimetable(
+    year: Int!
+    semester: String!
+    baselineEntryIDs: [ID!]!
+    courseIDs: [ID!]!
+  ): [TimetableEntry!]!
+  updateCurrentSemester(year: Int!, semester: String!): CurrentSemester!
+}
+
+type Course {
+  ID: ID!
+  roomID: ID!
+  dayOfWeek: String!
+  period: Int!
+  teacherName: String!
+  courseName: String!
+  year: Int!
+  semester: String!
+  createdAt: String!
+  # Admin-only: how many users currently have this course in their timetable.
+  # Non-admin callers get 0. Meant to be shown before adminDeleteCourse, since that
+  # deletion cascades away every one of these registrations.
+  registeredCount: Int!
+}
+
+input AdminCreateCourseInput {
+  dayOfWeek: String!
+  period: Int!
+  teacherName: String!
+  courseName: String!
+  year: Int!
+  semester: String!
+}
+
+type CoursePage {
+  items: [Course!]!
+  total: Int!
+}
+
+type TimetableEntry {
+  ID: ID!
+  course: Course!
+  color: TimetableEntryColor!
+  createdAt: String!
+}
+
+type CourseRoomUnread {
+  roomID: ID!
+  unreadCount: Int!
+}
+
+type UserTimetableProfile {
+  visible: Boolean!
+  entries: [TimetableEntry!]!
+}
+
+# 時間割のコマに表示する色。ユーザーは自由な色ではなく、この決まったパレットから選ぶ。
+# パレット画像の3行構成に対応: 鮮やか(無印)、淡い(_LIGHT)、くすみ(_MUTED)に加えて、
+# 各色をさらに鮮やかにした0行目(_VIVID)。数字・接尾辞なしは各行の左から右の並びに対応する。
+enum TimetableEntryColor {
+  RED_VIVID
+  ORANGE_VIVID
+  YELLOW_VIVID
+  GREEN_VIVID
+  CYAN_VIVID
+  BLUE_VIVID
+  INDIGO_VIVID
+  PURPLE_VIVID
+  MAGENTA_VIVID
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  CYAN
+  BLUE
+  INDIGO
+  PURPLE
+  MAGENTA
+  RED_LIGHT
+  ORANGE_LIGHT
+  YELLOW_LIGHT
+  GREEN_LIGHT
+  CYAN_LIGHT
+  BLUE_LIGHT
+  INDIGO_LIGHT
+  PURPLE_LIGHT
+  MAGENTA_LIGHT
+  RED_MUTED
+  ORANGE_MUTED
+  YELLOW_MUTED
+  GREEN_MUTED
+  CYAN_MUTED
+  BLUE_MUTED
+  INDIGO_MUTED
+  PURPLE_MUTED
+  MAGENTA_MUTED
+}
+
+type CurrentSemester {
+  year: Int!
+  semester: String!
+}
+
+enum CourseImportState {
+  IDLE
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+type CourseImportStatus {
+  state: CourseImportState!
+  year: Int
+  imported: Int
+  skipped: Int
+  errorMessage: String
+  startedAt: String
+  finishedAt: String
+  # Progress of a RUNNING import: rows fetched so far / total rows reported by the
+  # source site. Present only while state is RUNNING (and briefly after, until the
+  # next poll reflects SUCCEEDED/FAILED).
+  processedCount: Int
+  totalCount: Int
+  progressPercent: Int
+}

@@ -14,10 +14,10 @@ type GetFollowersTopLevelPostsByUserIDUseCase interface {
 var _ GetFollowersTopLevelPostsByUserIDUseCase = &GetFollowersTopLevelPostsByUserIDInteractor{}
 
 type GetFollowersTopLevelPostsByUserIDInteractor struct {
-	postRepo repository.PostRepository
+	postRepo repository.PostLister
 }
 
-func NewGetFollowersTopLevelPostsByUserIDUseCase(postRepo repository.PostRepository) GetFollowersTopLevelPostsByUserIDUseCase {
+func NewGetFollowersTopLevelPostsByUserIDUseCase(postRepo repository.PostLister) GetFollowersTopLevelPostsByUserIDUseCase {
 	return &GetFollowersTopLevelPostsByUserIDInteractor{
 		postRepo: postRepo,
 	}

@@ -14,10 +14,10 @@ type ListMediaByPostIDsUseCase interface {
 var _ ListMediaByPostIDsUseCase = &ListMediaByPostIDsInteractor{}
 
 type ListMediaByPostIDsInteractor struct {
-	mediaRepo repository.MediaRepository
+	mediaRepo repository.MediaReader
 }
 
-func NewListMediaByPostIDsUseCase(mediaRepo repository.MediaRepository) ListMediaByPostIDsUseCase {
+func NewListMediaByPostIDsUseCase(mediaRepo repository.MediaReader) ListMediaByPostIDsUseCase {
 	return &ListMediaByPostIDsInteractor{mediaRepo: mediaRepo}
 }
 

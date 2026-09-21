@@ -24,6 +24,9 @@ func NewPubSubCodec() *pubsub.Codec {
 	c.Register("answer", (*gqlmodel.Answer)(nil))
 	c.Register("poll", (*gqlmodel.Poll)(nil))
 	c.Register("room_read_status", (*gqlmodel.RoomReadStatusUpdate)(nil))
+	// 閲覧権限が変わった合図。GraphQL の型ではない（クライアントへは配らず、
+	// 購読中のループが自分で受けて判定をやり直すためだけに流れる）。
+	c.Register("room_access_changed", (*RoomAccessChanged)(nil))
 	// 取り込み状況だけは値で流している（Publish 側が courseimport.Status を
 	// そのまま渡す）ので、値の型で登録する。ここをポインタにすると、受け手の
 	// 型アサーションが通らずこのトピックだけ届かなくなる。

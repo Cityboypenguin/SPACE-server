@@ -15,11 +15,11 @@ type MarkRoomAsReadUseCase interface {
 }
 
 type markRoomAsReadUseCase struct {
-	roomUserRepo  repository.RoomUserRepository
+	roomUserRepo  repository.ReadPositionRepository
 	messageReader repository.MessageReadModel
 }
 
-func NewMarkRoomAsReadUseCase(roomUserRepo repository.RoomUserRepository, messageReader repository.MessageReadModel) MarkRoomAsReadUseCase {
+func NewMarkRoomAsReadUseCase(roomUserRepo repository.ReadPositionRepository, messageReader repository.MessageReadModel) MarkRoomAsReadUseCase {
 	return &markRoomAsReadUseCase{roomUserRepo: roomUserRepo, messageReader: messageReader}
 }
 

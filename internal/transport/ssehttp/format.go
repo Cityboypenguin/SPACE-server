@@ -1,12 +1,13 @@
-package sse
+package ssehttp
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"io"
 )
 
-func writeSSE(w io.Writer, ev Event) error {
+func writeSSE(w io.Writer, ev sse.Event) error {
 	if ev.ID != 0 {
 		if _, err := fmt.Fprintf(w, "id: %d\n", ev.ID); err != nil {
 			return err

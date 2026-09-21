@@ -35,7 +35,7 @@ func newDeleteAnswerFixture(writableErr error) *deleteAnswerFixture {
 		answerRepo:   &fakeAnswerRepoForDelete{answer: &model.Answer{ID: 3, QuestionID: 1, AuthorUserID: 7}},
 		questionRepo: &fakeQuestionRepoForUpdate{question: &model.Question{ID: 1, RoomID: 5}},
 	}
-	f.uc = NewDeleteAnswerUseCase(f.questionRepo, f.answerRepo, &fakeRequireWritable{err: writableErr})
+	f.uc = NewDeleteAnswerUseCase(nil, f.questionRepo, f.answerRepo, &fakeRequireWritable{err: writableErr})
 	return f
 }
 

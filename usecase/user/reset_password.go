@@ -15,12 +15,12 @@ type ResetPasswordUseCase interface {
 var _ ResetPasswordUseCase = &ResetPasswordInteractor{}
 
 type ResetPasswordInteractor struct {
-	userRepo    repository.UserRepository
+	userRepo    userPasswordRepository
 	pwResetRepo repository.PasswordResetRepository
 }
 
 func NewResetPasswordUseCase(
-	userRepo repository.UserRepository,
+	userRepo userPasswordRepository,
 	pwResetRepo repository.PasswordResetRepository,
 ) ResetPasswordUseCase {
 	return &ResetPasswordInteractor{

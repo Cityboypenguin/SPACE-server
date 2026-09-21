@@ -19,7 +19,10 @@ type BroadcastNotificationParam struct {
 	CreatedAt  int64
 }
 
-type NotificationRepository interface {
+// 通知の口も役割ごとに分けてある（理由は PostRepository のコメント）。
+
+// NotificationWriter は通知を作る。
+type NotificationWriter interface {
 	Save(ctx context.Context, n *model.Notification) error
 	SaveBatch(ctx context.Context, ns []*model.Notification) error
 
@@ -38,17 +41,37 @@ type NotificationRepository interface {
 	// SaveForAllActiveUsers は行をアプリへ返さない（返させると全件を運ぶことになり
 	// 元の木阿弥）。一方でリアルタイム配信のペイロードには通知IDが要る。宛先は
 	// 接続中の利用者だけなので、その人数ぶんだけをここで引き直す。
+}
+
+// NotificationReader は通知を引く・数える。
+type NotificationReader interface {
 	ListByTargetForUsers(ctx context.Context, targetType string, targetID int64, userIDs []int64) ([]*model.Notification, error)
 
 	ListByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Notification, int, error)
 	GetByID(ctx context.Context, id int64, userID int64) (*model.Notification, error)
 	ListGroupedByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.NotificationGroup, int, error)
 	ListByActor(ctx context.Context, userID int64, notifType string, actorID int64, q PageQuery) ([]*model.Notification, int, error)
+	CountUnread(ctx context.Context, userID int64) (int, error)
+}
+
+// NotificationReadStateRepository は既読の付け替え。
+type NotificationReadStateRepository interface {
 	MarkAsRead(ctx context.Context, id int64, userID int64) error
 	MarkAllAsRead(ctx context.Context, userID int64) error
 	MarkAllAsReadByActor(ctx context.Context, userID int64, notifType string, actorID int64) error
-	CountUnread(ctx context.Context, userID int64) (int, error)
+}
+
+// NotificationDeleter は通知の削除。
+type NotificationDeleter interface {
 	DeleteReadByUserID(ctx context.Context, userID int64) error
 	DeleteReadByActor(ctx context.Context, userID int64, notifType string, actorID int64) error
 	DeleteByIDs(ctx context.Context, ids []int64, userID int64) error
+}
+
+// NotificationRepository は上記をすべて束ねた口。infra の実装と DI が使う。
+type NotificationRepository interface {
+	NotificationWriter
+	NotificationReader
+	NotificationReadStateRepository
+	NotificationDeleter
 }

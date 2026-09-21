@@ -16,7 +16,7 @@ type DeleteFavoriteInteractor struct {
 	favoriteRepo repository.FavoriteRepository
 }
 
-func NewDeleteFavoriteUseCase(favoriteRepo repository.FavoriteRepository, postRepo repository.PostRepository) DeleteFavoriteUseCase {
+func NewDeleteFavoriteUseCase(favoriteRepo repository.FavoriteRepository) DeleteFavoriteUseCase {
 	return &DeleteFavoriteInteractor{
 		favoriteRepo: favoriteRepo,
 	}

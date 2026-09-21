@@ -1,0 +1,188 @@
+# 利用者・プロフィール・フォロー・ブロック。
+
+extend type Query {
+  users(limit: Int = 20, offset: Int = 0): UserAccountPage!
+  me: UserAccount!
+  # 未設定（サーバー側にまだ明示的な選択が保存されていない）なら null。
+  # 初期表示はクライアント側で localStorage / prefers-color-scheme から決める。
+  themePreference: ThemePreference
+  # 未設定なら true（デフォルトで公開）。
+  timetableProfileVisibility: Boolean!
+  getUserByID(id: ID!): UserAccount
+  # searchUsers は一般ユーザーが使う（＝他人が並ぶ）ので User を返す。email は出ない。
+  searchUsers(keyword: String!, limit: Int = 20, offset: Int = 0): UserPage!
+  # メンション (@accountID) のサジェスト。accountID の前方一致で返す。
+  suggestUsers(prefix: String!, limit: Int = 8): [User!]!
+  # コミュニティチャットの "@表示名" メンションでサジェストに出せる相手。
+  # 送信時の検証 (sendMessage の mentionUserIDs) とまったく同じ条件で絞り込むため、
+  # 「候補に出たのに送ると成立しない」というズレが起きない。
+  # 自分自身・凍結ユーザー・ブロック関係にある相手は除外する。
+  # コミュニティ以外のルーム（授業内チャットは匿名、DM は相手が1人）では常に空を返す。
+  mentionCandidates(roomID: ID!, prefix: String!, limit: Int = 8): [User!]!
+    @deprecated(reason: "Use Post.favorites or viewer-specific favorite fields; removal requires confirming no external clients use this query")
+  myProfile: Profile
+  getProfileByUserID(userID: ID!): Profile
+  listFavoriteUsers(limit: Int = 20, offset: Int = 0): UserPage!
+  myFollowers(limit: Int = 20, offset: Int = 0): UserPage!
+  # Favorite/Block の一覧・検索は6つとも引数を1つも取らず全件返していた。
+  # limit/offset の既定値を入れていない理由は getRepliesByPostID と同じ。
+  searchFavoriteUsers(keyword: String!, limit: Int, offset: Int): [User!]!
+  GetFavoriteUsersByUserID(userID: ID!, limit: Int, offset: Int): [User!]!
+  listBlockedUsers(limit: Int = 20, offset: Int = 0): UserPage!
+  searchBlockedUsers(keyword: String!, limit: Int, offset: Int): [User!]!
+  GetBlockersByUserID(userID: ID!, limit: Int, offset: Int): [User!]!
+}
+
+extend type Mutation {
+  sendEmailOTP(email: String!): Boolean!
+  verifyEmailOTP(email: String!, otp: String!): Boolean!
+  createUser(input: CreateUserInput!): UserAccount!
+  deleteUser(id: ID!): Boolean!
+  deleteMyAccount: Boolean!
+  updateUser(input: UpdateUserInput!): UserAccount!
+  loginUser(input: LoginInput!): UserAuthPayload!
+  refreshUserToken(refreshToken: String!): UserAuthPayload!
+  logoutUser(token: String!): Boolean!
+  requestPasswordReset(email: String!): Boolean!
+  verifyPasswordResetOTP(email: String!, otp: String!): String!
+  resetPassword(resetToken: String!, newPassword: String!): Boolean!
+  updateProfile(input: UpdateProfileInput!): Profile!
+  updateMyProfile(input: UpdateMyProfileInput!): Profile!
+  setAvatar(objectKey: String!): Profile!
+  deleteAvatar: Profile!
+  createFavoriteUser(favoriteUserID: ID!): FavoriteUser!
+  deleteFavoriteUser(favoriteUserID: ID!): Boolean!
+  createBlocker(blockedUserID: ID!): Blocker!
+  deleteBlocker(blockedUserID: ID!): Boolean!
+  setThemePreference(theme: ThemePreference!): ThemePreference!
+  setTimetableProfileVisibility(visible: Boolean!): Boolean!
+}
+
+# User は「他人に見せてよいユーザー像」。
+#
+# 認証さえ通っていれば誰でも辿れる場所（投稿の作者、ルームのメンバー、メンション候補、
+# 検索結果、いいねした人…）は全部この型を返す。**個人の連絡先は持たない**。
+#
+# 以前はここに email: String! があり、一般ユーザーが使える searchUsers から他人の
+# メールアドレスが取れていた。email を「本人と管理者にしか見えないもの」として
+# 扱うために、連絡先を持つ側を UserAccount に分けてある。
+#
+# 新しくユーザーを返すフィールドを足すときは、まずこの型を使うこと。
+# UserAccount を返してよいのは「本人だけ」か「管理者だけ」が辿れると
+# リゾルバで保証できる場所に限る（UserAccount のコメント参照）。
+type User {
+  ID: ID!
+  accountID: String!
+  name: String!
+  role: String!
+  status: String!
+  avatarUrl: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+# UserAccount は「本人または管理者にだけ見せるユーザー像」。User に email を足したもの。
+#
+# この型を返せるのは、リゾルバで次のどちらかを保証している場所だけ:
+#
+#   - 本人しか辿れない: me / updateUser（claims.ID 固定） /
+#     loginUser・createUser（自分が今そのメールを入力した）
+#   - 管理者しか辿れない: users / getUserByID / adminSearchUsers /
+#     adminUpdateUser / adminListConsents（TermsConsentRecord.user）
+#
+# 「一般ユーザーも辿れるが、管理者のときだけ email を出したい」という使い方はできない。
+# GraphQL の型は呼び出し元の権限で変わらないので、そういう場所は User を返し、
+# 管理者向けには admin* の別フィールドを用意すること（searchUsers と
+# adminSearchUsers がその例）。
+#
+# avatarUrl / posts / favorites を持たないのは意図的。あれらは「人を画面に出す」ための
+# フィールドで、本人・管理者向けの口（アカウント台帳・設定・監査）では要らない。
+# 必要になったら、足す前に「その画面が本当に UserAccount を見る必要があるか」を
+# 確かめること。
+type UserAccount {
+  ID: ID!
+  accountID: String!
+  name: String!
+  email: String!
+  role: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type UserPage {
+  items: [User!]!
+  total: Int!
+}
+
+type UserAccountPage {
+  items: [UserAccount!]!
+  total: Int!
+}
+
+type FavoriteUser {
+  ID: ID!
+  userID: ID!
+  favoriteUserID: ID!
+  createdAt: String!
+}
+
+type Blocker {
+  ID: ID!
+  userID: ID!
+  blockedUserID: ID!
+  createdAt: String!
+}
+
+type UserAuthPayload {
+  token: String!
+  refreshToken: String!
+  # ログイン直後の本人なので UserAccount（自分のメールは自分に見せてよい）。
+  user: UserAccount!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input CreateUserInput {
+  accountID: String!
+  name: String!
+  email: String!
+  password: String!
+  otp: String!
+}
+
+input UpdateUserInput {
+  accountID: String
+  name: String
+  email: String
+  password: String
+  currentPassword: String
+}
+
+type Profile {
+  user: User!
+  username: String!
+  bio: String
+  avatarUrl: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+input UpdateProfileInput {
+  username: String
+  bio: String
+}
+
+input UpdateMyProfileInput {
+  accountID: String
+  name: String
+  bio: String
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
+}
