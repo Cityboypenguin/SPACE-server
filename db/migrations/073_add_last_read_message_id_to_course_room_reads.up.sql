@@ -1,0 +1,18 @@
+-- 授業内チャットの既読位置をメッセージIDで持つための列。
+--
+-- 理屈と設計判断（なぜ時刻ではなくIDか、なぜ messages(id) への外部キーを張らないか）は
+-- room_users に同じ列を足した 068 に書いてある。ここはその授業内チャット版。
+--
+-- この列はもともと 066（表の作成）に直接書かれていたが、066 が適用済みの環境では
+-- CREATE TABLE IF NOT EXISTS が二度と走らないため列は追加されず、列を参照する既読更新
+-- (markRoomAsRead) と未読集計 (myCourseRoomUnreadCounts) が Unknown column で落ちていた。
+-- 適用済みのマイグレーションを書き換えても既存のDBには届かないので、追加の一手として分ける。
+--
+-- 066 の書き換え後に作られたDB（列を持って作成済み）だけは、この ALTER が Duplicate column
+-- で失敗する。MySQL には ADD COLUMN IF NOT EXISTS が無く、マイグレーションは1ファイル
+-- 1文（multiStatements 無効）なので条件分岐も書けない。066 側を元の形に戻してあるのは
+-- そのためで、これから作るDBは「列なしで作成 → ここで追加」の順に揃う。
+--
+-- 既存行は NULL のまま置く（バックフィルしない）。NULL のときは last_read_at を起点に
+-- 数えるフォールバックがあり、次に既読を打った時点で ID へ移行する。
+ALTER TABLE course_room_reads ADD COLUMN last_read_message_id BIGINT NULL AFTER user_id;
