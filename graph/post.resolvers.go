@@ -222,6 +222,21 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post, limit 
 		return nil, fmt.Errorf("invalid post id")
 	}
 
+	// 「誰がいいねしたか」を見られるのは投稿した本人（と管理者）だけ。件数と自分の
+	// 有無は favoriteCount / isFavoritedByMe が誰にでも返すが、名前の一覧は別扱いに
+	// する。ここを開けたままにすると、投稿の ID さえ分かれば任意の投稿について
+	// いいねした人を並べられてしまう。
+	//
+	// 一覧の途中でこれを選ぶと、自分以外の投稿のところで丸ごと失敗する。それで
+	// よい。空で返すと「いいねが0件」と見分けが付かず、呼び出し側が気づけない。
+	authorID, err := decodeGraphID(ctx, "user", obj.User.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+	if _, err := requireSelfOrAdmin(ctx, authorID, "list_post_favorites"); err != nil {
+		return nil, err
+	}
+
 	// limit を送らなくても unpagedCollectionCap で頭打ちになる。引数を後から
 	// 足したフィールドなので、送っていないクライアントの見え方は変えない
 	// （理由は graph/helpers.go の unpagedCollectionCap のコメント）。
