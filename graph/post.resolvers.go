@@ -678,6 +678,38 @@ func (r *queryResolver) GetFavoriteByID(ctx context.Context, id string) (*gqlmod
 	return toGraphFavorite(f), nil
 }
 
+// GetFavoritesByPostID is the resolver for the getFavoritesByPostID field.
+//
+// 中身は Post.favorites と同じなので、実装もそちらと同じ DataLoader を通す。
+// 直に UseCase を呼ぶと、同じリクエストで投稿側の favorites も選ばれたときに
+// 同じ行を2回引くことになる。
+func (r *queryResolver) GetFavoritesByPostID(ctx context.Context, postID string, limit *int32, offset *int32) ([]*gqlmodel.Favorite, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	numericPostID, err := decodeGraphID(ctx, "post", postID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid post id: %s", postID)
+	}
+
+	// limit を送らなくても unpagedCollectionCap で頭打ちになる
+	//（graph/pagination_helpers.go の unpagedCollectionCap のコメント参照）。
+	favorites, err := dataloader.For(ctx).FavoriteLoader.Load(ctx, dataloader.FavoritePageKey{
+		PostID: numericPostID,
+		Page:   resolveUnpagedWindow(limit, offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var gqlFavorites []*gqlmodel.Favorite
+	for _, f := range favorites {
+		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
+	}
+	return gqlFavorites, nil
+}
+
 // Favorite returns FavoriteResolver implementation.
 func (r *Resolver) Favorite() FavoriteResolver { return &favoriteResolver{r} }
 
