@@ -229,11 +229,26 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post, limit 
 	//
 	// 一覧の途中でこれを選ぶと、自分以外の投稿のところで丸ごと失敗する。それで
 	// よい。空で返すと「いいねが0件」と見分けが付かず、呼び出し側が気づけない。
-	authorID, err := decodeGraphID(ctx, "user", obj.User.ID)
+	//
+	// 投稿者は obj.User ではなく投稿の行そのものから決める。obj は呼び出し側が
+	// 組み立てた値で、ID だけを詰めた見本もありうる（graph/presenter.go の親投稿）。
+	// いまはどの経路も toGraphPost を通るので User は入っているが、そこに頼ると
+	// 「入っていなければ nil 参照で落ちる」「実体と食い違えば誤った相手に許可が
+	// 出る」の2つが、新しいフィールドを足した人には見えないまま残る。権限は
+	// 運ばれてきた値ではなく元の行で決める。
+	//
+	// PostLoader はリクエスト内で使い回されるので、追加のクエリはほぼ出ない
+	//（この口へ来る前に投稿を引いていれば、その結果がそのまま返る）。
+	const action = "list_post_favorites"
+	post, err := dataloader.For(ctx).PostLoader.Load(ctx, numericPostID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user id")
+		return nil, err
 	}
-	if _, err := requireSelfOrAdmin(ctx, authorID, "list_post_favorites"); err != nil {
+	if post == nil {
+		// 削除済み・ブロック相手で見えない投稿（PostLoader が nil を返す条件）。
+		return nil, denyNotVisible(ctx, action, "post", numericPostID)
+	}
+	if _, err := requireSelfOrAdmin(ctx, post.UserID, action); err != nil {
 		return nil, err
 	}
 
@@ -250,7 +265,6 @@ func (r *postResolver) Favorites(ctx context.Context, obj *gqlmodel.Post, limit 
 
 	var gqlFavorites []*gqlmodel.Favorite
 	for _, f := range favorites {
-		// ※君のプロジェクトにある変換関数を利用する
 		gqlFavorites = append(gqlFavorites, toGraphFavorite(f))
 	}
 	return gqlFavorites, nil

@@ -22,20 +22,29 @@ import (
 // UI 側で隠すだけでは足りない（GraphQL は誰でも好きなフィールドを選べる）ので、
 // 境界はここで固定しておく。
 
-const favoritingUserID = int64(42)
+const (
+	favoritingUserID = int64(42)
+	favoritesPostID  = int64(1)
+)
 
-func postByAuthor(authorID int64) *gqlmodel.Post {
-	return &gqlmodel.Post{
-		ID:   encodeGraphID("post", 1),
-		User: toGraphUser(&model.User{ID: authorID}),
-	}
+// postRef は GraphQL の親オブジェクトとして渡る投稿。ID しか入れていない。
+//
+// リゾルバが投稿者を obj.User から読んでいた頃は、ここに User を詰めないと
+// nil 参照で落ちた。いまは投稿の行から投稿者を決めるので、ID だけの見本で通る
+// ――そして通ることが、graph/presenter.go が作る「ID だけの親投稿」を
+// そのまま渡しても壊れない、という保証になっている。
+func postRef() *gqlmodel.Post {
+	return &gqlmodel.Post{ID: encodeGraphID("post", favoritesPostID)}
 }
 
-// favoritesCtx は FavoriteLoader だけを差したローダーを ctx に積む。
-// dataloader.New は全ローダーぶんの口を要求するので、ここでは必要な1本だけを
+// favoritesCtx は投稿者が authorID の投稿を1件だけ持つローダーを ctx に積む。
+// dataloader.New は全ローダーぶんの口を要求するので、ここでは使う2本だけを
 // 組んだ Loaders を直に渡す。
-func favoritesCtx(ctx context.Context) context.Context {
-	loader := dataloadgen.NewLoader(
+//
+// authorID に0を渡すと PostLoader は nil を返す（＝削除済み・ブロック相手で
+// 投稿が見えない状態）。
+func favoritesCtx(ctx context.Context, authorID int64) context.Context {
+	favoriteLoader := dataloadgen.NewLoader(
 		func(_ context.Context, keys []dataloader.FavoritePageKey) ([][]*model.Favorite, []error) {
 			out := make([][]*model.Favorite, len(keys))
 			for i, k := range keys {
@@ -49,14 +58,29 @@ func favoritesCtx(ctx context.Context) context.Context {
 			return out, make([]error, len(keys))
 		},
 	)
-	return dataloader.WithLoaders(ctx, &dataloader.Loaders{FavoriteLoader: loader})
+	postLoader := dataloadgen.NewLoader(
+		func(_ context.Context, keys []int64) ([]*model.Post, []error) {
+			out := make([]*model.Post, len(keys))
+			for i, id := range keys {
+				if authorID == 0 {
+					continue // 見えない投稿
+				}
+				out[i] = &model.Post{ID: id, UserID: authorID}
+			}
+			return out, make([]error, len(keys))
+		},
+	)
+	return dataloader.WithLoaders(ctx, &dataloader.Loaders{
+		FavoriteLoader: favoriteLoader,
+		PostLoader:     postLoader,
+	})
 }
 
 func TestPostFavorites_RejectsNonAuthor(t *testing.T) {
 	r := &postResolver{&Resolver{}}
-	ctx := favoritesCtx(auth.WithClaims(context.Background(), userClaims(99)))
+	ctx := favoritesCtx(auth.WithClaims(context.Background(), userClaims(99)), 10)
 
-	favorites, err := r.Favorites(ctx, postByAuthor(10), nil, nil)
+	favorites, err := r.Favorites(ctx, postRef(), nil, nil)
 	if err == nil {
 		t.Fatalf("他人の投稿のいいね一覧が引けてしまっている（%d 件返った）", len(favorites))
 	}
@@ -64,11 +88,23 @@ func TestPostFavorites_RejectsNonAuthor(t *testing.T) {
 
 func TestPostFavorites_RejectsAnonymous(t *testing.T) {
 	r := &postResolver{&Resolver{}}
-	ctx := favoritesCtx(context.Background())
+	ctx := favoritesCtx(context.Background(), 10)
 
-	favorites, err := r.Favorites(ctx, postByAuthor(10), nil, nil)
+	favorites, err := r.Favorites(ctx, postRef(), nil, nil)
 	if err == nil {
 		t.Fatalf("未ログインでいいね一覧が引けてしまっている（%d 件返った）", len(favorites))
+	}
+}
+
+// 削除済み・ブロック相手で投稿そのものが引けないとき、投稿者が分からない以上
+// 誰にも返さない。ここが素通りすると、投稿を消した後もいいねした人が残って見える。
+func TestPostFavorites_RejectsInvisiblePost(t *testing.T) {
+	r := &postResolver{&Resolver{}}
+	ctx := favoritesCtx(auth.WithClaims(context.Background(), userClaims(10)), 0)
+
+	favorites, err := r.Favorites(ctx, postRef(), nil, nil)
+	if err == nil {
+		t.Fatalf("見えない投稿のいいね一覧が引けてしまっている（%d 件返った）", len(favorites))
 	}
 }
 
@@ -81,9 +117,9 @@ func TestPostFavorites_AllowsAuthorAndAdmin(t *testing.T) {
 	for name, claims := range cases {
 		t.Run(name, func(t *testing.T) {
 			r := &postResolver{&Resolver{}}
-			ctx := favoritesCtx(auth.WithClaims(context.Background(), claims))
+			ctx := favoritesCtx(auth.WithClaims(context.Background(), claims), 10)
 
-			favorites, err := r.Favorites(ctx, postByAuthor(10), nil, nil)
+			favorites, err := r.Favorites(ctx, postRef(), nil, nil)
 			if err != nil {
 				t.Fatalf("いいね一覧が引けない: %v", err)
 			}
