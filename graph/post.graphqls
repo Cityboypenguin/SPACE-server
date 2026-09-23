@@ -36,15 +36,6 @@ extend type Query {
   popularHashtags: HashtagSuggestionPage!
   suggestHashtags(prefix: String!, limit: Int = 8): [HashtagSuggestion!]!
   getFavoriteByID(id: ID!): Favorite
-  # 「この投稿を誰がいいねしたか」を、投稿を経由せずに引く口。中身は
-  # Post.favorites と同じものなので、投稿を一緒に引いている画面はそちらを使うこと
-  # （同じ DataLoader を通るので、両方選んでも SQL は1本に畳まれる）。
-  # 件数と自分の有無だけで足りるなら Post.favoriteCount / Post.isFavoritedByMe。
-  #
-  # limit/offset に既定値を置いていないのは Post.favorites と同じ理由で、
-  # 送らなければ unpagedCollectionCap で頭打ちになる
-  #（graph/pagination_helpers.go の unpagedCollectionCap のコメント参照）。
-  getFavoritesByPostID(post_id: ID!, limit: Int, offset: Int): [Favorite!]!
 }
 
 extend type Mutation {
@@ -66,6 +57,11 @@ type Post {
   rootPost: Post
   # favorites は「誰がいいねしたか」の一覧。表示に要るのは件数と自分の有無だけなので、
   # 一覧・詳細のクエリは favoriteCount / isFavoritedByMe を使うこと。
+  #
+  # 「いいねした人」を並べる画面はここから引く。同じものを返すトップレベルの
+  # クエリを別に足さないこと。口が2つあると、片方だけページングや権限の直しが
+  # 入って静かにずれる。投稿を持っていない画面からは
+  # getPostByID(id) { favorites(limit: ..., offset: ...) } で辿れる。
   #
   # limit を送らない場合もサーバー側で頭打ちにする（graph/helpers.go の
   # unpagedCollectionCap）。引数が無いままだと、人気の投稿のいいね全件が
