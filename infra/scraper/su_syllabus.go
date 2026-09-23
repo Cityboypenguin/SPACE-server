@@ -48,7 +48,7 @@ var (
 	// [^<]*) because either can contain an embedded <br/> - the period cell when a
 	// course meets in two slots per week, the teacher cell when co-taught - which
 	// would otherwise make the whole row (and thus the course) invisible to
-	// FindAllStringSubmatch instead of merely falling through to a skip below.
+	// FindAllStringSubmatch. parseRows splits both cells on that <br/> afterwards.
 	rowRe        = regexp.MustCompile(`(?s)<tr class="column_(?:odd|even)"[^>]*>\s*<td[^>]*>\s*\d+\s*</td>\s*<td>\s*<a href="([^"]+)"[^>]*>([^<]*)</a>\s*</td>\s*<td>(.*?)</td>\s*<td>(.*?)</td>\s*</tr>`)
 	kougicdRe    = regexp.MustCompile(`kougicd\)=(\d+)`)
 	periodCellRe = regexp.MustCompile(`^(前期|後期|通年)\x{3000}(月|火|水|木|金|土)曜日\x{3000}(\d+)時限$`)
@@ -100,10 +100,11 @@ func (s *SenshuSyllabusScraper) Close() error {
 }
 
 // FetchCourses retrieves every course offered in the given academic year (both
-// semesters, plus 通年 full-year courses), across all departments. skipped counts
-// listing rows that could not be mapped to a single weekly day/period slot (e.g.
-// 定時外 non-standard-time offerings), which the current timetable model does not
-// represent.
+// semesters, plus 通年 full-year courses), across all departments. A course that
+// meets more than once a week yields one entry per weekly slot (see parseRows).
+// skipped counts the slots that could not be mapped to a weekly day/period pair
+// (e.g. 定時外 non-standard-time offerings), which the current timetable model
+// does not represent.
 //
 // knownDedupKeys is the set of dedup_key values the caller has already imported
 // for this year (nil/empty is fine, e.g. for a year's first-ever import). A
@@ -326,10 +327,21 @@ type scrapedRow struct {
 	detailPath string
 }
 
-// parseRows extracts one scrapedRow per listing row that names a single weekly
-// day/period slot, including 通年 (full-year) rows (Semester will be "通年").
-// Rows for 定時外 (non-standard time) offerings don't fit that shape and are
-// reported back via the skipped count instead of being silently dropped.
+// parseRows extracts one scrapedRow per weekly day/period slot named by a listing
+// row, including 通年 (full-year) rows (Semester will be "通年").
+//
+// A course that meets more than once a week is a single listing row whose period
+// cell names every slot, separated by <br/> ("後期　月曜日　1時限<br/>後期　水曜日
+// 　1時限"). ScrapedCourseInput holds one slot, so such a row becomes one course
+// per slot: they share a kougicd but differ in day/period, so their dedup keys
+// stay distinct and each one lands in the timetable cell a student actually
+// attends. Emitting only the first slot would instead hide the course from every
+// other cell it occupies.
+//
+// skipped counts the individual slots that don't fit that shape (e.g. 定時外
+// non-standard-time offerings), rather than whole rows, so one unparseable slot
+// doesn't discard the rest of the same row's slots - they're reported back
+// instead of being silently dropped.
 func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
 	for _, m := range rowRe.FindAllStringSubmatch(body, -1) {
 		href, name, periodCell, teacher := m[1], m[2], m[3], m[4]
@@ -341,35 +353,59 @@ func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
 		}
 		kougicd := kougicdMatch[1]
 
-		cell := strings.TrimSpace(html.UnescapeString(periodCell))
-		slot := periodCellRe.FindStringSubmatch(cell)
-		if slot == nil {
-			skipped++
-			continue
-		}
-		semester, dayOfWeek, periodStr := slot[1], slot[2], slot[3]
-		period, err := strconv.Atoi(periodStr)
-		if err != nil {
-			skipped++
-			continue
-		}
-
 		// Co-taught courses separate teacher names with <br/> in this cell; join
 		// them with a full-width comma instead since TeacherName is a single field.
 		teacherName := strings.TrimSpace(html.UnescapeString(brTagRe.ReplaceAllString(teacher, "、")))
+		courseName := strings.TrimSpace(html.UnescapeString(name))
+		detailPath := html.UnescapeString(href)
 
-		rows = append(rows, scrapedRow{
-			course: courseusecase.ScrapedCourseInput{
-				DayOfWeek:   dayOfWeek,
-				Period:      period,
-				TeacherName: teacherName,
-				CourseName:  strings.TrimSpace(html.UnescapeString(name)),
-				Year:        year,
-				Semester:    semester,
-				DedupKey:    fmt.Sprintf("senshu:%d:%s:%s:%s:%d", year, semester, kougicd, dayOfWeek, period),
-			},
-			detailPath: html.UnescapeString(href),
-		})
+		slotCells := 0
+		// Guards against a cell that names the same slot twice, which would
+		// otherwise emit two rows sharing one dedup_key.
+		seenSlots := make(map[string]bool)
+		for _, part := range brTagRe.Split(periodCell, -1) {
+			cell := strings.TrimSpace(html.UnescapeString(part))
+			if cell == "" {
+				continue
+			}
+			slotCells++
+
+			slot := periodCellRe.FindStringSubmatch(cell)
+			if slot == nil {
+				skipped++
+				continue
+			}
+			semester, dayOfWeek, periodStr := slot[1], slot[2], slot[3]
+			period, err := strconv.Atoi(periodStr)
+			if err != nil {
+				skipped++
+				continue
+			}
+
+			dedupKey := fmt.Sprintf("senshu:%d:%s:%s:%s:%d", year, semester, kougicd, dayOfWeek, period)
+			if seenSlots[dedupKey] {
+				continue
+			}
+			seenSlots[dedupKey] = true
+
+			rows = append(rows, scrapedRow{
+				course: courseusecase.ScrapedCourseInput{
+					DayOfWeek:   dayOfWeek,
+					Period:      period,
+					TeacherName: teacherName,
+					CourseName:  courseName,
+					Year:        year,
+					Semester:    semester,
+					DedupKey:    dedupKey,
+				},
+				detailPath: detailPath,
+			})
+		}
+		// An entirely empty period cell names no slot at all, so nothing above
+		// counted it; it's still a row this parser couldn't place.
+		if slotCells == 0 {
+			skipped++
+		}
 	}
 	return rows, skipped
 }

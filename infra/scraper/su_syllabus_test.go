@@ -150,26 +150,102 @@ func TestParseRows_CoTaughtCourse(t *testing.T) {
 	}
 }
 
-// A course meeting two slots per week (e.g. consecutive periods) puts both in the
-// period cell separated by <br/>. The current model only represents one weekly
-// slot per course, so this must still be skipped - but, unlike before the rowRe
-// fix, counted in skipped rather than silently vanishing.
-func TestParseRows_MultiSlotCourseIsSkipped(t *testing.T) {
+// A course meeting more than once a week (e.g. 商業経営, kougicd 25169: 後期
+// 月曜日1時限 and 後期水曜日1時限) puts every slot in the period cell separated by
+// <br/>. Each slot must become its own course so the class shows up in every
+// timetable cell a student actually attends - it used to be skipped wholesale,
+// making such courses unfindable.
+func TestParseRows_MultiSlotCourse(t *testing.T) {
 	row := `<tr class="column_odd" style="vertical-align:middle" >
               <td style="text-align:center">1</td>
               <td>
-                <a href="/syllsenshu/slbssbdr.do?value(risyunen)=2026&value(semekikn)=1&value(kougicd)=88888&value(crclumcd)=" >マルチスロット科目</a>
+                <a href="/syllsenshu/slbssbdr.do?value(risyunen)=2026&value(semekikn)=1&value(kougicd)=25169&value(crclumcd)=" >商業経営</a>
             </td>
-              <td>前期　月曜日　4時限<br/>前期　月曜日　5時限</td>
+              <td>後期　月曜日　1時限<br/>後期　水曜日　1時限</td>
+              <td>川野　訓志</td>
+          </tr>`
+
+	rows, skipped := parseRows(row, 2026)
+	if skipped != 0 {
+		t.Fatalf("skipped = %d, want 0", skipped)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want 2 (one per weekly slot)", len(rows))
+	}
+
+	want := []courseusecase.ScrapedCourseInput{
+		{
+			DayOfWeek:   "月",
+			Period:      1,
+			TeacherName: "川野　訓志",
+			CourseName:  "商業経営",
+			Year:        2026,
+			Semester:    "後期",
+			DedupKey:    "senshu:2026:後期:25169:月:1",
+		},
+		{
+			DayOfWeek:   "水",
+			Period:      1,
+			TeacherName: "川野　訓志",
+			CourseName:  "商業経営",
+			Year:        2026,
+			Semester:    "後期",
+			DedupKey:    "senshu:2026:後期:25169:水:1",
+		},
+	}
+	for i, w := range want {
+		if rows[i].course != w {
+			t.Fatalf("course[%d] = %+v, want %+v", i, rows[i].course, w)
+		}
+		if rows[i].detailPath == "" {
+			t.Fatalf("course[%d] has an empty detailPath", i)
+		}
+	}
+}
+
+// A multi-slot row whose slots aren't all parseable must still yield the ones
+// that are: the unparseable slot alone is counted in skipped, rather than the
+// whole row (and every other slot on it) being discarded.
+func TestParseRows_MultiSlotCoursePartiallyParseable(t *testing.T) {
+	row := `<tr class="column_odd" style="vertical-align:middle" >
+              <td style="text-align:center">1</td>
+              <td>
+                <a href="/syllsenshu/slbssbdr.do?value(risyunen)=2026&value(semekikn)=1&value(kougicd)=88888&value(crclumcd)=" >定時外混在科目</a>
+            </td>
+              <td>前期　月曜日　4時限<br/>前期　定時外</td>
               <td>テスト　次郎</td>
           </tr>`
 
 	rows, skipped := parseRows(row, 2026)
-	if len(rows) != 0 {
-		t.Fatalf("len(rows) = %d, want 0 (multi-slot courses aren't representable yet)", len(rows))
-	}
 	if skipped != 1 {
-		t.Fatalf("skipped = %d, want 1", skipped)
+		t.Fatalf("skipped = %d, want 1 (only the 定時外 slot)", skipped)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want 1", len(rows))
+	}
+	if rows[0].course.DedupKey != "senshu:2026:前期:88888:月:4" {
+		t.Fatalf("dedupKey = %q", rows[0].course.DedupKey)
+	}
+}
+
+// The same slot listed twice in one cell must not produce two rows sharing a
+// dedup_key - the import's unique index would reject the batch outright.
+func TestParseRows_MultiSlotCourseWithRepeatedSlot(t *testing.T) {
+	row := `<tr class="column_odd" style="vertical-align:middle" >
+              <td style="text-align:center">1</td>
+              <td>
+                <a href="/syllsenshu/slbssbdr.do?value(risyunen)=2026&value(semekikn)=1&value(kougicd)=77777&value(crclumcd)=" >重複スロット科目</a>
+            </td>
+              <td>前期　月曜日　4時限<br/>前期　月曜日　4時限</td>
+              <td>テスト　三郎</td>
+          </tr>`
+
+	rows, skipped := parseRows(row, 2026)
+	if skipped != 0 {
+		t.Fatalf("skipped = %d, want 0", skipped)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want 1 (the repeated slot is collapsed)", len(rows))
 	}
 }
 
