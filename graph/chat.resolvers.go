@@ -23,14 +23,26 @@ import (
 func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.Room, error) {
 	numericID, err := decodeGraphID(ctx, "room", obj.RoomID)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("invalid room id: %s", obj.RoomID)
 	}
 	// チャット履歴は同じルームのメッセージが並ぶので DataLoader 経由で引く
 	//（メッセージ N 件で N クエリ → 1クエリ、かつ同一ルームならキャッシュで1回）。
-	// 引けなくても従来どおり nil を返して画面は出す。
+	//
+	// 以前はここで nil を返して「引けなくても画面は出す」つもりだったが、実際には
+	// 出ない。スキーマ上 Message.room は非null（room: Room!）なので、gqlgen が
+	// 「the requested element is null which the schema does not allow」を立てて
+	// 親ごと落ちる。意図と逆の結果になっていたので、黙って隠さず返す。
+	//
+	// messages.room_id は rooms への ON DELETE CASCADE 付き外部キー
+	//（db/migrations/007_create_message.up.sql）なので、ルームの無いメッセージは
+	// 残らない。RoomLoader は権限で絞らない素の ID 引きなので、引けないのは
+	// 「消えたはずのメッセージが残っている」データ異常だけ。握り潰す理由がない。
 	rm, err := dataloader.For(ctx).RoomLoader.Load(ctx, numericID)
-	if err != nil || rm == nil {
-		return nil, nil
+	if err != nil {
+		return nil, err
+	}
+	if rm == nil {
+		return nil, fmt.Errorf("room %d not found for message", numericID)
 	}
 	gqlRoom := toGraphRoom(rm)
 	gqlRoom.IsMessagingDisabled = false
@@ -55,16 +67,30 @@ func (r *messageResolver) UserID(ctx context.Context, obj *gqlmodel.Message) (st
 func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.User, error) {
 	numericID, err := decodeGraphID(ctx, "user", obj.UserID)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("invalid user id: %s", obj.UserID)
 	}
 
 	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
 		return anon, nil
 	}
 
+	// スキーマ上 Message.user は非null（user: User!）。退会したユーザーの
+	// メッセージがここへ来るので、nil を返すと gqlgen の非null用マーシャラが
+	// 「the requested element is null which the schema does not allow」を立て、
+	// メッセージ（と、それを含む非nullリスト）ごと落ちる。つまり退会者が1人でも
+	// 混ざるとそのルームの履歴が丸ごと出なくなる。投稿側（postResolver.User）と
+	// 同じく「削除されたアカウント」の代替を返して、履歴は読めるままにする。
+	//
+	// 授業ルームは上の匿名表示で先に返るので、ここへ来るのは DM とコミュニティ。
+	//
+	// 読み込みエラーと不存在は分ける。まとめて代替で塗り潰すと、DBが一時的に
+	// 答えられないだけの相手まで退会済みとして表示してしまう。
 	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericID)
-	if err != nil || u == nil {
-		return nil, nil
+	if err != nil {
+		return nil, err
+	}
+	if u == nil {
+		return toGraphDeletedUserWithID(numericID), nil
 	}
 	return toGraphUser(u), nil
 }

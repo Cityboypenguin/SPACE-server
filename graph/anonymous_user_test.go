@@ -39,6 +39,7 @@ type fixtureOpts struct {
 	users      map[int64]*model.User
 	roomErr    error
 	anonErr    error
+	userErr    error
 }
 
 func newLoaderFixture(t *testing.T, opts fixtureOpts) *loaderFixture {
@@ -85,6 +86,12 @@ func newLoaderFixture(t *testing.T, opts fixtureOpts) *loaderFixture {
 		f.userFetches++
 		errs := make([]error, len(ids))
 		out := make([]*model.User, len(ids))
+		if opts.userErr != nil {
+			for i := range errs {
+				errs[i] = opts.userErr
+			}
+			return out, errs
+		}
 		for i, id := range ids {
 			out[i] = opts.users[id]
 		}
