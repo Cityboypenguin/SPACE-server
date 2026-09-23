@@ -48,7 +48,14 @@ func (r *favoriteResolver) Post(ctx context.Context, obj *gqlmodel.Favorite) (*g
 		return nil, err
 	}
 	if post == nil {
-		return nil, nil
+		// スキーマ上 Favorite.post は非null（post: Post!）。いいねが残ったまま
+		// 投稿が消えた／ブロック相手になったときにここへ来る。
+		//
+		// ここで nil を返しても「投稿だけ欠けた Favorite」にはならない。gqlgen の
+		// 非null用マーシャラが「the requested element is null which the schema
+		// does not allow」を立て、親（Favorite、ひいてはそれを含む非nullリスト）
+		// ごと落ちる。どうせ失敗するなら、理由の分かる形で返す。
+		return nil, denyNotVisible(ctx, "read_favorite_post", "post", numericPostID)
 	}
 
 	return toGraphPost(post), nil
