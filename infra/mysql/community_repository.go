@@ -113,9 +113,9 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 }
 
 func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {
-	searchParam := "%" + name + "%"
+	searchParam := "%" + escapeLikePrefix(name) + "%"
 
-	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities WHERE name LIKE ? AND room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)`,
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities WHERE name LIKE ? ESCAPE '\\' AND room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)`,
 		searchParam, userID)
 	if err != nil {
 		return nil, 0, err
@@ -127,7 +127,7 @@ func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name s
 		       c.created_at, c.updated_at
 		FROM communities c
 		LEFT JOIN media m ON m.id = c.avatar_media_id
-		WHERE c.name LIKE ?
+		WHERE c.name LIKE ? ESCAPE '\\'
 		  AND c.room_id NOT IN (SELECT room_id FROM room_users WHERE user_id = ?)
 		ORDER BY c.created_at DESC, c.id DESC
 		LIMIT ? OFFSET ?

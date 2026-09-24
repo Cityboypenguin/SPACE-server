@@ -237,9 +237,9 @@ func (r *MySQLCourseRepository) GetCourseByRoomID(ctx context.Context, roomID in
 // semester: a 通年 course occupies its slot in both terms, so it must be visible
 // (and registerable) whichever term the student is currently searching in.
 func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, q repository.PageQuery) ([]*model.Course, int, error) {
-	searchParam := "%" + keyword + "%"
+	searchParam := "%" + escapeLikePrefix(keyword) + "%"
 
-	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)`,
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM courses c WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? ESCAPE '\\' OR c.teacher_name LIKE ? ESCAPE '\\')`,
 		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam)
 	if err != nil {
 		return nil, 0, err
@@ -247,7 +247,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 
 	rows, err := r.DB.QueryContext(ctx,
 		`SELECT `+courseColumns+` FROM courses c
-		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
+		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND (c.course_name LIKE ? ESCAPE '\\' OR c.teacher_name LIKE ? ESCAPE '\\')
 		 ORDER BY c.course_name, c.id
 		 LIMIT ? OFFSET ?`,
 		dayOfWeek, period, year, semester, model.SemesterFull, searchParam, searchParam, q.Limit, q.Offset,
@@ -320,8 +320,8 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 		args = append(args, *param.DayOfWeek)
 	}
 	if param.Keyword != "" {
-		where = append(where, "(c.course_name LIKE ? OR c.teacher_name LIKE ?)")
-		searchParam := "%" + param.Keyword + "%"
+		where = append(where, "(c.course_name LIKE ? ESCAPE '\\\\' OR c.teacher_name LIKE ? ESCAPE '\\\\')")
+		searchParam := "%" + escapeLikePrefix(param.Keyword) + "%"
 		args = append(args, searchParam, searchParam)
 	}
 

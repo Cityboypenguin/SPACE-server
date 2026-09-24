@@ -495,9 +495,9 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string, q r
 	searchQuery := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count, deleted_at
 		FROM posts
-		WHERE content LIKE ?  AND deleted_at IS NULL
+		WHERE content LIKE ? ESCAPE '\\' AND deleted_at IS NULL
 	`
-	args := []interface{}{"%" + query + "%"}
+	args := []interface{}{"%" + escapeLikePrefix(query) + "%"}
 	searchQuery, args, err := AppendBlockFilter(ctx, searchQuery, args, "user_id")
 	if err != nil {
 		return nil, err

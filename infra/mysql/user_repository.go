@@ -290,10 +290,10 @@ func (r *MySQLUserRepository) ListUserAccounts(ctx context.Context, q repository
 // 条件が分かれると「管理画面と一般画面で検索結果が違う」という分かりにくい差になるので、
 // 変えるときは両方を揃えること。
 func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.UserAccount, int, error) {
-	searchParam := "%" + keyword + "%"
+	searchParam := "%" + escapeLikePrefix(keyword) + "%"
 
 	total, err := countForPage(ctx, r.DB, q,
-		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? ESCAPE '\\' OR account_id LIKE ? ESCAPE '\\'`,
 		searchParam, searchParam,
 	)
 	if err != nil {
@@ -303,7 +303,7 @@ func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, k
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT DISTINCT `+userAccountColumns+`
 		FROM users
-		WHERE name LIKE ? OR account_id LIKE ?
+		WHERE name LIKE ? ESCAPE '\\' OR account_id LIKE ? ESCAPE '\\'
 		ORDER BY name ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, searchParam, searchParam, q.Limit, q.Offset)
@@ -320,10 +320,10 @@ func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, k
 }
 
 func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.User, int, error) {
-	searchParam := "%" + keyword + "%"
+	searchParam := "%" + escapeLikePrefix(keyword) + "%"
 
 	total, err := countForPage(ctx, r.DB, q,
-		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? OR account_id LIKE ?`,
+		`SELECT COUNT(DISTINCT id) FROM users WHERE name LIKE ? ESCAPE '\\' OR account_id LIKE ? ESCAPE '\\'`,
 		searchParam, searchParam,
 	)
 	if err != nil {
@@ -333,7 +333,7 @@ func (r *MySQLUserRepository) SearchUsersByKeyword(ctx context.Context, keyword 
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT DISTINCT `+userPublicColumns+`
 		FROM users
-		WHERE name LIKE ? OR account_id LIKE ?
+		WHERE name LIKE ? ESCAPE '\\' OR account_id LIKE ? ESCAPE '\\'
 		ORDER BY name ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, searchParam, searchParam, q.Limit, q.Offset)
