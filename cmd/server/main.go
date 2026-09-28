@@ -454,7 +454,13 @@ func main() {
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
 	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
 	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
-	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(termsRepository, sseBroker)
+	// 規約の配信は台をまたいで1回だけにする。タイマーは各台のメモリにあるので、
+	// 門番が無いと台数ぶん重複して飛ぶ。起動時の取りこぼし拾いもこの印が要る。
+	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(
+		termsRepository,
+		sseBroker,
+		infraredis.NewTermsBroadcastClaim(redisClient, pubsubChannelPrefix),
+	)
 
 	// リクエストの応答を待たせずに走らせる処理（チャット配信・お知らせ通知・活動記録）の
 	// 実行口。流儀は internal/async.Runner の1つだけに揃えてあり、component 名だけが違う。
@@ -744,7 +750,12 @@ func main() {
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
 	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
-	e.Use(authmiddleware.GraphQLRateLimit())
+	e.Use(authmiddleware.GraphQLRateLimit(infraredis.NewRateLimiterStore(
+		redisClient,
+		pubsubChannelPrefix,
+		authmiddleware.GraphQLRateLimitRate,
+		authmiddleware.GraphQLRateLimitBurst,
+	)))
 	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
