@@ -65,6 +65,10 @@ services:
       # 両方とも明示すること（未設定だと private 側は <container>-private になる）。
       AZURE_STORAGE_CONTAINER_NAME: ${AZURE_STORAGE_CONTAINER_NAME:-space-avatars}
       AZURE_STORAGE_PRIVATE_CONTAINER_NAME: ${AZURE_STORAGE_PRIVATE_CONTAINER_NAME:-space-activity-archives}
+      # DM の添付だけを入れる置き場。匿名読み取りを付けないコンテナーにすること。
+      # 表示は期限付きの署名付きURLで配られる（internal/upload.MessageMedia 参照）。
+      # 公開側と同じ名前を入れると、DM の添付が匿名で読めるようになる。
+      MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
       # 公開オブジェクトの URL に読み取りSASを付けるか。既定は付ける。
       #
       # コンテナーの匿名読み取りはストレージアカウントの allowBlobPublicAccess で
