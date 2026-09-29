@@ -30,16 +30,39 @@ services:
       INIT_ADMIN_EMAIL: ${INIT_ADMIN_EMAIL:-}
       INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
       # ファイル置き場。STORAGE_PROVIDER で Azure Blob と S3 を切り替える。
-      #
-      # 当面は S3 のまま動かす。Azure Blob 側のコード(infra/azure)はアカウント
-      # キーを要るが、そのキーを取り出す権限(listKeys)がまだ無いため。キーを
-      # もらえたら STORAGE_PROVIDER=azure と AZURE_* を入れるだけで移れる。
       # 使わない側の変数が空でも、起動時の検証は選ばれた側しか見ない。
+      #
+      # Azure の署名手段は2つあり、どちらか片方で足りる。
+      #
+      #   1. アプリ登録（既定にしたい方）: AZURE_TENANT_ID / AZURE_CLIENT_ID /
+      #      AZURE_CLIENT_SECRET。できることは割り当てたロールの範囲だけで、
+      #      ロールを外せば止まり、操作ログにその ID が残る。
+      #   2. アカウントキー: AZURE_STORAGE_ACCOUNT_KEY。ストレージアカウント1個の
+      #      中では全権（全コンテナー、queue/table/file も含む）で、権限を絞れず、
+      #      失効はローテーションのみ、操作ログに誰がやったかが残らない。
+      #
+      # 両方入れるとアカウントキーが勝つ。移行が済んだらキーの行を空にすること。
+      # 空にしないと、絞った ID を用意した意味が無くなる。
+      #
+      # Azure 上の VM でマネージド ID を使う場合、AZURE_* の資格情報は3つとも
+      # 不要（シークレットを持たずに済むので一番安全）。
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
       AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME:-}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
       AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY:-}
-      AZURE_STORAGE_CONTAINER_NAME: ${AZURE_STORAGE_CONTAINER_NAME:-space-storage}
-      AZURE_STORAGE_PRIVATE_CONTAINER_NAME: ${AZURE_STORAGE_PRIVATE_CONTAINER_NAME:-space-storage-private}
+      # 既定値は実在するコンテナー名に合わせてある。別のアカウントへ移すときは
+      # 両方とも明示すること（未設定だと private 側は <container>-private になる）。
+      AZURE_STORAGE_CONTAINER_NAME: ${AZURE_STORAGE_CONTAINER_NAME:-space-avatars}
+      AZURE_STORAGE_PRIVATE_CONTAINER_NAME: ${AZURE_STORAGE_PRIVATE_CONTAINER_NAME:-space-activity-archives}
+      # 公開オブジェクトの URL に読み取りSASを付けるか。既定は付ける。
+      #
+      # コンテナーの匿名読み取りはストレージアカウントの allowBlobPublicAccess で
+      # 決まり、アカウントキーでは開けられない（コントロールプレーンの設定）。
+      # 閉じたまま画像を配るために署名する。コンテナーを本当に公開にした場合、
+      # またはクエリ文字列を転送しない CDN を前に置いた場合だけ false にする。
+      AZURE_BLOB_PUBLIC_SIGN: ${AZURE_BLOB_PUBLIC_SIGN:-}
       # CDN (Front Door) を前に置いたら、その配信ホストを入れる。
       #   例: https://img.senshu-universe.com
       # 未設定なら Blob の既定ホストを直接配る（CDN 無しの構成でもそのまま動く）。

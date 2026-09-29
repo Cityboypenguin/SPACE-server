@@ -197,7 +197,7 @@ func main() {
 	var storageRepository repository.StorageRepository
 	var privateStorageRepository repository.PrivateStorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
-		storage, storageErr := azurerepo.New()
+		storage, storageErr := azurerepo.New(context.Background())
 		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to azure blob storage")
