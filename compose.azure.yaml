@@ -40,6 +40,11 @@ services:
       AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY:-}
       AZURE_STORAGE_CONTAINER_NAME: ${AZURE_STORAGE_CONTAINER_NAME:-space-storage}
       AZURE_STORAGE_PRIVATE_CONTAINER_NAME: ${AZURE_STORAGE_PRIVATE_CONTAINER_NAME:-space-storage-private}
+      # CDN (Front Door) を前に置いたら、その配信ホストを入れる。
+      #   例: https://img.senshu-universe.com
+      # 未設定なら Blob の既定ホストを直接配る（CDN 無しの構成でもそのまま動く）。
+      # アップロードと署名付きURLは常に Blob の本来のホストを使うので影響しない。
+      AZURE_BLOB_PUBLIC_ENDPOINT: ${AZURE_BLOB_PUBLIC_ENDPOINT:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}

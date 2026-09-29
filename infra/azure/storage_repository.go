@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -21,6 +22,10 @@ type AzureBlobStorageRepository struct {
 	accountName          string
 	containerName        string
 	privateContainerName string
+	// publicEndpoint は公開オブジェクトの URL を組むときの基点。CDN (Front Door) を
+	// 前に置く場合にその配信ホストを入れる。空なら Blob の既定ホストを使う。
+	// 末尾のスラッシュは New が落とす。
+	publicEndpoint string
 }
 
 func New() (*AzureBlobStorageRepository, error) {
@@ -31,6 +36,18 @@ func New() (*AzureBlobStorageRepository, error) {
 	if privateContainerName == "" {
 		privateContainerName = containerName + "-private"
 	}
+
+	// CDN (Front Door) を前に置くと、ブラウザへ返す URL はその配信ホストを指す必要が
+	// ある。Blob の既定ホストを返してしまうと CDN を通らず、置いた意味が無くなる。
+	//
+	// 未設定なら Blob の既定ホストへ素で当てる。つまり CDN 無しの構成もそのまま動く。
+	// アップロードや SAS の発行は常に Blob の本来のホスト(serviceURL)を使うので、
+	// ここを変えても影響しない。署名は配信ホストでは検証できないため。
+	//
+	// S3 側の MINIO_PUBLIC_ENDPOINT と同じ役割で、パスの形も揃えてある
+	// (<endpoint>/<container>/<key>)。CDN 側は受けたパスをそのまま Blob へ
+	// 転送すればよい。
+	publicEndpoint := strings.TrimRight(os.Getenv("AZURE_BLOB_PUBLIC_ENDPOINT"), "/")
 
 	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	if err != nil {
@@ -49,6 +66,7 @@ func New() (*AzureBlobStorageRepository, error) {
 		accountName:          accountName,
 		containerName:        containerName,
 		privateContainerName: privateContainerName,
+		publicEndpoint:       publicEndpoint,
 	}, nil
 }
 
@@ -193,7 +211,15 @@ func (r *AzureBlobStorageRepository) readSASURL(objectKey string) (string, error
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
 }
 
+// PublicURL は公開オブジェクトをブラウザへ渡すための URL を組む。
+//
+// 戻り値は DB に保存していない（DB が持つのは storage_key だけ）。読み出しのたびに
+// ここで組み立てるので、CDN の追加や撤去、ストレージアカウントの移行をしても
+// 既存データの書き換えは要らない。
 func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
+	if r.publicEndpoint != "" {
+		return fmt.Sprintf("%s/%s/%s", r.publicEndpoint, r.containerName, objectKey)
+	}
 	return fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s",
 		r.accountName, r.containerName, objectKey)
 }
