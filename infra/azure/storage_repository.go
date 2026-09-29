@@ -197,6 +197,25 @@ func New(ctx context.Context) (*AzureBlobStorageRepository, error) {
 	}, nil
 }
 
+// ForContainer は同じ資格情報のまま、別のコンテナーを見る写しを返す。
+//
+// DM の添付だけを非公開のコンテナーへ入れるために使う。コンテナー名以外は
+// 何も変えないので、アップロード・検査・複製・削除の手順は公開側と同一になる
+// （つまり internal/upload の受け入れがそのまま効く）。
+//
+// signReads は表示URLに読み取りSASを付けるかどうか。非公開コンテナーでは必ず
+// true にすること。false だと素のURLを返し、ブラウザから 404/403 になる。
+//
+// publicEndpoint は引き継がない。CDN の配信ホストは公開コンテナーのために
+// 設定するもので、非公開のものをそこから配ると素のURLで晒される。
+func (r *AzureBlobStorageRepository) ForContainer(containerName string, signReads bool) *AzureBlobStorageRepository {
+	copied := *r
+	copied.containerName = containerName
+	copied.signPublicURLs = signReads
+	copied.publicEndpoint = ""
+	return &copied
+}
+
 // errNoSigningCredential は署名する手段がどちらも無いときに返る。
 var errNoSigningCredential = errors.New("no credential is available to sign a SAS")
 

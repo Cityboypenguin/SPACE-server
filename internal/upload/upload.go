@@ -64,6 +64,16 @@ type Kind struct {
 	// 他人のキーを申告できると、まだ受け入れていない他人のアップロードを
 	// こちらの操作で消したり写したりできてしまう（Accept のコメント参照）。
 	Owned bool
+	// Private は「非公開の置き場へ入れる種別か」。
+	//
+	// 公開の置き場は匿名読み取りを許してあり、URL を知っていれば誰でも取れる。
+	// DM の添付はそこに置けない（本文は暗号化して保存しているのに、添付だけ
+	// 誰でも見られる状態になる）。true の種別は別の置き場へ入れ、表示は
+	// 期限付きの署名付きURLで配る。
+	//
+	// どの置き場を使うかは呼び出し側が選ぶ。この型は判断の材料を持つだけで、
+	// 置き場そのものは知らない（internal/upload は保管先の実装に依らない）。
+	Private bool
 }
 
 const (
@@ -81,14 +91,23 @@ var imageExts = map[string]string{
 
 var (
 	Avatar = Kind{Prefix: "avatars", MaxBytes: 5 * mb, Exts: imageExts, Label: "アバター画像", Owned: true}
-	// Media は投稿・メッセージ・質問・回答の添付。
-	Media         = Kind{Prefix: "media", MaxBytes: 20 * mb, Exts: imageExts, Label: "添付画像", Owned: true}
+	// Media は投稿・質問・回答の添付。公開の置き場に入る。
+	//
+	// 以前は DM の添付もこれを使っていた。公開の置き場は匿名読み取りを許して
+	// あるので、DM の添付が URL を知る誰にでも見えていた（本文は暗号化して
+	// 保存しているので、扱いが噛み合っていなかった）。DM は MessageMedia に分けた。
+	Media = Kind{Prefix: "media", MaxBytes: 20 * mb, Exts: imageExts, Label: "添付画像", Owned: true}
+	// MessageMedia は DM の添付。非公開の置き場に入り、表示は署名付きURLで配る。
+	//
+	// 上限と受け付ける種別は Media と揃えてある。利用者からすると同じ「画像の添付」
+	// で、送る先が DM かどうかで通る大きさが変わるのは説明できない。
+	MessageMedia  = Kind{Prefix: "message-media", MaxBytes: 20 * mb, Exts: imageExts, Label: "メッセージの添付画像", Owned: true, Private: true}
 	CommunityIcon = Kind{Prefix: "community-icons", MaxBytes: 5 * mb, Exts: imageExts, Label: "コミュニティアイコン", Owned: true}
 	// 規約ドキュメントは管理者だけが置く。誰のものでもないので所有者セグメントは無い。
 	TermsDocument = Kind{Prefix: "terms", MaxBytes: 5 * mb, Exts: map[string]string{"text/markdown": ".md"}, Label: "規約ドキュメント"}
 )
 
-var kinds = []Kind{Avatar, Media, CommunityIcon, TermsDocument}
+var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument}
 
 // StagingPrefix は署名付きURLが書き込める唯一の場所。
 //

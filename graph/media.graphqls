@@ -3,6 +3,10 @@
 extend type Query {
   presignedAvatarUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedMediaUploadUrl(contentType: String!): PresignedUploadUrl!
+  # DM の添付用。presignedMediaUploadUrl とは置き場が違う（非公開）ので、
+  # 口も分けてある。同じ口で済ませると、どちらに入るかが呼び出し側の指定
+  # 次第になり、取り違えで DM の添付が公開される。
+  presignedMessageMediaUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedCommunityIconUploadUrl(contentType: String!): PresignedUploadUrl!
   presignedTermsDocumentUploadUrl: PresignedUploadUrl!
   # 寸法が未取得の画像メディア。メンテナンス中に一括で埋めるツール

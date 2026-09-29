@@ -38,11 +38,17 @@ const discardTimeout = 10 * time.Second
 type Kind string
 
 const (
-	// Attachment は投稿・メッセージ・質問・回答の添付。
-	Attachment    Kind = "media"
-	Avatar        Kind = "avatars"
-	CommunityIcon Kind = "community-icons"
-	TermsDocument Kind = "terms"
+	// Attachment は投稿・質問・回答の添付。公開の置き場に入る。
+	Attachment Kind = "media"
+	// MessageAttachment は DM の添付。非公開の置き場に入る。
+	//
+	// Attachment と分けてあるのは、公開の置き場が匿名読み取りを許してあるため。
+	// DM の本文は暗号化して保存しているので、添付だけ URL を知る誰にでも見える
+	// のは扱いが噛み合わない。
+	MessageAttachment Kind = "message-media"
+	Avatar            Kind = "avatars"
+	CommunityIcon     Kind = "community-icons"
+	TermsDocument     Kind = "terms"
 )
 
 // Acceptor は申告されたオブジェクトキーを受け入れ、保存してよいキーを返す。

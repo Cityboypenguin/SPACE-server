@@ -27,7 +27,13 @@ func (r *queryResolver) presignedUploadURL(ctx context.Context, kind upload.Kind
 	if err != nil {
 		return nil, err
 	}
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
+	// 置き場は種別で決まる（upload.Kind.Private）。引数で選ばせると、DM の添付を
+	// 公開側へ上げる経路が取り違えだけで生まれる。
+	store := r.StorageRepository
+	if kind.Private {
+		store = r.MessageStorageRepository
+	}
+	uploadURL, err := store.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}

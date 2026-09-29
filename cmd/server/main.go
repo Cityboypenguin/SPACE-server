@@ -194,7 +194,20 @@ func main() {
 	}
 	pollRepository := mysql.NewMySQLPollRepository(database)
 
+	// ファイルの置き場は2つある。どちらも同じ実装で、見ているコンテナー（バケット）
+	// と表示URLの作り方だけが違う。
+	//
+	//   storageRepository        公開。匿名読み取りを許してあり、素のURLで配る。
+	//                            アバター、コミュニティアイコン、投稿・質問・回答の添付。
+	//   messageStorageRepository 非公開。表示は期限付きの署名付きURL。DM の添付。
+	//
+	// DM を分けてあるのは、本文を暗号化して保存しているのに添付だけ URL を知る
+	// 誰にでも見える状態を避けるため（internal/upload.MessageMedia 参照）。
+	//
+	// 受け入れの手順（staging の検査、ETag 条件付きの複製、最終キーの引き直し）は
+	// どちらも共通で、internal/upload がそのまま両方に効く。
 	var storageRepository repository.StorageRepository
+	var messageStorageRepository repository.StorageRepository
 	var privateStorageRepository repository.PrivateStorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
 		storage, storageErr := azurerepo.New(context.Background())
@@ -204,6 +217,7 @@ func main() {
 		}
 		storageRepository = storage
 		privateStorageRepository = storage
+		messageStorageRepository = storage.ForContainer(messageMediaContainer(), true)
 	} else {
 		storage, storageErr := miniorepo.New()
 		err = storageErr
@@ -212,6 +226,7 @@ func main() {
 		}
 		storageRepository = storage
 		privateStorageRepository = storage
+		messageStorageRepository = storage.ForBucket(messageMediaContainer(), true)
 	}
 	activityArchiveRepository := mysql.NewMySQLActivityArchiveRepository(database)
 	activityArchiver, err := activityarchive.New(activityArchiveRepository, privateStorageRepository, config.ActivityArchiveHMACKey(isProd))
@@ -240,7 +255,7 @@ func main() {
 	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
 	// アップロードの受け入れ（上限・種別の検査と、署名付きURLの及ばないキーへの移送）。
 	// 1つ作って、オブジェクトキーを保存するユースケース全部へ配る。
-	uploadAcceptor := upload.NewAcceptor(storageRepository)
+	uploadAcceptor := upload.NewAcceptor(storageRepository, messageStorageRepository)
 
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(uploadAcceptor, profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
@@ -551,9 +566,10 @@ func main() {
 	})
 
 	resolver := &graph.Resolver{
-		StorageRepository:     storageRepository,
-		MaintenanceRepository: maintenanceRepository,
-		MaintenanceFlag:       maintenanceFlag,
+		StorageRepository:        storageRepository,
+		MessageStorageRepository: messageStorageRepository,
+		MaintenanceRepository:    maintenanceRepository,
+		MaintenanceFlag:          maintenanceFlag,
 
 		UserUseCases: graph.UserUseCases{
 			CreateUserUseCase:             createUserUseCase,
@@ -1014,6 +1030,18 @@ func errorCodeFor(err error) apperr.Code {
 }
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
+// messageMediaContainer は DM の添付を入れるコンテナー（バケット）名。
+//
+// 公開の置き場とは別にする。既定値を持たせてあるのは、この名前を入れ忘れた
+// だけで DM の添付が公開側へ落ちる、という壊れ方を避けるため（空文字を
+// そのまま渡すと、実装側はコンテナー未指定として扱ってしまう）。
+func messageMediaContainer() string {
+	if v := strings.TrimSpace(os.Getenv("MESSAGE_MEDIA_CONTAINER")); v != "" {
+		return v
+	}
+	return "space-message-media"
+}
+
 // If ALLOWED_ORIGINS is not set, it falls back to wildcard (dev-friendly).
 func allowedOriginsFromEnv(isProd bool) []string {
 	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))

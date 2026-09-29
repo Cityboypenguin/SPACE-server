@@ -66,9 +66,15 @@ const CourseImportStatusTopic = "course_import:status"
 // favorite、block、terms など）は空行で区切ってあるだけにしてある。構造体に
 // しても増えるのは名前だけで、探しにくくなるぶん損になる。
 type Resolver struct {
-	StorageRepository     repository.StorageRepository
-	MaintenanceRepository repository.MaintenanceRepository
-	MaintenanceFlag       *atomic.Bool
+	StorageRepository repository.StorageRepository
+	// MessageStorageRepository は DM の添付だけを見る置き場。非公開のコンテナーを
+	// 指しており、表示URLは期限付きの署名付きになる。
+	//
+	// StorageRepository と同じ型なので、取り違えても型では気づけない。DM に
+	// 関わる経路（送信の受け入れと、Message.media の表示URL）でだけこちらを使う。
+	MessageStorageRepository repository.StorageRepository
+	MaintenanceRepository    repository.MaintenanceRepository
+	MaintenanceFlag          *atomic.Bool
 
 	UserUseCases
 	PostUseCases
