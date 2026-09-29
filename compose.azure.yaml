@@ -4,6 +4,15 @@
 # app は 127.0.0.1 にだけ公開する。外から受けるのは VM 上の nginx で、
 # そこから回す（nginx が WebSocket と SSE の面倒を見ている。
 # deploy/azure/nginx.conf を参照）。直接 80 を持たせると、その層が消える。
+# ログの上限。既定の json-file は上限が無く、書き出したぶんだけ増え続ける。
+# ディスクが埋まると3つのコンテナーが揃って止まるので、必ず入れる。
+# 10MB×3世代＝1コンテナー最大30MB。障害調査に必要な直近ぶんは残る。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
     image: ${ACR_IMAGE}
@@ -89,6 +98,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    logging: *default-logging
     restart: unless-stopped
 
   mysql:
@@ -104,6 +114,7 @@ services:
       timeout: 10s
       retries: 30
       start_period: 40s
+    logging: *default-logging
     restart: unless-stopped
 
   redis:
@@ -119,6 +130,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
