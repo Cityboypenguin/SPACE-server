@@ -1,0 +1,98 @@
+# Azure VM 上の本番構成。compose.ec2.yaml と同じ形だが、取得元が ACR で、
+# ファイル置き場が S3 ではなく Azure Blob になっている。
+#
+# app は 127.0.0.1 にだけ公開する。外から受けるのは VM 上の nginx で、
+# そこから回す（nginx が WebSocket と SSE の面倒を見ている。
+# deploy/azure/nginx.conf を参照）。直接 80 を持たせると、その層が消える。
+services:
+  app:
+    image: ${ACR_IMAGE}
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-space}
+      # 同じ compose ネットワークの中だけを通るので TLS は張らない。
+      DB_TLS: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_TLS: "false"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      JWT_REFRESH_EXPIRATION_MINUTES: ${JWT_REFRESH_EXPIRATION_MINUTES:-43200}
+      MESSAGE_ENCRYPTION_KEY: ${MESSAGE_ENCRYPTION_KEY}
+      ACTIVITY_ARCHIVE_HMAC_KEY: ${ACTIVITY_ARCHIVE_HMAC_KEY}
+      OPAQUE_ID_SECRET: ${OPAQUE_ID_SECRET}
+      INIT_ADMIN_NAME: ${INIT_ADMIN_NAME:-}
+      INIT_ADMIN_EMAIL: ${INIT_ADMIN_EMAIL:-}
+      INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
+      # ファイル置き場。STORAGE_PROVIDER で Azure Blob と S3 を切り替える。
+      #
+      # 当面は S3 のまま動かす。Azure Blob 側のコード(infra/azure)はアカウント
+      # キーを要るが、そのキーを取り出す権限(listKeys)がまだ無いため。キーを
+      # もらえたら STORAGE_PROVIDER=azure と AZURE_* を入れるだけで移れる。
+      # 使わない側の変数が空でも、起動時の検証は選ばれた側しか見ない。
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+      AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME:-}
+      AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY:-}
+      AZURE_STORAGE_CONTAINER_NAME: ${AZURE_STORAGE_CONTAINER_NAME:-space-storage}
+      AZURE_STORAGE_PRIVATE_CONTAINER_NAME: ${AZURE_STORAGE_PRIVATE_CONTAINER_NAME:-space-storage-private}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
+      MINIO_BUCKET: ${MINIO_BUCKET:-}
+      MINIO_PRIVATE_BUCKET: ${MINIO_PRIVATE_BUCKET:-}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-true}
+      MINIO_REGION: ${MINIO_REGION:-ap-northeast-1}
+      MINIO_BUCKET_LOOKUP: ${MINIO_BUCKET_LOOKUP:-dns}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      APP_ENV: production
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: ${ACR_LOGIN_SERVER}/mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-space}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
+
+  redis:
+    image: ${ACR_LOGIN_SERVER}/redis:7-alpine
+    # 既定では一定間隔のスナップショットしか取らない。失効トークンや
+    # ワンタイムパスワードを持っているので、追記ログも有効にして
+    # 再起動で消えないようにする。
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
