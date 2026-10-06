@@ -1,0 +1,12 @@
+# /etc/cron.d/space-db-backup へ置く。
+# DB のバックアップを日次で取る（scripts/backup_db.sh）。
+#
+# VM のタイムゾーンは UTC なので、19:15 UTC = 翌 04:15 JST。
+# 利用者が最も少ない時間帯を選んである。
+#
+# flock は前回が長引いたときの重なりを防ぐ。重なると mysqldump が2本走り、
+# 同じ名前のファイルを別々に書きに行く。-n は待たずに諦める指定で、
+# 諦めたぶんは翌日に取れるので待つ必要が無い。
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 19 * * * root flock -n /run/space-db-backup.lock /usr/local/bin/space-db-backup.sh >> /var/log/space-db-backup.log 2>&1

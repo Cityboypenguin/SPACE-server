@@ -13,6 +13,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
+	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
@@ -85,9 +86,24 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	}
 	var result []*gqlmodel.Media
 	for _, m := range mediaList {
-		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+		// DM の添付は非公開の置き場にあるので、そちら（署名付きURLを返す側）から
+		// URL を作る。公開側の PublicURL を使うと、存在しないキーを指す素の URL に
+		// なって表示できない。
+		result = append(result, toGraphMedia(m, r.messageMediaURL(m.StorageKey)))
 	}
 	return result, nil
+}
+
+// messageMediaURL は DM の添付の表示URLを作る。
+//
+// 分離前に保存された添付は公開側のコンテナーに残っており、キーの先頭が "media/"
+// になっている。移行が終わるまで両方が DB に居るので、キーで見分けて取りに行く先を
+// 変える。移行後は "message-media/" だけになり、前半の分岐は通らなくなる。
+func (r *Resolver) messageMediaURL(storageKey string) string {
+	if kind, ok := upload.KindForObjectKey(storageKey); ok && !kind.Private {
+		return r.StorageRepository.PublicURL(storageKey)
+	}
+	return r.MessageStorageRepository.PublicURL(storageKey)
 }
 
 // IsMine is the resolver for the isMine field.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -20,6 +21,9 @@ type MinIOStorageRepository struct {
 	privateBucket  string
 	publicEndpoint string
 	bucketLookup   minio.BucketLookupType
+	// signReads は PublicURL に署名を付けるかどうか。非公開バケットを見る
+	// 写し（ForBucket）で true になる。ゼロ値 false が公開バケットの挙動。
+	signReads bool
 }
 
 func New() (*MinIOStorageRepository, error) {
@@ -142,7 +146,29 @@ func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey,
 	return nil
 }
 
+// minioReadURLTTL は非公開オブジェクトの表示URLの寿命。
+// minioReadURLWindow は失効時刻を丸める幅。
+//
+// 丸めるのは、同じオブジェクトに同じURLを返し続けるため。毎回 now+TTL で
+// 署名するとURLが呼び出しごとに変わり、ブラウザが別物として扱うので
+// キャッシュが効かなくなる（同じ画像を何度も取り直す）。Azure 側と同じ扱い。
+//
+// minioSignTimeout は署名にかける待ちの上限。PublicURL は error を返せないので、
+// ここで詰まると表示が丸ごと止まる。短く切って空文字を返す方に倒す。
+const (
+	minioReadURLTTL    = 24 * time.Hour
+	minioReadURLWindow = time.Hour
+	minioSignTimeout   = 5 * time.Second
+)
+
+// PublicURL は表示用のURLを組む。
+//
+// signReads が立っていれば署名付きの読み取りURLを返す（非公開バケット用）。
+// 立っていなければ素のURLで、バケット側の匿名読み取りに任せる。
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
+	if r.signReads {
+		return r.signedReadURL(objectKey)
+	}
 	if r.bucketLookup == minio.BucketLookupDNS {
 		u, err := url.Parse(r.publicEndpoint)
 		if err == nil {
@@ -150,6 +176,42 @@ func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 		}
 	}
 	return fmt.Sprintf("%s/%s/%s", r.publicEndpoint, r.bucket, objectKey)
+}
+
+// signedReadURL は非公開オブジェクトを1つ読むための署名付きURLを作る。
+// 失敗したら空文字を返す（表示できないだけで、他の項目は出す）。
+func (r *MinIOStorageRepository) signedReadURL(objectKey string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), minioSignTimeout)
+	defer cancel()
+
+	// 失効時刻を窓で丸め、同じ窓の中では同じURLになるようにする。
+	// 丸めたぶん寿命は TTL から TTL+Window の幅を取るので、掴んだ直後に
+	// 切れることはない。
+	expiry := time.Now().UTC().Add(minioReadURLTTL).Truncate(minioReadURLWindow).Add(minioReadURLWindow)
+	u, err := r.presignClient.PresignedGetObject(ctx, r.bucket, objectKey, time.Until(expiry), nil)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("bucket", r.bucket).Str("object_key", objectKey).
+			Msg("failed to sign a read URL for a private object")
+		return ""
+	}
+	return u.String()
+}
+
+// ForBucket は同じ資格情報のまま、別のバケットを見る写しを返す。
+//
+// DM の添付だけを非公開のバケットへ入れるために使う。バケット名以外は何も
+// 変えないので、アップロード・検査・複製・削除の手順は公開側と同一になる
+// （つまり internal/upload の受け入れがそのまま効く）。
+//
+// signReads は表示URLに署名を付けるかどうか。非公開バケットでは必ず true。
+// publicEndpoint は引き継がない（CDN の配信ホストは公開側のための設定で、
+// 非公開のものをそこから配ると素のURLで晒される）。
+func (r *MinIOStorageRepository) ForBucket(bucket string, signReads bool) *MinIOStorageRepository {
+	copied := *r
+	copied.bucket = bucket
+	copied.signReads = signReads
+	copied.publicEndpoint = ""
+	return &copied
 }
 
 func (r *MinIOStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {

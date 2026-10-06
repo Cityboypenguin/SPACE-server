@@ -101,10 +101,11 @@ func TestCheckKey_SkipsOwnershipForUnownedKinds(t *testing.T) {
 // URLは出るのに保存できない、という形で出るので気づきにくい。
 func TestUsecaseKindsMapToRealKinds(t *testing.T) {
 	cases := map[uploadusecase.Kind]Kind{
-		uploadusecase.Attachment:    Media,
-		uploadusecase.Avatar:        Avatar,
-		uploadusecase.CommunityIcon: CommunityIcon,
-		uploadusecase.TermsDocument: TermsDocument,
+		uploadusecase.Attachment:        Media,
+		uploadusecase.MessageAttachment: MessageMedia,
+		uploadusecase.Avatar:            Avatar,
+		uploadusecase.CommunityIcon:     CommunityIcon,
+		uploadusecase.TermsDocument:     TermsDocument,
 	}
 	if len(cases) != len(kinds) {
 		t.Fatalf("種別が %d 個あるのに、ユースケース側の名前は %d 個しかない", len(kinds), len(cases))
@@ -147,5 +148,28 @@ func TestDiscard_IgnoresKeysItDidNotIssue(t *testing.T) {
 
 	if len(store.deleted) != 0 {
 		t.Fatalf("deleted = %v, want 何も消さないこと", store.deleted)
+	}
+}
+
+// TestOnlyMessageMediaIsPrivate は「どの種別が非公開の置き場へ行くか」を固定する。
+//
+// Private を取り違えると、DM の添付が匿名読み取りを許した置き場に入る
+// （本文は暗号化して保存しているのに、添付だけ URL を知る誰にでも見える）。
+// 静かに起きて気づけないので、表として明示しておく。
+func TestOnlyMessageMediaIsPrivate(t *testing.T) {
+	want := map[string]bool{
+		Media.Prefix:         false,
+		MessageMedia.Prefix:  true,
+		Avatar.Prefix:        false,
+		CommunityIcon.Prefix: false,
+		TermsDocument.Prefix: false,
+	}
+	if len(want) != len(kinds) {
+		t.Fatalf("種別が %d 個あるのに、表は %d 個しかない", len(kinds), len(want))
+	}
+	for _, k := range kinds {
+		if k.Private != want[k.Prefix] {
+			t.Errorf("%s の Private = %v, want %v", k.Prefix, k.Private, want[k.Prefix])
+		}
 	}
 }

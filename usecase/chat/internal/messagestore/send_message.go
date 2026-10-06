@@ -92,7 +92,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 	uploads := uploadusecase.Begin(uc.uploads)
 	defer uploads.DiscardOnError(ctx, &err)
 
-	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.MessageAttachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
 	if err != nil {
 		return nil, err
 	}
