@@ -66,7 +66,7 @@ func NewAccessPolicy(deps AccessPolicyDeps) AccessPolicy {
 // EnsureReadAccess は roomID を閲覧してよいかを判定する。
 //
 // 判定規則:
-//   - 授業内チャット: 認証済みなら誰でも閲覧可（F-04 全授業公開。投稿者は匿名表示）。
+//   - 授業内チャット: 認証済みなら誰でも閲覧可（F-04 全授業公開）。
 //   - それ以外: room_users の membership が要る。
 //   - 管理者: DM 以外なら非メンバーでも閲覧可。
 //
@@ -140,7 +140,7 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 //	DM          | membership 必須                   | membership 必須（非参加のDMは不可）
 //
 // 授業ルームで membership を見ないのは、授業内チャットが room_users を使わない
-// 設計（誰でも閲覧でき匿名で表示する）だから。代わりに「現学期かつ履修中か」を
+// 設計（履修していなくても誰でも閲覧できる）だから。代わりに「現学期かつ履修中か」を
 // CheckRoomWritable が見る。送信時 (ensureWriteAccessFor) と同じ判定なので、
 // 送れる状態でなければ直せもしない、で揃う。
 //

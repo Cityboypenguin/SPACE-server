@@ -12,7 +12,6 @@ package di
 import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
@@ -51,7 +50,6 @@ func NewCourseUseCases(
 	courseRepo repository.CourseRepository,
 	timetableRepo repository.TimetableRepository,
 	settingRepo repository.SystemSettingRepository,
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 	userSettingRepo repository.UserSettingRepository,
 	roomRepo repository.RoomRepository,
 	blockRepo repository.BlockerRepository,
@@ -98,13 +96,10 @@ func NewQuestionUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
-	// 匿名ID(匿名NNN)は投稿時に確定させるので、質問・回答の作成にも採番の口が要る。
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 ) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
-	anonIdentity := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)
 	return graph.QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, anonIdentity),
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable),
 		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
@@ -112,7 +107,7 @@ func NewQuestionUseCases(
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
@@ -128,12 +123,10 @@ func NewPollUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
-	// 匿名ID(匿名NNN)は投稿時に確定させるので、投票の作成にも採番の口が要る。
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 ) graph.PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.PollUseCases{
-		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
+		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable),
 		VotePollUseCase:    pollusecase.NewVotePollUseCase(events, pollRepo, requireWritable),
 		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(events, pollRepo, requireWritable),
 		ListPollsUseCase:   pollusecase.NewListPollsUseCase(pollRepo),

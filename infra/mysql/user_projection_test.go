@@ -123,21 +123,7 @@ func userProjectionTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 
 	// db/migrations の DDL から外部キーだけ落とした形。
-	ddl := []string{
-		`CREATE TABLE users (
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			account_id VARCHAR(255) NOT NULL UNIQUE,
-			name VARCHAR(255) NOT NULL,
-			email VARCHAR(255) NOT NULL UNIQUE,
-			hashed_password VARCHAR(255) NOT NULL,
-			credentials_version BIGINT NOT NULL DEFAULT 0,
-			role VARCHAR(50) NOT NULL DEFAULT 'student',
-			status VARCHAR(50) NOT NULL DEFAULT 'active',
-			created_at BIGINT NOT NULL,
-			updated_at BIGINT NOT NULL,
-			last_active_at BIGINT NULL,
-			PRIMARY KEY (id)
-		)`,
+	ddl := append(append([]string{}, userTablesDDL...),
 		`CREATE TABLE rooms (
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			name VARCHAR(255) NOT NULL,
@@ -158,7 +144,7 @@ func userProjectionTestDB(t *testing.T) (*sql.DB, func()) {
 			PRIMARY KEY (id),
 			UNIQUE KEY unique_room_user (room_id, user_id)
 		)`,
-	}
+	)
 	for _, stmt := range ddl {
 		if _, err := db.Exec(stmt); err != nil {
 			db.Close()
@@ -328,6 +314,158 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 		}
 		if after.Status != model.UserStatusFrozen {
 			t.Errorf("status = %q, want frozen", after.Status)
+		}
+	})
+}
+
+// 退会の段階ごとに、どの取得から見えるかを実際の SQL で確かめる。
+//
+//   - 退会手続き中: 表示系（投稿者の表示・検索・メンバー一覧・トークン検証）からは
+//     消えるが、管理画面とログインからは見える（ログインで取り消せるように）。
+//   - 取り消し: 元どおり見える。
+//   - 完全削除: どこからも見えず、users には deleted の識別子だけが残る。
+func TestUserLifecycle_VisibilityFollowsTheStage(t *testing.T) {
+	db, cleanup := userProjectionTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := NewMySQLUserRepository(db)
+	roomUserRepo := NewMySQLRoomUserRepository(db)
+	txManager := NewMySQLTxManager(db)
+
+	creds := &model.UserCredentials{
+		UserAccount: model.UserAccount{
+			User:  model.User{AccountID: "taro", Name: "太郎", Role: "user", Status: model.UserStatusActive},
+			Email: "taro@example.com",
+		},
+		HashedPassword: "hash",
+	}
+	if err := userRepo.SaveCredentials(ctx, creds); err != nil {
+		t.Fatalf("SaveCredentials: %v", err)
+	}
+	id := creds.ID
+	now := time.Now().Unix()
+	if _, err := db.Exec(`INSERT INTO rooms (id, name, type, created_at, updated_at) VALUES (1, 'r', 'community', ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (1, ?, 'member', ?, ?)`, id, now, now); err != nil {
+		t.Fatal(err)
+	}
+	versionBefore, err := userRepo.GetCredentialsVersionByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	displayVisible := func(t *testing.T) bool {
+		t.Helper()
+		u, err := userRepo.GetUserByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		us, err := userRepo.GetUsersByIDs(ctx, []int64{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found, _, err := userRepo.SearchUsersByKeyword(ctx, "太郎", repository.PageQuery{Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		members, err := roomUserRepo.ListUsersByRoomIDs(ctx, []int64{1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		visible := []bool{u != nil, len(us) == 1, len(found) == 1, len(members[1]) == 1}
+		for _, v := range visible[1:] {
+			if v != visible[0] {
+				t.Fatalf("display paths disagree: GetUserByID/GetUsersByIDs/Search/RoomMembers = %v", visible)
+			}
+		}
+		return visible[0]
+	}
+
+	at := time.Unix(now, 0)
+	if ok, err := userRepo.DeactivateUser(ctx, id, at); err != nil || !ok {
+		t.Fatalf("DeactivateUser = %v, %v", ok, err)
+	}
+	t.Run("退会手続き中は表示系から消える", func(t *testing.T) {
+		if displayVisible(t) {
+			t.Fatal("a deactivated user is still visible to other users")
+		}
+		if a, err := userRepo.GetUserAccountByID(ctx, id); err != nil || a == nil || a.Status != model.UserStatusDeactivated {
+			t.Fatalf("admin view = %+v, %v; want the deactivated account", a, err)
+		}
+		if c, err := userRepo.FindCredentialsByEmail(ctx, "taro@example.com"); err != nil || c == nil {
+			t.Fatalf("login lookup = %+v, %v; want it to find the account to restore", c, err)
+		}
+		if v, err := userRepo.GetCredentialsVersionByID(ctx, id); err != nil || v != versionBefore+1 {
+			t.Fatalf("credentials version = %d, %v; want %d (退会で発行済みのトークンを失効させる)", v, err, versionBefore+1)
+		}
+		if ok, err := userRepo.DeactivateUser(ctx, id, at); err != nil || ok {
+			t.Fatalf("second DeactivateUser = %v, %v; want false", ok, err)
+		}
+	})
+
+	t.Run("取り消すと元どおり見える", func(t *testing.T) {
+		if ok, err := userRepo.ReactivateUser(ctx, id); err != nil || !ok {
+			t.Fatalf("ReactivateUser = %v, %v", ok, err)
+		}
+		if !displayVisible(t) {
+			t.Fatal("a reactivated user is still hidden")
+		}
+	})
+
+	t.Run("猶予切れの一覧は期限で絞る", func(t *testing.T) {
+		if ok, err := userRepo.DeactivateUser(ctx, id, at); err != nil || !ok {
+			t.Fatalf("DeactivateUser = %v, %v", ok, err)
+		}
+		if ids, err := userRepo.ListUserIDsToPurge(ctx, at.Add(-time.Second), 10); err != nil || len(ids) != 0 {
+			t.Fatalf("before the deadline = %v, %v; want none", ids, err)
+		}
+		if ids, err := userRepo.ListUserIDsToPurge(ctx, at, 10); err != nil || len(ids) != 1 || ids[0] != id {
+			t.Fatalf("at the deadline = %v, %v; want [%d]", ids, err, id)
+		}
+	})
+
+	t.Run("完全削除するとどこからも消え、識別子だけが残る", func(t *testing.T) {
+		if err := txManager.RunInTx(ctx, func(ctx context.Context) error {
+			l, err := userRepo.LockUserLifecycle(ctx, id)
+			if err != nil || l == nil || l.Status != model.UserStatusDeactivated || l.DeactivatedAt == nil {
+				t.Fatalf("LockUserLifecycle = %+v, %v", l, err)
+			}
+			ok, err := userRepo.PurgeUser(ctx, id, at)
+			if err != nil || !ok {
+				t.Fatalf("PurgeUser = %v, %v", ok, err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if displayVisible(t) {
+			t.Fatal("a purged user is still visible")
+		}
+		if a, err := userRepo.GetUserAccountByID(ctx, id); err != nil || a != nil {
+			t.Fatalf("admin view = %+v, %v; want nothing", a, err)
+		}
+		if c, err := userRepo.FindCredentialsByEmail(ctx, "taro@example.com"); err != nil || c != nil {
+			t.Fatalf("login lookup = %+v, %v; want nothing", c, err)
+		}
+		var status string
+		if err := db.QueryRow(`SELECT status FROM users WHERE id = ?`, id).Scan(&status); err != nil || status != model.UserStatusDeleted {
+			t.Fatalf("users row = %q, %v; want the deleted identity to remain", status, err)
+		}
+		if ok, err := userRepo.ReactivateUser(ctx, id); err != nil || ok {
+			t.Fatalf("ReactivateUser after purge = %v, %v; want false", ok, err)
+		}
+		// 同じメールアドレスと ID で、別の人が登録できる。
+		again := &model.UserCredentials{
+			UserAccount: model.UserAccount{
+				User:  model.User{AccountID: "taro", Name: "別の太郎", Role: "user", Status: model.UserStatusActive},
+				Email: "taro@example.com",
+			},
+			HashedPassword: "hash",
+		}
+		if err := userRepo.SaveCredentials(ctx, again); err != nil || again.ID == id {
+			t.Fatalf("re-register = id %d, %v; want a new identity", again.ID, err)
 		}
 	})
 }

@@ -43,6 +43,10 @@ type MediaReader interface {
 	ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error)
 	ListByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error)
 	ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
+	// ListStorageKeysByUploader はその利用者がアップロードした全メディアの保存先キー。
+	// 退会者の個人情報を消すとき、media 行は CASCADE で消えるがストレージ上の実体は
+	// 消えないので、行が消える前にキーを控えておくために使う。
+	ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error)
 }
 
 // MediaDeleter は紐づけとメディア本体の削除。

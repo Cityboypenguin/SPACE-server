@@ -762,9 +762,10 @@ type ComplexityRoot struct {
 	}
 
 	UserAuthPayload struct {
-		RefreshToken func(childComplexity int) int
-		Token        func(childComplexity int) int
-		User         func(childComplexity int) int
+		AccountRestored func(childComplexity int) int
+		RefreshToken    func(childComplexity int) int
+		Token           func(childComplexity int) int
+		User            func(childComplexity int) int
 	}
 
 	UserPage struct {
@@ -5233,6 +5234,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.UserAccountPage.Total(childComplexity), true
 
+	case "UserAuthPayload.accountRestored":
+		if e.ComplexityRoot.UserAuthPayload.AccountRestored == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserAuthPayload.AccountRestored(childComplexity), true
 	case "UserAuthPayload.refreshToken":
 		if e.ComplexityRoot.UserAuthPayload.RefreshToken == nil {
 			break
@@ -6512,6 +6519,8 @@ func (ec *executionContext) childFields_UserAuthPayload(ctx context.Context, fie
 		return ec.fieldContext_UserAuthPayload_refreshToken(ctx, field)
 	case "user":
 		return ec.fieldContext_UserAuthPayload_user(ctx, field)
+	case "accountRestored":
+		return ec.fieldContext_UserAuthPayload_accountRestored(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserAuthPayload", field.Name)
 }
@@ -27157,6 +27166,29 @@ func (ec *executionContext) fieldContext_UserAuthPayload_user(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _UserAuthPayload_accountRestored(ctx context.Context, field graphql.CollectedField, obj *model.UserAuthPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserAuthPayload_accountRestored(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AccountRestored, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UserAuthPayload_accountRestored(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserAuthPayload", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _UserPage_items(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37293,6 +37325,11 @@ func (ec *executionContext) _UserAuthPayload(ctx context.Context, sel ast.Select
 			}
 		case "user":
 			out.Values[i] = ec._UserAuthPayload_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accountRestored":
+			out.Values[i] = ec._UserAuthPayload_accountRestored(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

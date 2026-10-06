@@ -32,6 +32,9 @@ const (
 	MessagePromotedToCommunityOwner  = "コミュニティのオーナーに昇格しました"
 	MessageDemotedFromCommunityOwner = "コミュニティのオーナーから降格されました"
 	MessageKickedFromCommunity       = "コミュニティからキックされました"
+	// MessageInheritedCommunityOwner は、唯一のオーナーが退会したためにオーナーを
+	// 引き継いだとき。自分で選んだ昇格ではないので、昇格とは文言を分けて理由を伝える。
+	MessageInheritedCommunityOwner = "オーナーが退会したため、コミュニティのオーナーを引き継ぎました"
 )
 
 // MessageMentionedInRoom はチャットでメンションされたときの文言。
@@ -46,15 +49,6 @@ func MessageRepliedInRoom(roomName string) string {
 	// 「メッセージに返信」と言っている時点でチャットの話だと分かるので、
 	// 場所を名乗れないときは場所に触れない。
 	return inRoom(roomName, "", "あなたのメッセージに返信がありました")
-}
-
-// MessageAnonymousRepliedInRoom は授業内チャット（匿名）で引用返信されたときの文言。
-//
-// anonymousLabel はそのルーム内の匿名ラベル（「匿名12」など）。ここに実名を渡しては
-// いけない。授業内チャットの匿名性は通知の文言からも崩れうる（誰が返信したかが
-// 分かってしまう）ので、呼び出し側は必ずラベルを解決してから渡すこと。
-func MessageAnonymousRepliedInRoom(roomName, anonymousLabel string) string {
-	return inRoom(roomName, "", anonymousLabel+"さんがあなたのメッセージに返信しました")
 }
 
 // 通知に載せるルーム名の上限。ルーム名は255文字まで入りうる一方、通知は一覧でも

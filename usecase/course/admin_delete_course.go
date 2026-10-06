@@ -28,7 +28,7 @@ func NewAdminDeleteCourseUseCase(courseRepo repository.CourseRepository, roomRep
 // db/migrations/045_create_courses.up.sql), and from there timetables.course_id ->
 // courses(id) is itself ON DELETE CASCADE too, so deleting the room transitively
 // wipes the course, every user's timetable registration for it, and the room's
-// messages/questions/polls/anonymous identities in one atomic DB-level cascade.
+// messages/questions/polls in one atomic DB-level cascade.
 // There is no separate "delete the courses row but keep the room" operation to
 // reach for - that would leave an orphaned, permanently-empty course room behind.
 //

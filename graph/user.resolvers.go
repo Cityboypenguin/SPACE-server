@@ -75,14 +75,10 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 
 // DeleteMyAccount is the resolver for the deleteMyAccount field.
 func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
-
-	numericID := claims.ID
-
-	return r.DeleteUserUseCase.Execute(ctx, numericID)
+	return r.DeleteMyAccountUseCase.Execute(ctx)
 }
 
 // UpdateUser is the resolver for the updateUser field.
@@ -118,9 +114,10 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 	}
 
 	return &gqlmodel.UserAuthPayload{
-		Token:        result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		User:         toGraphUserAccount(result.User),
+		Token:           result.AccessToken,
+		RefreshToken:    result.RefreshToken,
+		User:            toGraphUserAccount(result.User),
+		AccountRestored: result.AccountRestored,
 	}, nil
 }
 

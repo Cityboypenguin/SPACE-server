@@ -79,6 +79,13 @@ type RoomRoleRepository interface {
 	// memberships before account deletion decides which complete rooms to lock.
 	// It must be called inside TxManager.RunInTx.
 	LockUserCommunityMembershipsForUpdate(ctx context.Context, userID int64) (map[int64]string, error)
+	// FindOwnerSuccessor は、leavingUserID が抜けるコミュニティでオーナーを
+	// 引き継ぐ人を返す。低浮上の人に渡さないよう、利用中のメンバーのうち
+	// そのコミュニティで最後に発言したのが最も新しい人を選ぶ。発言が無ければ
+	// アプリに最後にアクセスした日時、それも無ければ参加の早さで決める。
+	// 利用中の人が居なければ残りから同じ順で選ぶ。他に誰も居なければ 0。
+	// LockRoomMemberRolesForUpdate でメンバーの行をロックした後に呼ぶ。
+	FindOwnerSuccessor(ctx context.Context, roomID, leavingUserID int64) (int64, error)
 }
 
 // ReadPositionRepository は既読位置。

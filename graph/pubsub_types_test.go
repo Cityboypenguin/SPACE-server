@@ -32,7 +32,7 @@ func TestPubSubCodec_RoundTripsEverySubscriptionPayload(t *testing.T) {
 				if !ok {
 					t.Fatalf("型が %T", got)
 				}
-				// RoomID と UserID は受け取った台が匿名表示や権限を決めるのに使う。
+				// RoomID と UserID は受け取った台が投稿者の表示や権限を決めるのに使う。
 				// ここが落ちると、授業内チャットで実名が出るなどの形で効く。
 				if m.ID != "m1" || m.RoomID != "r1" || m.UserID != "u1" || m.Content != "やあ" {
 					t.Fatalf("中身が変わっている: %+v", m)

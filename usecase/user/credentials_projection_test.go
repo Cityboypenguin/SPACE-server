@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -110,7 +111,21 @@ func (r *noCredentialsUserRepo) SuggestUsersByPrefix(context.Context, string, in
 	return []*model.User{r.user}, nil
 }
 
-func (r *noCredentialsUserRepo) DeleteUser(context.Context, int64) (bool, error)        { return true, nil }
+func (r *noCredentialsUserRepo) DeactivateUser(context.Context, int64, time.Time) (bool, error) {
+	return true, nil
+}
+func (r *noCredentialsUserRepo) ReactivateUser(context.Context, int64) (bool, error) {
+	return true, nil
+}
+func (r *noCredentialsUserRepo) PurgeUser(context.Context, int64, time.Time) (bool, error) {
+	return true, nil
+}
+func (r *noCredentialsUserRepo) LockUserLifecycle(context.Context, int64) (*model.UserLifecycle, error) {
+	return nil, nil
+}
+func (r *noCredentialsUserRepo) ListUserIDsToPurge(context.Context, time.Time, int) ([]int64, error) {
+	return nil, nil
+}
 func (r *noCredentialsUserRepo) DeleteActivityHistory(context.Context, int64) error     { return nil }
 func (r *noCredentialsUserRepo) UpdateLastActiveAt(context.Context, int64, int64) error { return nil }
 func (r *noCredentialsUserRepo) LogActivityDate(context.Context, int64, string) error   { return nil }

@@ -51,15 +51,6 @@ func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gql
 
 // UserID is the resolver for the userID field.
 func (r *messageResolver) UserID(ctx context.Context, obj *gqlmodel.Message) (string, error) {
-	numericID, err := decodeGraphID(ctx, "user", obj.UserID)
-	if err != nil {
-		return "", nil
-	}
-
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
-		return anon.ID, nil
-	}
-
 	return obj.UserID, nil
 }
 
@@ -70,10 +61,6 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 		return nil, fmt.Errorf("invalid user id: %s", obj.UserID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
-		return anon, nil
-	}
-
 	// スキーマ上 Message.user は非null（user: User!）。退会したユーザーの
 	// メッセージがここへ来るので、nil を返すと gqlgen の非null用マーシャラが
 	// 「the requested element is null which the schema does not allow」を立て、
@@ -81,18 +68,9 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 	// 混ざるとそのルームの履歴が丸ごと出なくなる。投稿側（postResolver.User）と
 	// 同じく「削除されたアカウント」の代替を返して、履歴は読めるままにする。
 	//
-	// 授業ルームは上の匿名表示で先に返るので、ここへ来るのは DM とコミュニティ。
-	//
 	// 読み込みエラーと不存在は分ける。まとめて代替で塗り潰すと、DBが一時的に
 	// 答えられないだけの相手まで退会済みとして表示してしまう。
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-	if u == nil {
-		return toGraphDeletedUserWithID(numericID), nil
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericID)
 }
 
 // Media is the resolver for the media field.

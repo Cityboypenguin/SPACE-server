@@ -20,10 +20,16 @@ type userStatusRepository interface {
 	repository.UserWriter
 }
 
-// userDeletionRepository は退会。本人の行と活動履歴を消す。
+// userDeletionRepository は退会。退会の段階を進め、個人情報と活動履歴を消す。
 type userDeletionRepository interface {
-	repository.UserWriter
+	repository.UserLifecycleRepository
 	repository.UserActivityRepository
+}
+
+// userLoginRepository はログイン。照合用のハッシュを読み、退会手続き中なら取り消す。
+type userLoginRepository interface {
+	repository.UserCredentialsRepository
+	repository.UserLifecycleRepository
 }
 
 // userSessionRepository はトークンの再発行。連絡先（トークンに載せる）と

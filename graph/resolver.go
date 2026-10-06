@@ -186,6 +186,7 @@ type UserUseCases struct {
 	VerifyEmailOTPUseCase       user.VerifyEmailOTPUseCase
 	ListUsersUseCase            user.ListUsersUseCase
 	DeleteUserUseCase           user.DeleteUserUseCase
+	DeleteMyAccountUseCase      user.DeleteMyAccountUseCase
 	UpdateUserUseCase           user.UpdateUserUseCase
 	SearchUsersUseCase          user.SearchUsersUseCase
 	// 管理画面のユーザー検索（連絡先を含む）。一般ユーザー向けは SearchUsersUseCase。
@@ -258,7 +259,7 @@ type MessageRoomUseCases struct {
 
 // ChatUseCases はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
 //
-// 権限判定・メンション解決・匿名IDの採番・保存・通知は全て usecase/chat 側にあり、
+// 権限判定・メンション解決・保存・通知は全て usecase/chat 側にあり、
 // リゾルバは GraphQL ID のデコードと GraphQL 型への変換だけを行う。
 //
 // 全部入りのサービス1つではなく責務ごとに4つ持つ。1つにまとめると、そのサービスが

@@ -156,3 +156,31 @@ func countStatements(t *testing.T, db *sql.DB, fn func()) statementCounts {
 	fn()
 	return readStatementCounts(t, db).sub(before)
 }
+
+// userTablesDDL は利用者の2表（識別子の users と個人情報の user_accounts）。
+// db/migrations/076〜102 を流した後の形から、外部キーだけ落としたもの。
+// 利用者を読み書きするテストはこれを使い、形を写し間違えないようにする。
+var userTablesDDL = []string{
+	`CREATE TABLE users (
+		id             BIGINT      NOT NULL AUTO_INCREMENT,
+		status         VARCHAR(50) NOT NULL DEFAULT 'active',
+		deactivated_at BIGINT      NULL,
+		deleted_at     BIGINT      NULL,
+		created_at     BIGINT      NOT NULL,
+		PRIMARY KEY (id)
+	) ENGINE=InnoDB`,
+	`CREATE TABLE user_accounts (
+		user_id             BIGINT       NOT NULL,
+		account_id          VARCHAR(255) NOT NULL,
+		name                VARCHAR(255) NOT NULL,
+		email               VARCHAR(255) NOT NULL,
+		hashed_password     VARCHAR(255) NOT NULL,
+		role                VARCHAR(50)  NOT NULL DEFAULT 'student',
+		credentials_version BIGINT       NOT NULL DEFAULT 0,
+		last_active_at      BIGINT       NULL,
+		updated_at          BIGINT       NOT NULL,
+		PRIMARY KEY (user_id),
+		UNIQUE KEY uq_user_accounts_account_id (account_id),
+		UNIQUE KEY uq_user_accounts_email (email)
+	) ENGINE=InnoDB`,
+}

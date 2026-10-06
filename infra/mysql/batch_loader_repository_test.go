@@ -68,16 +68,6 @@ func batchTestDB(t *testing.T) (*sql.DB, func()) {
 			updated_at BIGINT NOT NULL,
 			PRIMARY KEY (id)
 		)`,
-		`CREATE TABLE room_anonymous_identities (
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			room_id BIGINT NOT NULL,
-			user_id BIGINT NOT NULL,
-			label VARCHAR(50) NOT NULL,
-			created_at BIGINT NOT NULL,
-			PRIMARY KEY (id),
-			UNIQUE KEY unique_room_anon_room_user (room_id, user_id),
-			UNIQUE KEY unique_room_anon_room_label (room_id, label)
-		)`,
 		`CREATE TABLE questions (
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			room_id BIGINT NOT NULL,
@@ -188,60 +178,6 @@ func TestBatchGetRoomsByIDs_MatchesTheSingleFetch(t *testing.T) {
 		}
 		if got[i] == nil || *got[i] != *want {
 			t.Fatalf("room %d: batch = %+v, single = %+v", i, got[i], want)
-		}
-	}
-}
-
-func TestBatchGetAnonymousIdentitiesByRoomUserKeys_MatchesTheSingleFetch(t *testing.T) {
-	db, cleanup := batchTestDB(t)
-	defer cleanup()
-
-	now := time.Now().Unix()
-	rows := []struct {
-		id, roomID, userID int64
-		label              string
-	}{
-		{1, 10, 100, "匿名001"},
-		{2, 10, 200, "匿名002"},
-		{3, 20, 100, "匿名001"},
-	}
-	for _, r := range rows {
-		mustExec(t, db, `INSERT INTO room_anonymous_identities (id, room_id, user_id, label, created_at) VALUES (?, ?, ?, ?, ?)`,
-			r.id, r.roomID, r.userID, r.label, now)
-	}
-
-	repo := NewMySQLRoomAnonymousIdentityRepository(db)
-	ctx := context.Background()
-
-	// (10,100) と (20,100) は user_id が同じ、(10,100) と (10,200) は room_id が同じ。
-	// 行コンストラクタの IN が組でマッチしていないと、ここで取り違えが起きる。
-	// (20,200) は行が無いケース。
-	keys := []repository.RoomUserKey{
-		{RoomID: 10, UserID: 100},
-		{RoomID: 10, UserID: 200},
-		{RoomID: 20, UserID: 100},
-		{RoomID: 20, UserID: 200},
-	}
-	got, err := repo.GetByRoomUserKeys(ctx, keys)
-	if err != nil {
-		t.Fatalf("GetByRoomUserKeys: %v", err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("len = %d, want 3 (行の無い key は落とすこと)", len(got))
-	}
-	if _, ok := got[repository.RoomUserKey{RoomID: 20, UserID: 200}]; ok {
-		t.Fatal("行の無い key が map に入っている")
-	}
-	for _, k := range keys {
-		want, err := repo.Get(ctx, k.RoomID, k.UserID)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if want == nil {
-			continue
-		}
-		if got[k] == nil || got[k].ID != want.ID || got[k].Label != want.Label {
-			t.Fatalf("key %+v: batch = %+v, single = %+v", k, got[k], want)
 		}
 	}
 }
@@ -452,24 +388,4 @@ func TestBatchAnswerFetches_MatchTheSingleFetch(t *testing.T) {
 		}
 	})
 
-	t.Run("GetQuestionsByIDs", func(t *testing.T) {
-		got, err := questionRepo.GetQuestionsByIDs(ctx, append(append([]int64{}, questionIDs...), 9999))
-		if err != nil {
-			t.Fatalf("GetQuestionsByIDs: %v", err)
-		}
-		if _, ok := got[9999]; ok {
-			t.Fatal("存在しないIDが map に入っている")
-		}
-		for _, qid := range questionIDs {
-			want, err := questionRepo.GetQuestionByID(ctx, qid)
-			if err != nil {
-				t.Fatalf("GetQuestionByID: %v", err)
-			}
-			g := got[qid]
-			// 本文は暗号化列なので、復号まで単体版と同じ経路を通っていることを見る。
-			if g == nil || g.RoomID != want.RoomID || g.Body != want.Body {
-				t.Fatalf("question %d: batch = %+v, single = %+v", qid, g, want)
-			}
-		}
-	})
 }

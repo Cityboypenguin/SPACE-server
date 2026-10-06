@@ -199,17 +199,6 @@ func (f *fakeEvents) MessageUpdated(_ context.Context, ev MessageUpdatedEvent) {
 	f.updated = append(f.updated, ev)
 }
 
-type fakeAnonIdentity struct {
-	calls  int
-	roomID int64
-}
-
-func (f *fakeAnonIdentity) Execute(_ context.Context, roomID, userID int64) (*model.RoomAnonymousIdentity, error) {
-	f.calls++
-	f.roomID = roomID
-	return &model.RoomAnonymousIdentity{ID: 1, RoomID: roomID, UserID: userID, Label: "匿名001"}, nil
-}
-
 // fakeReadStatus は授業ルームの既読位置取得（course_room_reads 経路）の代役。
 // room_users 経路（fakeRoomReadStatus）とどちらが呼ばれたかで、
 // 「ルーム種別で置き場を選べているか」を確かめる。
@@ -303,7 +292,6 @@ type harness struct {
 	updateMessage *fakeUpdateMessage
 	deleteMessage *fakeDeleteMessage
 	checkWritable *fakeCheckRoomWritable
-	anonIdentity  *fakeAnonIdentity
 	getMessage    *fakeGetMessage
 	listMentions  *fakeListMentions
 	listMedia     *fakeListMessageMedia
@@ -340,7 +328,6 @@ func newHarness() *harness {
 		updateMessage: &fakeUpdateMessage{},
 		deleteMessage: &fakeDeleteMessage{},
 		checkWritable: &fakeCheckRoomWritable{},
-		anonIdentity:  &fakeAnonIdentity{},
 		getMessage:    &fakeGetMessage{},
 		listMentions:  &fakeListMentions{},
 		listMedia:     &fakeListMessageMedia{},
@@ -369,11 +356,10 @@ func newHarness() *harness {
 			update: h.updateMessage,
 			delete: h.deleteMessage,
 		},
-		ResolveMentions:              &fakeResolveMentions{rooms: rooms},
-		ListMentions:                 h.listMentions,
-		ListMessageMedia:             h.listMedia,
-		GetOrCreateAnonymousIdentity: h.anonIdentity,
-		Events:                       h.events,
+		ResolveMentions:  &fakeResolveMentions{rooms: rooms},
+		ListMentions:     h.listMentions,
+		ListMessageMedia: h.listMedia,
+		Events:           h.events,
 	}
 	h.queryDeps = MessageQueryDeps{
 		ListMessages:       h.listMessages,
@@ -493,35 +479,10 @@ func TestListMessages_GoesThroughTheSameReadPolicy(t *testing.T) {
 
 // --- 送信 -------------------------------------------------------------------
 
-func TestSendMessage_CourseRoomAssignsAnonymousIdentityAtPostTime(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h.anonIdentity.calls != 1 {
-		t.Fatalf("anonymous identity allocations = %d, want 1 (採番は投稿時に確定させる)", h.anonIdentity.calls)
-	}
-	if h.anonIdentity.roomID != courseRoomID {
-		t.Errorf("allocated in room %d, want %d", h.anonIdentity.roomID, courseRoomID)
-	}
-}
-
-func TestSendMessage_NonCourseRoomDoesNotAllocateAnonymousIdentity(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h.anonIdentity.calls != 0 {
-		t.Errorf("anonymous identity allocations = %d, want 0 outside course rooms", h.anonIdentity.calls)
-	}
-}
-
 func TestSendMessage_MentionsAreDroppedInCourseRoom(t *testing.T) {
 	h := newHarness()
 
-	// 授業内チャットは匿名なので実名メンションが成立してはいけない。クライアントが
+	// 授業内チャットではメンションが成立しない（MentionsSupported 参照）。クライアントが
 	// mentionUserIDs を送ってきても、保存に渡るのは検証済み（＝空）の結果だけ。
 	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{
 		RoomID:         courseRoomID,

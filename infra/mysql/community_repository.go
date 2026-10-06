@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -110,6 +111,15 @@ func (r *MySQLCommunityRepository) GetCommunityByID(ctx context.Context, id int6
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		WHERE c.id = ?`, id)
 	return scanCommunity(row)
+}
+
+func (r *MySQLCommunityRepository) GetCommunityIDByRoomID(ctx context.Context, roomID int64) (int64, error) {
+	var id int64
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, `SELECT id FROM communities WHERE room_id = ?`, roomID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return id, err
 }
 
 func (r *MySQLCommunityRepository) SearchCommunities(ctx context.Context, name string, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {

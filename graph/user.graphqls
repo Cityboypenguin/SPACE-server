@@ -17,7 +17,7 @@ extend type Query {
   # 送信時の検証 (sendMessage の mentionUserIDs) とまったく同じ条件で絞り込むため、
   # 「候補に出たのに送ると成立しない」というズレが起きない。
   # 自分自身・凍結ユーザー・ブロック関係にある相手は除外する。
-  # コミュニティ以外のルーム（授業内チャットは匿名、DM は相手が1人）では常に空を返す。
+  # コミュニティ以外のルーム（授業内チャットはメンバーを持たず、DM は相手が1人）では常に空を返す。
   mentionCandidates(roomID: ID!, prefix: String!, limit: Int = 8): [User!]!
     @deprecated(reason: "Use Post.favorites or viewer-specific favorite fields; removal requires confirming no external clients use this query")
   myProfile: Profile
@@ -37,7 +37,11 @@ extend type Mutation {
   sendEmailOTP(email: String!): Boolean!
   verifyEmailOTP(email: String!, otp: String!): Boolean!
   createUser(input: CreateUserInput!): UserAccount!
+  # 管理者による削除。猶予を置かず、その場で個人情報を消す。メッセージ・質問・回答・
+  # 投票は投稿者を「削除されたアカウント」にして残す。
   deleteUser(id: ID!): Boolean!
+  # 本人の退会。退会手続き中にするだけで、15日の猶予の間にログインすれば取り消せる。
+  # 猶予が切れると個人情報が消える（残すものは deleteUser と同じ）。
   deleteMyAccount: Boolean!
   updateUser(input: UpdateUserInput!): UserAccount!
   loginUser(input: LoginInput!): UserAuthPayload!
@@ -139,6 +143,9 @@ type UserAuthPayload {
   refreshToken: String!
   # ログイン直後の本人なので UserAccount（自分のメールは自分に見せてよい）。
   user: UserAccount!
+  # 退会手続き中（猶予の15日間）の本人がログインしたため、退会を取り消したか。
+  # 画面で「退会を取り消しました」と知らせるために使う。トークンの再発行では常に false。
+  accountRestored: Boolean!
 }
 
 input LoginInput {

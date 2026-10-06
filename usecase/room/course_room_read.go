@@ -8,8 +8,7 @@ import (
 )
 
 // 授業内チャットの既読位置。授業内チャットは room_users の membership を使わないため、
-// 既読位置は course_room_reads（匿名ID room_anonymous_identities とは別表）に
-// 持つ。MarkRoomAsReadUseCase / GetRoomReadStatusUseCase
+// 既読位置は course_room_reads に持つ。MarkRoomAsReadUseCase / GetRoomReadStatusUseCase
 // ではなくこちらを使う。
 //
 // 置き場が違うだけで、未読の数え方（repository.UnreadOrigin の規則）は通常ルームと
@@ -65,8 +64,8 @@ func NewGetCourseRoomReadStatusUseCase(
 }
 
 // Execute returns the caller's own read position and unread count in a course room.
-// PartnerLastReadAt is always nil: course chats are anonymous, so other users' read
-// positions are never exposed.
+// PartnerLastReadAt is always nil: a course room has no single partner, so other
+// users' read positions are never exposed (see roomusecase.RoomReadStatus).
 //
 // 未読の起点は repository.UnreadOrigin の規則どおり「既読メッセージID → 既読時刻 →
 // 時間割に登録した時刻」。授業一覧のバッジ（CountUnreadByCourseRooms）と同じ規則なので、

@@ -686,9 +686,10 @@ type UserAccountPage struct {
 }
 
 type UserAuthPayload struct {
-	Token        string       `json:"token"`
-	RefreshToken string       `json:"refreshToken"`
-	User         *UserAccount `json:"user"`
+	Token           string       `json:"token"`
+	RefreshToken    string       `json:"refreshToken"`
+	User            *UserAccount `json:"user"`
+	AccountRestored bool         `json:"accountRestored"`
 }
 
 type UserPage struct {

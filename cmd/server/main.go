@@ -24,6 +24,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
+	"github.com/Cityboypenguin/SPACE-server/internal/accountpurge"
 	"github.com/Cityboypenguin/SPACE-server/internal/activityarchive"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/async"
@@ -45,7 +46,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
@@ -59,7 +59,6 @@ import (
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
-	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
@@ -182,7 +181,6 @@ func main() {
 		},
 	)
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
-	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
 	courseRoomReadRepository := mysql.NewMySQLCourseRoomReadRepository(database)
 	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
 	if err != nil {
@@ -222,7 +220,6 @@ func main() {
 	activityArchiveDone := make(chan struct{})
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, roomRepository, roomUserRepository, txManager)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -241,6 +238,10 @@ func main() {
 	// アップロードの受け入れ（上限・種別の検査と、署名付きURLの及ばないキーへの移送）。
 	// 1つ作って、オブジェクトキーを保存するユースケース全部へ配る。
 	uploadAcceptor := upload.NewAcceptor(storageRepository)
+
+	// 退会（本人・管理者・猶予切れ）。添付の実体の後片付けは受け入れと同じ置き場で行う。
+	accountPurgeCtx, stopAccountPurge := context.WithCancel(context.Background())
+	accountPurgeDone := make(chan struct{})
 
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(uploadAcceptor, profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
@@ -362,9 +363,6 @@ func main() {
 	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(courseRoomReadRepository, messageRepository)
 	// 授業ルームの学期・履修判定。チャットサービスが送信・編集・削除で使う。
 	checkRoomWritableUseCase := courseusecase.NewCheckRoomWritableUseCase(courseRepository, systemSettingRepository, timetableRepository)
-	getOrCreateAnonymousIdentityUseCase := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
-	// 採番しない読み取り専用の口。授業ルームの返信通知の文言（匿名NNN）に使う。
-	getAnonymousIdentityUseCase := anonusecase.NewGetAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
 	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(courseRoomReadRepository, messageRepository, courseRepository, timetableRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	// 授業ルームの更新通知の宛先（履修者）。未読数は数えず、IDだけを引く軽い経路
@@ -428,6 +426,21 @@ func main() {
 	sseFanout := infraredis.NewSSEFanout(redisClient, pubsubChannelPrefix, sseBroker.DeliverLocal)
 	sseBroker.SetFanout(sseFanout)
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+	accountDeletionDeps := userusecase.AccountDeletionDeps{
+		Users:     userRepository,
+		Posts:     postRepository,
+		Rooms:     roomRepository,
+		RoomUsers: roomUserRepository,
+		// 唯一のオーナーが退会したとき、オーナーを引き継いだ人へ知らせる。
+		Communities: communityRepository,
+		Notifier:    notificationPublisher,
+		Media:       mediaRepository,
+		Objects:     uploadAcceptor,
+		TxManager:   txManager,
+	}
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(accountDeletionDeps)
+	deleteMyAccountUseCase := userusecase.NewDeleteMyAccountUseCase(accountDeletionDeps)
+	accountPurger := accountpurge.New(userusecase.NewPurgeExpiredAccountsUseCase(accountDeletionDeps))
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
 	createPostUseCase := postusecase.NewCreatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
@@ -438,13 +451,11 @@ func main() {
 	// 触るので Resolver には持たせない（単体取得と二重に持つと、片方だけ使う
 	// リゾルバが残って N+1 が戻る）。
 	getRoomsByIDsUseCase := roomusecase.NewGetRoomsByIDsUseCase(roomRepository)
-	getQuestionsByIDsUseCase := questionusecase.NewGetQuestionsByIDsUseCase(questionRepository)
 	getAnswersByIDsUseCase := answerusecase.NewGetAnswersByIDsUseCase(answerRepository)
 	listAnswerPagesByQuestionIDsUseCase := answerusecase.NewListAnswerPagesByQuestionIDsUseCase(answerRepository)
 	countAnswersByQuestionIDsUseCase := answerusecase.NewCountAnswersByQuestionIDsUseCase(answerRepository)
 	listPollOptionResultsByPollIDsUseCase := pollusecase.NewListPollOptionResultsByPollIDsUseCase(pollRepository)
 	countPollVotersByPollIDsUseCase := pollusecase.NewCountPollVotersByPollIDsUseCase(pollRepository)
-	getAnonymousIdentitiesUseCase := anonusecase.NewGetAnonymousIdentitiesUseCase(roomAnonymousIdentityRepository)
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
@@ -509,7 +520,6 @@ func main() {
 		CourseRegistrantIDs:            getCourseRegistrantIDsUseCase,
 		Async:                          chatEventAsyncRunner,
 		GetMessage:                     getMessageByIDUseCase,
-		GetAnonymousIdentity:           getAnonymousIdentityUseCase,
 		MarkNotificationsAsReadByActor: markAllAsReadByActorUseCase,
 	})
 
@@ -523,16 +533,15 @@ func main() {
 		CheckBlockRelation: checkBlockRelationUseCase,
 	})
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
-		Access:                       chatAccessPolicy,
-		GetRoom:                      getRoomUseCase,
-		GetRoomUserRole:              getRoomUserRoleUseCase,
-		GetMessage:                   getMessageByIDUseCase,
-		Writers:                      chatMessageWriters,
-		ResolveMentions:              resolveMessageMentionsUseCase,
-		ListMentions:                 listMessageMentionsUseCase,
-		ListMessageMedia:             listMediaByMessageIDsUseCase,
-		GetOrCreateAnonymousIdentity: getOrCreateAnonymousIdentityUseCase,
-		Events:                       chatEventPublisher,
+		Access:           chatAccessPolicy,
+		GetRoom:          getRoomUseCase,
+		GetRoomUserRole:  getRoomUserRoleUseCase,
+		GetMessage:       getMessageByIDUseCase,
+		Writers:          chatMessageWriters,
+		ResolveMentions:  resolveMessageMentionsUseCase,
+		ListMentions:     listMessageMentionsUseCase,
+		ListMessageMedia: listMediaByMessageIDsUseCase,
+		Events:           chatEventPublisher,
 	})
 	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
 		Access:             chatAccessPolicy,
@@ -561,6 +570,7 @@ func main() {
 			VerifyEmailOTPUseCase:         verifyEmailOTPUseCase,
 			ListUsersUseCase:              listUsersUseCase,
 			DeleteUserUseCase:             deleteUserUseCase,
+			DeleteMyAccountUseCase:        deleteMyAccountUseCase,
 			UpdateUserUseCase:             updateUserUseCase,
 			GetUserByIDUseCase:            getUserByIDUseCase,
 			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
@@ -654,9 +664,9 @@ func main() {
 		},
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
-		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
-		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
+		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
+		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
@@ -781,13 +791,11 @@ func main() {
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
 		GetRoomsByIDs:                  getRoomsByIDsUseCase,
-		GetQuestionsByIDs:              getQuestionsByIDsUseCase,
 		GetAnswersByIDs:                getAnswersByIDsUseCase,
 		ListAnswerPagesByQuestionIDs:   listAnswerPagesByQuestionIDsUseCase,
 		CountAnswersByQuestionIDs:      countAnswersByQuestionIDsUseCase,
 		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
 		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
-		GetAnonymousIdentities:         getAnonymousIdentitiesUseCase,
 	})))
 
 	// テスト用エンドポイント
@@ -931,6 +939,10 @@ func main() {
 		defer close(activityArchiveDone)
 		activityArchiver.Run(activityArchiveCtx)
 	}()
+	go func() {
+		defer close(accountPurgeDone)
+		accountPurger.Run(accountPurgeCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -944,6 +956,7 @@ func main() {
 
 	logger.Log.Info().Msg("shutting down server...")
 	stopActivityArchive()
+	stopAccountPurge()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -955,6 +968,11 @@ func main() {
 	case <-activityArchiveDone:
 	case <-shutdownCtx.Done():
 		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
+	}
+	select {
+	case <-accountPurgeDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("account purge did not stop before shutdown")
 	}
 	if err := courseImportTracker.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error().Err(err).Msg("course import did not stop before shutdown; leaving DB and Redis open")

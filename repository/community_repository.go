@@ -19,6 +19,8 @@ type CommunityRepository interface {
 	// いずれかのステップで失敗した場合はロールバックし、孤立レコードを残さない。
 	SaveCommunityWithRoom(ctx context.Context, name, description string, avatar *UpdateCommunityAvatarParam, creatorUserID int64) (*model.Community, error)
 	GetCommunityByID(ctx context.Context, id int64) (*model.Community, error)
+	// GetCommunityIDByRoomID はチャットルームのIDからコミュニティのIDを引く。無ければ 0。
+	GetCommunityIDByRoomID(ctx context.Context, roomID int64) (int64, error)
 	SearchCommunities(ctx context.Context, name string, userID int64, q PageQuery) ([]*model.Community, int, error)
 	// UpdateCommunity はコミュニティ情報を更新する。avatar が nil でない場合はメディアレコードの
 	// 作成も同一トランザクション内で行い、孤立レコードが生じないことを保証する。
