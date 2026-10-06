@@ -547,6 +547,7 @@ type Room struct {
 	CreatedAt           string  `json:"createdAt"`
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
+	IsPartnerWithdrawn  bool    `json:"isPartnerWithdrawn"`
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
 	LastReadMessageID   *string `json:"lastReadMessageID,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`

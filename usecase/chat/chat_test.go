@@ -83,6 +83,16 @@ func (f *fakeCheckRoomWritable) Execute(_ context.Context, _ int64) error {
 	return f.err
 }
 
+// fakeGetUser は表示用の利用者取得の代役。withdrawn に入れた人は退会済みとして nil を返す。
+type fakeGetUser struct{ withdrawn map[int64]bool }
+
+func (f *fakeGetUser) Execute(_ context.Context, id int64) (*model.User, error) {
+	if f.withdrawn[id] {
+		return nil, nil
+	}
+	return &model.User{ID: id, Status: model.UserStatusActive}, nil
+}
+
 type fakeCheckBlockRelation struct {
 	blocked bool
 	// calls / partnerID は「誰を相手にブロックを見に行ったか」。ブロック判定を
@@ -284,6 +294,7 @@ type harness struct {
 
 	members       *fakeMembers
 	isMember      *fakeIsMember
+	users         *fakeGetUser
 	readStatus    *fakeRoomReadStatus
 	courseRead    *fakeReadStatus
 	markRead      *fakeMarkRead
@@ -335,6 +346,7 @@ func newHarness() *harness {
 		listAround:    &fakeListMessagesAround{},
 		events:        &fakeEvents{},
 		blockRelation: &fakeCheckBlockRelation{},
+		users:         &fakeGetUser{withdrawn: map[int64]bool{}},
 	}
 	h.isMember = &fakeIsMember{members: h.members}
 	getRoom := &fakeGetRoom{rooms: rooms}
@@ -344,6 +356,7 @@ func newHarness() *harness {
 		IsRoomMember:       h.isMember,
 		CheckRoomWritable:  h.checkWritable,
 		CheckBlockRelation: h.blockRelation,
+		GetUser:            h.users,
 	}
 	h.commandDeps = MessageCommandDeps{
 		GetRoom:         getRoom,
@@ -1010,19 +1023,37 @@ func TestEnsureWriteAccess_DMWithoutBlockIsAllowed(t *testing.T) {
 	}
 }
 
-// 相手が退会して room_users の行が消えた DM は相手が決まらない。ブロック関係を
-// 引きようが無いので判定を飛ばし、拒否もしない（送り先が居ないだけで、ここで
-// 「ブロックされています」と言うのは嘘になる）。
-func TestEnsureWriteAccess_DMWithoutAPartnerSkipsTheBlockCheck(t *testing.T) {
+// 相手が完全に削除された DM は room_users の行が消え、自分しか残っていない。
+// 送っても誰にも届かないので、ブロックとは別の理由で断る。
+func TestEnsureWriteAccess_DMWithoutAPartnerIsRejectedAsWithdrawn(t *testing.T) {
 	h := newHarness()
-	h.blockRelation.blocked = true
 	h.members.byRoom[dmRoomID] = []int64{10}
 
-	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err != nil {
-		t.Fatalf("a DM whose partner is gone must not be rejected as blocked, got: %v", err)
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
 	}
 	if h.blockRelation.calls != 0 {
 		t.Errorf("block relation was checked %d times without a partner, want 0", h.blockRelation.calls)
+	}
+}
+
+// 相手が退会手続き中の DM も断る（取り消さない限り読まれないまま消えるため）。
+func TestEnsureWriteAccess_DMWithDeactivatedPartnerIsRejected(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
+	}
+}
+
+// 相手の退会は DM だけの話。コミュニティでは退会した人が居ても書き込める。
+func TestEnsureWriteAccess_WithdrawnMemberDoesNotCloseACommunity(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("a community must stay writable when a member withdrew, got: %v", err)
 	}
 }
 

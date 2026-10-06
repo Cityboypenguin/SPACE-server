@@ -348,7 +348,7 @@ func main() {
 	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
 	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
-	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
+	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository, userRepository)
 	leaveCommunityUseCase := roomusecase.NewLeaveCommunityUseCase(roomRepository, roomUserRepository, txManager)
 	deleteOrphanedDMUseCase := roomusecase.NewDeleteOrphanedDMUseCase(roomRepository, roomUserRepository, txManager)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
@@ -531,6 +531,7 @@ func main() {
 		IsRoomMember:       isRoomMemberUseCase,
 		CheckRoomWritable:  checkRoomWritableUseCase,
 		CheckBlockRelation: checkBlockRelationUseCase,
+		GetUser:            getUserByIDUseCase,
 	})
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
 		Access:           chatAccessPolicy,

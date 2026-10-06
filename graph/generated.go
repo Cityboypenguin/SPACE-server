@@ -652,6 +652,7 @@ type ComplexityRoot struct {
 		CreatedAt           func(childComplexity int) int
 		ID                  func(childComplexity int) int
 		IsMessagingDisabled func(childComplexity int) int
+		IsPartnerWithdrawn  func(childComplexity int) int
 		LastReadAt          func(childComplexity int) int
 		LastReadMessageID   func(childComplexity int) int
 		Name                func(childComplexity int) int
@@ -4747,6 +4748,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.IsMessagingDisabled(childComplexity), true
+	case "Room.isPartnerWithdrawn":
+		if e.ComplexityRoot.Room.IsPartnerWithdrawn == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Room.IsPartnerWithdrawn(childComplexity), true
 	case "Room.lastReadAt":
 		if e.ComplexityRoot.Room.LastReadAt == nil {
 			break
@@ -6335,6 +6342,8 @@ func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.
 		return ec.fieldContext_Room_updatedAt(ctx, field)
 	case "isMessagingDisabled":
 		return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
+	case "isPartnerWithdrawn":
+		return ec.fieldContext_Room_isPartnerWithdrawn(ctx, field)
 	case "lastReadAt":
 		return ec.fieldContext_Room_lastReadAt(ctx, field)
 	case "lastReadMessageID":
@@ -25271,6 +25280,29 @@ func (ec *executionContext) fieldContext_Room_isMessagingDisabled(_ context.Cont
 	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Room_isPartnerWithdrawn(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Room_isPartnerWithdrawn(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsPartnerWithdrawn, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Room_isPartnerWithdrawn(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Room_lastReadAt(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36552,6 +36584,11 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "isMessagingDisabled":
 			out.Values[i] = ec._Room_isMessagingDisabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isPartnerWithdrawn":
+			out.Values[i] = ec._Room_isPartnerWithdrawn(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

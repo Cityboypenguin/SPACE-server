@@ -518,9 +518,10 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	// 特定するため）も使うので、どちらかが選ばれていれば引く。
 	wantMembers := fieldRequested(ctx, "user")
 	wantMessagingDisabled := fieldRequested(ctx, "isMessagingDisabled")
+	wantPartnerWithdrawn := fieldRequested(ctx, "isPartnerWithdrawn")
 
 	var users []*model.User
-	if wantMembers || wantMessagingDisabled {
+	if wantMembers || wantMessagingDisabled || wantPartnerWithdrawn {
 		usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
 		if err != nil {
 			return nil, fmt.Errorf("failed to load room members")
@@ -536,13 +537,20 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		gqlRoom.User = members
 	}
 
-	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor のブロック判定と
+	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor の判定と
 	// 同じ規則に揃える（画面の状態と実際の送信可否が食い違わないようにするため）。
-	// 相手が1人に決まらない DM ではブロックを引けないので、向こうと同じく判定しない。
+	//
+	// メンバー一覧は表示用なので、退会手続き中の人は載らず、削除済みの人は行ごと無い。
+	// どちらでも相手が1人に決まらないので、それを「相手が退会している」とみなす。
+	// 送信側が相手を GetUserByID（同じく表示用）で確かめるのと同じ結果になる。
 	gqlRoom.IsMessagingDisabled = false
-	if wantMessagingDisabled && room.Type == model.RoomTypeDM {
+	gqlRoom.IsPartnerWithdrawn = false
+	if (wantMessagingDisabled || wantPartnerWithdrawn) && room.Type == model.RoomTypeDM {
 		partnerID, ok := dmPartnerID(users, claims.ID)
-		if ok {
+		if !ok {
+			gqlRoom.IsPartnerWithdrawn = true
+			gqlRoom.IsMessagingDisabled = true
+		} else if wantMessagingDisabled {
 			// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
 			// 実際に送ろうとすれば AccessPolicy 側のブロック判定で弾かれるので通ることは
 			// ないが、入力欄の状態だけが食い違うので失敗は残す。
@@ -607,9 +615,10 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	// 「退会済みで自分しか居ない」の判定）ので、どちらかが選ばれていれば引く。
 	wantMembers := fieldRequested(ctx, "items", "user")
 	wantMessagingDisabled := fieldRequested(ctx, "items", "isMessagingDisabled")
+	wantPartnerWithdrawn := fieldRequested(ctx, "items", "isPartnerWithdrawn")
 
 	usersByRoomID := map[int64][]*model.User{}
-	if wantMembers || wantMessagingDisabled {
+	if wantMembers || wantMessagingDisabled || wantPartnerWithdrawn {
 		usersByRoomID, err = r.ListUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load room members")
@@ -658,6 +667,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
+		// 表示用のメンバー一覧なので、相手が退会手続き中でも削除済みでも自分しか残らない。
 		hasOnlyCurrentUser := len(users) == 1 && users[0].ID == claims.ID
 
 		gqlRoom := toGraphRoom(room)
@@ -681,6 +691,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 			gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser ||
 				(room.Type == model.RoomTypeDM && hasPartner && blockedSet[partnerID])
 		}
+		gqlRoom.IsPartnerWithdrawn = wantPartnerWithdrawn && room.Type == model.RoomTypeDM && hasOnlyCurrentUser
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
 			gqlRoom.Content = &lastMsg.Content

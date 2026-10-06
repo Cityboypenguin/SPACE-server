@@ -11,7 +11,12 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
+
+// ErrDMPartnerWithdrawn は、退会した相手との DM へ送ろうとしたとき。
+// 退会手続き中の人へ送っても、本人が取り消さない限り読まれないまま消えるので断る。
+var ErrDMPartnerWithdrawn = errors.New("相手が退会しているため、メッセージを送信できません")
 
 // AccessPolicy はチャットの権限判定。閲覧・書き込み・編集削除の可否をここだけで決める。
 //
@@ -51,6 +56,9 @@ type AccessPolicyDeps struct {
 	// CheckRoomWritable は授業ルームの学期・履修判定（非授業ルームは素通し）。
 	CheckRoomWritable  courseusecase.CheckRoomWritableUseCase
 	CheckBlockRelation block.CheckBlockRelationUseCase
+	// GetUser は DM の相手が退会していないかを見る。退会手続き中・削除済みの人は
+	// nil で返る（表示用の取得なので）。
+	GetUser userusecase.GetUserByIDUseCase
 }
 
 var _ AccessPolicy = &accessPolicy{}
@@ -184,7 +192,8 @@ type writeAccess struct {
 //
 //   - 授業内チャット: room_users を使わず、現在の学期と一致するか（アーカイブ
 //     されていないか）と時間割に登録済みかを CheckRoomWritableUseCase が見る。
-//   - それ以外: membership が必須。DM だけはブロック関係があれば拒否。
+//   - それ以外: membership が必須。DM だけは相手が退会しているか、ブロック関係が
+//     あれば拒否。
 func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error) {
 	room, err := p.deps.GetRoom.Execute(ctx, roomID)
 	if err != nil {
@@ -216,20 +225,28 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 	// 参加者同士にブロック関係があっても場そのものは使えるのが正しい（ブロックは
 	// 1対1の会話を止める機能であって、共同の場から締め出す機能ではない）ので、
 	// 人数ではなくルーム種別で判定する。
+	//
+	// 相手が退会していれば断る。退会手続き中なら相手は表示から消えていて、削除済みなら
+	// room_users の行ごと消えて自分しか残っていない（相手が1人に決まらない）。
 	if room.Type == model.RoomTypeDM {
-		if partnerID, ok := soleOtherMember(memberIDs, claims.ID); ok {
-			isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, partnerID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check block status")
-			}
-			if isBlocked {
-				return nil, errors.New("ブロック設定によりメッセージを送信できません")
-			}
+		partnerID, ok := soleOtherMember(memberIDs, claims.ID)
+		if !ok {
+			return nil, ErrDMPartnerWithdrawn
 		}
-		// 相手が1人に決まらない DM（相手が退会して room_users の行が消え、自分しか
-		// 残っていない等）はブロック判定を飛ばす。ブロック関係は「相手が誰か」が
-		// 決まらないと引けず、ここで拒否側に倒すと「ブロックしていないのに送れない」
-		// 説明のつかない状態になるため。送り先が居ないだけなので、通しても害はない。
+		partner, err := p.deps.GetUser.Execute(ctx, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check the DM partner")
+		}
+		if partner == nil {
+			return nil, ErrDMPartnerWithdrawn
+		}
+		isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status")
+		}
+		if isBlocked {
+			return nil, errors.New("ブロック設定によりメッセージを送信できません")
+		}
 	}
 
 	return &writeAccess{Room: room, MemberIDs: memberIDs}, nil
