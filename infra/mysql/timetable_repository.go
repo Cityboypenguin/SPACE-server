@@ -35,8 +35,13 @@ func (r *MySQLTimetableRepository) Upsert(ctx context.Context, userID, courseID 
 
 	var dayOfWeek string
 	var period int
-	if err := tx.QueryRowContext(ctx, `SELECT day_of_week, period FROM courses WHERE id = ?`, courseID).Scan(&dayOfWeek, &period); err != nil {
+	var discontinuedAt sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT day_of_week, period, discontinued_at FROM courses WHERE id = ?`, courseID).Scan(&dayOfWeek, &period, &discontinuedAt); err != nil {
 		return nil, err
+	}
+	// 廃止済みの授業へ新しく登録させない（シラバスから消えた授業）。
+	if discontinuedAt.Valid {
+		return nil, repository.ErrCourseDiscontinued
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -133,19 +138,15 @@ func (r *MySQLTimetableRepository) ListByUser(ctx context.Context, userID int64,
 	var list []*repository.TimetableEntryWithCourse
 	for rows.Next() {
 		var t model.Timetable
-		var c model.Course
-		var tCreatedAt, tUpdatedAt, cCreatedAt, cUpdatedAt int64
-		if err := rows.Scan(
-			&t.ID, &t.UserID, &t.CourseID, &t.Color, &tCreatedAt, &tUpdatedAt,
-			&c.ID, &c.RoomID, &c.DayOfWeek, &c.Period, &c.TeacherName, &c.CourseName, &c.Year, &c.Semester, &c.DedupKey, &cCreatedAt, &cUpdatedAt,
-		); err != nil {
+		var c courseRow
+		var tCreatedAt, tUpdatedAt int64
+		dest := append([]any{&t.ID, &t.UserID, &t.CourseID, &t.Color, &tCreatedAt, &tUpdatedAt}, c.dest()...)
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		t.CreatedAt = time.Unix(tCreatedAt, 0)
 		t.UpdatedAt = time.Unix(tUpdatedAt, 0)
-		c.CreatedAt = time.Unix(cCreatedAt, 0)
-		c.UpdatedAt = time.Unix(cUpdatedAt, 0)
-		list = append(list, &repository.TimetableEntryWithCourse{Timetable: &t, Course: &c})
+		list = append(list, &repository.TimetableEntryWithCourse{Timetable: &t, Course: c.course()})
 	}
 	return list, rows.Err()
 }
@@ -233,6 +234,11 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 		addedCourseIDs = append(addedCourseIDs, courseID)
 	}
 
+	// 廃止済みの授業は、既に登録しているぶんは残せるが、新しくは足させない。
+	if err := checkNotDiscontinued(ctx, tx, addedCourseIDs); err != nil {
+		return nil, err
+	}
+
 	if err := inChunks(removedEntryIDs, 1, func(chunk []int64) error {
 		args := make([]any, len(chunk))
 		for i, id := range chunk {
@@ -264,6 +270,34 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 	}
 
 	return r.ListByUser(ctx, userID, year, semester)
+}
+
+// checkNotDiscontinued returns repository.ErrCourseDiscontinued if any of courseIDs
+// has been discontinued.
+func checkNotDiscontinued(ctx context.Context, tx *sql.Tx, courseIDs []int64) error {
+	found := false
+	if err := inChunks(courseIDs, 1, func(chunk []int64) error {
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		var n int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM courses WHERE discontinued_at IS NOT NULL AND id IN (`+inPlaceholders(len(chunk))+`)`,
+			args...).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			found = true
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if found {
+		return repository.ErrCourseDiscontinued
+	}
+	return nil
 }
 
 // checkNoSlotConflicts returns repository.ErrTimetableSlotConflict if courseIDs

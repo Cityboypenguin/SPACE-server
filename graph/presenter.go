@@ -127,21 +127,131 @@ func toGraphCourse(c *model.Course) *gqlmodel.Course {
 		return nil
 	}
 	return &gqlmodel.Course{
-		ID:          encodeGraphID("course", c.ID),
-		RoomID:      encodeGraphID("room", c.RoomID),
-		DayOfWeek:   c.DayOfWeek,
-		Period:      int32(c.Period),
-		TeacherName: c.TeacherName,
-		CourseName:  c.CourseName,
-		Year:        int32(c.Year),
-		Semester:    c.Semester,
-		CreatedAt:   c.CreatedAt.Format(timeFormat),
+		ID:             encodeGraphID("course", c.ID),
+		RoomID:         encodeGraphID("room", c.RoomID),
+		DayOfWeek:      c.DayOfWeek,
+		Period:         int32(c.Period),
+		TeacherName:    c.TeacherName,
+		CourseName:     c.CourseName,
+		Year:           int32(c.Year),
+		Semester:       c.Semester,
+		CreatedAt:      c.CreatedAt.Format(timeFormat),
+		Discontinued:   c.IsDiscontinued(),
+		DiscontinuedAt: formatTimePtr(c.DiscontinuedAt),
+	}
+}
+
+func formatTimePtr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format(timeFormat)
+	return &s
+}
+
+func toGraphCourseSnapshot(s *model.CourseSnapshot) *gqlmodel.CourseSnapshot {
+	if s == nil {
+		return nil
+	}
+	out := &gqlmodel.CourseSnapshot{
+		SourceRef:   s.SourceRef,
+		Semester:    s.Semester,
+		DayOfWeek:   s.DayOfWeek,
+		Period:      int32(s.Period),
+		CourseName:  s.CourseName,
+		TeacherName: s.TeacherName,
+	}
+	if s.CourseID != 0 {
+		id := encodeGraphID("course", s.CourseID)
+		out.CourseID = &id
+	}
+	return out
+}
+
+func toGraphCourseSnapshots(list []model.CourseSnapshot) []*gqlmodel.CourseSnapshot {
+	out := make([]*gqlmodel.CourseSnapshot, 0, len(list))
+	for i := range list {
+		out = append(out, toGraphCourseSnapshot(&list[i]))
+	}
+	return out
+}
+
+func toGraphCourseSyncRun(run *model.CourseSyncRun) *gqlmodel.CourseSyncRun {
+	if run == nil {
+		return nil
+	}
+	out := &gqlmodel.CourseSyncRun{
+		ID:                encodeGraphID("course_sync_run", run.ID),
+		Year:              int32(run.Year),
+		DryRun:            run.DryRun,
+		SiteTotal:         int32(run.SiteTotal),
+		ListedRows:        int32(run.ListedRows),
+		UnidentifiedRows:  int32(run.UnidentifiedRows),
+		CreatedCount:      int32(run.Created),
+		UpdatedCount:      int32(run.Updated),
+		DiscontinuedCount: int32(run.Discontinued),
+		RestoredCount:     int32(run.Restored),
+		ReviewCount:       int32(run.Reviews),
+		UnchangedCount:    int32(run.Unchanged),
+		UnregisteredCount: int32(run.Unregistered),
+		StartedAt:         run.StartedAt.Format(timeFormat),
+		FinishedAt:        run.FinishedAt.Format(timeFormat),
+	}
+	if run.DiscontinueSkippedReason != "" {
+		reason := run.DiscontinueSkippedReason
+		out.DiscontinueSkippedReason = &reason
+	}
+	return out
+}
+
+func toGraphCourseSyncChange(c *model.CourseSyncChange) *gqlmodel.CourseSyncChange {
+	out := &gqlmodel.CourseSyncChange{
+		ID:                encodeGraphID("course_sync_change", c.ID),
+		Kind:              gqlmodel.CourseSyncChangeKind(c.Kind),
+		CourseName:        c.CourseName,
+		TeacherName:       c.TeacherName,
+		Detail:            c.Detail,
+		Before:            toGraphCourseSnapshot(c.Before),
+		After:             toGraphCourseSnapshot(c.After),
+		RegisteredCount:   int32(c.RegisteredCount),
+		UnregisteredCount: int32(c.UnregisteredCount),
+	}
+	if c.CourseID != nil {
+		id := encodeGraphID("course", *c.CourseID)
+		out.CourseID = &id
+	}
+	if c.ReviewID != nil {
+		id := encodeGraphID("course_sync_review", *c.ReviewID)
+		out.ReviewID = &id
+	}
+	return out
+}
+
+func toGraphCourseSyncReview(r *model.CourseSyncReview) *gqlmodel.CourseSyncReview {
+	if r == nil {
+		return nil
+	}
+	return &gqlmodel.CourseSyncReview{
+		ID:         encodeGraphID("course_sync_review", r.ID),
+		Year:       int32(r.Year),
+		Kind:       gqlmodel.CourseSyncReviewKind(r.Kind),
+		Status:     gqlmodel.CourseSyncReviewStatus(r.Status),
+		Message:    r.Message,
+		Existing:   toGraphCourseSnapshots(r.Existing),
+		Proposed:   toGraphCourseSnapshots(r.Proposed),
+		CreatedAt:  r.CreatedAt.Format(timeFormat),
+		ResolvedAt: formatTimePtr(r.ResolvedAt),
 	}
 }
 
 func toGraphCourseImportStatus(status courseimport.Status) *gqlmodel.CourseImportStatus {
 	out := &gqlmodel.CourseImportStatus{
-		State: gqlmodel.CourseImportState(status.State),
+		State:  gqlmodel.CourseImportState(status.State),
+		DryRun: status.DryRun,
+	}
+	if status.RunID != 0 {
+		runID := encodeGraphID("course_sync_run", status.RunID)
+		out.SyncRunID = &runID
 	}
 	if status.Year != 0 {
 		year := int32(status.Year)

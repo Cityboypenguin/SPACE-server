@@ -292,3 +292,70 @@ func TestAccountSplitMigration(t *testing.T) {
 		}
 	})
 }
+
+// beforeCourseSync はシラバス同期の列を足す直前の版。
+const beforeCourseSync = 102
+
+// シラバス同期の migration（103〜108）が既存の授業を1行も失わず、
+// 取り込み元と講義コードを dedup_key から正しく埋めること。
+// 戻したときも行が残ること（down は列を落とすだけ）。
+func TestCourseSyncMigration(t *testing.T) {
+	db := throwawayDB(t)
+	m := newMigrator(t, db)
+
+	if err := m.Migrate(beforeCourseSync); err != nil {
+		t.Fatalf("migrate to %d: %v", beforeCourseSync, err)
+	}
+	mustExec(t, db, `INSERT INTO rooms (id, name, type, created_at, updated_at) VALUES
+		(1, '経済学入門', 'course', 1, 1), (2, '手作りの授業', 'course', 1, 1), (3, '古い形式', 'course', 1, 1)`)
+	mustExec(t, db, `INSERT INTO courses (id, room_id, day_of_week, period, teacher_name, course_name, year, semester, dedup_key, created_at, updated_at) VALUES
+		(1, 1, '水', 5, '田中', '経済学入門', 2026, '前期', 'senshu:2026:前期:12345:水:5', 1, 1),
+		(2, 2, '月', 1, '佐藤', '手作りの授業', 2026, '前期', 'manual:0b9c0e4e-0000-0000-0000-000000000000', 1, 1),
+		(3, 3, '火', 2, '鈴木', '古い形式', 2026, '前期', 'legacy-key', 1, 1)`)
+
+	if err := m.Up(); err != nil {
+		t.Fatalf("migrate up: %v", err)
+	}
+
+	if n := count(t, db, `SELECT COUNT(*) FROM courses`); n != 3 {
+		t.Fatalf("courses = %d, want 3 (no row may be lost)", n)
+	}
+	type row struct {
+		source    string
+		sourceRef sql.NullString
+		dedupKey  string
+		disc      sql.NullInt64
+	}
+	read := func(id int) row {
+		var r row
+		if err := db.QueryRow(`SELECT source, source_ref, dedup_key, discontinued_at FROM courses WHERE id = ?`, id).
+			Scan(&r.source, &r.sourceRef, &r.dedupKey, &r.disc); err != nil {
+			t.Fatalf("read course %d: %v", id, err)
+		}
+		return r
+	}
+	if r := read(1); r.source != "senshu" || r.sourceRef.String != "12345" || r.dedupKey != "senshu:2026:前期:12345:水:5" || r.disc.Valid {
+		t.Errorf("scraped course = %+v, want senshu / 12345 / dedup_key kept / not discontinued", r)
+	}
+	if r := read(2); r.source != "manual" || r.sourceRef.Valid {
+		t.Errorf("manual course = %+v, want manual with no source_ref", r)
+	}
+	if r := read(3); r.source != "unknown" || r.sourceRef.Valid {
+		t.Errorf("odd course = %+v, want unknown with no source_ref (never synced)", r)
+	}
+	for _, table := range []string{"course_sync_reviews", "course_sync_runs", "course_sync_changes"} {
+		if n := count(t, db, `SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`, table); n != 1 {
+			t.Errorf("table %s was not created", table)
+		}
+	}
+
+	if err := m.Migrate(beforeCourseSync); err != nil {
+		t.Fatalf("migrate back down to %d: %v", beforeCourseSync, err)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM courses`); n != 3 {
+		t.Fatalf("courses after down = %d, want 3", n)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'courses' AND COLUMN_NAME = 'source'`); n != 0 {
+		t.Errorf("courses.source survived the down migration")
+	}
+}

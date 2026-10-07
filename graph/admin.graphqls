@@ -18,6 +18,22 @@ extend type Query {
   adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
   adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
   adminCourseImportStatus: CourseImportStatus!
+  # シラバス同期の実行結果（新しい順）。
+  adminCourseSyncRuns(year: Int, limit: Int = 20, offset: Int = 0): CourseSyncRunPage!
+  adminCourseSyncRun(id: ID!): CourseSyncRun
+  # 同期1回ぶんの変更。登録者の多い（影響の大きい）ものから並ぶ。
+  adminCourseSyncChanges(
+    runID: ID!
+    kind: CourseSyncChangeKind
+    limit: Int = 50
+    offset: Int = 0
+  ): CourseSyncChangePage!
+  adminCourseSyncReviews(
+    year: Int
+    status: CourseSyncReviewStatus
+    limit: Int = 20
+    offset: Int = 0
+  ): CourseSyncReviewPage!
   adminListCourseYears: [Int!]!
   adminGetCourse(id: ID!): Course
   adminListCourses(
@@ -49,7 +65,11 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
-  adminTriggerCourseImport(year: Int!): CourseImportStatus!
+  # シラバスを取り込み、DB の授業を大学に今登録されている内容に合わせる。
+  # dryRun が true なら DB の授業は書き換えず、何が変わるかの結果だけを残す。
+  adminTriggerCourseImport(year: Int!, dryRun: Boolean = false): CourseImportStatus!
+  # 確認待ちの変化に判断を付ける。反映は次の同期で行われる。
+  adminResolveCourseSyncReview(id: ID!, decision: CourseSyncReviewDecision!): CourseSyncReview!
   adminCreateCourse(input: AdminCreateCourseInput!): Course!
   # Deletes the course's chat room, which cascades to the course row itself, every
   # user's timetable registration for it, and all of the room's messages/questions/

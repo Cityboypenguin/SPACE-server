@@ -28,6 +28,9 @@ const (
 	// TypeMessageMention はコミュニティチャットでの @表示名 メンション。
 	// 返信と同じく遷移先がルーム内の該当メッセージなので、投稿のメンションとは別タイプにしている。
 	TypeMessageMention NotificationType = "message_mention"
+	// TypeTimetableRemoved はシラバス同期で授業のコマが変わり、移った先のコマに別の授業を
+	// 登録していたため、その授業を時間割から外したことを知らせる（時間割は1コマ1授業）。
+	TypeTimetableRemoved NotificationType = "timetable_removed"
 )
 
 type TargetType string
@@ -38,6 +41,7 @@ const (
 	TargetCommunity    TargetType = "community"
 	TargetAnnouncement TargetType = "announcement"
 	TargetMessage      TargetType = "message"
+	TargetCourse       TargetType = "course"
 )
 
 type PublishParams struct {

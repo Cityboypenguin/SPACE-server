@@ -59,6 +59,8 @@ func TestParseRows(t *testing.T) {
 		Year:        2026,
 		Semester:    "前期",
 		DedupKey:    "senshu:2026:前期:26070:木:3",
+		SourceRef:   "26070",
+		SourceName:  "アカウンティングコミュニケーション",
 	}
 	if rows[0].course != want {
 		t.Fatalf("first course = %+v, want %+v", rows[0].course, want)
@@ -107,6 +109,8 @@ func TestParseRows_FullYearCourse(t *testing.T) {
 		Year:        2026,
 		Semester:    "通年",
 		DedupKey:    "senshu:2026:通年:99999:月:1",
+		SourceRef:   "99999",
+		SourceName:  "通年テスト科目",
 	}
 	if rows[0].course != want {
 		t.Fatalf("course = %+v, want %+v", rows[0].course, want)
@@ -144,6 +148,8 @@ func TestParseRows_CoTaughtCourse(t *testing.T) {
 		Year:        2026,
 		Semester:    "前期",
 		DedupKey:    "senshu:2026:前期:32212:水:4",
+		SourceRef:   "32212",
+		SourceName:  "コンピュータサイエンス演習１",
 	}
 	if rows[0].course != want {
 		t.Fatalf("course = %+v, want %+v", rows[0].course, want)
@@ -182,6 +188,8 @@ func TestParseRows_MultiSlotCourse(t *testing.T) {
 			Year:        2026,
 			Semester:    "後期",
 			DedupKey:    "senshu:2026:後期:25169:月:1",
+			SourceRef:   "25169",
+			SourceName:  "商業経営",
 		},
 		{
 			DayOfWeek:   "水",
@@ -191,6 +199,8 @@ func TestParseRows_MultiSlotCourse(t *testing.T) {
 			Year:        2026,
 			Semester:    "後期",
 			DedupKey:    "senshu:2026:後期:25169:水:1",
+			SourceRef:   "25169",
+			SourceName:  "商業経営",
 		},
 	}
 	for i, w := range want {

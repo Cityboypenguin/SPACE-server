@@ -55,6 +55,10 @@ type Course {
   # Non-admin callers get 0. Meant to be shown before adminDeleteCourse, since that
   # deletion cascades away every one of these registrations.
   registeredCount: Int!
+  # シラバスから消えて廃止扱いになった授業。検索には出ず、新しく時間割に登録できない。
+  # 既に登録している人の時間割には残る（クライアントは「廃止」と表示する）。
+  discontinued: Boolean!
+  discontinuedAt: String
 }
 
 input AdminCreateCourseInput {
@@ -156,4 +160,129 @@ type CourseImportStatus {
   processedCount: Int
   totalCount: Int
   progressPercent: Int
+  # ドライラン（DB を書き換えずに、実行したら何が変わるかだけを見積もる）か。
+  dryRun: Boolean!
+  # 成功した実行の結果（adminCourseSyncRun で変更の一覧を引ける）。
+  syncRunID: ID
+}
+
+# ■ シラバス同期の結果
+#
+# 取り込みは「大学に今登録されている授業」に DB を合わせる。授業は講義コードで
+# 照合し、コマ・授業名・教員名の変更を反映し、シラバスから消えた授業は廃止扱いにする
+# （行は消さない。時間割・ルーム・メッセージは残る）。自動で判断しない変化は
+# CourseSyncReview として管理者の確認に回る。
+
+enum CourseSyncChangeKind {
+  CREATED
+  UPDATED
+  DISCONTINUED
+  RESTORED
+  REVIEW
+}
+
+# 授業1コマぶんの中身（変更の前後、確認の内容の表示用）。
+type CourseSnapshot {
+  courseID: ID
+  sourceRef: String!
+  semester: String!
+  dayOfWeek: String!
+  period: Int!
+  courseName: String!
+  teacherName: String!
+}
+
+type CourseSyncRun {
+  ID: ID!
+  year: Int!
+  dryRun: Boolean!
+  # サイトが報告した授業の件数と、実際に一覧から読めた件数。一致しないと廃止を見送る。
+  siteTotal: Int!
+  listedRows: Int!
+  unidentifiedRows: Int!
+  createdCount: Int!
+  updatedCount: Int!
+  discontinuedCount: Int!
+  restoredCount: Int!
+  reviewCount: Int!
+  unchangedCount: Int!
+  # コマの重なりで時間割から外した登録の数（全授業の合計）。
+  unregisteredCount: Int!
+  # 廃止の判定を見送った理由。null なら判定した。
+  discontinueSkippedReason: String
+  startedAt: String!
+  finishedAt: String!
+}
+
+type CourseSyncRunPage {
+  items: [CourseSyncRun!]!
+  total: Int!
+}
+
+type CourseSyncChange {
+  ID: ID!
+  kind: CourseSyncChangeKind!
+  courseID: ID
+  reviewID: ID
+  courseName: String!
+  teacherName: String!
+  # 人が読む説明（例: "コマ: 水5 → 水4"）。
+  detail: String!
+  before: CourseSnapshot
+  after: CourseSnapshot
+  # この授業を時間割に登録している人数。
+  registeredCount: Int!
+  # コマが変わった結果、移った先のコマに別の授業を登録していたため、時間割から
+  # この授業を外した人数（時間割は1コマ1授業。元からそのコマにあった授業を残し、
+  # 外した人にはアプリ内通知で知らせる）。ドライランでは外す予定の人数。
+  unregisteredCount: Int!
+}
+
+type CourseSyncChangePage {
+  items: [CourseSyncChange!]!
+  total: Int!
+}
+
+enum CourseSyncReviewKind {
+  # 同じ講義コードのまま授業名と教員名が両方変わった（使い回しの疑い）。
+  CODE_REUSED
+  # 消えた講義コードと同じ授業名・教員名で新しい講義コードが現れた（振り直しの疑い）。
+  CODE_REISSUED
+  # 複数コマの授業でコマが変わり、どのコマがどのコマに移ったか決まらない。
+  SLOT_AMBIGUOUS
+}
+
+enum CourseSyncReviewStatus {
+  PENDING
+  SAME
+  DIFFERENT
+  IGNORED
+  APPLIED
+}
+
+# 確認への判断。判断は次の同期で反映される。
+enum CourseSyncReviewDecision {
+  # 同じ授業として既存の授業を更新する（ルーム・時間割を引き継ぐ）。SLOT_AMBIGUOUS には使えない。
+  SAME
+  # 別の授業として扱う（既存は廃止、新しい授業を作る）。
+  DIFFERENT
+  # 今のまま据え置く（同じ状況では再び確認に回さない）。
+  IGNORED
+}
+
+type CourseSyncReview {
+  ID: ID!
+  year: Int!
+  kind: CourseSyncReviewKind!
+  status: CourseSyncReviewStatus!
+  message: String!
+  existing: [CourseSnapshot!]!
+  proposed: [CourseSnapshot!]!
+  createdAt: String!
+  resolvedAt: String
+}
+
+type CourseSyncReviewPage {
+  items: [CourseSyncReview!]!
+  total: Int!
 }

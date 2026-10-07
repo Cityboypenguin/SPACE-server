@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
@@ -227,37 +228,65 @@ func (r *mutationResolver) AdminDeleteQuestion(ctx context.Context, id string) (
 }
 
 // AdminTriggerCourseImport is the resolver for the adminTriggerCourseImport field.
-func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32) (*gqlmodel.CourseImportStatus, error) {
+func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32, dryRun *bool) (*gqlmodel.CourseImportStatus, error) {
 	claims, err := requireAdminAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context, reportProgress func(processed, total int)) (int, int, error) {
+	isDryRun := dryRun != nil && *dryRun
+	status, err := r.CourseImportTracker.StartRun(int(year), isDryRun, func(bgCtx context.Context, reportProgress func(processed, total int)) (courseimport.Outcome, error) {
 		bgCtx = auth.WithClaims(bgCtx, claims)
+		startedAt := time.Now()
 		knownDedupKeys, err := r.ListDedupKeysByYearUseCase.Execute(bgCtx, int(year))
 		if err != nil {
-			return 0, 0, err
+			return courseimport.Outcome{}, err
 		}
 
 		sc, err := scraper.NewSenshuSyllabusScraper()
 		if err != nil {
-			return 0, 0, err
+			return courseimport.Outcome{}, err
 		}
 		defer sc.Close()
-		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys, reportProgress)
+		fetched, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys, reportProgress)
 		if err != nil {
-			return 0, skippedRows, err
+			return courseimport.Outcome{}, err
 		}
-		result, err := r.ImportCoursesUseCase.Execute(bgCtx, scraped)
+		run, err := r.SyncCoursesUseCase.Execute(bgCtx, courseusecase.SyncCoursesInput{
+			Year:         int(year),
+			DryRun:       isDryRun,
+			Courses:      fetched.Courses,
+			Completeness: fetched.Completeness,
+			StartedAt:    startedAt,
+		})
 		if err != nil {
-			return 0, skippedRows, err
+			return courseimport.Outcome{}, err
 		}
-		return result.Imported, skippedRows + result.Skipped, nil
+		return courseimport.Outcome{
+			Imported: run.Created,
+			Skipped:  fetched.SkippedSlots + run.Unchanged,
+			RunID:    run.ID,
+		}, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return toGraphCourseImportStatus(status), nil
+}
+
+// AdminResolveCourseSyncReview is the resolver for the adminResolveCourseSyncReview field.
+func (r *mutationResolver) AdminResolveCourseSyncReview(ctx context.Context, id string, decision gqlmodel.CourseSyncReviewDecision) (*gqlmodel.CourseSyncReview, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_review", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync review id")
+	}
+	review, err := r.CourseSyncAdminUseCase.ResolveReview(ctx, numericID, model.CourseSyncReviewStatus(decision))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCourseSyncReview(review), nil
 }
 
 // AdminCreateCourse is the resolver for the adminCreateCourse field.
@@ -685,4 +714,91 @@ func (r *subscriptionResolver) AdminCourseImportStatusUpdated(ctx context.Contex
 			return toGraphCourseImportStatus(status), true
 		},
 	), nil
+}
+
+// AdminCourseSyncRuns is the resolver for the adminCourseSyncRuns field.
+func (r *queryResolver) AdminCourseSyncRuns(ctx context.Context, year *int32, limit *int32, offset *int32) (*gqlmodel.CourseSyncRunPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	var y *int
+	if year != nil {
+		v := int(*year)
+		y = &v
+	}
+	runs, total, err := r.CourseSyncAdminUseCase.ListRuns(ctx, y, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncRun, 0, len(runs))
+	for _, run := range runs {
+		items = append(items, toGraphCourseSyncRun(run))
+	}
+	return &gqlmodel.CourseSyncRunPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCourseSyncRun is the resolver for the adminCourseSyncRun field.
+func (r *queryResolver) AdminCourseSyncRun(ctx context.Context, id string) (*gqlmodel.CourseSyncRun, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_run", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync run id")
+	}
+	run, err := r.CourseSyncAdminUseCase.GetRun(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCourseSyncRun(run), nil
+}
+
+// AdminCourseSyncChanges is the resolver for the adminCourseSyncChanges field.
+func (r *queryResolver) AdminCourseSyncChanges(ctx context.Context, runID string, kind *gqlmodel.CourseSyncChangeKind, limit *int32, offset *int32) (*gqlmodel.CourseSyncChangePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_run", runID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync run id")
+	}
+	var k *model.CourseSyncChangeKind
+	if kind != nil {
+		v := model.CourseSyncChangeKind(*kind)
+		k = &v
+	}
+	changes, total, err := r.CourseSyncAdminUseCase.ListChanges(ctx, numericID, k, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncChange, 0, len(changes))
+	for _, c := range changes {
+		items = append(items, toGraphCourseSyncChange(c))
+	}
+	return &gqlmodel.CourseSyncChangePage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCourseSyncReviews is the resolver for the adminCourseSyncReviews field.
+func (r *queryResolver) AdminCourseSyncReviews(ctx context.Context, year *int32, status *gqlmodel.CourseSyncReviewStatus, limit *int32, offset *int32) (*gqlmodel.CourseSyncReviewPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	param := repository.ListCourseSyncReviewsParam{Page: resolvePageQuery(ctx, limit, offset, defaultPageSize)}
+	if year != nil {
+		v := int(*year)
+		param.Year = &v
+	}
+	if status != nil {
+		v := model.CourseSyncReviewStatus(*status)
+		param.Status = &v
+	}
+	reviews, total, err := r.CourseSyncAdminUseCase.ListReviews(ctx, param)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncReview, 0, len(reviews))
+	for _, rv := range reviews {
+		items = append(items, toGraphCourseSyncReview(rv))
+	}
+	return &gqlmodel.CourseSyncReviewPage{Items: items, Total: int32(total)}, nil
 }

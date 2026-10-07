@@ -15,6 +15,7 @@ import (
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
@@ -56,6 +57,9 @@ func NewCourseUseCases(
 	// 授業一覧の未読バッジしか使わないので、合成インターフェースではなく
 	// 未読集計の口だけを受け取る。
 	unreadCounter repository.MessageUnreadCounter,
+	courseSyncRepo repository.CourseSyncRepository,
+	txManager repository.TxManager,
+	notifier notificationuc.NotificationPublisher,
 ) graph.CourseUseCases {
 	return graph.CourseUseCases{
 		SearchCoursesUseCase:               courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
@@ -73,7 +77,8 @@ func NewCourseUseCases(
 		GetCurrentSemesterUseCase:          semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:       semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		ListCourseRoomUnreadCountsUseCase:  courseusecase.NewListCourseRoomUnreadCountsUseCase(unreadCounter, settingRepo),
-		ImportCoursesUseCase:               courseusecase.NewImportCoursesUseCase(courseRepo),
+		SyncCoursesUseCase:                 courseusecase.NewSyncCoursesUseCase(courseRepo, courseSyncRepo, txManager, notifier),
+		CourseSyncAdminUseCase:             courseusecase.NewCourseSyncAdminUseCase(courseSyncRepo),
 		ListCoursesUseCase:                 courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:             courseusecase.NewListCourseYearsUseCase(courseRepo),
 		ListDedupKeysByYearUseCase:         courseusecase.NewListDedupKeysByYearUseCase(courseRepo),

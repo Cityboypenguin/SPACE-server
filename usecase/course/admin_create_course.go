@@ -80,5 +80,6 @@ func (uc *AdminCreateCourseInteractor) Execute(ctx context.Context, param AdminC
 		Year:        param.Year,
 		Semester:    param.Semester,
 		DedupKey:    "manual:" + uuid.New().String(),
+		Source:      model.CourseSourceManual,
 	})
 }

@@ -132,6 +132,10 @@ func timetableTestDB(t *testing.T) (*sql.DB, func()) {
 			year INT NOT NULL,
 			semester VARCHAR(20) NOT NULL,
 			dedup_key VARCHAR(255) NOT NULL DEFAULT '',
+			source VARCHAR(20) NOT NULL DEFAULT 'senshu',
+			source_ref VARCHAR(64) NULL,
+			source_name VARCHAR(255) NULL,
+			discontinued_at BIGINT NULL,
 			created_at BIGINT NOT NULL DEFAULT 0,
 			updated_at BIGINT NOT NULL DEFAULT 0,
 			PRIMARY KEY (id)

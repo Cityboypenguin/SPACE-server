@@ -40,6 +40,8 @@ func (uc *ReplaceTimetableInteractor) Execute(ctx context.Context, year int, sem
 			return nil, apperr.Conflict("他の操作で時間割が変更されています。最新の状態を確認してください。")
 		case errors.Is(err, repository.ErrTimetableSlotConflict):
 			return nil, apperr.InvalidInput("同じ曜日・時限に複数の授業を登録することはできません。")
+		case errors.Is(err, repository.ErrCourseDiscontinued):
+			return nil, apperr.InvalidInput("廃止された授業（シラバスに掲載されなくなった授業）は新しく登録できません。")
 		default:
 			return nil, err
 		}

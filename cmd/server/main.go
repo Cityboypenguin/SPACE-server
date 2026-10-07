@@ -155,6 +155,7 @@ func main() {
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	courseRepository := mysql.NewMySQLCourseRepository(database)
+	courseSyncRepository := mysql.NewMySQLCourseSyncRepository(database)
 	instanceID := newInstanceID()
 
 	// Redis はここで繋ぐ。subscription の配信（下の chatBus）が Redis に乗るので、
@@ -681,7 +682,7 @@ func main() {
 		},
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
-		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
+		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, userSettingRepository, roomRepository, blockRepository, messageRepository, courseSyncRepository, txManager, notificationPublisher),
 		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
 		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 

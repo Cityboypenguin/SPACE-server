@@ -15,6 +15,10 @@ type SaveCourseParam struct {
 	Year        int
 	Semester    string
 	DedupKey    string
+	// Source は model.CourseSourceSenshu / model.CourseSourceManual。
+	Source     string
+	SourceRef  string
+	SourceName string
 }
 
 // ListCoursesParam holds the optional filters for ListCourses (admin course listing).
@@ -41,20 +45,13 @@ type CourseRepository interface {
 	//
 	// 意味は SaveCourseWithRoom と同じで、courses 1行につき rooms 1行を作り、
 	// room_users には触らない。渡した順と同じ順で返す。
-	// DedupKey の重複確認はしない（呼び出し側が FindExistingDedupKeys で
-	// 落としてから渡すこと）。
+	// DedupKey の重複確認はしない（呼び出し側が照合で落としてから渡すこと）。
+	// ctx にトランザクションが乗っていればそれに参加する。
 	SaveCoursesWithRooms(ctx context.Context, params []SaveCourseParam) ([]*model.Course, error)
 	FindByDedupKey(ctx context.Context, dedupKey string) (*model.Course, error)
-	// FindExistingDedupKeys は渡した dedup_key のうち、既に courses に在るものだけを
-	// true で返す。取り込みの存在確認を1件ずつの FindByDedupKey から1本の IN 句へ
-	// まとめるためのもの。
-	//
-	// ListDedupKeysByYear と違い年で絞らない。取り込み対象そのものを問い合わせるので、
-	// 年をまたいだ dedup_key（unique index はテーブル全体に張ってある）も正しく
-	// 「既に在る」と判定できる。
-	FindExistingDedupKeys(ctx context.Context, dedupKeys []string) (map[string]bool, error)
 	GetCourseByID(ctx context.Context, id int64) (*model.Course, error)
 	GetCourseByRoomID(ctx context.Context, roomID int64) (*model.Course, error)
+	// SearchByDayPeriod は廃止済みの授業を含めない。
 	SearchByDayPeriod(ctx context.Context, dayOfWeek string, period int, keyword string, year int, semester string, q PageQuery) ([]*model.Course, int, error)
 	ListCourses(ctx context.Context, param ListCoursesParam) ([]*model.Course, int, error)
 	// ListDistinctYears returns every year present in courses, newest first, so the

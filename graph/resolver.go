@@ -308,7 +308,8 @@ type CourseUseCases struct {
 	GetCurrentSemesterUseCase          semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase       semesterusecase.UpdateCurrentSemesterUseCase
 	ListCourseRoomUnreadCountsUseCase  courseusecase.ListCourseRoomUnreadCountsUseCase
-	ImportCoursesUseCase               courseusecase.ImportCoursesUseCase
+	SyncCoursesUseCase                 courseusecase.SyncCoursesUseCase
+	CourseSyncAdminUseCase             courseusecase.CourseSyncAdminUseCase
 	ListCoursesUseCase                 courseusecase.ListCoursesUseCase
 	ListCourseYearsUseCase             courseusecase.ListCourseYearsUseCase
 	ListDedupKeysByYearUseCase         courseusecase.ListDedupKeysByYearUseCase
