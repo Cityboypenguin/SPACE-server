@@ -29,3 +29,29 @@ func wrapDuplicateKey(err error) error {
 	}
 	return err
 }
+
+// mysqlDeadlockErrno は MySQL の「Deadlock found when trying to get lock」(ER_LOCK_DEADLOCK)。
+// InnoDB はトランザクションを1つ巻き戻して返すので、最初からやり直せば通る。
+const mysqlDeadlockErrno = 1213
+
+func isDeadlockError(err error) bool {
+	var mysqlErr *drivermysql.MySQLError
+	if !errors.As(err, &mysqlErr) {
+		return false
+	}
+	return mysqlErr.Number == mysqlDeadlockErrno
+}
+
+// deadlockRetries はデッドロックで巻き戻されたトランザクションをやり直す回数の上限。
+const deadlockRetries = 3
+
+// retryOnDeadlock は fn（トランザクション1つ全体）をデッドロックのときだけやり直す。
+// fn は毎回トランザクションを開き直すこと（巻き戻されたトランザクションは使えない）。
+func retryOnDeadlock[T any](fn func() (T, error)) (T, error) {
+	for attempt := 1; ; attempt++ {
+		v, err := fn()
+		if err == nil || !isDeadlockError(err) || attempt == deadlockRetries {
+			return v, err
+		}
+	}
+}

@@ -77,7 +77,7 @@ func NewCourseUseCases(
 		GetCurrentSemesterUseCase:          semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:       semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		ListCourseRoomUnreadCountsUseCase:  courseusecase.NewListCourseRoomUnreadCountsUseCase(unreadCounter, settingRepo),
-		SyncCoursesUseCase:                 courseusecase.NewSyncCoursesUseCase(courseRepo, courseSyncRepo, txManager, notifier),
+		SyncCoursesUseCase:                 courseusecase.NewSyncCoursesUseCase(courseRepo, courseSyncRepo, txManager, settingRepo, notifier),
 		CourseSyncAdminUseCase:             courseusecase.NewCourseSyncAdminUseCase(courseSyncRepo),
 		ListCoursesUseCase:                 courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:             courseusecase.NewListCourseYearsUseCase(courseRepo),

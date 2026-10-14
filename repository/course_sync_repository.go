@@ -50,6 +50,10 @@ type CourseSyncRepository interface {
 	// ListSyncableCourses は year の授業のうち、シラバスから取り込んだもの
 	// （source = senshu で source_ref がある。廃止済みも含む）を返す。
 	ListSyncableCourses(ctx context.Context, year int) ([]*model.Course, error)
+	// LockCourses は書き換える授業の行を ID の昇順に排他ロックする。書き換えより前に
+	// まとめて呼ぶこと（時間割の書き込みと同じ順で押さえ、行き違いを避けるため。
+	// infra/mysql/timetable_repository.go の冒頭のコメント参照）。
+	LockCourses(ctx context.Context, ids []int64) error
 	UpdateCourses(ctx context.Context, params []CourseUpdateParam) error
 	// DiscontinueCourses は廃止の印を付ける（行は消さない）。
 	DiscontinueCourses(ctx context.Context, ids []int64, at time.Time) error

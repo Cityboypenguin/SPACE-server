@@ -16,6 +16,9 @@ import (
 
 const testYear = 2026
 
+// currentTerm はテストでの「現在の学期」。testYear の前期の授業は終わっていない。
+var currentTerm = AcademicTerm{Year: testYear, Semester: model.SemesterFirst}
+
 func dbCourse(id int64, ref, day string, period int, name, teacher string) *model.Course {
 	return &model.Course{
 		ID: id, RoomID: id + 1000, Year: testYear, Semester: model.SemesterFirst,
@@ -56,7 +59,7 @@ func complete(n int) FetchCompleteness {
 func planWith(t *testing.T, olds []*model.Course, news []ScrapedCourseInput, reviews ...*model.CourseSyncReview) *SyncPlan {
 	t.Helper()
 	fo, fn := filler(20)
-	return PlanCourseSync(testYear, append(olds, fo...), append(news, fn...), reviews, complete(len(news)+20))
+	return PlanCourseSync(testYear, append(olds, fo...), append(news, fn...), reviews, complete(len(news)+20), currentTerm)
 }
 
 func TestPlan_NothingChangedIsUnchanged(t *testing.T) {
@@ -195,7 +198,7 @@ func TestPlan_DiscontinueGuard(t *testing.T) {
 	t.Run("an incomplete listing discontinues nothing", func(t *testing.T) {
 		fo, fn := filler(20)
 		olds := append([]*model.Course{dbCourse(1, "A", "火", 2, "日本文化論", "鈴木")}, fo...)
-		plan := PlanCourseSync(testYear, olds, fn, nil, FetchCompleteness{SiteTotal: 25, ListedRows: 20})
+		plan := PlanCourseSync(testYear, olds, fn, nil, FetchCompleteness{SiteTotal: 25, ListedRows: 20}, currentTerm)
 		if len(plan.Discontinues) != 0 || plan.DiscontinueSkippedReason == "" {
 			t.Fatalf("discontinues = %d, reason = %q; want none and a reason", len(plan.Discontinues), plan.DiscontinueSkippedReason)
 		}
@@ -203,7 +206,7 @@ func TestPlan_DiscontinueGuard(t *testing.T) {
 	t.Run("unreadable course codes discontinue nothing", func(t *testing.T) {
 		fo, fn := filler(20)
 		olds := append([]*model.Course{dbCourse(1, "A", "火", 2, "日本文化論", "鈴木")}, fo...)
-		plan := PlanCourseSync(testYear, olds, fn, nil, FetchCompleteness{SiteTotal: 21, ListedRows: 21, UnidentifiedRows: 1})
+		plan := PlanCourseSync(testYear, olds, fn, nil, FetchCompleteness{SiteTotal: 21, ListedRows: 21, UnidentifiedRows: 1}, currentTerm)
 		if len(plan.Discontinues) != 0 || plan.DiscontinueSkippedReason == "" {
 			t.Fatalf("discontinues = %d, reason = %q; want none and a reason", len(plan.Discontinues), plan.DiscontinueSkippedReason)
 		}
@@ -211,14 +214,14 @@ func TestPlan_DiscontinueGuard(t *testing.T) {
 	t.Run("more than 10% vanishing discontinues nothing", func(t *testing.T) {
 		fo, fn := filler(20)
 		// 20件中3件が消える = 15%。
-		plan := PlanCourseSync(testYear, fo, fn[3:], nil, complete(17))
+		plan := PlanCourseSync(testYear, fo, fn[3:], nil, complete(17), currentTerm)
 		if len(plan.Discontinues) != 0 || plan.DiscontinueSkippedReason == "" {
 			t.Fatalf("discontinues = %d, reason = %q; want none and a reason", len(plan.Discontinues), plan.DiscontinueSkippedReason)
 		}
 	})
 	t.Run("exactly 10% is allowed", func(t *testing.T) {
 		fo, fn := filler(20)
-		plan := PlanCourseSync(testYear, fo, fn[2:], nil, complete(18))
+		plan := PlanCourseSync(testYear, fo, fn[2:], nil, complete(18), currentTerm)
 		if len(plan.Discontinues) != 2 || plan.DiscontinueSkippedReason != "" {
 			t.Fatalf("discontinues = %d, reason = %q; want 2 and no reason", len(plan.Discontinues), plan.DiscontinueSkippedReason)
 		}
@@ -357,5 +360,65 @@ func TestPlan_NewCourseIsCreated(t *testing.T) {
 	plan := planWith(t, nil, []ScrapedCourseInput{scrapedCourse("Z", "金", 5, "新設科目", "小林")})
 	if len(plan.Creates) != 1 || plan.Creates[0].Input.SourceRef != "Z" {
 		t.Fatalf("creates = %+v, want the new course", plan.Creates)
+	}
+}
+
+// 現在の学期より前に終わった授業は、コマが変わっても動かさない（授業名・教員名は反映する）。
+func TestPlan_EndedCoursesKeepTheirSlot(t *testing.T) {
+	later := AcademicTerm{Year: testYear, Semester: model.SemesterSecond}
+	fo, fn := filler(20)
+	olds := append([]*model.Course{dbCourse(1, "A", "水", 5, "経済学入門", "田中")}, fo...)
+
+	moved := append([]ScrapedCourseInput{scrapedCourse("A", "水", 4, "経済学入門", "田中")}, fn...)
+	plan := PlanCourseSync(testYear, olds, moved, nil, complete(21), later)
+	if len(plan.Updates)+len(plan.Creates)+len(plan.Discontinues)+len(plan.Reviews) != 0 {
+		t.Fatalf("plan = %+v, want an ended course's slot change ignored", plan)
+	}
+
+	renamedAndMoved := append([]ScrapedCourseInput{scrapedCourse("A", "水", 4, "経済学入門Ⅰ", "田中")}, fn...)
+	plan = PlanCourseSync(testYear, olds, renamedAndMoved, nil, complete(21), later)
+	if len(plan.Updates) != 1 {
+		t.Fatalf("updates = %d, want the rename applied", len(plan.Updates))
+	}
+	u := plan.Updates[0]
+	if u.SlotChanged || u.After.Period != 5 || u.After.DedupKey != olds[0].DedupKey || u.After.CourseName != "経済学入門Ⅰ" {
+		t.Errorf("update = %+v, want the name changed and the slot kept", u)
+	}
+
+	// 通年の授業は同じ年度のうちは終わっていない。
+	fullYear := dbCourse(2, "B", "月", 1, "体育", "伊藤")
+	fullYear.Semester = model.SemesterFull
+	in := scrapedCourse("B", "火", 1, "体育", "伊藤")
+	in.Semester = model.SemesterFull
+	plan = PlanCourseSync(testYear, append([]*model.Course{fullYear}, fo...), append([]ScrapedCourseInput{in}, fn...), nil, complete(21), later)
+	if len(plan.Updates) != 1 || !plan.Updates[0].SlotChanged {
+		t.Errorf("updates = %+v, want a full-year course still movable", plan.Updates)
+	}
+
+	// 去年の授業も動かさない。
+	lastYear := AcademicTerm{Year: testYear + 1, Semester: model.SemesterFirst}
+	plan = PlanCourseSync(testYear, olds, moved, nil, complete(21), lastYear)
+	if len(plan.Updates) != 0 {
+		t.Errorf("updates = %+v, want last year's course left alone", plan.Updates)
+	}
+}
+
+// 講義コードが同じで学期だけ変わったときは、学期の変更として確認に回す
+// （「講義コード X が消え、講義コード X が現れました」とは書かない）。
+func TestPlan_SemesterChangeIsReviewedAsSuch(t *testing.T) {
+	olds := []*model.Course{dbCourse(1, "A", "木", 3, "マクロ経済学", "高橋")}
+	in := scrapedCourse("A", "木", 3, "マクロ経済学", "高橋")
+	in.Semester = model.SemesterSecond
+	plan := planWith(t, olds, []ScrapedCourseInput{in})
+	if len(plan.Reviews) != 1 || plan.Reviews[0].Kind != model.CourseSyncReviewSemesterChanged {
+		t.Fatalf("reviews = %+v, want one SEMESTER_CHANGED", plan.Reviews)
+	}
+	if msg := plan.Reviews[0].Message; !strings.Contains(msg, "学期が前期から後期に変わりました") || strings.Contains(msg, "消え") {
+		t.Errorf("message = %q", msg)
+	}
+
+	same := planWith(t, olds, []ScrapedCourseInput{in}, &model.CourseSyncReview{ID: 3, Fingerprint: plan.Reviews[0].Fingerprint, Status: model.CourseSyncReviewSame})
+	if len(same.Updates) != 1 || same.Updates[0].After.Semester != model.SemesterSecond {
+		t.Fatalf("updates = %+v, want course 1 moved to 後期", same.Updates)
 	}
 }

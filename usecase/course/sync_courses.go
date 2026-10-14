@@ -10,6 +10,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/notification"
+	"github.com/Cityboypenguin/SPACE-server/usecase/semester"
 )
 
 // ScrapedCourseInput is the shape any course data source (scraper, CSV import, ...)
@@ -50,15 +51,16 @@ type SyncCoursesUseCase interface {
 var _ SyncCoursesUseCase = &SyncCoursesInteractor{}
 
 type SyncCoursesInteractor struct {
-	courseRepo repository.CourseRepository
-	syncRepo   repository.CourseSyncRepository
-	txManager  repository.TxManager
-	notifier   notification.NotificationPublisher
-	now        func() time.Time
+	courseRepo  repository.CourseRepository
+	syncRepo    repository.CourseSyncRepository
+	txManager   repository.TxManager
+	settingRepo repository.SystemSettingRepository
+	notifier    notification.NotificationPublisher
+	now         func() time.Time
 }
 
-func NewSyncCoursesUseCase(courseRepo repository.CourseRepository, syncRepo repository.CourseSyncRepository, txManager repository.TxManager, notifier notification.NotificationPublisher) SyncCoursesUseCase {
-	return &SyncCoursesInteractor{courseRepo: courseRepo, syncRepo: syncRepo, txManager: txManager, notifier: notifier, now: time.Now}
+func NewSyncCoursesUseCase(courseRepo repository.CourseRepository, syncRepo repository.CourseSyncRepository, txManager repository.TxManager, settingRepo repository.SystemSettingRepository, notifier notification.NotificationPublisher) SyncCoursesUseCase {
+	return &SyncCoursesInteractor{courseRepo: courseRepo, syncRepo: syncRepo, txManager: txManager, settingRepo: settingRepo, notifier: notifier, now: time.Now}
 }
 
 // dryRunSavepoint はドライランで授業への書き込みを巻き戻す地点の名前。
@@ -94,7 +96,14 @@ func (uc *SyncCoursesInteractor) Execute(ctx context.Context, input SyncCoursesI
 	if err != nil {
 		return nil, err
 	}
-	plan := PlanCourseSync(input.Year, existing, input.Courses, reviews, input.Completeness)
+	// 現在の学期より前に終わった授業のコマは動かさない（PlanCourseSync 参照）。
+	// 現在の学期が分からないまま進めると、終わった学期の登録を外しかねないので止める。
+	currentYear, currentSemester, err := semester.Get(ctx, uc.settingRepo)
+	if err != nil {
+		return nil, fmt.Errorf("reading the current semester: %w", err)
+	}
+	plan := PlanCourseSync(input.Year, existing, input.Courses, reviews, input.Completeness,
+		AcademicTerm{Year: currentYear, Semester: currentSemester})
 
 	triggeredBy := claims.ID
 	run := &model.CourseSyncRun{
@@ -131,6 +140,11 @@ func (uc *SyncCoursesInteractor) Execute(ctx context.Context, input SyncCoursesI
 			return err
 		}
 
+		// 書き換える授業の行を先に押さえる。利用者の時間割の書き込みと順番を付け、
+		// 同期の最中に登録された授業も重なりの判定から漏らさないため。
+		if err := uc.syncRepo.LockCourses(ctx, changedCourseIDs(plan)); err != nil {
+			return err
+		}
 		if input.DryRun {
 			if err := uc.syncRepo.Savepoint(ctx, dryRunSavepoint); err != nil {
 				return err
@@ -312,6 +326,18 @@ func movedCourseIDs(plan *SyncPlan) []int64 {
 		if u.SlotChanged || u.Before.Semester != u.After.Semester {
 			ids = append(ids, u.Before.ID)
 		}
+	}
+	return ids
+}
+
+// changedCourseIDs は書き換える既存の授業（更新・廃止・退避）。
+func changedCourseIDs(plan *SyncPlan) []int64 {
+	var ids []int64
+	for _, u := range plan.Updates {
+		ids = append(ids, u.Before.ID)
+	}
+	for _, d := range plan.Discontinues {
+		ids = append(ids, d.Course.ID)
 	}
 	return ids
 }

@@ -30,6 +30,10 @@ import (
 //
 // 廃止候補は最後にまとめて判定し、取りこぼしの疑いがあるときや多すぎるときは
 // 1件も廃止しない（discontinueGuard）。
+//
+// 現在の学期より前に終わった授業は、コマ（曜日・時限・学期）を変えない。終わった
+// 学期のコマを今さら動かすと、その授業を登録していた人の時間割から登録が外れ、
+// 身に覚えのない通知が届くだけだから（授業名・教員名の変更は反映する）。
 
 // discontinueMaxRatioPercent は1回の同期で廃止してよい授業の割合の上限（現行の授業数に対する%）。
 // これを超えるときはサイト側の不具合や仕様変更を疑い、廃止を見送る。
@@ -44,6 +48,26 @@ type FetchCompleteness struct {
 	// UnidentifiedRows は講義コードを読み取れなかった行数。その授業は照合できないので、
 	// 1件でもあれば廃止を見送る（在るのに「消えた」と判定しかねない）。
 	UnidentifiedRows int
+}
+
+// AcademicTerm は年度と学期（"前期" / "後期"）。シラバス同期では「現在の学期」を表す。
+// 年度が 0 なら不明として扱い、どの授業も「前に終わった」とはみなさない。
+type AcademicTerm struct {
+	Year     int
+	Semester string
+}
+
+// endedBefore は授業 c が学期 t より前に終わっているか。通年の授業はその年度の
+// 後期まで続くので、同じ年度のうちは終わっていない。
+func (t AcademicTerm) endedBefore(c *model.Course) bool {
+	switch {
+	case t.Year == 0:
+		return false
+	case c.Year != t.Year:
+		return c.Year < t.Year
+	default:
+		return c.Semester == model.SemesterFirst && t.Semester == model.SemesterSecond
+	}
 }
 
 // CourseFields は同期で書き換える授業の中身。
@@ -122,9 +146,11 @@ func slotLabel(day string, period int) string { return day + strconv.Itoa(period
 // PlanCourseSync は year の授業について、シラバスの内容（scraped）と DB の授業
 // （existing: その年度の取り込み元が同じ授業。廃止済みも含む）を突き合わせる。
 // reviews はその年度の確認（fingerprint で引く）で、管理者の判断を反映するのに使う。
-func PlanCourseSync(year int, existing []*model.Course, scraped []ScrapedCourseInput, reviews []*model.CourseSyncReview, completeness FetchCompleteness) *SyncPlan {
+// current は現在の学期（それより前に終わった授業のコマは変えない）。
+func PlanCourseSync(year int, existing []*model.Course, scraped []ScrapedCourseInput, reviews []*model.CourseSyncReview, completeness FetchCompleteness, current AcademicTerm) *SyncPlan {
 	p := &planner{
 		year:      year,
+		current:   current,
 		plan:      &SyncPlan{},
 		decisions: make(map[string]*model.CourseSyncReview, len(reviews)),
 	}
@@ -180,24 +206,32 @@ func PlanCourseSync(year int, existing []*model.Course, scraped []ScrapedCourseI
 			continue
 		}
 		olds := oldGroups[oldKey]
-		fp := fingerprint(model.CourseSyncReviewCodeReissued, year, oldKey.String(), k.String())
+		// 講義コードが同じなら、変わったのは学期だけ（振り直しではない）。
+		kind := model.CourseSyncReviewCodeReissued
+		message := fmt.Sprintf("講義コード %s が消え、同じ授業名・教員名で講義コード %s が現れました。講義コードが振り直された可能性があります。",
+			oldKey.sourceRef, k.sourceRef)
+		differentDetail := "講義コードの振り直しではないと判断（管理者）"
+		if oldKey.sourceRef == k.sourceRef {
+			kind = model.CourseSyncReviewSemesterChanged
+			message = fmt.Sprintf("講義コード %s の「%s」（%s）の学期が%sから%sに変わりました。同じ授業として学期を変えるか確認してください。",
+				k.sourceRef, news[0].SourceName, news[0].TeacherName, oldKey.semester, k.semester)
+			differentDetail = "学期の変更を別の授業と判断（管理者）"
+		}
+		fp := fingerprint(kind, year, oldKey.String(), k.String())
 		switch decision := p.decisions[fp]; decisionStatus(decision) {
 		case model.CourseSyncReviewSame:
 			delete(oldGroups, oldKey)
 			p.planGroup(k, olds, news, true)
 			p.applied(decision)
 		case model.CourseSyncReviewDifferent:
-			p.createAll(news, "講義コードの振り直しではないと判断（管理者）")
+			p.createAll(news, differentDetail)
 			p.applied(decision)
 		case model.CourseSyncReviewIgnored:
 			// 据え置き。消えた側も廃止しない。
 			delete(oldGroups, oldKey)
 		default:
 			delete(oldGroups, oldKey)
-			p.review(model.CourseSyncReviewCodeReissued, fp,
-				fmt.Sprintf("講義コード %s が消え、同じ授業名・教員名で講義コード %s が現れました。講義コードが振り直された可能性があります。",
-					oldKey.sourceRef, k.sourceRef),
-				olds, news)
+			p.review(kind, fp, message, olds, news)
 		}
 	}
 
@@ -214,6 +248,7 @@ func PlanCourseSync(year int, existing []*model.Course, scraped []ScrapedCourseI
 
 type planner struct {
 	year       int
+	current    AcademicTerm
 	plan       *SyncPlan
 	decisions  map[string]*model.CourseSyncReview
 	candidates []*model.Course
@@ -289,6 +324,8 @@ func (p *planner) planGroup(k syncGroupKey, olds []*model.Course, news []Scraped
 		}
 	case len(leftoverOld) == 1 && len(leftoverNew) == 1:
 		p.update(leftoverOld[0], leftoverNew[0])
+	case p.allEnded(leftoverOld):
+		// 前に終わった授業のコマは動かさないので、対応を確かめる意味も無い。
 	default:
 		fp := fingerprint(model.CourseSyncReviewSlotAmbiguous, p.year, k.String(),
 			strings.Join(oldSlots(leftoverOld), ","), strings.Join(newSlots(leftoverNew), ","))
@@ -322,6 +359,11 @@ func (p *planner) update(c *model.Course, in ScrapedCourseInput) {
 		SourceRef:   in.SourceRef,
 		SourceName:  in.SourceName,
 		DedupKey:    in.DedupKey,
+	}
+	// 前に終わった授業はコマを変えない（パッケージのコメント参照）。dedup_key は
+	// コマを含むので、コマを据え置くならそれも据え置く。
+	if p.current.endedBefore(c) && (c.Semester != after.Semester || c.DayOfWeek != after.DayOfWeek || c.Period != after.Period) {
+		after.Semester, after.DayOfWeek, after.Period, after.DedupKey = c.Semester, c.DayOfWeek, c.Period, c.DedupKey
 	}
 
 	var details []string
@@ -397,7 +439,8 @@ func (p *planner) matchReissues(newOnly []syncGroupKey, newGroups map[syncGroupK
 		in := newGroups[nk][0]
 		for _, ok := range sortedKeys(gone) {
 			olds := gone[ok]
-			if !hasActive(olds) || olds[0].TeacherName != in.TeacherName || !nameMatches(olds[0], in.SourceName) {
+			// 前に終わった授業は学期・コマを付け替えない（その授業は消えた扱いのまま）。
+			if !hasActive(olds) || p.allEnded(olds) || olds[0].TeacherName != in.TeacherName || !nameMatches(olds[0], in.SourceName) {
 				continue
 			}
 			candidatesOf[nk] = append(candidatesOf[nk], ok)
@@ -477,6 +520,15 @@ func nextCourseName(c *model.Course, in ScrapedCourseInput) string {
 		suffix = strings.TrimPrefix(c.CourseName, c.SourceName)
 	}
 	return in.SourceName + suffix
+}
+
+func (p *planner) allEnded(cs []*model.Course) bool {
+	for _, c := range cs {
+		if !p.current.endedBefore(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func hasActive(cs []*model.Course) bool {

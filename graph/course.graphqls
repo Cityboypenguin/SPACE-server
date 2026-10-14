@@ -250,6 +250,8 @@ enum CourseSyncReviewKind {
   CODE_REISSUED
   # 複数コマの授業でコマが変わり、どのコマがどのコマに移ったか決まらない。
   SLOT_AMBIGUOUS
+  # 講義コード・授業名・教員名はそのままで、学期だけが変わった。
+  SEMESTER_CHANGED
 }
 
 enum CourseSyncReviewStatus {

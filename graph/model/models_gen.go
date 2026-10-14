@@ -1027,20 +1027,22 @@ func (e CourseSyncReviewDecision) MarshalJSON() ([]byte, error) {
 type CourseSyncReviewKind string
 
 const (
-	CourseSyncReviewKindCodeReused    CourseSyncReviewKind = "CODE_REUSED"
-	CourseSyncReviewKindCodeReissued  CourseSyncReviewKind = "CODE_REISSUED"
-	CourseSyncReviewKindSlotAmbiguous CourseSyncReviewKind = "SLOT_AMBIGUOUS"
+	CourseSyncReviewKindCodeReused      CourseSyncReviewKind = "CODE_REUSED"
+	CourseSyncReviewKindCodeReissued    CourseSyncReviewKind = "CODE_REISSUED"
+	CourseSyncReviewKindSlotAmbiguous   CourseSyncReviewKind = "SLOT_AMBIGUOUS"
+	CourseSyncReviewKindSemesterChanged CourseSyncReviewKind = "SEMESTER_CHANGED"
 )
 
 var AllCourseSyncReviewKind = []CourseSyncReviewKind{
 	CourseSyncReviewKindCodeReused,
 	CourseSyncReviewKindCodeReissued,
 	CourseSyncReviewKindSlotAmbiguous,
+	CourseSyncReviewKindSemesterChanged,
 }
 
 func (e CourseSyncReviewKind) IsValid() bool {
 	switch e {
-	case CourseSyncReviewKindCodeReused, CourseSyncReviewKindCodeReissued, CourseSyncReviewKindSlotAmbiguous:
+	case CourseSyncReviewKindCodeReused, CourseSyncReviewKindCodeReissued, CourseSyncReviewKindSlotAmbiguous, CourseSyncReviewKindSemesterChanged:
 		return true
 	}
 	return false

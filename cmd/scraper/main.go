@@ -51,7 +51,7 @@ func main() {
 	// このコマンドには SSE の接続が無いので、時間割から外した人への通知は DB に残すだけ
 	// （本人が次にアプリを開いたときに通知一覧に出る）。
 	notifier := notificationuc.NewNotificationPublisher(mysql.NewMySQLNotificationRepository(database), offlineDelivery{})
-	syncCourses := courseusecase.NewSyncCoursesUseCase(courseRepository, mysql.NewMySQLCourseSyncRepository(database), mysql.NewMySQLTxManager(database), notifier)
+	syncCourses := courseusecase.NewSyncCoursesUseCase(courseRepository, mysql.NewMySQLCourseSyncRepository(database), mysql.NewMySQLTxManager(database), mysql.NewMySQLSystemSettingRepository(database), notifier)
 
 	syllabusScraper, err := scraper.NewSenshuSyllabusScraper()
 	if err != nil {

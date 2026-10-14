@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +34,21 @@ func (r *MySQLCourseSyncRepository) ListSyncableCourses(ctx context.Context, yea
 	}
 	defer rows.Close()
 	return scanCourses(rows)
+}
+
+func (r *MySQLCourseSyncRepository) LockCourses(ctx context.Context, ids []int64) error {
+	sorted := append([]int64(nil), ids...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	db := extractDB(ctx, r.DB)
+	return inChunks(sorted, 1, func(chunk []int64) error {
+		rows, err := db.QueryContext(ctx,
+			`SELECT id FROM courses WHERE id IN (`+inPlaceholders(len(chunk))+`) ORDER BY id FOR UPDATE`,
+			int64Args(chunk)...)
+		if err != nil {
+			return err
+		}
+		return rows.Close()
+	})
 }
 
 // UpdateCourses は1件ずつ UPDATE する。同期で変わる授業は数件〜数十件で、列ごとに
@@ -122,6 +138,9 @@ func (r *MySQLCourseSyncRepository) CountRegistrations(ctx context.Context, cour
 
 // FindSlotConflicts の「重なる学期」は、時間割の表示と同じく 通年 を両方の学期に
 // 数える（通年の授業は前期にも後期にも並ぶ）。
+//
+// 時間割の行はロック付きで読む。ロック付きの読み取りは確定済みの最新の行を見るので、
+// 同期の最中に確定した利用者の登録も重なりの判定に入る（書き込み中のものは確定を待つ）。
 func (r *MySQLCourseSyncRepository) FindSlotConflicts(ctx context.Context, movedCourseIDs []int64) ([]repository.SlotConflict, error) {
 	if len(movedCourseIDs) == 0 {
 		return nil, nil
@@ -148,7 +167,8 @@ func (r *MySQLCourseSyncRepository) FindSlotConflicts(ctx context.Context, moved
 			 WHERE t.course_id IN (`+inPlaceholders(len(chunk))+`)
 			   AND oc.year = c.year AND oc.day_of_week = c.day_of_week AND oc.period = c.period
 			   AND (oc.semester = c.semester OR oc.semester = ? OR c.semester = ?)
-			 ORDER BY t.id, o.id`,
+			 ORDER BY t.id, o.id
+			 FOR UPDATE OF t, o`,
 			append(int64Args(chunk), model.SemesterFull, model.SemesterFull)...)
 		if err != nil {
 			return err

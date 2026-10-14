@@ -51,6 +51,9 @@ const (
 	// CourseSyncReviewSlotAmbiguous は複数コマの授業でコマが変わり、どのコマが
 	// どのコマに移ったのか1対1に決まらない。
 	CourseSyncReviewSlotAmbiguous CourseSyncReviewKind = "SLOT_AMBIGUOUS"
+	// CourseSyncReviewSemesterChanged は同じ講義コード・授業名・教員名のまま学期だけが
+	// 変わった（照合は学期ごとなので、自動では同じ授業とみなさない）。
+	CourseSyncReviewSemesterChanged CourseSyncReviewKind = "SEMESTER_CHANGED"
 )
 
 // CourseSyncReviewStatus は確認の状態（106 の migration のコメント参照）。

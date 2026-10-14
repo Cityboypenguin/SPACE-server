@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -23,20 +24,63 @@ func NewMySQLTimetableRepository(db *sql.DB) repository.TimetableRepository {
 	return &MySQLTimetableRepository{DB: db}
 }
 
+// ■ 時間割の書き込みとシラバス同期の並行
+//
+// 時間割は1コマ1授業。シラバス同期は授業のコマを書き換え、移った先で重なった登録を
+// 外す（infra/mysql/course_sync_repository.go の FindSlotConflicts）。利用者の時間割の
+// 書き込みがその最中に走っても重なりが残らないよう、両者は授業の行のロックで順番を付ける。
+//
+//   - 同期は書き換える授業の行を、ID の昇順に先に FOR UPDATE で押さえる
+//   - 時間割の書き込みは、足す授業の行を ID の昇順に FOR SHARE で押さえてからコマを読む
+//
+// 同期が先なら、書き込みは同期の確定を待って新しいコマで判定する。書き込みが先なら、
+// 同期はその確定を待ち、確定した登録を含めて重なりを判定する（同期の判定はロック付きの
+// 読み取りなので、確定済みの最新の行を見る）。同じ順で押さえるので授業の行どうしでは
+// 行き違わないが、時間割の行で稀に行き違うことはある。そのときは InnoDB が片方を巻き戻すので、
+// 書き込み側は retryOnDeadlock でやり直す。
+
+// lockCoursesForShare は courseIDs の授業の行を ID の昇順に共有ロックする。
+func lockCoursesForShare(ctx context.Context, tx *sql.Tx, courseIDs []int64) error {
+	ids := append([]int64(nil), courseIDs...)
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return inChunks(ids, 1, func(chunk []int64) error {
+		rows, err := tx.QueryContext(ctx,
+			`SELECT id FROM courses WHERE id IN (`+inPlaceholders(len(chunk))+`) ORDER BY id FOR SHARE`,
+			int64Args(chunk)...)
+		if err != nil {
+			return err
+		}
+		return rows.Close()
+	})
+}
+
 // Upsert registers courseID into userID's timetable. Any existing entry occupying
-// the same (day_of_week, period) slot for this user is deleted first, so a student
-// only ever has one course per slot (F-01/F-02 "overwrite on re-registration").
+// the same slot for this user is deleted first, so a student only ever has one
+// course per slot (F-01/F-02 "overwrite on re-registration").
+//
+// 「同じコマ」は同じ年度・同じ曜日時限で、学期が重なるもの（同じ学期か、どちらかが
+// 通年）。以前は年度も学期も見ずに曜日時限だけで消していたので、前期の水4に登録すると
+// 去年の授業や後期の水4の登録まで消えていた。
 func (r *MySQLTimetableRepository) Upsert(ctx context.Context, userID, courseID int64) (*model.Timetable, error) {
+	return retryOnDeadlock(func() (*model.Timetable, error) {
+		return r.upsert(ctx, userID, courseID)
+	})
+}
+
+func (r *MySQLTimetableRepository) upsert(ctx context.Context, userID, courseID int64) (*model.Timetable, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	var dayOfWeek string
-	var period int
+	// FOR SHARE: 同期がこの授業のコマを書き換えている最中なら、確定を待って新しいコマを読む。
+	var dayOfWeek, semester string
+	var period, year int
 	var discontinuedAt sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT day_of_week, period, discontinued_at FROM courses WHERE id = ?`, courseID).Scan(&dayOfWeek, &period, &discontinuedAt); err != nil {
+	if err := tx.QueryRowContext(ctx,
+		`SELECT day_of_week, period, year, semester, discontinued_at FROM courses WHERE id = ? FOR SHARE`, courseID,
+	).Scan(&dayOfWeek, &period, &year, &semester, &discontinuedAt); err != nil {
 		return nil, err
 	}
 	// 廃止済みの授業へ新しく登録させない（シラバスから消えた授業）。
@@ -47,8 +91,9 @@ func (r *MySQLTimetableRepository) Upsert(ctx context.Context, userID, courseID 
 	if _, err := tx.ExecContext(ctx, `
 		DELETE t FROM timetables t
 		JOIN courses c ON t.course_id = c.id
-		WHERE t.user_id = ? AND c.day_of_week = ? AND c.period = ?
-	`, userID, dayOfWeek, period); err != nil {
+		WHERE t.user_id = ? AND c.year = ? AND c.day_of_week = ? AND c.period = ?
+		  AND (c.semester = ? OR c.semester = ? OR ? = ?)
+	`, userID, year, dayOfWeek, period, semester, model.SemesterFull, semester, model.SemesterFull); err != nil {
 		return nil, err
 	}
 
@@ -159,11 +204,26 @@ const timetableInsertColumns = 5
 // optimistic-concurrency check against baselineEntryIDs. See the interface doc
 // comment for the full contract.
 func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userID int64, year int, semester string, baselineEntryIDs, desiredCourseIDs []int64) ([]*repository.TimetableEntryWithCourse, error) {
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
+	if _, err := retryOnDeadlock(func() (struct{}, error) {
+		return struct{}{}, r.replaceForSemester(ctx, userID, year, semester, baselineEntryIDs, desiredCourseIDs)
+	}); err != nil {
 		return nil, err
 	}
+	return r.ListByUser(ctx, userID, year, semester)
+}
+
+func (r *MySQLTimetableRepository) replaceForSemester(ctx context.Context, userID int64, year int, semester string, baselineEntryIDs, desiredCourseIDs []int64) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
 	defer tx.Rollback()
+
+	// 足す授業の行を先に押さえる（ファイル冒頭のコメント参照）。以降のコマの読み取りは
+	// 同期の確定を待った後の値になる。
+	if err := lockCoursesForShare(ctx, tx, desiredCourseIDs); err != nil {
+		return err
+	}
 
 	// FOR UPDATE locks the rows for the duration of the transaction so a concurrent
 	// ReplaceForSemester call for the same user/semester can't interleave between
@@ -175,37 +235,37 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 		FROM timetables t
 		JOIN courses c ON t.course_id = c.id
 		WHERE t.user_id = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?)
-		FOR UPDATE
+		FOR UPDATE OF t
 	`, userID, year, semester, model.SemesterFull)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	currentCourseByEntry := make(map[int64]int64)
 	for rows.Next() {
 		var entryID, courseID int64
 		if err := rows.Scan(&entryID, &courseID); err != nil {
 			rows.Close()
-			return nil, err
+			return err
 		}
 		currentCourseByEntry[entryID] = courseID
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, err
+		return err
 	}
 	rows.Close()
 
 	if len(currentCourseByEntry) != len(baselineEntryIDs) {
-		return nil, repository.ErrTimetableConflict
+		return repository.ErrTimetableConflict
 	}
 	for _, id := range baselineEntryIDs {
 		if _, ok := currentCourseByEntry[id]; !ok {
-			return nil, repository.ErrTimetableConflict
+			return repository.ErrTimetableConflict
 		}
 	}
 
 	if err := checkNoSlotConflicts(ctx, tx, desiredCourseIDs); err != nil {
-		return nil, err
+		return err
 	}
 
 	currentCourseIDs := make(map[int64]bool, len(currentCourseByEntry))
@@ -236,7 +296,7 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 
 	// 廃止済みの授業は、既に登録しているぶんは残せるが、新しくは足させない。
 	if err := checkNotDiscontinued(ctx, tx, addedCourseIDs); err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := inChunks(removedEntryIDs, 1, func(chunk []int64) error {
@@ -248,7 +308,7 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 			`DELETE FROM timetables WHERE id IN (`+inPlaceholders(len(chunk))+`)`, args...)
 		return err
 	}); err != nil {
-		return nil, err
+		return err
 	}
 
 	now := time.Now().Unix()
@@ -262,14 +322,10 @@ func (r *MySQLTimetableRepository) ReplaceForSemester(ctx context.Context, userI
 				valuesPlaceholders(len(chunk), timetableInsertColumns), args...)
 		return err
 	}); err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return r.ListByUser(ctx, userID, year, semester)
+	return tx.Commit()
 }
 
 // checkNotDiscontinued returns repository.ErrCourseDiscontinued if any of courseIDs
@@ -283,7 +339,7 @@ func checkNotDiscontinued(ctx context.Context, tx *sql.Tx, courseIDs []int64) er
 		}
 		var n int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM courses WHERE discontinued_at IS NOT NULL AND id IN (`+inPlaceholders(len(chunk))+`)`,
+			`SELECT COUNT(*) FROM courses WHERE discontinued_at IS NOT NULL AND id IN (`+inPlaceholders(len(chunk))+`) FOR SHARE`,
 			args...).Scan(&n); err != nil {
 			return err
 		}
@@ -313,7 +369,7 @@ func checkNoSlotConflicts(ctx context.Context, tx *sql.Tx, courseIDs []int64) er
 		args[i] = id
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT day_of_week, period FROM courses WHERE id IN (`+strings.Join(placeholders, ",")+`)`,
+		`SELECT day_of_week, period FROM courses WHERE id IN (`+strings.Join(placeholders, ",")+`) FOR SHARE`,
 		args...,
 	)
 	if err != nil {

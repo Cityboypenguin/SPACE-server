@@ -115,7 +115,8 @@ func courseSyncTestDB(t *testing.T) (*sql.DB, func()) {
 			PRIMARY KEY (id)
 		)`,
 	})
-	return singleConnDB(db), cleanup
+	// 接続を1本に絞らない。同期と時間割の書き込みを並行させるテストがある。
+	return db, cleanup
 }
 
 // recordingNotifier は通知を DB にも SSE にも出さず、送ろうとした内容だけを残す。
@@ -128,6 +129,14 @@ func (n *recordingNotifier) PublishBatch(_ context.Context, params []notificatio
 	n.sent = append(n.sent, params...)
 	return nil
 }
+
+// fixedSemester は「現在の学期」だけを返す設定。
+type fixedSemester struct {
+	repository.SystemSettingRepository
+	value string
+}
+
+func (f fixedSemester) Get(context.Context, string) (string, error) { return f.value, nil }
 
 type syncFixture struct {
 	t         *testing.T
@@ -153,7 +162,7 @@ func newSyncFixture(t *testing.T) (*syncFixture, func()) {
 		courses:   courses,
 		syncRepo:  syncRepo,
 		timetable: NewMySQLTimetableRepository(db),
-		sync:      courseusecase.NewSyncCoursesUseCase(courses, syncRepo, NewMySQLTxManager(db), notifier),
+		sync:      courseusecase.NewSyncCoursesUseCase(courses, syncRepo, NewMySQLTxManager(db), fixedSemester{value: "2026:前期"}, notifier),
 		admin:     courseusecase.NewCourseSyncAdminUseCase(syncRepo),
 		notifier:  notifier,
 	}, cleanup
@@ -508,5 +517,128 @@ func TestCourseSync_TwoCoursesMovingIntoOneSlotKeepTheEarlierRegistration(t *tes
 	}
 	if n := f.count(`SELECT COUNT(*) FROM timetables WHERE user_id = 1 AND course_id = ?`, a.ID); n != 0 {
 		t.Error("the later registration (A) was kept; want one course per slot")
+	}
+}
+
+// 時間割へ登録すると同じコマの登録を置き換えるが、消すのは同じ年度で学期が重なる
+// ものだけ（以前は年度・学期を見ずに曜日時限だけで消していた）。
+func TestTimetableUpsert_ReplacesOnlyTheSameTerm(t *testing.T) {
+	f, cleanup := newSyncFixture(t)
+	defer cleanup()
+
+	mk := func(ref string, year int, semester string) int64 {
+		row := syllabusRow(ref, "水", 4, "授業"+ref, "先生")
+		row.Year, row.Semester = year, semester
+		row.DedupKey = fmt.Sprintf("senshu:%d:%s:%s:水:4", year, semester, ref)
+		created, err := f.courses.SaveCoursesWithRooms(f.ctx, []repository.SaveCourseParam{{
+			DayOfWeek: row.DayOfWeek, Period: row.Period, TeacherName: row.TeacherName, CourseName: row.CourseName,
+			Year: row.Year, Semester: row.Semester, DedupKey: row.DedupKey, Source: model.CourseSourceSenshu, SourceRef: ref,
+		}})
+		if err != nil {
+			t.Fatalf("creating course %s: %v", ref, err)
+		}
+		return created[0].ID
+	}
+	lastYear := mk("P", 2025, model.SemesterSecond)
+	autumn := mk("Q", 2026, model.SemesterSecond)
+	fullYear := mk("R", 2026, model.SemesterFull)
+	spring := mk("S", 2026, model.SemesterFirst)
+	spring2 := mk("T", 2026, model.SemesterFirst)
+
+	// 通年は前期・後期どちらの水4とも重なるので、後で前期を入れると消える。
+	for _, id := range []int64{lastYear, autumn} {
+		if _, err := f.timetable.Upsert(f.ctx, 1, id); err != nil {
+			t.Fatalf("registering: %v", err)
+		}
+	}
+	if _, err := f.timetable.Upsert(f.ctx, 2, fullYear); err != nil {
+		t.Fatalf("registering: %v", err)
+	}
+
+	if _, err := f.timetable.Upsert(f.ctx, 1, spring); err != nil {
+		t.Fatalf("registering: %v", err)
+	}
+	for _, id := range []int64{lastYear, autumn, spring} {
+		if n := f.count(`SELECT COUNT(*) FROM timetables WHERE user_id = 1 AND course_id = ?`, id); n != 1 {
+			t.Errorf("user 1's registration of course %d = %d, want kept (different year or semester)", id, n)
+		}
+	}
+
+	// 同じ年度・学期の水4に別の授業を入れると、置き換わる。
+	if _, err := f.timetable.Upsert(f.ctx, 1, spring2); err != nil {
+		t.Fatalf("registering: %v", err)
+	}
+	if n := f.count(`SELECT COUNT(*) FROM timetables WHERE user_id = 1 AND course_id = ?`, spring); n != 0 {
+		t.Error("the same-term course in 水4 was not replaced")
+	}
+
+	// 通年と前期は重なる。
+	if _, err := f.timetable.Upsert(f.ctx, 2, spring); err != nil {
+		t.Fatalf("registering: %v", err)
+	}
+	if n := f.count(`SELECT COUNT(*) FROM timetables WHERE user_id = 2 AND course_id = ?`, fullYear); n != 0 {
+		t.Error("the full-year course in 水4 was not replaced by the 前期 one")
+	}
+}
+
+// 同期の最中に利用者が移った先のコマへ別の授業を登録しても、確定した登録を含めて
+// 重なりを判定する（同期のロック付き読み取りが、その登録の確定を待つ）。
+func TestCourseSync_SeesARegistrationCommittedDuringTheSync(t *testing.T) {
+	f, cleanup := newSyncFixture(t)
+	defer cleanup()
+
+	f.run(baseSyllabus(), false)
+	a, x := f.course("A"), f.course("X")
+	if _, err := f.timetable.Upsert(f.ctx, 1, a.ID); err != nil { // 経済学入門（水5）
+		t.Fatalf("registering: %v", err)
+	}
+
+	// 利用者が統計学（水4）を登録しかけている（まだ確定していない）トランザクション。
+	userTx, err := f.db.BeginTx(f.ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer userTx.Rollback()
+	if _, err := userTx.Exec(`SELECT id FROM courses WHERE id = ? FOR SHARE`, x.ID); err != nil {
+		t.Fatalf("locking: %v", err)
+	}
+	if _, err := userTx.Exec(`INSERT INTO timetables (user_id, course_id, color, created_at, updated_at) VALUES (1, ?, 'BLUE', 0, 0)`, x.ID); err != nil {
+		t.Fatalf("inserting: %v", err)
+	}
+
+	// 経済学入門が水5→水4へ移る同期を並行で走らせる。
+	rows := baseSyllabus()
+	rows[0] = syllabusRow("A", "水", 4, "経済学入門", "田中")
+	done := make(chan *model.CourseSyncRun, 1)
+	go func() {
+		run, err := f.sync.Execute(f.ctx, courseusecase.SyncCoursesInput{
+			Year: 2026, Courses: rows, StartedAt: time.Now(),
+			Completeness: courseusecase.FetchCompleteness{SiteTotal: len(rows), ListedRows: len(rows)},
+		})
+		if err != nil {
+			t.Errorf("sync failed: %v", err)
+		}
+		done <- run
+	}()
+
+	// 同期が利用者の行を待っている間に、利用者の登録を確定させる。
+	time.Sleep(500 * time.Millisecond)
+	if err := userTx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	run := <-done
+	if run == nil {
+		t.FailNow()
+	}
+
+	if n := f.count(`SELECT COUNT(*) FROM timetables t JOIN courses c ON c.id = t.course_id
+		WHERE t.user_id = 1 AND c.day_of_week = '水' AND c.period = 4`); n != 1 {
+		t.Fatalf("user 1 has %d course(s) in 水4, want exactly 1", n)
+	}
+	if n := f.count(`SELECT COUNT(*) FROM timetables WHERE user_id = 1 AND course_id = ?`, x.ID); n != 1 {
+		t.Error("the course the user just registered (X) was removed; want the moved course (A) removed instead")
+	}
+	if run.Unregistered != 1 {
+		t.Errorf("unregistered = %d, want 1", run.Unregistered)
 	}
 }
