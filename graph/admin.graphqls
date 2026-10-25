@@ -20,6 +20,23 @@ extend type Query {
   adminCourseImportStatus: CourseImportStatus!
   adminListCourseYears: [Int!]!
   adminGetCourse(id: ID!): Course
+  # 管理画面のコミュニティ一覧。検索・並び替え・ページングはすべてサーバー側で行う
+  # （並び替えは全件に対して行ってから窓を切る）。
+  adminListCommunities(
+    keyword: String
+    sortBy: AdminCommunitySortField = CREATED_AT
+    sortOrder: SortOrder = DESC
+    limit: Int = 20
+    offset: Int = 0
+  ): AdminCommunityPage!
+  adminGetCommunity(id: ID!): AdminCommunity
+  # 管理画面の投稿一覧（削除済みを含む）。絞り込みはサーバー側で行う。
+  adminListPosts(
+    keyword: String
+    status: AdminPostStatus = ALL
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
   adminListCourses(
     year: Int
     semester: String
@@ -222,4 +239,32 @@ type TimeSeriesPoint {
 
 type TimeSeriesData {
   points: [TimeSeriesPoint!]!
+}
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+enum AdminCommunitySortField {
+  NAME
+  MEMBER_COUNT
+  CREATED_AT
+}
+
+# owner は最初にオーナーになった1人。オーナーがいなければ null。
+type AdminCommunity {
+  community: Community!
+  owner: User
+}
+
+type AdminCommunityPage {
+  items: [AdminCommunity!]!
+  total: Int!
+}
+
+enum AdminPostStatus {
+  ALL
+  ACTIVE
+  DELETED
 }

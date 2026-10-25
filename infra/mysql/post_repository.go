@@ -389,13 +389,66 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, q repository.PageQu
 	}
 	defer rows.Close()
 
+	posts, err := scanListedPosts(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
+}
+
+func (r *MySQLPostRepository) AdminListPosts(ctx context.Context, f repository.AdminPostFilter, q repository.PageQuery) ([]*model.Post, int, error) {
+	var conds []string
+	var args []any
+	switch f.Status {
+	case repository.AdminPostStatusActive:
+		conds = append(conds, "p.deleted_at IS NULL")
+	case repository.AdminPostStatusDeleted:
+		conds = append(conds, "p.deleted_at IS NOT NULL")
+	}
+	if keyword := strings.TrimSpace(f.Keyword); keyword != "" {
+		pattern := "%" + escapeLikePrefix(keyword) + "%"
+		conds = append(conds, `(p.content LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.account_id LIKE ? ESCAPE '\\')`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = "WHERE " + strings.Join(conds, " AND ")
+	}
+
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM posts p LEFT JOIN users u ON u.id = p.user_id `+where, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id, p.deleted_at, p.reply_count
+		FROM posts p
+		LEFT JOIN users u ON u.id = p.user_id
+		`+where+`
+		ORDER BY p.created_at DESC, p.id DESC
+		LIMIT ? OFFSET ?`, append(args, q.Limit, q.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	posts, err := scanListedPosts(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
+}
+
+// scanListedPosts は ListPosts / AdminListPosts の列並び
+// (id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count) を読む。
+func scanListedPosts(rows *sql.Rows) ([]*model.Post, error) {
 	var posts []*model.Post
 	for rows.Next() {
 		var p model.Post
 		var createdAtUnix, updatedAtUnix int64
 		var parentID, deletedAtUnix sql.NullInt64
 		if err := rows.Scan(&p.ID, &p.Content, &createdAtUnix, &updatedAtUnix, &p.UserID, &parentID, &deletedAtUnix, &p.ReplyCount); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		if parentID.Valid {
 			p.ParentID = &parentID.Int64
@@ -412,8 +465,7 @@ func (r *MySQLPostRepository) ListPosts(ctx context.Context, q repository.PageQu
 		p.UpdatedAt = time.Unix(updatedAtUnix, 0)
 		posts = append(posts, &p)
 	}
-
-	return posts, total, nil
+	return posts, rows.Err()
 }
 
 func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {

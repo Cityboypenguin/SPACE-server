@@ -262,6 +262,7 @@ func main() {
 	getRootPostUseCase := postusecase.NewGetRootPostUseCase(postRepository)
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
+	adminListPostsUseCase := postusecase.NewAdminListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	searchPostsByHashtagUseCase := postusecase.NewSearchPostsByHashtagUseCase(postRepository)
 	popularHashtagsUseCase := postusecase.NewPopularHashtagsUseCase(postRepository)
@@ -603,6 +604,7 @@ func main() {
 			GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
 			CreatePostUseCase:                        createPostUseCase,
 			ListPostsUseCase:                         listPostsUseCase,
+			AdminListPostsUseCase:                    adminListPostsUseCase,
 			DeletePostUseCase:                        deletePostUseCase,
 			UpdatePostUseCase:                        updatePostUseCase,
 			SearchPostsUseCase:                       searchPostsUseCase,

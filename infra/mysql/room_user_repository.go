@@ -475,6 +475,50 @@ func (r *MySQLRoomUserRepository) CountUsersByRoomIDs(ctx context.Context, roomI
 	return result, rows.Err()
 }
 
+// ListOwnersByRoomIDs はオーナー行だけを1クエリで引き、ルームごとに最初の1人を残す。
+func (r *MySQLRoomUserRepository) ListOwnersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.User, error) {
+	result := make(map[int64]*model.User, len(roomIDs))
+	if len(roomIDs) == 0 {
+		return result, nil
+	}
+
+	args := make([]any, 0, len(roomIDs)+1)
+	args = append(args, model.RoomUserRoleOwner)
+	for _, roomID := range roomIDs {
+		args = append(args, roomID)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT ru.room_id, `+roomMemberUserColumns+`
+		FROM room_users ru
+		JOIN users u ON ru.user_id = u.id
+		WHERE ru.role = ? AND ru.room_id IN (`+inPlaceholders(len(roomIDs))+`)
+		ORDER BY ru.room_id, ru.created_at ASC, ru.user_id ASC
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var roomID int64
+		var user model.User
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&roomID, &user.ID, &user.AccountID, &user.Name, &user.Role, &user.Status, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if _, ok := result[roomID]; ok {
+			continue
+		}
+		user.CreatedAt = time.Unix(createdAt, 0)
+		user.UpdatedAt = time.Unix(updatedAt, 0)
+		result[roomID] = &user
+	}
+	return result, rows.Err()
+}
+
 // ListJoinedRoomIDs は「自分が入っているか」だけを1クエリで引く。
 func (r *MySQLRoomUserRepository) ListJoinedRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]bool, error) {
 	result := make(map[int64]bool, len(roomIDs))

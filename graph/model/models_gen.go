@@ -14,6 +14,16 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type AdminCommunity struct {
+	Community *Community `json:"community"`
+	Owner     *User      `json:"owner,omitempty"`
+}
+
+type AdminCommunityPage struct {
+	Items []*AdminCommunity `json:"items"`
+	Total int32             `json:"total"`
+}
+
 type AdminCreateCourseInput struct {
 	DayOfWeek   string `json:"dayOfWeek"`
 	Period      int32  `json:"period"`
@@ -714,6 +724,120 @@ type UserTimetableProfile struct {
 	Entries []*TimetableEntry `json:"entries"`
 }
 
+type AdminCommunitySortField string
+
+const (
+	AdminCommunitySortFieldName        AdminCommunitySortField = "NAME"
+	AdminCommunitySortFieldMemberCount AdminCommunitySortField = "MEMBER_COUNT"
+	AdminCommunitySortFieldCreatedAt   AdminCommunitySortField = "CREATED_AT"
+)
+
+var AllAdminCommunitySortField = []AdminCommunitySortField{
+	AdminCommunitySortFieldName,
+	AdminCommunitySortFieldMemberCount,
+	AdminCommunitySortFieldCreatedAt,
+}
+
+func (e AdminCommunitySortField) IsValid() bool {
+	switch e {
+	case AdminCommunitySortFieldName, AdminCommunitySortFieldMemberCount, AdminCommunitySortFieldCreatedAt:
+		return true
+	}
+	return false
+}
+
+func (e AdminCommunitySortField) String() string {
+	return string(e)
+}
+
+func (e *AdminCommunitySortField) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AdminCommunitySortField(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AdminCommunitySortField", str)
+	}
+	return nil
+}
+
+func (e AdminCommunitySortField) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AdminCommunitySortField) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AdminCommunitySortField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type AdminPostStatus string
+
+const (
+	AdminPostStatusAll     AdminPostStatus = "ALL"
+	AdminPostStatusActive  AdminPostStatus = "ACTIVE"
+	AdminPostStatusDeleted AdminPostStatus = "DELETED"
+)
+
+var AllAdminPostStatus = []AdminPostStatus{
+	AdminPostStatusAll,
+	AdminPostStatusActive,
+	AdminPostStatusDeleted,
+}
+
+func (e AdminPostStatus) IsValid() bool {
+	switch e {
+	case AdminPostStatusAll, AdminPostStatusActive, AdminPostStatusDeleted:
+		return true
+	}
+	return false
+}
+
+func (e AdminPostStatus) String() string {
+	return string(e)
+}
+
+func (e *AdminPostStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AdminPostStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AdminPostStatus", str)
+	}
+	return nil
+}
+
+func (e AdminPostStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AdminPostStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AdminPostStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type CommunityMemberAction string
 
 const (
@@ -1061,6 +1185,61 @@ func (e *ReportTargetType) UnmarshalJSON(b []byte) error {
 }
 
 func (e ReportTargetType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type SortOrder string
+
+const (
+	SortOrderAsc  SortOrder = "ASC"
+	SortOrderDesc SortOrder = "DESC"
+)
+
+var AllSortOrder = []SortOrder{
+	SortOrderAsc,
+	SortOrderDesc,
+}
+
+func (e SortOrder) IsValid() bool {
+	switch e {
+	case SortOrderAsc, SortOrderDesc:
+		return true
+	}
+	return false
+}
+
+func (e SortOrder) String() string {
+	return string(e)
+}
+
+func (e *SortOrder) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SortOrder(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SortOrder", str)
+	}
+	return nil
+}
+
+func (e SortOrder) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *SortOrder) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e SortOrder) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

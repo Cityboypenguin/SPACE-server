@@ -52,6 +52,13 @@ type RoomMembershipReader interface {
 	// コミュニティ一覧の isMember 用。人数と同じ理由で、一覧ぶんを1クエリにする。
 	// 在籍していないルームは key ごと欠ける（bool のゼロ値 false が正しい）。
 	ListJoinedRoomIDs(ctx context.Context, userID int64, roomIDs []int64) (map[int64]bool, error)
+	// ListOwnersByRoomIDs は複数ルームのオーナーを1クエリで引く。オーナーが複数いる
+	// ルームは最初にオーナーになった（在籍の古い）1人を返す。オーナーのいないルームは
+	// key ごと欠ける。
+	//
+	// 管理画面のコミュニティ一覧のオーナー列用。以前はクライアントが1件ごとに
+	// communityMembers を引いて role を探していた。
+	ListOwnersByRoomIDs(ctx context.Context, roomIDs []int64) (map[int64]*model.User, error)
 	ListRoomMembersWithRoles(ctx context.Context, roomID int64) ([]*model.RoomMember, error)
 	ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q PageQuery) ([]*model.RoomMember, int, error)
 }

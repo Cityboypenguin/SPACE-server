@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -239,6 +240,72 @@ func (r *MySQLCommunityRepository) ListAllCommunities(ctx context.Context, q rep
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		ORDER BY c.created_at DESC, c.id DESC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	communities, err := scanCommunities(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return communities, total, nil
+}
+
+// adminCommunityOrderBy は並び替えキーを ORDER BY 句に直す。値は列挙済みの
+// 定数からしか選ばないので、利用者の入力が SQL に混ざることはない。
+// 同値のときの並びがページをまたいで揺れないよう、最後に必ず c.id を足す。
+func adminCommunityOrderBy(f repository.AdminCommunityFilter) string {
+	dir := "ASC"
+	if f.Desc {
+		dir = "DESC"
+	}
+	switch f.SortBy {
+	case repository.CommunitySortName:
+		return "c.name " + dir + ", c.id " + dir
+	case repository.CommunitySortMemberCount:
+		return "member_count " + dir + ", c.id " + dir
+	default:
+		return "c.created_at " + dir + ", c.id " + dir
+	}
+}
+
+func (r *MySQLCommunityRepository) AdminListCommunities(ctx context.Context, f repository.AdminCommunityFilter, q repository.PageQuery) ([]*model.Community, int, error) {
+	where := ""
+	var args []any
+	if keyword := strings.TrimSpace(f.Keyword); keyword != "" {
+		pattern := "%" + escapeLikePrefix(keyword) + "%"
+		where = `WHERE (c.name LIKE ? ESCAPE '\\' OR c.description LIKE ? ESCAPE '\\')`
+		args = append(args, pattern, pattern)
+	}
+
+	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities c `+where, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 人数順のときだけ room_users を数える。他のキーで並べるときに全コミュニティぶん
+	// 数えるのは無駄なので、相関サブクエリは ORDER BY に要るときだけ入れる。
+	memberCountColumn := "0 AS member_count"
+	if f.SortBy == repository.CommunitySortMemberCount {
+		memberCountColumn = "(SELECT COUNT(*) FROM room_users ru WHERE ru.room_id = c.room_id) AS member_count"
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT c.id, c.room_id, c.name, c.description,
+		       m.id, m.uploader_user_id, m.storage_key, m.content_type, m.created_at,
+		       c.created_at, c.updated_at
+		FROM (
+			SELECT c.id, `+memberCountColumn+`
+			FROM communities c
+			`+where+`
+			ORDER BY `+adminCommunityOrderBy(f)+`
+			LIMIT ? OFFSET ?
+		) page
+		JOIN communities c ON c.id = page.id
+		LEFT JOIN media m ON m.id = c.avatar_media_id
+		ORDER BY `+adminCommunityOrderBy(f)+``,
+		append(args, q.Limit, q.Offset)...,
 	)
 	if err != nil {
 		return nil, 0, err

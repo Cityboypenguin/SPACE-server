@@ -617,6 +617,94 @@ func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmode
 	return gqlCourse, nil
 }
 
+// AdminListCommunities is the resolver for the adminListCommunities field.
+func (r *queryResolver) AdminListCommunities(ctx context.Context, keyword *string, sortBy *gqlmodel.AdminCommunitySortField, sortOrder *gqlmodel.SortOrder, limit *int32, offset *int32) (*gqlmodel.AdminCommunityPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	filter := repository.AdminCommunityFilter{SortBy: repository.CommunitySortCreatedAt, Desc: true}
+	if keyword != nil {
+		filter.Keyword = *keyword
+	}
+	if sortBy != nil {
+		switch *sortBy {
+		case gqlmodel.AdminCommunitySortFieldName:
+			filter.SortBy = repository.CommunitySortName
+		case gqlmodel.AdminCommunitySortFieldMemberCount:
+			filter.SortBy = repository.CommunitySortMemberCount
+		}
+	}
+	if sortOrder != nil {
+		filter.Desc = *sortOrder == gqlmodel.SortOrderDesc
+	}
+
+	communities, total, err := r.AdminListCommunitiesUseCase.Execute(ctx, filter, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items, err := r.toGraphAdminCommunities(ctx, communities,
+		fieldRequested(ctx, "items", "community", "memberCount"), fieldRequested(ctx, "items", "owner"))
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.AdminCommunityPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminGetCommunity is the resolver for the adminGetCommunity field.
+func (r *queryResolver) AdminGetCommunity(ctx context.Context, id string) (*gqlmodel.AdminCommunity, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "community", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid community id")
+	}
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, nil
+	}
+	items, err := r.toGraphAdminCommunities(ctx, []*model.Community{c},
+		fieldRequested(ctx, "community", "memberCount"), fieldRequested(ctx, "owner"))
+	if err != nil {
+		return nil, err
+	}
+	return items[0], nil
+}
+
+// AdminListPosts is the resolver for the adminListPosts field.
+func (r *queryResolver) AdminListPosts(ctx context.Context, keyword *string, status *gqlmodel.AdminPostStatus, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	filter := repository.AdminPostFilter{}
+	if keyword != nil {
+		filter.Keyword = *keyword
+	}
+	if status != nil {
+		switch *status {
+		case gqlmodel.AdminPostStatusActive:
+			filter.Status = repository.AdminPostStatusActive
+		case gqlmodel.AdminPostStatusDeleted:
+			filter.Status = repository.AdminPostStatusDeleted
+		}
+	}
+
+	posts, total, err := r.AdminListPostsUseCase.Execute(ctx, filter, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.Post, 0, len(posts))
+	for _, post := range posts {
+		items = append(items, toGraphPost(post))
+	}
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
 // AdminListCourses is the resolver for the adminListCourses field.
 func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {

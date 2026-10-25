@@ -41,6 +41,7 @@ func NewCommunityUseCases(
 		SearchCommunityUseCase:        communityusecase.NewSearchCommunityUseCase(communityRepo),
 		ListMyCommunitiesUseCase:      communityusecase.NewListMyCommunitiesUseCase(communityRepo),
 		ListAllCommunitiesUseCase:     communityusecase.NewListAllCommunitiesUseCase(communityRepo),
+		AdminListCommunitiesUseCase:   communityusecase.NewAdminListCommunitiesUseCase(communityRepo, roomUserRepo),
 		GetRandomCommunitiesUseCase:   *communityusecase.NewGetRandomCommunitiesUseCase(communityRepo),
 	}
 }
