@@ -21,7 +21,7 @@
 set -euo pipefail
 
 MODE="${MODE:-dry}"
-ACCOUNT="${AZURE_STORAGE_ACCOUNT:-20260925project}"
+ACCOUNT="${AZURE_STORAGE_ACCOUNT:-20261024project202609su}"
 SRC_CONTAINER="${SRC_CONTAINER:-space-avatars}"
 DST_CONTAINER="${DST_CONTAINER:-space-message-media}"
 VM="${VM:-azureuser@20.243.81.35}"
@@ -30,8 +30,11 @@ SSH_KEY="${SSH_KEY:-$HOME/.ssh/azure_space}"
 ssh_vm() { ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$VM" "$@"; }
 
 mysql_q() {
-  # -N で見出しを落とし、タブ区切りで返す
-  ssh_vm "sudo docker exec -i space-mysql-1 sh -c 'mysql -uroot -p\$MYSQL_ROOT_PASSWORD space -N -B'" <<< "$1"
+  # -N で見出しを落とし、タブ区切りで返す。
+  # 文字集合を明示するのは、既定のままだと日本語が化けるため（キーは ASCII だが、
+  # 同じ入口を他の問い合わせに使ったときに効く）。
+  # コンテナー名は直書きせず compose に聞く（再作成で名前が変わっても追随する）。
+  ssh_vm "cd /opt/space && sudo docker exec -i \$(sudo docker compose ps -q mysql) sh -c 'mysql -uroot -p\$MYSQL_ROOT_PASSWORD --default-character-set=utf8mb4 space -N -B'" <<< "$1"
 }
 
 echo "=== 対象の抽出 ==="

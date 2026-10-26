@@ -2,11 +2,16 @@
 # MySQL の中身を1ファイルに吐き出して、古いものを捨てる。
 # VM の root の cron から日次で呼ぶ。
 #
-# 【この置き場が守れる事故と守れない事故】
-# 出力先は VM のディスクなので、消えた行や壊したテーブルは戻せるが、
-# ディスクごと失う事故には無力（バックアップも一緒に消える）。
-# 出力先を Blob にも複製するのが本来の形で、それにはこの VM の
-# マネージド ID が要る。付いたらここに送信を足す。
+# 【どこに置くか】
+# まず VM のディスクに吐き、そのあと Azure Blob にも複製する。
+# ディスクだけだと、ディスクごと失う事故でバックアップも一緒に消える。
+#
+# Blob へは VM のマネージド ID で送る（鍵をこのVMに置かない）。az CLI は
+# 入れず、トークンを取って REST で PUT する。1ファイル2MB程度なので
+# 1リクエストで収まる。
+#
+# Blob 側の世代管理はストレージアカウントのライフサイクル規則に任せる
+# （30日で自動削除）。消す処理をここに書くと、消す権限もこのVMに必要になる。
 #
 # 【戻し方】
 # 取ったものは、検証用に立てた捨てるコンテナーで必ず一度試すこと
@@ -22,6 +27,11 @@
 #          | sudo docker exec -i -e MYSQL_PWD="$P" "$C" mysql -uroot
 #   3. アプリを起こす
 #        cd /opt/space && sudo docker compose up -d app
+#
+# VM のディスクから消えている場合は Blob から取る。
+#   az storage blob download --account-name <アカウント> \
+#     --container-name space-db-backups --name db/space-YYYYmmdd-HHMMSS.sql.gz \
+#     --file ./restore.sql.gz --auth-mode login
 #
 # 戻すと Blob 側のファイルは戻らない（DB だけが過去に戻る）。
 # DB が指しているのに実体が無いファイルが出うるので、
@@ -97,3 +107,46 @@ log "保持 ${KEEP_DAYS}日 / 削除 ${DELETED}件 / 現在 $(find "$DEST_DIR" -
 
 # 取り残した .part（前回の異常終了ぶん）も片付ける。
 find "$DEST_DIR" -maxdepth 1 -name '*.sql.gz.part' -mtime +1 -delete
+
+# ---- ここから Blob への複製 ----
+#
+# ここまでで VM のディスクには確実に残っている。以降が失敗しても、
+# それは「遠くに置けなかった」だけなので、ローカルの世代は巻き戻さない。
+# ただし失敗は終了コードに出す（ログを見れば分かるようにする）。
+
+ACCOUNT=$(read_env AZURE_STORAGE_ACCOUNT_NAME)
+CONTAINER="${BLOB_CONTAINER:-space-db-backups}"
+
+if [ -z "$ACCOUNT" ]; then
+  log "WARN: .env に AZURE_STORAGE_ACCOUNT_NAME が無いので Blob への複製を飛ばす"
+  exit 0
+fi
+
+# マネージド ID でストレージ用のトークンを取る。
+TOKEN=$(curl -s -m 10 -H Metadata:true \
+  "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F" \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token",""))')
+if [ -z "$TOKEN" ]; then
+  log "ERROR: マネージド ID のトークンが取れないので Blob へ複製できない"
+  exit 1
+fi
+
+BLOB="db/$(basename "$OUT")"
+# x-ms-version は AAD 認証に対応した版を明示する。古い版だと Bearer を受け付けない。
+# x-ms-blob-type はブロック BLOB の PUT に必須。
+CODE=$(curl -s -o /tmp/space-backup-upload.err -w '%{http_code}' -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "x-ms-version: 2021-08-06" \
+  -H "x-ms-blob-type: BlockBlob" \
+  -H "Content-Type: application/gzip" \
+  --data-binary "@$OUT" \
+  "https://${ACCOUNT}.blob.core.windows.net/${CONTAINER}/${BLOB}")
+
+if [ "$CODE" = "201" ]; then
+  log "Blob へ複製 ${CONTAINER}/${BLOB}"
+  rm -f /tmp/space-backup-upload.err
+else
+  log "ERROR: Blob への複製が HTTP $CODE で失敗（ローカルの世代は残っている）"
+  head -c 300 /tmp/space-backup-upload.err 2>/dev/null | tr -d '\0'; echo
+  exit 1
+fi
