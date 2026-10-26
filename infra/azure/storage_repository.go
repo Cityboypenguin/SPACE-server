@@ -380,6 +380,19 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 		if bloberror.HasCode(err, bloberror.SourceConditionNotMet, bloberror.ConditionNotMet) {
 			return repository.ErrObjectChanged
 		}
+		// CannotVerifyCopySource は、実機で確かめた限り**条件の不一致でも**返る
+		// （URL 経由のコピーなので、Azure から見ると「元を読めなかった」になる）。
+		// つまりこの分類は、中身が差し替えられた場合を ErrObjectNotFound 側へ
+		// 入れている。
+		//
+		// それでも ErrObjectChanged へ移していないのは、Azure が同じコードを
+		// 「元が本当に無い」ときにも、署名や権限の一時的な不調のときにも使うため。
+		// コードだけでは区別できず、ErrObjectChanged へ寄せると、サーバー側の
+		// 不調を「アップロードされていないファイルが指定された」と利用者へ
+		// 返すことになる（Accept の分岐を参照）。
+		//
+		// どちらに分類してもコピーは行われないので、検査していないものが
+		// 公開されることはない。差があるのは文言と、障害時の追いやすさだけ。
 		if bloberror.HasCode(err, bloberror.BlobNotFound, bloberror.CannotVerifyCopySource) {
 			return repository.ErrObjectNotFound
 		}

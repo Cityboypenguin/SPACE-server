@@ -344,7 +344,18 @@ type ObjectStore interface {
 //
 // 測る（StatObject）と写す（CopyObject）の間にもう一度置かれると、検査したものと
 // 別のものが公開される。写すときに「測ったときの ETag と同じなら」という条件を
-// 付けて塞いである（一致しなければ何も書かれず ErrObjectChanged が返る）。
+// 付けて塞いである。一致しなければ何も書かれない。
+//
+// ただし「何のエラーが返るか」は置き場によって違う。Azure は条件の不一致を
+// CannotVerifyCopySource で返してくるため（実機で確認）、ErrObjectChanged では
+// なく ErrObjectNotFound に分類される。Azure はこのコードを「元が本当に無い」
+// ときにも、署名や権限の一時的な不調のときにも使うので、コードだけでは
+// 区別できない。
+//
+// どちらに分類されても写しは行われないので、検査していないものが公開される
+// ことはない。変わるのは利用者へ返る文言だけ（errNotUploaded か、一般の
+// 保存失敗か）。ここを「Azure でも ErrObjectChanged が返る」前提で書き直すと、
+// サーバー側の不調を利用者の操作ミスとして表示することになる。
 func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind, owner string) (string, error) {
 	if err := CheckKey(objectKey, want, owner); err != nil {
 		return "", fmt.Errorf("invalid object key")
