@@ -111,6 +111,38 @@ func (c *delegationKeyCache) get(ctx context.Context) (*service.UserDelegationCr
 	return c.udc, c.expiry, nil
 }
 
+// credentialEnvVars は DefaultAzureCredential が資格情報として読む変数。
+var credentialEnvVars = []string{
+	"AZURE_TENANT_ID",
+	"AZURE_CLIENT_ID",
+	"AZURE_CLIENT_SECRET",
+	"AZURE_CLIENT_CERTIFICATE_PATH",
+	"AZURE_USERNAME",
+	"AZURE_PASSWORD",
+}
+
+// clearEmptyCredentialEnv は、空文字で置かれている資格情報の変数を消す。
+//
+// 空文字は「設定されていない」のと同じ意味しか持たないが、SDK は「存在するか」で
+// 判断する。空の AZURE_CLIENT_ID は「利用者割り当て ID を指定された（中身は空）」と
+// 解釈され、マネージド ID での取得ごと失敗する。
+//
+//	ManagedIdentityCredential: empty managedidentity.UserAssignedClientID
+//
+// compose は値を与えていない変数も空文字で渡すので（${AZURE_CLIENT_ID:-}）、
+// Azure 上の VM でマネージド ID を使う構成がこれだけで起動しなくなる（実機で確認）。
+// 消しても失う情報は無い。
+//
+// プロセス全体の環境を書き換えるが、起動時に1度だけで、対象は自分の設定のうち
+// 中身が無いものだけ。SDK の環境の読み取りに影響させるには、これより手前の層が無い。
+func clearEmptyCredentialEnv() {
+	for _, name := range credentialEnvVars {
+		if value, ok := os.LookupEnv(name); ok && strings.TrimSpace(value) == "" {
+			_ = os.Unsetenv(name)
+		}
+	}
+}
+
 // New はどちらの資格情報で署名するかを環境変数から決める。
 //
 // AZURE_STORAGE_ACCOUNT_KEY があればアカウントキー、無ければ Entra ID
@@ -168,6 +200,11 @@ func New(ctx context.Context) (*AzureBlobStorageRepository, error) {
 		// AZURE_CLIENT_SECRET → マネージド ID → 手元の az login の順に探す。
 		// だから本番（アプリ登録）、Azure 上の VM（マネージド ID、シークレット不要）、
 		// 開発者の手元が、同じコードと同じ設定で動く。
+		//
+		// ただし、その前に空文字の変数を消しておく必要がある。理由は
+		// clearEmptyCredentialEnv のコメント参照。
+		clearEmptyCredentialEnv()
+
 		cred, err := azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create azure identity credential: %w", err)
