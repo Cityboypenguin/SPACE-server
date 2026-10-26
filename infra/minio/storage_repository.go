@@ -132,14 +132,58 @@ func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey strin
 // いるように見えて、実際には素通しになる。宛先が一度きりしか書かれないことは
 // 呼び出し側が宛先キーを毎回引き直すことで保証している
 // （internal/upload.acceptedKeyFor）。
-func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+func (r *MinIOStorageRepository) ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error) {
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(0, limit-1); err != nil {
+		return nil, "", err
+	}
+	object, err := r.client.GetObject(ctx, r.bucket, objectKey, opts)
+	if err != nil {
+		return nil, "", err
+	}
+	defer object.Close()
+
+	// GetObject は遅延実行なので、ここで初めて実際の失敗が分かる。
+	// Stat を先に呼んで「在るか」と ETag を確かめる。
+	info, err := object.Stat()
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, "", repository.ErrObjectNotFound
+		}
+		return nil, "", err
+	}
+
+	head, err := io.ReadAll(io.LimitReader(object, limit))
+	if err != nil {
+		return nil, "", err
+	}
+	return head, info.ETag, nil
+}
+
+func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error {
 	if srcETag == "" {
 		// 条件を付けられないなら写さない。無条件に写すと、検査してから写すまでの
 		// 隙間に差し替えられたものをそのまま公開することになる。
 		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
 	}
+	// 写すときに「どう配るか」も書き込む。ReplaceMetadata を立てると渡した分だけが
+	// 残るので、Content-Type も必ず一緒に渡す（渡さないと空になる）。
+	// 値は repository 側の宣言を使い、置き場ごとに違う指定を持たない。
+	//
+	// contentType は受け入れ側が実物のバイト列から確かめた値。コピー元に付いて
+	// いるのは利用者が PUT 時に申告した値なので、確かめた値で上書きする。
 	_, err := r.client.CopyObject(ctx,
-		minio.CopyDestOptions{Bucket: r.bucket, Object: dstKey},
+		minio.CopyDestOptions{
+			Bucket:          r.bucket,
+			Object:          dstKey,
+			ReplaceMetadata: true,
+			UserMetadata: map[string]string{
+				"Content-Type":        contentType,
+				"Content-Disposition": repository.ServedContentDisposition,
+				"Cache-Control":       repository.ServedCacheControl,
+			},
+		},
 		minio.CopySrcOptions{Bucket: r.bucket, Object: srcKey, MatchETag: srcETag},
 	)
 	if err != nil {

@@ -25,9 +25,13 @@ func (s headerStore) StatObject(context.Context, string) (repository.ObjectInfo,
 	s.t.Fatal("StatObject は呼ばれないはず")
 	return repository.ObjectInfo{}, nil
 }
-func (s headerStore) CopyObject(context.Context, string, string, string) error {
+func (s headerStore) CopyObject(context.Context, string, string, string, string) error {
 	s.t.Fatal("CopyObject は呼ばれないはず")
 	return nil
+}
+func (s headerStore) ObjectHead(context.Context, string, int64) ([]byte, string, error) {
+	s.t.Fatal("ObjectHead は呼ばれないはず")
+	return nil, "", nil
 }
 func (s headerStore) PublicURL(string) string {
 	s.t.Fatal("PublicURL は呼ばれないはず")

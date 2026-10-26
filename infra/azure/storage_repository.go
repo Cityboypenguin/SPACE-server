@@ -361,7 +361,53 @@ const azureCopySourceTTL = 5 * time.Minute
 // 宛先側の条件は付けない。Azure 単体なら効かせられるが、もう一方の実装（MinIO）
 // では効かないため、それを前提にすると保管先によって保証が変わる。宛先が一度きり
 // しか書かれないことは呼び出し側で保証している（repository.StorageRepository 参照）。
-func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+// setServingHeaders は、アプリが参照するキーに「どう配るか」を書き込む。
+//
+// Azure の Set Blob Properties は、指定しなかった欄を消す。だから
+// Content-Type も Cache-Control も毎回いっしょに渡す（片方だけ渡すと
+// もう片方が空になる）。
+//
+// contentType は受け入れ側が実物のバイト列から確かめた値。コピーで引き継がれる
+// のは利用者が PUT 時に申告した値なので、ここで確かめた値に上書きする。
+func (r *AzureBlobStorageRepository) setServingHeaders(ctx context.Context, dst *blob.Client, contentType string) error {
+	disposition := repository.ServedContentDisposition
+	cacheControl := repository.ServedCacheControl
+	if _, err := dst.SetHTTPHeaders(ctx, blob.HTTPHeaders{
+		BlobContentType:        &contentType,
+		BlobContentDisposition: &disposition,
+		BlobCacheControl:       &cacheControl,
+	}, nil); err != nil {
+		return fmt.Errorf("failed to set serving headers: %w", err)
+	}
+	return nil
+}
+
+// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+func (r *AzureBlobStorageRepository) ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error) {
+	blobClient := r.client.ServiceClient().NewContainerClient(r.containerName).NewBlobClient(objectKey)
+	resp, err := blobClient.DownloadStream(ctx, &blob.DownloadStreamOptions{
+		Range: blob.HTTPRange{Offset: 0, Count: limit},
+	})
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil, "", repository.ErrObjectNotFound
+		}
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	head, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, "", err
+	}
+	etag := ""
+	if resp.ETag != nil {
+		etag = string(*resp.ETag)
+	}
+	return head, etag, nil
+}
+
+func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error {
 	if srcETag == "" {
 		// 条件を付けられないなら写さない（MinIO 実装と同じ理由）。
 		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
@@ -399,7 +445,7 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 		return err
 	}
 	if started.CopyStatus != nil && *started.CopyStatus == blob.CopyStatusTypeSuccess {
-		return nil
+		return r.setServingHeaders(ctx, dst, contentType)
 	}
 
 	deadline := time.Now().Add(azureCopyPollTimeout)
@@ -418,7 +464,7 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 			return err
 		}
 		if props.CopyStatus == nil {
-			return nil
+			return r.setServingHeaders(ctx, dst, contentType)
 		}
 		switch *props.CopyStatus {
 		case blob.CopyStatusTypeSuccess:
