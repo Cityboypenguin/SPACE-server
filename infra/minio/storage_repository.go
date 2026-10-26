@@ -102,6 +102,14 @@ func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey 
 // StatObject は保存済みオブジェクトの実寸と Content-Type を返す。
 // 署名付き PUT では上限を縛れないので、受け入れ時にここで実物を測る
 // （repository.StorageRepository のコメント参照）。
+// UploadRequestHeaders は、S3 互換の署名付き PUT に追加のヘッダーが要らないことを表す。
+//
+// 署名に含めていないヘッダーを送ると署名が合わなくなる場合があるので、
+// 「何も足さない」を明示的に返す。
+func (r *MinIOStorageRepository) UploadRequestHeaders() map[string]string {
+	return nil
+}
+
 func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error) {
 	info, err := r.client.StatObject(ctx, r.bucket, objectKey, minio.StatObjectOptions{})
 	if err != nil {

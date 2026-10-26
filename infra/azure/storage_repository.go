@@ -264,6 +264,14 @@ func (r *AzureBlobStorageRepository) PresignedPutURL(ctx context.Context, object
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
 }
 
+// UploadRequestHeaders は Azure Blob への PUT に必須のヘッダーを返す。
+//
+// これが無いと Azure は 400 MissingRequiredHeader を返し、本文は一切保存されない
+// （実機で確認）。ブロック BLOB 以外を作る予定は無いので固定でよい。
+func (r *AzureBlobStorageRepository) UploadRequestHeaders() map[string]string {
+	return map[string]string{"x-ms-blob-type": "BlockBlob"}
+}
+
 // StatObject は保存済み BLOB の実寸と Content-Type を返す。
 // SAS ではサイズを縛れないので、受け入れ時にここで実物を測る
 // （repository.StorageRepository のコメント参照）。

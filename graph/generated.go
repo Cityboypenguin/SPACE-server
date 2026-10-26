@@ -518,6 +518,7 @@ type ComplexityRoot struct {
 	}
 
 	PresignedUploadUrl struct {
+		Headers   func(childComplexity int) int
 		ObjectKey func(childComplexity int) int
 		UploadURL func(childComplexity int) int
 	}
@@ -734,6 +735,11 @@ type ComplexityRoot struct {
 		Course    func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
+	}
+
+	UploadHeader struct {
+		Name  func(childComplexity int) int
+		Value func(childComplexity int) int
 	}
 
 	User struct {
@@ -3697,6 +3703,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PostPage.Total(childComplexity), true
 
+	case "PresignedUploadUrl.headers":
+		if e.ComplexityRoot.PresignedUploadUrl.Headers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PresignedUploadUrl.Headers(childComplexity), true
 	case "PresignedUploadUrl.objectKey":
 		if e.ComplexityRoot.PresignedUploadUrl.ObjectKey == nil {
 			break
@@ -5143,6 +5155,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TimetableEntry.ID(childComplexity), true
 
+	case "UploadHeader.name":
+		if e.ComplexityRoot.UploadHeader.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Name(childComplexity), true
+	case "UploadHeader.value":
+		if e.ComplexityRoot.UploadHeader.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Value(childComplexity), true
+
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
 			break
@@ -6265,6 +6290,8 @@ func (ec *executionContext) childFields_PresignedUploadUrl(ctx context.Context, 
 		return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
 	case "objectKey":
 		return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+	case "headers":
+		return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
 }
@@ -6477,6 +6504,16 @@ func (ec *executionContext) childFields_TimetableEntry(ctx context.Context, fiel
 		return ec.fieldContext_TimetableEntry_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TimetableEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_UploadHeader(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_UploadHeader_name(ctx, field)
+	case "value":
+		return ec.fieldContext_UploadHeader_value(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UploadHeader", field.Name)
 }
 
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -20894,6 +20931,38 @@ func (ec *executionContext) fieldContext_PresignedUploadUrl_objectKey(_ context.
 	return graphql.NewScalarFieldContext("PresignedUploadUrl", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PresignedUploadUrl_headers(ctx context.Context, field graphql.CollectedField, obj *model.PresignedUploadURL) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Headers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+			return ec.marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PresignedUploadUrl_headers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PresignedUploadUrl",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UploadHeader(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Profile_user(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26766,6 +26835,52 @@ func (ec *executionContext) _TimetableEntry_createdAt(ctx context.Context, field
 }
 func (ec *executionContext) fieldContext_TimetableEntry_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TimetableEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UploadHeader_name(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UploadHeader_value(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_value(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _User_ID(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
@@ -34154,6 +34269,11 @@ func (ec *executionContext) _PresignedUploadUrl(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "headers":
+			out.Values[i] = ec._PresignedUploadUrl_headers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -37209,6 +37329,49 @@ func (ec *executionContext) _TimetableEntry(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var uploadHeaderImplementors = []string{"UploadHeader"}
+
+func (ec *executionContext) _UploadHeader(ctx context.Context, sel ast.SelectionSet, obj *model.UploadHeader) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, uploadHeaderImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UploadHeader")
+		case "name":
+			out.Values[i] = ec._UploadHeader_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._UploadHeader_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *model.User) graphql.Marshaler {
@@ -39424,6 +39587,32 @@ func (ec *executionContext) unmarshalNUpdateProfileInput2githubᚗcomᚋCityboyp
 func (ec *executionContext) unmarshalNUpdateUserInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateUserInput(ctx context.Context, v any) (model.UpdateUserInput, error) {
 	res, err := ec.unmarshalInputUpdateUserInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx context.Context, sel ast.SelectionSet, v *model.UploadHeader) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UploadHeader(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.User) graphql.Marshaler {

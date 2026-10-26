@@ -62,6 +62,17 @@ type StorageRepository interface {
 	CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error
 	PublicURL(objectKey string) string
 	DeleteObject(ctx context.Context, objectKey string) error
+	// UploadRequestHeaders は、PresignedPutURL で出した URL へ PUT するときに
+	// クライアントが必ず付けなければならないヘッダー。
+	//
+	// Azure Blob の PUT Blob は x-ms-blob-type が必須で、欠けると 400
+	// （MissingRequiredHeader）になる。S3 互換側には要らない。
+	//
+	// どちらが必要かは置き場の実装しか知らないので、クライアントに宛先の
+	// ホスト名を見て判定させない。判定をクライアントへ置くと、置き場を
+	// 増やすたびにクライアントも直さねばならず、直し忘れは「アップロードが
+	// 400 で落ちる」という形でしか出ない。
+	UploadRequestHeaders() map[string]string
 }
 
 // ErrObjectNotFound is returned by StatObject when the object does not exist.

@@ -27,6 +27,15 @@ extend type Mutation {
 type PresignedUploadUrl {
   uploadUrl: String!
   objectKey: String!
+  # uploadUrl へ PUT するとき付けるヘッダー。置き場によって必須のものが違う
+  # （Azure Blob は x-ms-blob-type が無いと 400 になる）。クライアントは中身を
+  # 解釈せず、そのまま付けるだけでよい。置き場が増えてもクライアントは変わらない。
+  headers: [UploadHeader!]!
+}
+
+type UploadHeader {
+  name: String!
+  value: String!
 }
 
 type Media {

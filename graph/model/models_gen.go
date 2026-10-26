@@ -481,8 +481,9 @@ type PostPage struct {
 }
 
 type PresignedUploadURL struct {
-	UploadURL string `json:"uploadUrl"`
-	ObjectKey string `json:"objectKey"`
+	UploadURL string          `json:"uploadUrl"`
+	ObjectKey string          `json:"objectKey"`
+	Headers   []*UploadHeader `json:"headers"`
 }
 
 type Profile struct {
@@ -657,6 +658,11 @@ type UpdateUserInput struct {
 	Email           *string `json:"email,omitempty"`
 	Password        *string `json:"password,omitempty"`
 	CurrentPassword *string `json:"currentPassword,omitempty"`
+}
+
+type UploadHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type User struct {
