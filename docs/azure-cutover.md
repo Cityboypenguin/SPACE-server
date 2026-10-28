@@ -91,7 +91,17 @@ dig +short NS senshu-universe.com    # azure-dns 系になれば完了
 
 ### 2-1. VM を HTTPS にする
 
-先生に DNS 名ラベルと 443 番の開放をいただいた後。
+先生に DNS 名ラベルをいただいた後。
+
+443 番は **NSG で既に許可されている**（確認済み）。判別の方法を残しておく。
+外から 443 を叩くと「即座に接続拒否」が返り、遮断されている番号（9999 など）は
+「無応答で時間切れ」になる。拒否が返るのはパケットが VM まで届いた証拠なので、
+VM に何も置かずに許可の有無が分かる。
+
+```bash
+curl -v --connect-timeout 10 http://20.243.81.35:443/   # 即座に拒否 → 許可あり
+curl -v --connect-timeout 10 http://20.243.81.35:9999/  # 時間切れ   → 遮断
+```
 
 ```bash
 sudo certbot --nginx -d senshu-space.japaneast.cloudapp.azure.com
