@@ -38,6 +38,14 @@
 # 通知先は「普段見ている場所」にすること。誰も見ないアドレスに送っても、
 # 異常に気づけない点は監視が無いのと変わらない。
 #
+# 【月次の生存通知】
+#   space-healthcheck.sh --heartbeat
+# 月に1度、状態をまとめて送る。目的は「異常が無いこと」の報告ではなく、
+# 通知経路がまだ生きていることの確認。SMTP のパスワード失効などで送信が
+# 壊れると、異常が起きても何も届かない。そのとき「メールが来ない」は
+# 「異常が無い」と見分けが付かない。月次の便りが途絶えたら、監視自体が
+# 壊れていると判断できる。
+#
 # 【試験送信】
 #   space-healthcheck.sh --test
 # 送信経路だけを単体で試す。異常が起きた時に初めて「実は届かなかった」と
@@ -127,6 +135,31 @@ how_to_look() {
   sudo tail -50 /var/log/space-healthcheck.log
 TXT
 }
+
+if [ "${1:-}" = "--heartbeat" ]; then
+  # 送る内容は「読んで判断できる事実」に絞る。多いと読まれなくなる。
+  last_backup=$(find /var/backups/space -maxdepth 1 -name '*.sql.gz' -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | awk '{print $2}')
+  [ -n "$last_backup" ] && last_backup="$(basename "$last_backup") （$(date -u -r "$last_backup" +%Y-%m-%d\ %H:%M)Z）"
+  [ -n "$last_backup" ] || last_backup="★ 見つからない"
+
+  bans=$(fail2ban-client status sshd 2>/dev/null | sed -n 's/.*Total banned:\t//p')
+
+  notify "[SPACE] 監視は動いています（月次）" "このメールが届いていれば、監視と通知の経路は生きています。
+**来月これが届かなかったら、監視自体が壊れていると考えてください。**
+
+稼働:       $(uptime -p 2>/dev/null)
+ディスク:   $(df -h / 2>/dev/null | awk 'NR==2 {print $5" 使用（"$3"/"$2"）"}')
+コンテナー:
+$( (cd "$DEPLOY_DIR" && docker compose ps --format '  {{.Service}} {{.State}}' 2>/dev/null) || echo '  ★ 取得できない')
+最新のバックアップ: $last_backup
+SSH 遮断（起動後の累計）: ${bans:-取得できない} 件
+
+$(host_line)
+
+対応は不要です。"
+  exit $?
+fi
 
 if [ "${1:-}" = "--test" ]; then
   TO=$(alert_target)

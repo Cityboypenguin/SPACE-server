@@ -5,3 +5,8 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 */5 * * * * root flock -n /run/space-healthcheck.lock /usr/local/bin/space-healthcheck.sh >> /var/log/space-healthcheck.log 2>&1
+
+# 月に1度、状態をまとめて送る。目的は「異常が無いこと」の報告ではなく、
+# 通知経路が生きていることの確認（scripts/healthcheck.sh の説明を参照）。
+# 毎月1日の 00:00 UTC = 09:00 JST。VM は UTC で動いている。
+0 0 1 * * root /usr/local/bin/space-healthcheck.sh --heartbeat >> /var/log/space-healthcheck.log 2>&1
