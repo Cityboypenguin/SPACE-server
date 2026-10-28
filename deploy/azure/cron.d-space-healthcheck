@@ -1,0 +1,7 @@
+# /etc/cron.d/space-healthcheck へ置く。
+# 5分ごとに死活確認。状態が変わった時だけメールが出る（scripts/healthcheck.sh）。
+# flock は前回の実行が終わっていない時に重ねないため。SMTP が詰まると
+# 1回の実行が長くなりうる。
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/5 * * * * root flock -n /run/space-healthcheck.lock /usr/local/bin/space-healthcheck.sh >> /var/log/space-healthcheck.log 2>&1

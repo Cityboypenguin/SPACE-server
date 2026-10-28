@@ -1,0 +1,12 @@
+# /etc/logrotate.d/space-healthcheck へ置く。
+# 状態が変わった時しか書かないので普段は増えないが、上限の無い書き出しを
+# 残さない方針に合わせる（space-db-backup と同じ理由）。
+/var/log/space-healthcheck.log {
+    su root adm
+    monthly
+    rotate 6
+    compress
+    missingok
+    notifempty
+    create 640 root adm
+}
