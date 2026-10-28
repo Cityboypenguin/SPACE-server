@@ -706,7 +706,7 @@ func (r *queryResolver) AdminListPosts(ctx context.Context, keyword *string, sta
 }
 
 // AdminListCourses is the resolver for the adminListCourses field.
-func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
+func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *gqlmodel.SortOrder, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -720,11 +720,20 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	if keyword != nil {
 		kw = *keyword
 	}
+
+	var sortOrderStr *string
+    if sortOrder != nil {
+        s := string(*sortOrder)
+        sortOrderStr = &s
+    }
+
 	items, total, err := r.ListCoursesUseCase.Execute(ctx, courseusecase.ListCoursesParam{
 		Year:      y,
 		Semester:  semester,
 		DayOfWeek: dayOfWeek,
 		Keyword:   kw,
+		SortBy:    sortBy,
+		SortOrder: sortOrderStr,
 		Page:      resolvePageQuery(ctx, limit, offset, defaultPageSize),
 	})
 	if err != nil {
@@ -735,16 +744,16 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	// 以前は一覧の1件ごとに COUNT を撃っていた（20件なら20本）。
 	// 単体の adminCourse と同じく、判定は共通の fieldRequested。
 	registeredCounts := map[int64]int{}
-	if fieldRequested(ctx, "items", "registeredCount") {
-		courseIDs := make([]int64, 0, len(items))
-		for _, c := range items {
-			courseIDs = append(courseIDs, c.ID)
-		}
-		registeredCounts, err = r.GetCourseRegisteredCountsUseCase.Execute(ctx, courseIDs)
-		if err != nil {
-			return nil, err
-		}
-	}
+    if fieldRequested(ctx, "items", "registeredCount") {
+        courseIDs := make([]int64, 0, len(items))
+        for _, c := range items {
+            courseIDs = append(courseIDs, c.ID)
+        }
+        registeredCounts, err = r.GetCourseRegisteredCountsUseCase.Execute(ctx, courseIDs)
+        if err != nil {
+            return nil, err
+        }
+    }
 
 	gqlItems := make([]*gqlmodel.Course, 0, len(items))
 	for _, c := range items {

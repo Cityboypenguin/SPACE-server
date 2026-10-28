@@ -42,6 +42,8 @@ extend type Query {
     semester: String
     dayOfWeek: String
     keyword: String
+    sortBy: String
+    sortOrder: SortOrder
     limit: Int = 20
     offset: Int = 0
   ): CoursePage!

@@ -554,7 +554,7 @@ type ComplexityRoot struct {
 		AdminListCommunities            func(childComplexity int, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
 		AdminListCourseYears            func(childComplexity int) int
-		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) int
+		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListMediaMissingDimensions func(childComplexity int, limit *int32, offset *int32) int
 		AdminListPosts                  func(childComplexity int, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int, limit *int32, offset *int32) int
@@ -977,7 +977,7 @@ type QueryResolver interface {
 	AdminListCommunities(ctx context.Context, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.AdminCommunityPage, error)
 	AdminGetCommunity(ctx context.Context, id string) (*model.AdminCommunity, error)
 	AdminListPosts(ctx context.Context, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) (*model.PostPage, error)
-	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
+	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.CoursePage, error)
 	Announcements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
@@ -3912,7 +3912,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.AdminListCourses(childComplexity, args["year"].(*int32), args["semester"].(*string), args["dayOfWeek"].(*string), args["keyword"].(*string), args["limit"].(*int32), args["offset"].(*int32)), true
+		return e.ComplexityRoot.Query.AdminListCourses(childComplexity, args["year"].(*int32), args["semester"].(*string), args["dayOfWeek"].(*string), args["keyword"].(*string), args["sortBy"].(*string), args["sortOrder"].(*model.SortOrder), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListMediaMissingDimensions":
 		if e.ComplexityRoot.Query.AdminListMediaMissingDimensions == nil {
 			break
@@ -8926,22 +8926,38 @@ func (ec *executionContext) field_Query_adminListCourses_args(ctx context.Contex
 		return nil, err
 	}
 	args["keyword"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortBy"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "sortOrder",
+		func(ctx context.Context, v any) (*model.SortOrder, error) {
+			return ec.unmarshalOSortOrder2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐSortOrder(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortOrder"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
 		func(ctx context.Context, v any) (*int32, error) {
 			return ec.unmarshalOInt2ᚖint32(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+	args["limit"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
 		func(ctx context.Context, v any) (*int32, error) {
 			return ec.unmarshalOInt2ᚖint32(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["offset"] = arg5
+	args["offset"] = arg7
 	return args, nil
 }
 
@@ -21956,7 +21972,7 @@ func (ec *executionContext) _Query_adminListCourses(ctx context.Context, field g
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().AdminListCourses(ctx, fc.Args["year"].(*int32), fc.Args["semester"].(*string), fc.Args["dayOfWeek"].(*string), fc.Args["keyword"].(*string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+			return ec.Resolvers.Query().AdminListCourses(ctx, fc.Args["year"].(*int32), fc.Args["semester"].(*string), fc.Args["dayOfWeek"].(*string), fc.Args["keyword"].(*string), fc.Args["sortBy"].(*string), fc.Args["sortOrder"].(*model.SortOrder), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.CoursePage) graphql.Marshaler {

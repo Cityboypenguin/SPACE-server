@@ -25,6 +25,8 @@ type ListCoursesParam struct {
 	Semester  *string
 	DayOfWeek *string
 	Keyword   string
+	SortBy   *string
+	SortOrder *string
 	// Page は窓と「total を数えるか」。他の一覧と同じ PageQuery に揃えてある
 	// （以前は Limit/Offset の2フィールドだった）。
 	Page PageQuery
