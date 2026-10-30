@@ -103,6 +103,27 @@ func (r *MySQLMediaRepository) CreateAnswerMediaBatch(ctx context.Context, answe
 	return r.createMediaLinks(ctx, "answer_media", "answer_id", answerID, mediaIDs, startPosition)
 }
 
+// ListStorageKeysByUploader はその利用者がアップロードした全メディアの保存先キー。
+// トランザクションの中で呼ばれる（退会者の削除）ので extractDB を通す。
+func (r *MySQLMediaRepository) ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx,
+		`SELECT storage_key FROM media WHERE uploader_user_id = ? ORDER BY id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {
 	query := `
 		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.width, m.height, m.created_at

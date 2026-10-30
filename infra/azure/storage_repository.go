@@ -2,28 +2,153 @@ package azurerepo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
+// AzureBlobStorageRepository は署名する手段を2つのうちどちらか1つだけ持つ。
+//
+//   - sharedKeyCred: アカウントキー。そのストレージアカウントの中では全権で、
+//     権限を絞れず、失効はキーのローテーションしか無く、操作ログに誰がやったかが
+//     残らない。
+//   - delegation: Entra ID の ID（アプリ登録やマネージド ID）から取る委任キー。
+//     できることは割り当てたロールの範囲だけで、ロールを外せば止まり、操作ログに
+//     その ID が残る。
+//
+// New がどちらを使うかを決める。署名の呼び出し側は sign を通すので、どちらでも
+// 同じコードで動く。
 type AzureBlobStorageRepository struct {
 	client               *azblob.Client
 	sharedKeyCred        *azblob.SharedKeyCredential
+	delegation           *delegationKeyCache
 	accountName          string
 	containerName        string
 	privateContainerName string
+	// publicEndpoint は公開オブジェクトの URL を組むときの基点。CDN (Front Door) を
+	// 前に置く場合にその配信ホストを入れる。空なら Blob の既定ホストを使う。
+	// 末尾のスラッシュは New が落とす。
+	publicEndpoint string
+	// signPublicURLs は公開オブジェクトの URL に読み取りSASを付けるかどうか。
+	//
+	// コンテナーの匿名読み取りが閉じていると（ストレージアカウントの
+	// allowBlobPublicAccess=false）、素の URL はブラウザから 403 になる。そこで
+	// 読み取りだけを許す署名を付けて配る。
+	//
+	// ゼロ値が false なのは意図的で、この構造体を直に組む側は素の URL を見る。
+	// New は既定で true を入れる。
+	signPublicURLs bool
 }
 
-func New() (*AzureBlobStorageRepository, error) {
+// azureDelegationKeyTTL は委任キーを要求する寿命（Azure の上限は7日）。
+// azureDelegationKeyMargin は残りがこれを切ったら取り直す幅。
+// azureDelegationKeySkew は開始時刻を過去へずらす幅。サーバー間の時計のずれで
+// 「まだ有効になっていない鍵」を掴まないため。
+//
+// Margin は発行しうる SAS の最長寿命（azurePublicSASTTL + azurePublicSASWindow）より
+// 必ず大きく取ること。小さいと SAS の失効が委任キーの失効を追い越し、署名は通るのに
+// 使う時点で弾かれる URL を配ってしまう。sign が念のため上限を切り詰めるが、
+// そこに頼ると URL が枠内で変わってキャッシュが効かなくなる。
+const (
+	azureDelegationKeyTTL    = 7 * 24 * time.Hour
+	azureDelegationKeyMargin = 48 * time.Hour
+	azureDelegationKeySkew   = 5 * time.Minute
+)
+
+// delegationKeyCache は Entra ID から取った委任キーを保持する。
+//
+// 委任キーの取得はネットワーク越しなので、SAS を1本作るたびに取りに行くわけには
+// いかない（PublicURL は一覧の要素ごとに呼ばれる）。7日ぶんを1本取って使い回し、
+// 残りが Margin を切ったときだけ取り直す。つまり実際の取得は数日に1回で、
+// その1回を引いた呼び出しだけが待つ。
+type delegationKeyCache struct {
+	svc *service.Client
+
+	mu     sync.Mutex
+	udc    *service.UserDelegationCredential
+	expiry time.Time
+}
+
+// get は有効な委任キーとその失効時刻を返す。必要なら取り直す。
+func (c *delegationKeyCache) get(ctx context.Context) (*service.UserDelegationCredential, time.Time, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.udc != nil && time.Until(c.expiry) > azureDelegationKeyMargin {
+		return c.udc, c.expiry, nil
+	}
+
+	now := time.Now().UTC()
+	expiry := now.Add(azureDelegationKeyTTL)
+	udc, err := c.svc.GetUserDelegationCredential(ctx, service.KeyInfo{
+		Start:  to.Ptr(now.Add(-azureDelegationKeySkew).Format(sas.TimeFormat)),
+		Expiry: to.Ptr(expiry.Format(sas.TimeFormat)),
+	}, nil)
+	if err != nil {
+		// 取り直しに失敗しても、手元の鍵がまだ生きているならそれで続ける。
+		// Margin を 2 日取ってあるので、この猶予のあいだに復旧すれば表に影響は出ない。
+		if c.udc != nil && now.Before(c.expiry) {
+			return c.udc, c.expiry, nil
+		}
+		return nil, time.Time{}, fmt.Errorf("failed to get a user delegation key: %w", err)
+	}
+
+	c.udc, c.expiry = udc, expiry
+	return c.udc, c.expiry, nil
+}
+
+// credentialEnvVars は DefaultAzureCredential が資格情報として読む変数。
+var credentialEnvVars = []string{
+	"AZURE_TENANT_ID",
+	"AZURE_CLIENT_ID",
+	"AZURE_CLIENT_SECRET",
+	"AZURE_CLIENT_CERTIFICATE_PATH",
+	"AZURE_USERNAME",
+	"AZURE_PASSWORD",
+}
+
+// clearEmptyCredentialEnv は、空文字で置かれている資格情報の変数を消す。
+//
+// 空文字は「設定されていない」のと同じ意味しか持たないが、SDK は「存在するか」で
+// 判断する。空の AZURE_CLIENT_ID は「利用者割り当て ID を指定された（中身は空）」と
+// 解釈され、マネージド ID での取得ごと失敗する。
+//
+//	ManagedIdentityCredential: empty managedidentity.UserAssignedClientID
+//
+// compose は値を与えていない変数も空文字で渡すので（${AZURE_CLIENT_ID:-}）、
+// Azure 上の VM でマネージド ID を使う構成がこれだけで起動しなくなる（実機で確認）。
+// 消しても失う情報は無い。
+//
+// プロセス全体の環境を書き換えるが、起動時に1度だけで、対象は自分の設定のうち
+// 中身が無いものだけ。SDK の環境の読み取りに影響させるには、これより手前の層が無い。
+func clearEmptyCredentialEnv() {
+	for _, name := range credentialEnvVars {
+		if value, ok := os.LookupEnv(name); ok && strings.TrimSpace(value) == "" {
+			_ = os.Unsetenv(name)
+		}
+	}
+}
+
+// New はどちらの資格情報で署名するかを環境変数から決める。
+//
+// AZURE_STORAGE_ACCOUNT_KEY があればアカウントキー、無ければ Entra ID
+// (DefaultAzureCredential)。キーの方を条件にしてあるのは、キーが設定から消えた
+// ときに黙ってキー方式へ落ちないようにするため。
+func New(ctx context.Context) (*AzureBlobStorageRepository, error) {
 	accountName := os.Getenv("AZURE_STORAGE_ACCOUNT_NAME")
 	accountKey := os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")
 	containerName := os.Getenv("AZURE_STORAGE_CONTAINER_NAME")
@@ -32,40 +157,156 @@ func New() (*AzureBlobStorageRepository, error) {
 		privateContainerName = containerName + "-private"
 	}
 
-	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create azure credential: %w", err)
-	}
+	// CDN (Front Door) を前に置くと、ブラウザへ返す URL はその配信ホストを指す必要が
+	// ある。Blob の既定ホストを返してしまうと CDN を通らず、置いた意味が無くなる。
+	//
+	// 未設定なら Blob の既定ホストへ素で当てる。つまり CDN 無しの構成もそのまま動く。
+	// アップロードや SAS の発行は常に Blob の本来のホスト(serviceURL)を使うので、
+	// ここを変えても影響しない。署名は配信ホストでは検証できないため。
+	//
+	// S3 側の MINIO_PUBLIC_ENDPOINT と同じ役割で、パスの形も揃えてある
+	// (<endpoint>/<container>/<key>)。CDN 側は受けたパスをそのまま Blob へ
+	// 転送すればよい。
+	publicEndpoint := strings.TrimRight(os.Getenv("AZURE_BLOB_PUBLIC_ENDPOINT"), "/")
+
+	// 既定で署名を付ける。匿名読み取りを開けるのはコントロールプレーンの設定
+	// (allowBlobPublicAccess) で、アカウントキーでは開けられない。つまり「鍵は
+	// 持っているのに画像だけ表示されない」が既定の状態なので、素の URL を配る方を
+	// 特別扱いにする。
+	//
+	// コンテナーを本当に公開にした場合、またはクエリ文字列を転送しない CDN を前に
+	// 置いた場合だけ AZURE_BLOB_PUBLIC_SIGN=false で素の URL に戻す。
+	signPublicURLs := !strings.EqualFold(strings.TrimSpace(os.Getenv("AZURE_BLOB_PUBLIC_SIGN")), "false")
 
 	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
-	client, err := azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create azure blob client: %w", err)
+
+	var (
+		client        *azblob.Client
+		sharedKeyCred *azblob.SharedKeyCredential
+		delegation    *delegationKeyCache
+	)
+	if accountKey != "" {
+		cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure credential: %w", err)
+		}
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure blob client: %w", err)
+		}
+		sharedKeyCred = cred
+	} else {
+		// DefaultAzureCredential は AZURE_TENANT_ID / AZURE_CLIENT_ID /
+		// AZURE_CLIENT_SECRET → マネージド ID → 手元の az login の順に探す。
+		// だから本番（アプリ登録）、Azure 上の VM（マネージド ID、シークレット不要）、
+		// 開発者の手元が、同じコードと同じ設定で動く。
+		//
+		// ただし、その前に空文字の変数を消しておく必要がある。理由は
+		// clearEmptyCredentialEnv のコメント参照。
+		clearEmptyCredentialEnv()
+
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure identity credential: %w", err)
+		}
+		client, err = azblob.NewClient(serviceURL, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure blob client: %w", err)
+		}
+		delegation = &delegationKeyCache{svc: client.ServiceClient()}
+
+		// 起動時に1本引いておく。ここで確かめないと、ロールの割り当て漏れや
+		// シークレットの誤りが「最初に画像を上げた人が失敗する」形で出る。
+		if _, _, err := delegation.get(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	return &AzureBlobStorageRepository{
 		client:               client,
-		sharedKeyCred:        cred,
+		sharedKeyCred:        sharedKeyCred,
+		delegation:           delegation,
 		accountName:          accountName,
 		containerName:        containerName,
 		privateContainerName: privateContainerName,
+		publicEndpoint:       publicEndpoint,
+		signPublicURLs:       signPublicURLs,
 	}, nil
 }
 
-func (r *AzureBlobStorageRepository) PresignedPutURL(_ context.Context, objectKey string, _ string, expires time.Duration, _ int64) (string, error) {
-	queryParams, err := sas.BlobSignatureValues{
+// ForContainer は同じ資格情報のまま、別のコンテナーを見る写しを返す。
+//
+// DM の添付だけを非公開のコンテナーへ入れるために使う。コンテナー名以外は
+// 何も変えないので、アップロード・検査・複製・削除の手順は公開側と同一になる
+// （つまり internal/upload の受け入れがそのまま効く）。
+//
+// signReads は表示URLに読み取りSASを付けるかどうか。非公開コンテナーでは必ず
+// true にすること。false だと素のURLを返し、ブラウザから 404/403 になる。
+//
+// publicEndpoint は引き継がない。CDN の配信ホストは公開コンテナーのために
+// 設定するもので、非公開のものをそこから配ると素のURLで晒される。
+func (r *AzureBlobStorageRepository) ForContainer(containerName string, signReads bool) *AzureBlobStorageRepository {
+	copied := *r
+	copied.containerName = containerName
+	copied.signPublicURLs = signReads
+	copied.publicEndpoint = ""
+	return &copied
+}
+
+// errNoSigningCredential は署名する手段がどちらも無いときに返る。
+var errNoSigningCredential = errors.New("no credential is available to sign a SAS")
+
+// canSign は署名できるかを、ネットワークにも context にも触らずに判定する。
+func (r *AzureBlobStorageRepository) canSign() bool {
+	return r.sharedKeyCred != nil || r.delegation != nil
+}
+
+// sign は SAS に署名する。アカウントキーと委任キーの違いをここだけに閉じ込める。
+//
+// アカウントキー方式では純粋なローカル計算で、ctx は使わない。委任キー方式では
+// 鍵の取り直しが要るときだけネットワークへ出る（delegationKeyCache 参照）。
+func (r *AzureBlobStorageRepository) sign(ctx context.Context, values sas.BlobSignatureValues) (sas.QueryParameters, error) {
+	if r.sharedKeyCred != nil {
+		return values.SignWithSharedKey(r.sharedKeyCred)
+	}
+	if r.delegation == nil {
+		return sas.QueryParameters{}, errNoSigningCredential
+	}
+
+	udc, keyExpiry, err := r.delegation.get(ctx)
+	if err != nil {
+		return sas.QueryParameters{}, err
+	}
+	// SAS は委任キーより長生きできない。追い越すと、署名は通るのに使う時点で
+	// 弾かれる URL ができる。Margin の取り方が正しければここは効かない（保険）。
+	if values.ExpiryTime.After(keyExpiry) {
+		values.ExpiryTime = keyExpiry
+	}
+	return values.SignWithUserDelegation(udc)
+}
+
+func (r *AzureBlobStorageRepository) PresignedPutURL(ctx context.Context, objectKey string, _ string, expires time.Duration, _ int64) (string, error) {
+	queryParams, err := r.sign(ctx, sas.BlobSignatureValues{
 		Protocol:      sas.ProtocolHTTPS,
 		ExpiryTime:    time.Now().UTC().Add(expires),
 		ContainerName: r.containerName,
 		BlobName:      objectKey,
 		Permissions:   (&sas.BlobPermissions{Write: true, Create: true}).String(),
-	}.SignWithSharedKey(r.sharedKeyCred)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate SAS token: %w", err)
 	}
 
 	return fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s?%s",
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
+}
+
+// UploadRequestHeaders は Azure Blob への PUT に必須のヘッダーを返す。
+//
+// これが無いと Azure は 400 MissingRequiredHeader を返し、本文は一切保存されない
+// （実機で確認）。ブロック BLOB 以外を作る予定は無いので固定でよい。
+func (r *AzureBlobStorageRepository) UploadRequestHeaders() map[string]string {
+	return map[string]string{"x-ms-blob-type": "BlockBlob"}
 }
 
 // StatObject は保存済み BLOB の実寸と Content-Type を返す。
@@ -120,12 +361,58 @@ const azureCopySourceTTL = 5 * time.Minute
 // 宛先側の条件は付けない。Azure 単体なら効かせられるが、もう一方の実装（MinIO）
 // では効かないため、それを前提にすると保管先によって保証が変わる。宛先が一度きり
 // しか書かれないことは呼び出し側で保証している（repository.StorageRepository 参照）。
-func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+// setServingHeaders は、アプリが参照するキーに「どう配るか」を書き込む。
+//
+// Azure の Set Blob Properties は、指定しなかった欄を消す。だから
+// Content-Type も Cache-Control も毎回いっしょに渡す（片方だけ渡すと
+// もう片方が空になる）。
+//
+// contentType は受け入れ側が実物のバイト列から確かめた値。コピーで引き継がれる
+// のは利用者が PUT 時に申告した値なので、ここで確かめた値に上書きする。
+func (r *AzureBlobStorageRepository) setServingHeaders(ctx context.Context, dst *blob.Client, contentType string) error {
+	disposition := repository.ServedContentDisposition
+	cacheControl := repository.ServedCacheControl
+	if _, err := dst.SetHTTPHeaders(ctx, blob.HTTPHeaders{
+		BlobContentType:        &contentType,
+		BlobContentDisposition: &disposition,
+		BlobCacheControl:       &cacheControl,
+	}, nil); err != nil {
+		return fmt.Errorf("failed to set serving headers: %w", err)
+	}
+	return nil
+}
+
+// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+func (r *AzureBlobStorageRepository) ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error) {
+	blobClient := r.client.ServiceClient().NewContainerClient(r.containerName).NewBlobClient(objectKey)
+	resp, err := blobClient.DownloadStream(ctx, &blob.DownloadStreamOptions{
+		Range: blob.HTTPRange{Offset: 0, Count: limit},
+	})
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil, "", repository.ErrObjectNotFound
+		}
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	head, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, "", err
+	}
+	etag := ""
+	if resp.ETag != nil {
+		etag = string(*resp.ETag)
+	}
+	return head, etag, nil
+}
+
+func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error {
 	if srcETag == "" {
 		// 条件を付けられないなら写さない（MinIO 実装と同じ理由）。
 		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
 	}
-	srcURL, err := r.readSASURL(srcKey)
+	srcURL, err := r.readSASURL(ctx, srcKey)
 	if err != nil {
 		return err
 	}
@@ -139,13 +426,26 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 		if bloberror.HasCode(err, bloberror.SourceConditionNotMet, bloberror.ConditionNotMet) {
 			return repository.ErrObjectChanged
 		}
+		// CannotVerifyCopySource は、実機で確かめた限り**条件の不一致でも**返る
+		// （URL 経由のコピーなので、Azure から見ると「元を読めなかった」になる）。
+		// つまりこの分類は、中身が差し替えられた場合を ErrObjectNotFound 側へ
+		// 入れている。
+		//
+		// それでも ErrObjectChanged へ移していないのは、Azure が同じコードを
+		// 「元が本当に無い」ときにも、署名や権限の一時的な不調のときにも使うため。
+		// コードだけでは区別できず、ErrObjectChanged へ寄せると、サーバー側の
+		// 不調を「アップロードされていないファイルが指定された」と利用者へ
+		// 返すことになる（Accept の分岐を参照）。
+		//
+		// どちらに分類してもコピーは行われないので、検査していないものが
+		// 公開されることはない。差があるのは文言と、障害時の追いやすさだけ。
 		if bloberror.HasCode(err, bloberror.BlobNotFound, bloberror.CannotVerifyCopySource) {
 			return repository.ErrObjectNotFound
 		}
 		return err
 	}
 	if started.CopyStatus != nil && *started.CopyStatus == blob.CopyStatusTypeSuccess {
-		return nil
+		return r.setServingHeaders(ctx, dst, contentType)
 	}
 
 	deadline := time.Now().Add(azureCopyPollTimeout)
@@ -164,7 +464,7 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 			return err
 		}
 		if props.CopyStatus == nil {
-			return nil
+			return r.setServingHeaders(ctx, dst, contentType)
 		}
 		switch *props.CopyStatus {
 		case blob.CopyStatusTypeSuccess:
@@ -178,14 +478,14 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 }
 
 // readSASURL は1つの BLOB を読むためだけの短命な署名付きURLを作る。
-func (r *AzureBlobStorageRepository) readSASURL(objectKey string) (string, error) {
-	queryParams, err := sas.BlobSignatureValues{
+func (r *AzureBlobStorageRepository) readSASURL(ctx context.Context, objectKey string) (string, error) {
+	queryParams, err := r.sign(ctx, sas.BlobSignatureValues{
 		Protocol:      sas.ProtocolHTTPS,
 		ExpiryTime:    time.Now().UTC().Add(azureCopySourceTTL),
 		ContainerName: r.containerName,
 		BlobName:      objectKey,
 		Permissions:   (&sas.BlobPermissions{Read: true}).String(),
-	}.SignWithSharedKey(r.sharedKeyCred)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate SAS token: %w", err)
 	}
@@ -193,9 +493,70 @@ func (r *AzureBlobStorageRepository) readSASURL(objectKey string) (string, error
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
 }
 
+// azurePublicSASTTL は公開オブジェクトに付ける読み取りSASの最短の寿命。
+// azurePublicSASWindow は失効時刻を丸める幅。
+//
+// 失効時刻を丸めるのは、同じオブジェクトに対して同じ URL を返し続けるため。
+// 毎回 now+TTL で署名すると URL が呼び出しごとに変わり、ブラウザも CDN も
+// 別物として扱うのでキャッシュが一切効かなくなる（同じ画像を何度も取り直す）。
+//
+// 丸めた結果、実際の寿命は TTL から TTL+Window の幅を取る。失効の直前に掴んだ
+// URL でも最低 TTL は使えるので、開いたままのページで画像が切れることはない。
+// azurePublicSignTimeout は PublicURL が委任キーを取り直すときの待ちの上限。
+const (
+	azurePublicSASTTL      = 24 * time.Hour
+	azurePublicSASWindow   = time.Hour
+	azurePublicSignTimeout = 5 * time.Second
+)
+
+// PublicURL は公開オブジェクトをブラウザへ渡すための URL を組む。
+//
+// 戻り値は DB に保存していない（DB が持つのは storage_key だけ）。読み出しのたびに
+// ここで組み立てるので、CDN の追加や撤去、ストレージアカウントの移行、署名の
+// 有無の切り替えをしても既存データの書き換えは要らない。
+//
+// signPublicURLs が立っていれば読み取りSASを付ける。コンテナーの匿名読み取りが
+// 閉じている構成では、これが無いとブラウザからの取得が 403 になる。
 func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
+	base := r.publicBaseURL(objectKey)
+	if !r.signPublicURLs || !r.canSign() {
+		return base
+	}
+
+	// PublicURL は repository.StorageRepository の契約上 error を返さないので、
+	// 委任キーの取り直しが要る回だけここで待つ。数日に1回しか起きないが、
+	// 読み出しの経路で長く止まるのは避けたいので短く切る。
+	ctx, cancel := context.WithTimeout(context.Background(), azurePublicSignTimeout)
+	defer cancel()
+
+	queryParams, err := r.sign(ctx, sas.BlobSignatureValues{
+		Protocol:      sas.ProtocolHTTPS,
+		ExpiryTime:    publicSASExpiry(time.Now()),
+		ContainerName: r.containerName,
+		BlobName:      objectKey,
+		Permissions:   (&sas.BlobPermissions{Read: true}).String(),
+	})
+	if err != nil {
+		// 読み出し全体を落とすより、素の URL を返して「画像が出ない」に留める
+		// （コンテナーが公開ならそれで足りる）。
+		return base
+	}
+	return base + "?" + queryParams.Encode()
+}
+
+// publicBaseURL は署名を除いた公開 URL。CDN を前に置いたときだけ配信ホストを向く。
+func (r *AzureBlobStorageRepository) publicBaseURL(objectKey string) string {
+	if r.publicEndpoint != "" {
+		return fmt.Sprintf("%s/%s/%s", r.publicEndpoint, r.containerName, objectKey)
+	}
 	return fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s",
 		r.accountName, r.containerName, objectKey)
+}
+
+// publicSASExpiry は now を含む時間枠の全員に共通の失効時刻を返す。
+// 同じ枠のあいだ署名が変わらないので、URL がキャッシュ可能になる。
+func publicSASExpiry(now time.Time) time.Time {
+	return now.UTC().Truncate(azurePublicSASWindow).Add(azurePublicSASWindow + azurePublicSASTTL)
 }
 
 func (r *AzureBlobStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {

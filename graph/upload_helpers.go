@@ -3,11 +3,13 @@ package graph
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
 // presignedUploadURL generates a presigned put URL for one upload kind.
@@ -27,11 +29,40 @@ func (r *queryResolver) presignedUploadURL(ctx context.Context, kind upload.Kind
 	if err != nil {
 		return nil, err
 	}
-	uploadURL, err := r.StorageRepository.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
+	// 置き場は種別で決まる（upload.Kind.Private）。引数で選ばせると、DM の添付を
+	// 公開側へ上げる経路が取り違えだけで生まれる。
+	store := r.StorageRepository
+	if kind.Private {
+		store = r.MessageStorageRepository
+	}
+	uploadURL, err := store.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
 	}
-	return &gqlmodel.PresignedUploadURL{UploadURL: uploadURL, ObjectKey: objectKey}, nil
+	return &gqlmodel.PresignedUploadURL{
+		UploadURL: uploadURL,
+		ObjectKey: objectKey,
+		Headers:   uploadHeaders(store),
+	}, nil
+}
+
+// uploadHeaders は置き場が要求するヘッダーを GraphQL の形へ並べる。
+//
+// map の走査順は毎回変わるので名前で並べ替える。順が揺れると、同じ要求に
+// 対する応答が毎回違うものになり、キャッシュや突き合わせの邪魔になる。
+func uploadHeaders(store repository.StorageRepository) []*gqlmodel.UploadHeader {
+	required := store.UploadRequestHeaders()
+	names := make([]string, 0, len(required))
+	for name := range required {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	headers := make([]*gqlmodel.UploadHeader, 0, len(names))
+	for _, name := range names {
+		headers = append(headers, &gqlmodel.UploadHeader{Name: name, Value: required[name]})
+	}
+	return headers
 }
 
 // toMediaInputs は GraphQL の添付入力をユースケース層の形へ変換する。

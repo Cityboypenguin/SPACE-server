@@ -17,7 +17,33 @@ const (
 const (
 	UserStatusActive = "active"
 	UserStatusFrozen = "frozen"
+	// UserStatusDeactivated は退会手続き中。AccountDeletionGracePeriod の間は
+	// ログインすれば取り消せる。周りからは退会済みと同じに見える（投稿者は
+	// 「削除されたアカウント」、タイムラインの投稿は非表示）。
+	UserStatusDeactivated = "deactivated"
+	// UserStatusDeleted は完全削除済み。個人情報（user_accounts の行）はもう無く、
+	// users には識別子だけが残る。会話が投稿者として参照し続けるため。
+	UserStatusDeleted = "deleted"
 )
+
+// UserLifecycle は退会の段階。users の行に残る情報で、個人情報を消した後も読める。
+type UserLifecycle struct {
+	Status string
+	// DeactivatedAt は退会手続きに入った時刻。退会手続き中でなければ nil。
+	DeactivatedAt *time.Time
+}
+
+// GracePeriodExpired は、退会手続き中で、猶予が now の時点で切れているか。
+func (l *UserLifecycle) GracePeriodExpired(now time.Time) bool {
+	if l == nil || l.Status != UserStatusDeactivated || l.DeactivatedAt == nil {
+		return false
+	}
+	return !now.Before(l.DeactivatedAt.Add(AccountDeletionGracePeriod))
+}
+
+// AccountDeletionGracePeriod は退会してから個人情報を完全に消すまでの猶予。
+// この間にログインすれば退会を取り消せる。管理者による削除には猶予を置かない。
+const AccountDeletionGracePeriod = 15 * 24 * time.Hour
 
 // User は表示に使うユーザー。パスワードハッシュもメールアドレスも持たない。
 //

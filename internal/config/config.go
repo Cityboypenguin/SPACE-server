@@ -59,8 +59,35 @@ func Validate(isProd bool) error {
 
 		// Object storage: the selected provider's credentials must be present.
 		if os.Getenv("STORAGE_PROVIDER") == "azure" {
-			for _, key := range []string{"AZURE_STORAGE_ACCOUNT_NAME", "AZURE_STORAGE_ACCOUNT_KEY", "AZURE_STORAGE_CONTAINER_NAME"} {
+			for _, key := range []string{"AZURE_STORAGE_ACCOUNT_NAME", "AZURE_STORAGE_CONTAINER_NAME"} {
 				require(key)
+			}
+
+			// 署名する手段は2つあり、どちらか片方で足りる（infra/azure の
+			// AzureBlobStorageRepository を参照）。
+			//
+			//   1. AZURE_STORAGE_ACCOUNT_KEY（アカウントキー）
+			//   2. Entra ID の ID: アプリ登録なら AZURE_TENANT_ID /
+			//      AZURE_CLIENT_ID / AZURE_CLIENT_SECRET の3点、Azure 上の
+			//      マネージド ID なら環境変数は要らない
+			//
+			// マネージド ID は env に痕跡を残さないので「何も無い」を誤りとは
+			// 判定できない。代わりに3点の「途中まで」を弾く。実際に起きる誤りは
+			// 1つ入れ忘れる形で、これは起動時の委任キー取得が Azure 側の
+			// 認証エラーとして返すため原因が読み取りにくい。
+			if strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")) == "" {
+				appRegistration := []string{"AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"}
+				var missing []string
+				for _, key := range appRegistration {
+					if strings.TrimSpace(os.Getenv(key)) == "" {
+						missing = append(missing, key)
+					}
+				}
+				if len(missing) > 0 && len(missing) < len(appRegistration) {
+					problems = append(problems, fmt.Sprintf(
+						"%s must be set when authenticating with an app registration (or set AZURE_STORAGE_ACCOUNT_KEY instead)",
+						strings.Join(missing, ", ")))
+				}
 			}
 		} else {
 			for _, key := range []string{"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET"} {

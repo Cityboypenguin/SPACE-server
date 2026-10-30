@@ -17,21 +17,10 @@ func TestMessagesNameTheRoom(t *testing.T) {
 	}{
 		{"mention", MessageMentionedInRoom(room)},
 		{"reply", MessageRepliedInRoom(room)},
-		{"anonymous reply", MessageAnonymousRepliedInRoom(room, "匿名12")},
 	} {
 		if !strings.Contains(tt.got, room) {
 			t.Errorf("%s: message = %q, want it to name the room %q", tt.name, tt.got, room)
 		}
-	}
-}
-
-// 匿名ルームの返信は、場所を名乗っても匿名ラベルのままであること。
-// 場所を言うために実名を漏らしては元も子もない（実名を渡さないのは呼び出し側の責任だが、
-// ラベルがそのまま文面に出ることはここで固定しておく）。
-func TestMessageAnonymousRepliedInRoom_KeepsTheLabel(t *testing.T) {
-	got := MessageAnonymousRepliedInRoom("情報工学概論", "匿名12")
-	if !strings.Contains(got, "匿名12さん") {
-		t.Errorf("message = %q, want it to use the anonymous label", got)
 	}
 }
 
@@ -47,9 +36,6 @@ func TestMessagesFallBackWithoutARoomName(t *testing.T) {
 	}
 	if got := MessageRepliedInRoom(""); got != "あなたのメッセージに返信がありました" {
 		t.Errorf("reply = %q, want just the event", got)
-	}
-	if got := MessageAnonymousRepliedInRoom("", "匿名12"); got != "匿名12さんがあなたのメッセージに返信しました" {
-		t.Errorf("anonymous reply = %q, want just the event", got)
 	}
 }
 

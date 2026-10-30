@@ -57,18 +57,12 @@ func (fakeMediaRepoForCreate) CreateQuestionMediaBatch(context.Context, int64, [
 	return nil
 }
 
-type fakeAnonIdentity struct{}
-
-func (fakeAnonIdentity) Execute(context.Context, int64, int64) (*model.RoomAnonymousIdentity, error) {
-	return &model.RoomAnonymousIdentity{}, nil
-}
-
 func newCreateQuestionFixture(saveErr error) (*promotingUploads, CreateQuestionUseCase) {
 	uploads := &promotingUploads{}
 	uc := NewCreateQuestionUseCase(nil, uploads,
 		&fakeQuestionRepoForCreate{err: saveErr},
 		fakeMediaRepoForCreate{},
-		fakeTxManager{}, &fakeRequireWritable{}, fakeAnonIdentity{})
+		fakeTxManager{}, &fakeRequireWritable{})
 	return uploads, uc
 }
 

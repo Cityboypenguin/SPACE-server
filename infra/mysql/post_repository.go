@@ -19,6 +19,23 @@ func NewMySQLPostRepository(db *sql.DB) repository.PostRepository {
 	return &MySQLPostRepository{DB: db}
 }
 
+// appendVisiblePostAuthorFilter は投稿一覧の絞り込み。ブロック関係にある人
+// （AppendBlockFilter）に加えて、退会手続き中の人の投稿を外す。
+//
+// 退会手続き中の人の投稿は、猶予の間は消さずに残してある（ログインで退会を
+// 取り消せば元どおり見えるように）。周りからは退会済みと同じに見せるので、
+// 一覧からは外す。猶予が切れると投稿は個人情報と一緒に消える。
+//
+// AppendBlockFilter と同じく、query は末尾に " AND ..." を足せる形で渡すこと。
+func appendVisiblePostAuthorFilter(ctx context.Context, query string, args []interface{}, authorColumn string) (string, []interface{}, error) {
+	query, args, err := AppendBlockFilter(ctx, query, args, authorColumn)
+	if err != nil {
+		return "", nil, err
+	}
+	return fmt.Sprintf("%s AND %s NOT IN (SELECT id FROM users WHERE status = '%s')",
+		query, authorColumn, model.UserStatusDeactivated), args, nil
+}
+
 func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model.Post, error) {
 	query := `
 		SELECT id, content, created_at, updated_at, user_id, parent_id, reply_count
@@ -27,7 +44,7 @@ func (r *MySQLPostRepository) GetPostByID(ctx context.Context, id int64) (*model
 	`
 	args := []interface{}{id}
 
-	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +89,7 @@ func (r *MySQLPostRepository) GetPostsByIDs(ctx context.Context, ids []int64) ([
 		WHERE id IN (%s) AND deleted_at IS NULL
 	`, strings.Join(placeholders, ","))
 
-	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -101,12 +118,17 @@ func (r *MySQLPostRepository) GetPostsByIDs(ctx context.Context, ids []int64) ([
 }
 
 func (r *MySQLPostRepository) GetPostByIDIncludeDeleted(ctx context.Context, id int64) (*model.Post, error) {
+	// 投稿者が退会手続き中なら、退会した時刻で削除済みとして返す。一覧からは
+	// appendVisiblePostAuthorFilter が外しているので、1件取りでも同じに見せる。
+	// 退会を取り消せば users の状態が戻るだけで、投稿は元どおりになる。
 	query := `
-		SELECT id, content, created_at, updated_at, user_id, parent_id, deleted_at, reply_count
-		FROM posts
-		WHERE id = ?
+		SELECT p.id, p.content, p.created_at, p.updated_at, p.user_id, p.parent_id,
+		       COALESCE(p.deleted_at, IF(u.status = ?, u.deactivated_at, NULL)), p.reply_count
+		FROM posts p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.id = ?
 	`
-	row := r.DB.QueryRowContext(ctx, query, id)
+	row := r.DB.QueryRowContext(ctx, query, model.UserStatusDeactivated, id)
 
 	var p model.Post
 	var createdAtUnix, updatedAtUnix int64
@@ -425,7 +447,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	`
 	var countArgs []interface{}
 	countArgs = append(countArgs, userID)
-	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
+	countQuery, countArgs, err := appendVisiblePostAuthorFilter(ctx, countQuery, countArgs, "p.user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -446,7 +468,7 @@ func (r *MySQLPostRepository) GetfollowersTopLevelPostsByUserID(ctx context.Cont
 	`
 	var args []interface{}
 	args = append(args, userID)
-	query, args, err = AppendBlockFilter(ctx, query, args, "p.user_id")
+	query, args, err = appendVisiblePostAuthorFilter(ctx, query, args, "p.user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -498,7 +520,7 @@ func (r *MySQLPostRepository) SearchPosts(ctx context.Context, query string, q r
 		WHERE content LIKE ?  AND deleted_at IS NULL
 	`
 	args := []interface{}{"%" + query + "%"}
-	searchQuery, args, err := AppendBlockFilter(ctx, searchQuery, args, "user_id")
+	searchQuery, args, err := appendVisiblePostAuthorFilter(ctx, searchQuery, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -551,7 +573,7 @@ func (r *MySQLPostRepository) SearchPostsByHashtag(ctx context.Context, tag stri
 		WHERE h.tag = ? AND p.deleted_at IS NULL
 	`
 	args := []interface{}{tag}
-	searchQuery, args, err := AppendBlockFilter(ctx, searchQuery, args, "p.user_id")
+	searchQuery, args, err := appendVisiblePostAuthorFilter(ctx, searchQuery, args, "p.user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -708,7 +730,7 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64, q re
 	`
 
 	args := []interface{}{id}
-	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -748,7 +770,7 @@ func (r *MySQLPostRepository) GetRepliesByID(ctx context.Context, id int64, q re
 func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
-	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	countQuery, countArgs, err := appendVisiblePostAuthorFilter(ctx, countQuery, countArgs, "user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -763,7 +785,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repositor
 		WHERE parent_id IS NULL AND deleted_at IS NULL
 	`
 	var args []interface{}
-	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err = appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -802,7 +824,7 @@ func (r *MySQLPostRepository) ListTopLevelPosts(ctx context.Context, q repositor
 func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL`
 	var countArgs []interface{}
-	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	countQuery, countArgs, err := appendVisiblePostAuthorFilter(ctx, countQuery, countArgs, "user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -823,7 +845,7 @@ func (r *MySQLPostRepository) GetFeedPosts(ctx context.Context, viewerID int64, 
 		WHERE p.parent_id IS NULL AND p.deleted_at IS NULL
 	`
 	args := []interface{}{viewerID}
-	baseQuery, args, err = AppendBlockFilter(ctx, baseQuery, args, "p.user_id")
+	baseQuery, args, err = appendVisiblePostAuthorFilter(ctx, baseQuery, args, "p.user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -879,7 +901,7 @@ func (r *MySQLPostRepository) GetRepliesByPostIDs(ctx context.Context, parentIDs
 		WHERE parent_id IN (%s) AND deleted_at IS NULL
 	`, strings.Join(placeholders, ","))
 
-	inner, args, err := AppendBlockFilter(ctx, inner, args, "user_id")
+	inner, args, err := appendVisiblePostAuthorFilter(ctx, inner, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -940,7 +962,7 @@ func (r *MySQLPostRepository) GetRepliesByPostIDsIncludeDeleted(ctx context.Cont
 		WHERE parent_id IN (%s)
 	`, strings.Join(placeholders, ","))
 
-	inner, args, err := AppendBlockFilter(ctx, inner, args, "user_id")
+	inner, args, err := appendVisiblePostAuthorFilter(ctx, inner, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -1024,7 +1046,7 @@ func (r *MySQLPostRepository) GetRootPost(ctx context.Context, postID int64) (*m
 	args := []interface{}{postID, postID}
 
 	// ancestors（CTE結果）の user_id に対してブロックフィルターをかける
-	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err = appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, err
 	}
@@ -1079,7 +1101,7 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	`
 	var countArgs []interface{}
 	countArgs = append(countArgs, userID)
-	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "p.user_id")
+	countQuery, countArgs, err := appendVisiblePostAuthorFilter(ctx, countQuery, countArgs, "p.user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1097,7 +1119,7 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 	`
 	var args []interface{}
 	args = append(args, userID)
-	query, args, err = AppendBlockFilter(ctx, query, args, "p.user_id")
+	query, args, err = appendVisiblePostAuthorFilter(ctx, query, args, "p.user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1144,7 +1166,7 @@ func (r *MySQLPostRepository) GetFavoritePostsByUserID(ctx context.Context, user
 func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Post, int, error) {
 	countQuery := `SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL`
 	countArgs := []interface{}{userID}
-	countQuery, countArgs, err := AppendBlockFilter(ctx, countQuery, countArgs, "user_id")
+	countQuery, countArgs, err := appendVisiblePostAuthorFilter(ctx, countQuery, countArgs, "user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1160,7 +1182,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 		WHERE user_id = ? AND deleted_at IS NULL
 	`
 	args := []interface{}{userID}
-	query, args, err = AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err = appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1196,7 +1218,7 @@ func (r *MySQLPostRepository) GetPostsByUserID(ctx context.Context, userID int64
 func (r *MySQLPostRepository) CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error) {
 	query := `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at > ? AND user_id != ?`
 	args := []interface{}{since.Unix(), viewerID}
-	query, args, err := AppendBlockFilter(ctx, query, args, "user_id")
+	query, args, err := appendVisiblePostAuthorFilter(ctx, query, args, "user_id")
 	if err != nil {
 		return 0, err
 	}

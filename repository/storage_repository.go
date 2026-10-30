@@ -7,6 +7,23 @@ import (
 	"time"
 )
 
+// 利用者の保存物を「どう配るか」はここで1度だけ決める。置き場の実装は
+// この値をそのまま使い、形式ごとの例外を作らない。
+//
+// ServedContentDisposition を attachment にしているのは、URL を直接開かれても
+// ブラウザーが文書として描画しないようにするため。SVG や（将来許す）PDF は
+// 文書として開かれるとスクリプトが動く。<img> での表示と fetch はこの指定を
+// 見ないので、アプリの表示には影響しない。
+//
+// これは利用者の保存物をアプリと別のホストから配ることと合わせて2段になっている。
+// 片方だけに全部を背負わせない（docs/user-content-serving.md 参照）。
+const (
+	ServedContentDisposition = "attachment"
+	// ServedCacheControl はキーに UUID が入っていて中身が差し替わらないことが
+	// 前提。受け入れは毎回新しいキーを引くので、同じキーの中身は変わらない。
+	ServedCacheControl = "public, max-age=31536000, immutable"
+)
+
 // ObjectInfo is what StatObject reports about an already-stored object.
 type ObjectInfo struct {
 	Size        int64
@@ -59,9 +76,31 @@ type StorageRepository interface {
 	// CopyObject の If-None-Match: * を黙って無視して上書きする（実機で確認済み）。
 	// 守れない条件を契約に書くと、呼び出し側が守られているつもりで書き換えを
 	// 許してしまう。上書きが起きない根拠は宛先の一意さに置いてある。
-	CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error
+	//
+	// contentType は受け入れ側が実物のバイト列から確かめた種別。保存済みの
+	// メタデータ（＝利用者が PUT 時に申告した値）ではなく、これを写し先に付ける。
+	// あわせて ServedContentDisposition と ServedCacheControl も付ける。
+	// 写し先はアプリが参照する唯一のキーなので、ここで付ければ漏れが無い。
+	CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error
+	// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+	//
+	// ETag も返すのは、大きさを測る要求（StatObject）と先頭を読む要求が別の
+	// 往復になるため。その間に置き直されると「測ったもの」と「中身を確かめた
+	// もの」が別になる。呼び出し側は2つの ETag が同じことを確かめる。
+	ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error)
 	PublicURL(objectKey string) string
 	DeleteObject(ctx context.Context, objectKey string) error
+	// UploadRequestHeaders は、PresignedPutURL で出した URL へ PUT するときに
+	// クライアントが必ず付けなければならないヘッダー。
+	//
+	// Azure Blob の PUT Blob は x-ms-blob-type が必須で、欠けると 400
+	// （MissingRequiredHeader）になる。S3 互換側には要らない。
+	//
+	// どちらが必要かは置き場の実装しか知らないので、クライアントに宛先の
+	// ホスト名を見て判定させない。判定をクライアントへ置くと、置き場を
+	// 増やすたびにクライアントも直さねばならず、直し忘れは「アップロードが
+	// 400 で落ちる」という形でしか出ない。
+	UploadRequestHeaders() map[string]string
 }
 
 // ErrObjectNotFound is returned by StatObject when the object does not exist.

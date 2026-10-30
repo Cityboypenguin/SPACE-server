@@ -83,6 +83,16 @@ func (f *fakeCheckRoomWritable) Execute(_ context.Context, _ int64) error {
 	return f.err
 }
 
+// fakeGetUser は表示用の利用者取得の代役。withdrawn に入れた人は退会済みとして nil を返す。
+type fakeGetUser struct{ withdrawn map[int64]bool }
+
+func (f *fakeGetUser) Execute(_ context.Context, id int64) (*model.User, error) {
+	if f.withdrawn[id] {
+		return nil, nil
+	}
+	return &model.User{ID: id, Status: model.UserStatusActive}, nil
+}
+
 type fakeCheckBlockRelation struct {
 	blocked bool
 	// calls / partnerID は「誰を相手にブロックを見に行ったか」。ブロック判定を
@@ -199,17 +209,6 @@ func (f *fakeEvents) MessageUpdated(_ context.Context, ev MessageUpdatedEvent) {
 	f.updated = append(f.updated, ev)
 }
 
-type fakeAnonIdentity struct {
-	calls  int
-	roomID int64
-}
-
-func (f *fakeAnonIdentity) Execute(_ context.Context, roomID, userID int64) (*model.RoomAnonymousIdentity, error) {
-	f.calls++
-	f.roomID = roomID
-	return &model.RoomAnonymousIdentity{ID: 1, RoomID: roomID, UserID: userID, Label: "匿名001"}, nil
-}
-
 // fakeReadStatus は授業ルームの既読位置取得（course_room_reads 経路）の代役。
 // room_users 経路（fakeRoomReadStatus）とどちらが呼ばれたかで、
 // 「ルーム種別で置き場を選べているか」を確かめる。
@@ -295,6 +294,7 @@ type harness struct {
 
 	members       *fakeMembers
 	isMember      *fakeIsMember
+	users         *fakeGetUser
 	readStatus    *fakeRoomReadStatus
 	courseRead    *fakeReadStatus
 	markRead      *fakeMarkRead
@@ -303,7 +303,6 @@ type harness struct {
 	updateMessage *fakeUpdateMessage
 	deleteMessage *fakeDeleteMessage
 	checkWritable *fakeCheckRoomWritable
-	anonIdentity  *fakeAnonIdentity
 	getMessage    *fakeGetMessage
 	listMentions  *fakeListMentions
 	listMedia     *fakeListMessageMedia
@@ -340,7 +339,6 @@ func newHarness() *harness {
 		updateMessage: &fakeUpdateMessage{},
 		deleteMessage: &fakeDeleteMessage{},
 		checkWritable: &fakeCheckRoomWritable{},
-		anonIdentity:  &fakeAnonIdentity{},
 		getMessage:    &fakeGetMessage{},
 		listMentions:  &fakeListMentions{},
 		listMedia:     &fakeListMessageMedia{},
@@ -348,6 +346,7 @@ func newHarness() *harness {
 		listAround:    &fakeListMessagesAround{},
 		events:        &fakeEvents{},
 		blockRelation: &fakeCheckBlockRelation{},
+		users:         &fakeGetUser{withdrawn: map[int64]bool{}},
 	}
 	h.isMember = &fakeIsMember{members: h.members}
 	getRoom := &fakeGetRoom{rooms: rooms}
@@ -357,6 +356,7 @@ func newHarness() *harness {
 		IsRoomMember:       h.isMember,
 		CheckRoomWritable:  h.checkWritable,
 		CheckBlockRelation: h.blockRelation,
+		GetUser:            h.users,
 	}
 	h.commandDeps = MessageCommandDeps{
 		GetRoom:         getRoom,
@@ -369,11 +369,10 @@ func newHarness() *harness {
 			update: h.updateMessage,
 			delete: h.deleteMessage,
 		},
-		ResolveMentions:              &fakeResolveMentions{rooms: rooms},
-		ListMentions:                 h.listMentions,
-		ListMessageMedia:             h.listMedia,
-		GetOrCreateAnonymousIdentity: h.anonIdentity,
-		Events:                       h.events,
+		ResolveMentions:  &fakeResolveMentions{rooms: rooms},
+		ListMentions:     h.listMentions,
+		ListMessageMedia: h.listMedia,
+		Events:           h.events,
 	}
 	h.queryDeps = MessageQueryDeps{
 		ListMessages:       h.listMessages,
@@ -493,35 +492,10 @@ func TestListMessages_GoesThroughTheSameReadPolicy(t *testing.T) {
 
 // --- 送信 -------------------------------------------------------------------
 
-func TestSendMessage_CourseRoomAssignsAnonymousIdentityAtPostTime(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h.anonIdentity.calls != 1 {
-		t.Fatalf("anonymous identity allocations = %d, want 1 (採番は投稿時に確定させる)", h.anonIdentity.calls)
-	}
-	if h.anonIdentity.roomID != courseRoomID {
-		t.Errorf("allocated in room %d, want %d", h.anonIdentity.roomID, courseRoomID)
-	}
-}
-
-func TestSendMessage_NonCourseRoomDoesNotAllocateAnonymousIdentity(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h.anonIdentity.calls != 0 {
-		t.Errorf("anonymous identity allocations = %d, want 0 outside course rooms", h.anonIdentity.calls)
-	}
-}
-
 func TestSendMessage_MentionsAreDroppedInCourseRoom(t *testing.T) {
 	h := newHarness()
 
-	// 授業内チャットは匿名なので実名メンションが成立してはいけない。クライアントが
+	// 授業内チャットではメンションが成立しない（MentionsSupported 参照）。クライアントが
 	// mentionUserIDs を送ってきても、保存に渡るのは検証済み（＝空）の結果だけ。
 	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{
 		RoomID:         courseRoomID,
@@ -1049,19 +1023,37 @@ func TestEnsureWriteAccess_DMWithoutBlockIsAllowed(t *testing.T) {
 	}
 }
 
-// 相手が退会して room_users の行が消えた DM は相手が決まらない。ブロック関係を
-// 引きようが無いので判定を飛ばし、拒否もしない（送り先が居ないだけで、ここで
-// 「ブロックされています」と言うのは嘘になる）。
-func TestEnsureWriteAccess_DMWithoutAPartnerSkipsTheBlockCheck(t *testing.T) {
+// 相手が完全に削除された DM は room_users の行が消え、自分しか残っていない。
+// 送っても誰にも届かないので、ブロックとは別の理由で断る。
+func TestEnsureWriteAccess_DMWithoutAPartnerIsRejectedAsWithdrawn(t *testing.T) {
 	h := newHarness()
-	h.blockRelation.blocked = true
 	h.members.byRoom[dmRoomID] = []int64{10}
 
-	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err != nil {
-		t.Fatalf("a DM whose partner is gone must not be rejected as blocked, got: %v", err)
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
 	}
 	if h.blockRelation.calls != 0 {
 		t.Errorf("block relation was checked %d times without a partner, want 0", h.blockRelation.calls)
+	}
+}
+
+// 相手が退会手続き中の DM も断る（取り消さない限り読まれないまま消えるため）。
+func TestEnsureWriteAccess_DMWithDeactivatedPartnerIsRejected(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
+	}
+}
+
+// 相手の退会は DM だけの話。コミュニティでは退会した人が居ても書き込める。
+func TestEnsureWriteAccess_WithdrawnMemberDoesNotCloseACommunity(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("a community must stay writable when a member withdrew, got: %v", err)
 	}
 }
 

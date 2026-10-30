@@ -21,10 +21,15 @@ func NewMySQLRoomUserRepository(db *sql.DB) repository.RoomUserRepository {
 }
 
 // roomMemberUserColumns は room_users から JOIN して出すユーザーの列。
-// users.hashed_password も users.email も含めない（ここは完全な表示系で、
-// ルームのメンバー一覧に他人の連絡先を載せる理由がひとつも無い）。列の並びは
+// hashed_password も email も含めない（ここは完全な表示系で、ルームのメンバー
+// 一覧に他人の連絡先を載せる理由がひとつも無い）。列の並びと表の別名（u / a）は
 // infra/mysql/user_repository.go の userPublicColumns と同じにしてある。
-const roomMemberUserColumns = `u.id, u.account_id, u.name, u.role, u.status, u.created_at, u.updated_at`
+const roomMemberUserColumns = `u.id, a.account_id, a.name, a.role, u.status, u.created_at, a.updated_at`
+
+// roomMemberJoin は room_users にメンバーの利用者を結び付ける JOIN。
+// 完全削除した人は user_accounts が無いので出てこない。退会手続き中の人は
+// visibleUserCond で外す（周りからは退会済みと同じに見せる）。
+const roomMemberJoin = `JOIN users u ON ru.user_id = u.id JOIN user_accounts a ON a.user_id = u.id`
 
 // roomMemberUserSelectColumns は roomMemberUserColumns を、CTE から選び直すときの
 // 名前（テーブル別名が付かない）に直したもの。並びは必ず揃えること。
@@ -125,8 +130,8 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 	query := `
 		SELECT ` + roomMemberUserColumns + `, ru.role
 		FROM room_users ru
-		JOIN users u ON ru.user_id = u.id
-		WHERE ru.room_id = ?
+		` + roomMemberJoin + `
+		WHERE ru.room_id = ? AND ` + visibleUserCond + `
 		ORDER BY ru.created_at ASC, ru.user_id ASC
 	`
 	rows, err := r.DB.QueryContext(ctx, query, roomID)
@@ -154,7 +159,8 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRoles(ctx context.Context, 
 }
 
 func (r *MySQLRoomUserRepository) ListRoomMembersWithRolesPage(ctx context.Context, roomID int64, q repository.PageQuery) ([]*model.RoomMember, int, error) {
-	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM room_users WHERE room_id = ?`, roomID)
+	total, err := countForPage(ctx, r.DB, q,
+		`SELECT COUNT(*) FROM room_users ru `+roomMemberJoin+` WHERE ru.room_id = ? AND `+visibleUserCond, roomID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -162,8 +168,8 @@ func (r *MySQLRoomUserRepository) ListRoomMembersWithRolesPage(ctx context.Conte
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT `+roomMemberUserColumns+`, ru.role
 		FROM room_users ru
-		JOIN users u ON ru.user_id = u.id
-		WHERE ru.room_id = ?
+		`+roomMemberJoin+`
+		WHERE ru.room_id = ? AND `+visibleUserCond+`
 		ORDER BY ru.created_at ASC, ru.user_id ASC
 		LIMIT ? OFFSET ?
 	`, roomID, q.Limit, q.Offset)
@@ -249,6 +255,33 @@ func (r *MySQLRoomUserRepository) LockUserCommunityMembershipsForUpdate(ctx cont
 		roles[roomID] = role
 	}
 	return roles, rows.Err()
+}
+
+func (r *MySQLRoomUserRepository) FindOwnerSuccessor(ctx context.Context, roomID, leavingUserID int64) (int64, error) {
+	var successor int64
+	// 退会の時にだけ走るので、ルームのメッセージをその場で集計する。
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, `
+		SELECT ru.user_id
+		FROM room_users ru
+		JOIN users u ON u.id = ru.user_id
+		LEFT JOIN user_accounts a ON a.user_id = ru.user_id
+		LEFT JOIN (
+			SELECT user_id, MAX(created_at) AS last_posted_at
+			FROM messages
+			WHERE room_id = ? AND deleted_at IS NULL
+			GROUP BY user_id
+		) m ON m.user_id = ru.user_id
+		WHERE ru.room_id = ? AND ru.user_id <> ?
+		ORDER BY u.status = ? DESC,
+			m.last_posted_at IS NULL, m.last_posted_at DESC,
+			a.last_active_at IS NULL, a.last_active_at DESC,
+			ru.created_at, ru.user_id
+		LIMIT 1
+	`, roomID, roomID, leavingUserID, model.UserStatusActive).Scan(&successor)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return successor, err
 }
 
 func (r *MySQLRoomUserRepository) RemoveUserFromRoom(ctx context.Context, roomID, userID int64) error {
@@ -355,8 +388,8 @@ func (r *MySQLRoomUserRepository) ListUsersByRoomIDs(ctx context.Context, roomID
 			SELECT ru.room_id, `+roomMemberUserColumns+`,
 			       ROW_NUMBER() OVER (PARTITION BY ru.room_id ORDER BY ru.created_at ASC) AS row_num
 			FROM room_users ru
-			JOIN users u ON ru.user_id = u.id
-			WHERE ru.room_id IN (%s)
+			`+roomMemberJoin+`
+			WHERE ru.room_id IN (%s) AND `+visibleUserCond+`
 		)
 		SELECT room_id, `+roomMemberUserSelectColumns+`
 		FROM ranked
@@ -407,11 +440,11 @@ func (r *MySQLRoomUserRepository) SearchRoomUsersByPrefix(ctx context.Context, r
 	query := `
 		SELECT ` + roomMemberUserColumns + `
 		FROM room_users ru
-		JOIN users u ON ru.user_id = u.id
+		` + roomMemberJoin + `
 		WHERE ru.room_id = ?
 		  AND u.status = ?
-		  AND (u.name LIKE ? ESCAPE '\\' OR u.account_id LIKE ? ESCAPE '\\')
-		ORDER BY u.name ASC, u.id ASC
+		  AND (a.name LIKE ? ESCAPE '\\' OR a.account_id LIKE ? ESCAPE '\\')
+		ORDER BY a.name ASC, u.id ASC
 		LIMIT ?
 	`
 	prefixPattern := escapeLikePrefix(prefix) + "%"
@@ -705,7 +738,7 @@ func (r *MySQLRoomUserRepository) FindOrCreateDMRoom(ctx context.Context, userID
 	leftUserName := fmt.Sprintf("user:%d", leftUserID)
 	rightUserName := fmt.Sprintf("user:%d", rightUserID)
 
-	userNameQuery := "SELECT name FROM users WHERE id = ? LIMIT 1"
+	userNameQuery := "SELECT name FROM user_accounts WHERE user_id = ? LIMIT 1"
 	if err := tx.QueryRowContext(ctx, userNameQuery, leftUserID).Scan(&leftUserName); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}

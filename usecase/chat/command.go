@@ -10,7 +10,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
@@ -18,8 +17,8 @@ import (
 
 // MessageCommandService はメッセージを書き換える操作（送信・編集・削除）。
 //
-// 受け持つのは「権限判定を通す → メンションを解決する → 匿名IDを確定させる →
-// 保存する → 配信・通知を出す」という順序で、判定そのものは AccessPolicy、保存
+// 受け持つのは「権限判定を通す → メンションを解決する → 保存する →
+// 配信・通知を出す」という順序で、判定そのものは AccessPolicy、保存
 // そのものは MessageWriters に居る。読み取りは MessageQueryService 側。
 type MessageCommandService interface {
 	SendMessage(ctx context.Context, in SendMessageInput) (*model.Message, error)
@@ -50,9 +49,6 @@ type MessageCommandDeps struct {
 	// 添付は Message 集約の外にあるので、集約をまたぐ不変条件（本文も添付も空の
 	// メッセージを作らせない）を守れるのは添付を引けるこの層だけ。
 	ListMessageMedia mediausecase.ListMediaByMessageIDsUseCase
-
-	// GetOrCreateAnonymousIdentity は授業ルームへの投稿時に匿名IDを確定させる。
-	GetOrCreateAnonymousIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase
 
 	// Events は配信・通知の出口。nil を渡すと何もしない実装が入る。
 	Events EventPublisher
@@ -112,10 +108,6 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 	// 直接呼ぶ経路は無くしてあるので、別経路から実名メンションを通す余地は無い。
 	mentions, err := s.deps.ResolveMentions.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MentionUserIDs)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.ensureAnonymousIdentity(ctx, access.Room, claims.ID); err != nil {
 		return nil, err
 	}
 
@@ -280,30 +272,6 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		s.deps.Events.MessageDeleted(ctx, MessageDeletedEvent{RoomID: msg.RoomID, MessageID: msg.ID})
 	}
 	return deleted, nil
-}
-
-// ensureAnonymousIdentity は授業ルームへの書き込み時に匿名ID（匿名NNN）を確定させる。
-//
-// 以前は表示時（messageResolver.User など）に採番していたため、(a) 読むだけの
-// クエリが DB に行を作る副作用を持ち、(b) 番号が「そのルームで初めて投稿した順」
-// ではなく「初めて誰かの画面に出た順」になりえた。投稿時に採番すれば番号は
-// 投稿順に固定され、表示側は読み取りだけで済む。
-//
-// 保存トランザクションの外で呼んでいるのは、採番がルームごとのカウンタ
-// (room_anonymous_sequences) を1文で進める独立した処理で、メッセージ保存の
-// トランザクションに巻き込む必要が無いため。保存が失敗しても残るのは
-// 「まだ投稿していない人の番号」だけで、その人が次に投稿したときに同じ行が
-// 再利用されるので実害はない（カウンタは進んだままだが、番号の欠番は許容する。
-// 詳細は infra/mysql/room_anonymous_identity_repository.go の GetOrCreate）。
-//
-// 権限判定ではなく「投稿という行為に伴う副作用」なので、AccessPolicy ではなく
-// 送信サービス側に置いている。
-func (s *messageCommandService) ensureAnonymousIdentity(ctx context.Context, room *model.Room, userID int64) error {
-	if room == nil || room.Type != model.RoomTypeCourse {
-		return nil
-	}
-	_, err := s.deps.GetOrCreateAnonymousIdentity.Execute(ctx, room.ID, userID)
-	return err
 }
 
 // ensureMessageNotEmptied は「本文も添付も無いメッセージは存在しない」という

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -20,6 +21,9 @@ type MinIOStorageRepository struct {
 	privateBucket  string
 	publicEndpoint string
 	bucketLookup   minio.BucketLookupType
+	// signReads は PublicURL に署名を付けるかどうか。非公開バケットを見る
+	// 写し（ForBucket）で true になる。ゼロ値 false が公開バケットの挙動。
+	signReads bool
 }
 
 func New() (*MinIOStorageRepository, error) {
@@ -98,6 +102,14 @@ func (r *MinIOStorageRepository) PresignedPutURL(ctx context.Context, objectKey 
 // StatObject は保存済みオブジェクトの実寸と Content-Type を返す。
 // 署名付き PUT では上限を縛れないので、受け入れ時にここで実物を測る
 // （repository.StorageRepository のコメント参照）。
+// UploadRequestHeaders は、S3 互換の署名付き PUT に追加のヘッダーが要らないことを表す。
+//
+// 署名に含めていないヘッダーを送ると署名が合わなくなる場合があるので、
+// 「何も足さない」を明示的に返す。
+func (r *MinIOStorageRepository) UploadRequestHeaders() map[string]string {
+	return nil
+}
+
 func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error) {
 	info, err := r.client.StatObject(ctx, r.bucket, objectKey, minio.StatObjectOptions{})
 	if err != nil {
@@ -120,14 +132,58 @@ func (r *MinIOStorageRepository) StatObject(ctx context.Context, objectKey strin
 // いるように見えて、実際には素通しになる。宛先が一度きりしか書かれないことは
 // 呼び出し側が宛先キーを毎回引き直すことで保証している
 // （internal/upload.acceptedKeyFor）。
-func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+func (r *MinIOStorageRepository) ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error) {
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(0, limit-1); err != nil {
+		return nil, "", err
+	}
+	object, err := r.client.GetObject(ctx, r.bucket, objectKey, opts)
+	if err != nil {
+		return nil, "", err
+	}
+	defer object.Close()
+
+	// GetObject は遅延実行なので、ここで初めて実際の失敗が分かる。
+	// Stat を先に呼んで「在るか」と ETag を確かめる。
+	info, err := object.Stat()
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, "", repository.ErrObjectNotFound
+		}
+		return nil, "", err
+	}
+
+	head, err := io.ReadAll(io.LimitReader(object, limit))
+	if err != nil {
+		return nil, "", err
+	}
+	return head, info.ETag, nil
+}
+
+func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error {
 	if srcETag == "" {
 		// 条件を付けられないなら写さない。無条件に写すと、検査してから写すまでの
 		// 隙間に差し替えられたものをそのまま公開することになる。
 		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
 	}
+	// 写すときに「どう配るか」も書き込む。ReplaceMetadata を立てると渡した分だけが
+	// 残るので、Content-Type も必ず一緒に渡す（渡さないと空になる）。
+	// 値は repository 側の宣言を使い、置き場ごとに違う指定を持たない。
+	//
+	// contentType は受け入れ側が実物のバイト列から確かめた値。コピー元に付いて
+	// いるのは利用者が PUT 時に申告した値なので、確かめた値で上書きする。
 	_, err := r.client.CopyObject(ctx,
-		minio.CopyDestOptions{Bucket: r.bucket, Object: dstKey},
+		minio.CopyDestOptions{
+			Bucket:          r.bucket,
+			Object:          dstKey,
+			ReplaceMetadata: true,
+			UserMetadata: map[string]string{
+				"Content-Type":        contentType,
+				"Content-Disposition": repository.ServedContentDisposition,
+				"Cache-Control":       repository.ServedCacheControl,
+			},
+		},
 		minio.CopySrcOptions{Bucket: r.bucket, Object: srcKey, MatchETag: srcETag},
 	)
 	if err != nil {
@@ -142,7 +198,29 @@ func (r *MinIOStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey,
 	return nil
 }
 
+// minioReadURLTTL は非公開オブジェクトの表示URLの寿命。
+// minioReadURLWindow は失効時刻を丸める幅。
+//
+// 丸めるのは、同じオブジェクトに同じURLを返し続けるため。毎回 now+TTL で
+// 署名するとURLが呼び出しごとに変わり、ブラウザが別物として扱うので
+// キャッシュが効かなくなる（同じ画像を何度も取り直す）。Azure 側と同じ扱い。
+//
+// minioSignTimeout は署名にかける待ちの上限。PublicURL は error を返せないので、
+// ここで詰まると表示が丸ごと止まる。短く切って空文字を返す方に倒す。
+const (
+	minioReadURLTTL    = 24 * time.Hour
+	minioReadURLWindow = time.Hour
+	minioSignTimeout   = 5 * time.Second
+)
+
+// PublicURL は表示用のURLを組む。
+//
+// signReads が立っていれば署名付きの読み取りURLを返す（非公開バケット用）。
+// 立っていなければ素のURLで、バケット側の匿名読み取りに任せる。
 func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
+	if r.signReads {
+		return r.signedReadURL(objectKey)
+	}
 	if r.bucketLookup == minio.BucketLookupDNS {
 		u, err := url.Parse(r.publicEndpoint)
 		if err == nil {
@@ -150,6 +228,42 @@ func (r *MinIOStorageRepository) PublicURL(objectKey string) string {
 		}
 	}
 	return fmt.Sprintf("%s/%s/%s", r.publicEndpoint, r.bucket, objectKey)
+}
+
+// signedReadURL は非公開オブジェクトを1つ読むための署名付きURLを作る。
+// 失敗したら空文字を返す（表示できないだけで、他の項目は出す）。
+func (r *MinIOStorageRepository) signedReadURL(objectKey string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), minioSignTimeout)
+	defer cancel()
+
+	// 失効時刻を窓で丸め、同じ窓の中では同じURLになるようにする。
+	// 丸めたぶん寿命は TTL から TTL+Window の幅を取るので、掴んだ直後に
+	// 切れることはない。
+	expiry := time.Now().UTC().Add(minioReadURLTTL).Truncate(minioReadURLWindow).Add(minioReadURLWindow)
+	u, err := r.presignClient.PresignedGetObject(ctx, r.bucket, objectKey, time.Until(expiry), nil)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("bucket", r.bucket).Str("object_key", objectKey).
+			Msg("failed to sign a read URL for a private object")
+		return ""
+	}
+	return u.String()
+}
+
+// ForBucket は同じ資格情報のまま、別のバケットを見る写しを返す。
+//
+// DM の添付だけを非公開のバケットへ入れるために使う。バケット名以外は何も
+// 変えないので、アップロード・検査・複製・削除の手順は公開側と同一になる
+// （つまり internal/upload の受け入れがそのまま効く）。
+//
+// signReads は表示URLに署名を付けるかどうか。非公開バケットでは必ず true。
+// publicEndpoint は引き継がない（CDN の配信ホストは公開側のための設定で、
+// 非公開のものをそこから配ると素のURLで晒される）。
+func (r *MinIOStorageRepository) ForBucket(bucket string, signReads bool) *MinIOStorageRepository {
+	copied := *r
+	copied.bucket = bucket
+	copied.signReads = signReads
+	copied.publicEndpoint = ""
+	return &copied
 }
 
 func (r *MinIOStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {

@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,16 @@ type fakeStore struct {
 	// 見るために要る（2回目の中身が1回目と同じとは限らないので、結果だけ見ても
 	// 分からない）。
 	writes map[string]int
+
+	// headBytes / headETag / headErr は ObjectHead の戻りを差し替えるための口。
+	// 既定では「申告された種別どおりの中身」と info.ETag を返すので、
+	// 中身の検査を意識しないテストはそのまま通る。
+	headBytes []byte
+	headETag  string
+	headErr   error
+	// copiedTypes は CopyObject に渡された Content-Type。確かめた種別が
+	// 写し先へ渡っていることを見るために要る。
+	copiedTypes map[string]string
 }
 
 type copiedObject struct {
@@ -53,7 +64,7 @@ func (f *fakeStore) StatObject(_ context.Context, key string) (repository.Object
 	return info, nil
 }
 
-func (f *fakeStore) CopyObject(_ context.Context, src, dst, etag string) error {
+func (f *fakeStore) CopyObject(_ context.Context, src, dst, etag, contentType string) error {
 	if f.copyErr != nil {
 		return f.copyErr
 	}
@@ -62,7 +73,61 @@ func (f *fakeStore) CopyObject(_ context.Context, src, dst, etag string) error {
 	f.copied = append(f.copied, copiedObject{src, dst, etag})
 	f.writes[dst]++
 	f.objects[dst] = f.objects[src]
+	if f.copiedTypes == nil {
+		f.copiedTypes = map[string]string{}
+	}
+	f.copiedTypes[dst] = contentType
 	return nil
+}
+
+// ObjectHead は既定では「申告どおりの中身」を返す。
+//
+// 中身の検査を主題にしないテストが、形式の細工を書かずに済むようにしてある。
+// 検査そのものを見るテストは headBytes / headETag / headErr を差し替える。
+func (f *fakeStore) ObjectHead(_ context.Context, key string, limit int64) ([]byte, string, error) {
+	if f.headErr != nil {
+		return nil, "", f.headErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	info, ok := f.objects[key]
+	if !ok {
+		return nil, "", repository.ErrObjectNotFound
+	}
+
+	head := f.headBytes
+	if head == nil {
+		head = sampleBytesFor(info.ContentType)
+	}
+	if int64(len(head)) > limit {
+		head = head[:limit]
+	}
+	etag := f.headETag
+	if etag == "" {
+		etag = info.ETag
+	}
+	return head, etag, nil
+}
+
+// sampleBytesFor は、その種別として正しく判定される最小の中身を返す。
+func sampleBytesFor(contentType string) []byte {
+	switch contentType {
+	case "image/png":
+		return []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 24))
+	case "image/jpeg":
+		return []byte("\xff\xd8\xff" + strings.Repeat("\x00", 24))
+	case "image/gif":
+		return []byte("GIF89a" + strings.Repeat("\x00", 24))
+	case "image/webp":
+		return []byte("RIFF\x00\x00\x00\x00WEBPVP8 " + strings.Repeat("\x00", 16))
+	case "image/svg+xml":
+		return []byte(`<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`)
+	case "text/markdown":
+		return []byte("# みだし\n")
+	default:
+		// 判定できない種別。許可リストの段で落ちるので、ここへは来ない。
+		return []byte(strings.Repeat("\x00", 32))
+	}
 }
 
 func (f *fakeStore) DeleteObject(_ context.Context, key string) error {
@@ -535,5 +600,77 @@ func TestAccept_FailsWhenTheSourceChangedBeforeTheCopy(t *testing.T) {
 
 	if _, err := Accept(context.Background(), store, staging, Media, "42"); err == nil {
 		t.Fatal("写す直前に差し替えられたのに受け入れてしまった")
+	}
+}
+
+// 申告した種別と中身が食い違うものを受け入れないこと。
+//
+// 署名付き PUT では Content-Type も利用者が決める。ここが機能していないと、
+// 中身が HTML のファイルを image/png と名乗って置き、公開URLから配れる。
+func TestVerify_RejectsObjectsWhoseBytesDoNotMatchTheDeclaredType(t *testing.T) {
+	key := acceptedForm(avatarKey(t))
+	store := newFakeStore(okImage(), key)
+	// 名乗りは image/png のまま、中身だけ HTML にする。
+	store.headBytes = []byte("<!DOCTYPE html><html><body>x</body></html>")
+
+	err := Verify(context.Background(), store, key)
+	if err == nil {
+		t.Fatal("中身が HTML のものを image/png として受け入れてしまった")
+	}
+	if !strings.Contains(err.Error(), "中身") {
+		t.Fatalf("error = %v, want 中身が違うことの説明", err)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != key {
+		t.Fatalf("deleted = %v, want 違反したオブジェクトが消えていること", store.deleted)
+	}
+}
+
+// 測った実体と中身を読んだ実体が別物なら受け入れないこと。
+//
+// 大きさを測る要求と先頭を読む要求は別の往復なので、その間に置き直されると
+// 「測ったもの」と「中身を確かめたもの」が食い違う。写しは測った ETag を条件に
+// 行うので、確かめたのが別物なら公開してはいけない。
+func TestVerify_RejectsWhenTheObjectChangedBetweenMeasuringAndReading(t *testing.T) {
+	key := acceptedForm(avatarKey(t))
+	store := newFakeStore(okImage(), key)
+	store.headETag = "etag-2" // StatObject は etag-1 を返す
+
+	if err := Verify(context.Background(), store, key); err == nil {
+		t.Fatal("測った実体と別物を確かめたのに受け入れてしまった")
+	}
+	// 置き直された側が正しいとは限らないので、こちらの判断で消さない。
+	if len(store.deleted) != 0 {
+		t.Fatalf("deleted = %v, want 消さないこと", store.deleted)
+	}
+}
+
+// 置き場の不調で中身が読めないとき、利用者のアップロードを捨てないこと。
+func TestVerify_DoesNotDeleteWhenTheStoreFailsToRead(t *testing.T) {
+	key := acceptedForm(avatarKey(t))
+	store := newFakeStore(okImage(), key)
+	store.headErr = errors.New("ネットワークの不調")
+
+	if err := Verify(context.Background(), store, key); err == nil {
+		t.Fatal("中身を確かめられていないのに受け入れてしまった")
+	}
+	if len(store.deleted) != 0 {
+		t.Fatalf("deleted = %v, want こちらの不調で消さないこと", store.deleted)
+	}
+}
+
+// 写し先には、確かめた種別が渡ること。
+//
+// 保存済みのメタデータは利用者の申告なので、そちらを引き継ぐと
+// 「確かめた種別」と「配るときの種別」が別になりうる。
+func TestAccept_PassesTheVerifiedContentTypeToTheCopy(t *testing.T) {
+	staging := mediaKey(t)
+	store := newFakeStore(okImage(), staging)
+
+	final, err := Accept(context.Background(), store, staging, Media, "42")
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got := store.copiedTypes[final]; got != "image/png" {
+		t.Fatalf("写し先に渡った種別 = %q, want %q", got, "image/png")
 	}
 }

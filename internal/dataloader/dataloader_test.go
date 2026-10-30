@@ -91,12 +91,6 @@ func (f favoritePageFn) Execute(ctx context.Context, ids []int64, q repository.P
 	return f(ctx, ids, q)
 }
 
-type anonFn func(context.Context, []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error)
-
-func (f anonFn) Execute(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
-	return f(ctx, keys)
-}
-
 // nopUseCases は「呼ばれたら空を返す」口で全フィールドを埋めた UseCases を返す。
 // テストごとに試したいローダーの口だけ差し替える。New はすべてのフィールドを
 // 参照するので、埋めずに nil を残すと組み立て時に panic する。
@@ -117,7 +111,6 @@ func nopUseCases() UseCases {
 		ListMentionsByPostIDs:    mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
 		ListMentionsByMessageIDs: mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
 		GetRoomsByIDs:            mapFn[*model.Room](func(context.Context, []int64) (map[int64]*model.Room, error) { return nil, nil }),
-		GetQuestionsByIDs:        mapFn[*model.Question](func(context.Context, []int64) (map[int64]*model.Question, error) { return nil, nil }),
 		GetAnswersByIDs: mapFn[*repository.AnswerWithLikes](func(context.Context, []int64) (map[int64]*repository.AnswerWithLikes, error) {
 			return nil, nil
 		}),
@@ -131,9 +124,6 @@ func nopUseCases() UseCases {
 		CountFavoritesByPostIDs:   mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
 		CountAnswersByQuestionIDs: mapFn[int](func(context.Context, []int64) (map[int64]int, error) { return nil, nil }),
 		ListPostIDsFavoritedBy: favoritedByFn(func(context.Context, int64, []int64) (map[int64]bool, error) {
-			return nil, nil
-		}),
-		GetAnonymousIdentities: anonFn(func(context.Context, []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
 			return nil, nil
 		}),
 	}
@@ -235,33 +225,6 @@ func TestLoaders_ResolveManyKeysWithOneFetch(t *testing.T) {
 				for i, rm := range rooms {
 					if rm == nil || rm.ID != want[i] {
 						return errors.New("room came back for the wrong key")
-					}
-				}
-				return nil
-			},
-		},
-		{
-			name: "QuestionLoader",
-			setup: func(uc *UseCases) *recorder {
-				rec := &recorder{}
-				uc.GetQuestionsByIDs = mapFn[*model.Question](func(_ context.Context, keys []int64) (map[int64]*model.Question, error) {
-					rec.record(keys)
-					out := make(map[int64]*model.Question, len(keys))
-					for _, id := range keys {
-						out[id] = &model.Question{ID: id, RoomID: id * 10}
-					}
-					return out, nil
-				})
-				return rec
-			},
-			load: func(ctx context.Context, l *Loaders) error {
-				questions, err := l.QuestionLoader.LoadAll(ctx, want)
-				if err != nil {
-					return err
-				}
-				for i, q := range questions {
-					if q == nil || q.ID != want[i] {
-						return errors.New("question came back for the wrong key")
 					}
 				}
 				return nil
@@ -423,107 +386,31 @@ func TestLoaders_ResolveManyKeysWithOneFetch(t *testing.T) {
 	}
 }
 
-// TestAnonymousIdentityLoader_ResolvesManyKeysWithOneFetch は複合キー
-// (roomID, userID) のローダーも1クエリに畳まれることを確かめる。
-func TestAnonymousIdentityLoader_ResolvesManyKeysWithOneFetch(t *testing.T) {
-	var (
-		mu    sync.Mutex
-		calls int
-		got   int
-	)
-	uc := nopUseCases()
-	uc.GetAnonymousIdentities = anonFn(func(_ context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
-		mu.Lock()
-		calls++
-		got = len(keys)
-		mu.Unlock()
-		out := make(map[repository.RoomUserKey]*model.RoomAnonymousIdentity, len(keys))
-		for _, k := range keys {
-			out[k] = &model.RoomAnonymousIdentity{ID: k.UserID, RoomID: k.RoomID, UserID: k.UserID, Label: "匿名001"}
-		}
-		return out, nil
-	})
-
-	keys := make([]repository.RoomUserKey, 0, 20)
-	for i := int64(1); i <= 20; i++ {
-		keys = append(keys, repository.RoomUserKey{RoomID: 7, UserID: i})
-	}
-
-	identities, err := New(uc).AnonymousIdentityLoader.LoadAll(context.Background(), keys)
-	if err != nil {
-		t.Fatalf("LoadAll: %v", err)
-	}
-	for i, identity := range identities {
-		if identity == nil || identity.UserID != keys[i].UserID {
-			t.Fatalf("identity[%d] came back for the wrong key", i)
-		}
-	}
-	if calls != 1 {
-		t.Fatalf("fetch calls = %d, want 1", calls)
-	}
-	if got != len(keys) {
-		t.Fatalf("keys passed to the batch = %d, want %d", got, len(keys))
-	}
-}
-
 // TestLoaders_CacheDedupesRepeatedKeys は「同じIDを何度引いてもクエリは1回」を
-// 確かめる。Answer.user が回答ごとに同じ質問を引く（項目4）のと、Message が
-// userID と user で同じ匿名解決を2回通る（項目7）のは、どちらもこの性質で消える。
+// 確かめる。一覧で同じルームを何度も引いても、クエリは増えない。
 func TestLoaders_CacheDedupesRepeatedKeys(t *testing.T) {
-	t.Run("QuestionLoader", func(t *testing.T) {
+	t.Run("RoomLoader", func(t *testing.T) {
 		rec := &recorder{}
 		uc := nopUseCases()
-		uc.GetQuestionsByIDs = mapFn[*model.Question](func(_ context.Context, keys []int64) (map[int64]*model.Question, error) {
+		uc.GetRoomsByIDs = mapFn[*model.Room](func(_ context.Context, keys []int64) (map[int64]*model.Room, error) {
 			rec.record(keys)
-			return map[int64]*model.Question{42: {ID: 42, RoomID: 7}}, nil
+			return map[int64]*model.Room{42: {ID: 42, Name: "授業"}}, nil
 		})
 		loaders := New(uc)
 		ctx := context.Background()
 
 		// 1件ずつ、間を空けて（＝バッチが閉じたあとで）引き直す。
 		for i := 0; i < 5; i++ {
-			q, err := loaders.QuestionLoader.Load(ctx, 42)
+			room, err := loaders.RoomLoader.Load(ctx, 42)
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if q == nil || q.RoomID != 7 {
-				t.Fatal("question did not come back")
+			if room == nil || room.Name != "授業" {
+				t.Fatal("room did not come back")
 			}
 		}
 		if got := rec.callCount(); got != 1 {
 			t.Fatalf("fetch calls = %d, want 1 (キャッシュが効いていない)", got)
-		}
-	})
-
-	t.Run("AnonymousIdentityLoader", func(t *testing.T) {
-		var calls int
-		uc := nopUseCases()
-		uc.GetAnonymousIdentities = anonFn(func(_ context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error) {
-			calls++
-			out := make(map[repository.RoomUserKey]*model.RoomAnonymousIdentity, len(keys))
-			for _, k := range keys {
-				out[k] = &model.RoomAnonymousIdentity{ID: 9, RoomID: k.RoomID, UserID: k.UserID, Label: "匿名009"}
-			}
-			return out, nil
-		})
-		loaders := New(uc)
-		key := repository.RoomUserKey{RoomID: 7, UserID: 3}
-
-		first, err := loaders.AnonymousIdentityLoader.Load(context.Background(), key)
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		second, err := loaders.AnonymousIdentityLoader.Load(context.Background(), key)
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		if calls != 1 {
-			t.Fatalf("fetch calls = %d, want 1 (userID と user で2回引いている)", calls)
-		}
-		// 同じ行が返ることまで見る。別々に引くと、途中で採番された場合に
-		// userID と user で違う匿名IDが出てしまう。
-		if first != second {
-			t.Fatal("the same key must resolve to the same identity row")
 		}
 	})
 }

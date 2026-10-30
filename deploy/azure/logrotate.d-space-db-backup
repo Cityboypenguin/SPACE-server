@@ -1,0 +1,15 @@
+# /etc/logrotate.d/space-db-backup へ置く。
+# 1日3行しか増えないが、上限の無い書き出しを残さない方針に合わせる
+# （docker のログ上限と同じ理由。ディスクが埋まるとコンテナーが揃って止まる）。
+/var/log/space-db-backup.log {
+    # Ubuntu の /var/log は syslog グループに書き込みを許しているので、
+    # logrotate は既定だと「親ディレクトリの権限が緩い」と言って回さない。
+    # どの権限で回すかを明示して受け入れさせる。
+    su root adm
+    monthly
+    rotate 6
+    compress
+    missingok
+    notifempty
+    create 640 root adm
+}

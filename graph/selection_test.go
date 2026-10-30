@@ -778,6 +778,13 @@ type roomQueryFixture struct {
 	reads    *fakeReadStatusOfRoom
 }
 
+// fakeGetUserByID は、誰も退会していない前提の利用者取得。
+type fakeGetUserByID struct{}
+
+func (fakeGetUserByID) Execute(_ context.Context, id int64) (*model.User, error) {
+	return &model.User{ID: id, Status: model.UserStatusActive}, nil
+}
+
 // newRoomQueryFixture は room クエリだけを通せる最小構成。
 // 閲覧権限は本物の AccessPolicy（chatusecase）を通す。権限判定を fake で
 // 置き換えてしまうと、この項目で一番確かめたい「付帯情報を遅らせても権限判定が
@@ -791,6 +798,7 @@ func newRoomQueryFixture(memberIDs []int64) *roomQueryFixture {
 		IsRoomMember:       &fakeIsRoomMember{members: map[int64][]int64{7: memberIDs}},
 		CheckRoomWritable:  fakeCheckRoomWritable{},
 		CheckBlockRelation: &fakeCheckBlockRelation{},
+		GetUser:            fakeGetUserByID{},
 	})
 
 	f := &roomQueryFixture{
@@ -822,6 +830,7 @@ func TestRoomQuery_HydratesOnlyWhatIsSelected(t *testing.T) {
 		{name: "名前だけなら何も引かない", selection: "name type"},
 		{name: "user はメンバーだけ", selection: "user { ID }", wantMembers: 1},
 		{name: "isMessagingDisabled はメンバーとブロック", selection: "isMessagingDisabled", wantMembers: 1, wantBlock: 1},
+		{name: "isPartnerWithdrawn はメンバーだけ", selection: "isPartnerWithdrawn", wantMembers: 1},
 		{name: "unreadCount は既読だけ", selection: "unreadCount", wantReads: 1},
 		{name: "partnerLastReadAt も同じ取得から埋まる", selection: "partnerLastReadAt", wantReads: 1},
 	}
@@ -843,6 +852,30 @@ func TestRoomQuery_HydratesOnlyWhatIsSelected(t *testing.T) {
 				t.Errorf("ReadStatusOfAuthorizedRoom calls = %d, want %d", f.reads.calls, tc.wantReads)
 			}
 		})
+	}
+}
+
+// DM の相手が退会していれば（表示用のメンバー一覧に相手が居なければ）入力欄を閉じ、
+// 理由として isPartnerWithdrawn を立てる。相手が決まらないのでブロックは引かない。
+func TestRoomQuery_ClosesADMWhosePartnerWithdrew(t *testing.T) {
+	f := newRoomQueryFixture([]int64{1, 2})
+	f.members.users[7] = []*model.User{{ID: 1, AccountID: "me"}}
+	c := newSelectionTestClient(t, f.resolver, userClaims(1))
+
+	var resp struct {
+		Room struct {
+			IsMessagingDisabled bool
+			IsPartnerWithdrawn  bool
+		}
+	}
+	c.MustPost(`query($id: ID!){ room(id: $id) { isMessagingDisabled isPartnerWithdrawn } }`, &resp,
+		client.Var("id", encodeGraphID("room", 7)))
+
+	if !resp.Room.IsMessagingDisabled || !resp.Room.IsPartnerWithdrawn {
+		t.Fatalf("room = %+v, want messaging disabled because the partner withdrew", resp.Room)
+	}
+	if f.block.calls != 0 {
+		t.Errorf("CheckBlockRelation calls = %d, want 0 without a partner", f.block.calls)
 	}
 }
 

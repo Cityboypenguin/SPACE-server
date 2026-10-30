@@ -22,34 +22,7 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	// 回答は質問を経由しないとルームが分からないので、匿名表示の判定に質問を引く。
-	// 引けないと授業ルームでも実名で出てしまうため、失敗は必ず残す
-	// （ID のデコード失敗は audit.LogProbe が既に記録している）。
-	//
-	// 質問は DataLoader 経由。1つの質問にぶら下がる回答は全て同じ質問を指すので、
-	// 新しいクエリが増えるのではなくリクエスト内キャッシュで1回に畳まれる
-	// （回答一覧 N 件で N クエリ → 1クエリ）。
-	qid, err := decodeGraphID(ctx, "question", obj.QuestionID)
-	if err == nil {
-		q, err := dataloader.For(ctx).QuestionLoader.Load(ctx, qid)
-		if err != nil {
-			logChatLookup(err, chatLookupQuestionRoom).
-				Int64("question_id", qid).
-				Int64("author_user_id", numericUserID).
-				Msg("failed to load the question; falling back to showing the real user")
-		} else if q != nil {
-			roomIDStr := encodeGraphID("room", q.RoomID)
-			if anon := r.anonymousUserForCourseRoom(ctx, roomIDStr, numericUserID); anon != nil {
-				return anon, nil
-			}
-		}
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // Media is the resolver for the media field.
@@ -325,29 +298,7 @@ func (r *pollResolver) User(ctx context.Context, obj *gqlmodel.Poll) (*gqlmodel.
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
-		// 投票の「先生からの投票」表示のため、匿名化しつつも role だけは実ユーザーのものを
-		// 引き継ぐ(name/avatarUrl/ID等は匿名IDのまま個人を特定できないようにする)。
-		//
-		// 引けなくても匿名表示のまま返す（role が既定値になるだけで匿名性は壊れない）。
-		// ただし「先生からの投票」バッジが黙って消えるのは気づきにくいのでログに残す。
-		u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-		if err != nil {
-			logChatLookup(err, chatLookupPollAuthorRole).
-				Str("poll_id", obj.ID).
-				Int64("author_user_id", numericUserID).
-				Msg("failed to load the poll author; the role badge falls back to the default")
-		} else if u != nil {
-			anon.Role = u.Role
-		}
-		return anon, nil
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // Options is the resolver for the options field.
@@ -500,15 +451,7 @@ func (r *questionResolver) User(ctx context.Context, obj *gqlmodel.Question) (*g
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
-		return anon, nil
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // BestAnswer is the resolver for the bestAnswer field.

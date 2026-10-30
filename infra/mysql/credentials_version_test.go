@@ -7,25 +7,15 @@ import (
 )
 
 func TestCredentialsVersionChangesWithPasswordInSameTransaction(t *testing.T) {
-	db, cleanup := throwawaySchemaDB(t, "space_credentials_version_test", []string{
-		`CREATE TABLE users (
-			id BIGINT NOT NULL PRIMARY KEY,
-			account_id VARCHAR(255) NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			email VARCHAR(255) NOT NULL,
-			hashed_password VARCHAR(255) NOT NULL,
-			credentials_version BIGINT NOT NULL DEFAULT 0,
-			role VARCHAR(50) NOT NULL,
-			status VARCHAR(50) NOT NULL,
-			created_at BIGINT NOT NULL,
-			updated_at BIGINT NOT NULL
-		) ENGINE=InnoDB`,
-	})
+	db, cleanup := throwawaySchemaDB(t, "space_credentials_version_test", userTablesDDL)
 	defer cleanup()
 	ctx := context.Background()
-	if _, err := db.ExecContext(ctx, `INSERT INTO users
-		(id, account_id, name, email, hashed_password, role, status, created_at, updated_at)
-		VALUES (1, 'test', 'Test', 'test@example.com', 'old', 'user', 'active', 0, 0)`); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO users (id, status, created_at) VALUES (1, 'active', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO user_accounts
+		(user_id, account_id, name, email, hashed_password, role, updated_at)
+		VALUES (1, 'test', 'Test', 'test@example.com', 'old', 'user', 0)`); err != nil {
 		t.Fatal(err)
 	}
 	repo := NewMySQLUserRepository(db)

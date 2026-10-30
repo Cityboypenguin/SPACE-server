@@ -1,0 +1,48 @@
+name: Deploy to Azure VM
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: azure-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: azure-production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: 20260926project202609cr.azurecr.io
+          username: ${{ secrets.AZURE_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_ACR_PASSWORD }}
+      - name: Build and push commit image
+        env:
+          IMAGE: 20260926project202609cr.azurecr.io/space-server:${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 --target prod -f docker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+      - name: Configure SSH
+        env:
+          KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy app
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+          IMAGE: 20260926project202609cr.azurecr.io/space-server:${{ github.sha }}
+        run: |
+          [[ "$VM_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$VM_USER" =~ ^[a-zA-Z0-9_-]+$ ]] || exit 2
+          tar czf /tmp/azure-deploy.tar.gz compose.azure.yaml scripts/deploy_azure.sh scripts/acr_login.sh
+          scp -o StrictHostKeyChecking=yes /tmp/azure-deploy.tar.gz "$VM_USER@$VM_HOST:/tmp/space-azure-deploy.tar.gz"
+          ssh -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" "sudo tar xzf /tmp/space-azure-deploy.tar.gz -C /opt/space && sudo bash /opt/space/scripts/deploy_azure.sh '$IMAGE'"
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

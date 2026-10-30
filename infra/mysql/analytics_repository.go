@@ -170,10 +170,19 @@ type summaryWindows struct {
 	active3Days int64
 }
 
+// 利用者の数え方（db/migrations/076 で users を識別子と個人情報に分けた後）:
+//
+//   - 総数は「今いる人」（active / frozen）。退会手続き中と完全削除済みは数えない。
+//   - 新規登録は users.created_at で数える。users の行は退会しても残るので、後で
+//     退会した人も「その日に登録した人」として数え続ける（以前は退会すると行ごと
+//     消え、過去の新規登録数まで後から減っていた）。
+//   - 最終アクセス（last_active_at）は個人情報と一緒に user_accounts にある。
+const totalUsersQuery = `SELECT COUNT(*) FROM users WHERE status IN ('` + model.UserStatusActive + `', '` + model.UserStatusFrozen + `')`
+
 func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, w summaryWindows) []intQuery {
 	return []intQuery{
 		{[]string{fieldTotalUsers, fieldAvgCommunitiesPerUser, fieldAvgFollowersPerUser, fieldAvgFollowingPerUser, fieldOnboardingCompleteRate},
-			&s.TotalUsers, `SELECT COUNT(*) FROM users`, nil},
+			&s.TotalUsers, totalUsersQuery, nil},
 		{[]string{"newUsersToday"}, &s.NewUsersToday, `SELECT COUNT(*) FROM users WHERE created_at >= ?`, []any{w.todayStart}},
 		{[]string{"newUsersThisWeek"}, &s.NewUsersThisWeek, `SELECT COUNT(*) FROM users WHERE created_at >= ?`, []any{w.weekStart}},
 		{[]string{"newUsersThisMonth"}, &s.NewUsersThisMonth, `SELECT COUNT(*) FROM users WHERE created_at >= ?`, []any{w.monthStart}},
@@ -189,10 +198,10 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 		{[]string{"totalReports"}, &s.TotalReports, `SELECT COUNT(*) FROM user_reports`, nil},
 		{[]string{"totalBlocks"}, &s.TotalBlocks, `SELECT COUNT(*) FROM blocks`, nil},
 		{[]string{"totalInquiries"}, &s.TotalInquiries, `SELECT COUNT(*) FROM inquiries`, nil},
-		{[]string{"currentActiveUsers"}, &s.CurrentActiveUsers, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{w.active3Days}},
-		{[]string{fieldDAU, fieldDAUMAURatio}, &s.DAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{w.todayStart}},
-		{[]string{"wau"}, &s.WAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{w.weekStart}},
-		{[]string{fieldMAU, fieldDAUMAURatio}, &s.MAU, `SELECT COUNT(*) FROM users WHERE last_active_at >= ?`, []any{w.monthStart}},
+		{[]string{"currentActiveUsers"}, &s.CurrentActiveUsers, `SELECT COUNT(*) FROM user_accounts WHERE last_active_at >= ?`, []any{w.active3Days}},
+		{[]string{fieldDAU, fieldDAUMAURatio}, &s.DAU, `SELECT COUNT(*) FROM user_accounts WHERE last_active_at >= ?`, []any{w.todayStart}},
+		{[]string{"wau"}, &s.WAU, `SELECT COUNT(*) FROM user_accounts WHERE last_active_at >= ?`, []any{w.weekStart}},
+		{[]string{fieldMAU, fieldDAUMAURatio}, &s.MAU, `SELECT COUNT(*) FROM user_accounts WHERE last_active_at >= ?`, []any{w.monthStart}},
 		{[]string{"postsToday"}, &s.PostsToday, `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"commentsToday"}, &s.CommentsToday, `SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"messagesToday"}, &s.MessagesToday, `SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
@@ -574,7 +583,7 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	// 上限は「実人数」で、下がったぶんが以前の数えすぎ。時間別のグラフは
 	// もともとこの数え方なので変わらない。
 	//
-	// なお時間別が user_activity_hours を使うのは、users.last_active_at が
+	// なお時間別が user_activity_hours を使うのは、user_accounts.last_active_at が
 	// ユーザーごとに1値（最後の活動時刻）しか持たず、10時と14時に活動した人が
 	// 14時のスロットにしか現れないため（過去の時間帯ほど実際より少なく出ていた）。
 	const (
@@ -595,7 +604,7 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		// TIMESTAMPDIFF で最初のスロットからの経過時間＝スロット番号にして返す
 		// （負なら範囲より手前の活動）。
 		//
-		// users.last_active_at を UNION で足してあるのは、user_activity_hours が
+		// user_accounts.last_active_at を UNION で足してあるのは、user_activity_hours が
 		// migration 070 で新設される表で、本番に適用した直後は空だから。この表だけを
 		// 見ると、履歴が溜まるまで時間別グラフが 0 に落ちる。last_active_at は
 		// ユーザーごとに1値しかないので過去の時間帯ほど少なく出る（この表を足した
@@ -610,8 +619,8 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 				FROM user_activity_hours
 				WHERE activity_hour >= '%s' AND activity_hour < '%s'
 				UNION
-				SELECT id AS user_id, TIMESTAMPDIFF(HOUR, '%s', DATE_FORMAT(FROM_UNIXTIME(last_active_at + %d), '%%Y-%%m-%%d %%H:00:00')) AS slot
-				FROM users
+				SELECT user_id, TIMESTAMPDIFF(HOUR, '%s', DATE_FORMAT(FROM_UNIXTIME(last_active_at + %d), '%%Y-%%m-%%d %%H:00:00')) AS slot
+				FROM user_accounts
 				WHERE last_active_at >= %d AND last_active_at < %d
 			) a ORDER BY user_id, slot`,
 			fromT.Format(sqlDateTimeFmt), activeExtendedFrom.Format(sqlDateTimeFmt), toT.Format(sqlDateTimeFmt),
@@ -625,7 +634,7 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		// DATEDIFF で最初のスロットからの経過日数＝スロット番号にする
 		// （負なら範囲より手前の活動）。
 		//
-		// user_activity_dates だけでなく user_session_summaries と users.last_active_at も
+		// user_activity_dates だけでなく user_session_summaries と user_accounts.last_active_at も
 		// UNION で足す。user_activity_dates は migration 043 で足した表なので、それ以前に
 		// 活動していたぶんの行が無く、記録漏れもある。その期間の日次グラフが実際より
 		// 低く出るのを、セッション記録と最終活動時刻で補完する。
@@ -641,8 +650,8 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 				FROM user_session_summaries
 				WHERE date >= '%s' AND date <= '%s' AND session_count > 0
 				UNION
-				SELECT id AS user_id, DATEDIFF(DATE(FROM_UNIXTIME(last_active_at + %d)), '%s') AS slot
-				FROM users
+				SELECT user_id, DATEDIFF(DATE(FROM_UNIXTIME(last_active_at + %d)), '%s') AS slot
+				FROM user_accounts
 				WHERE last_active_at >= %d AND last_active_at < %d
 			) a ORDER BY user_id, slot`,
 			fromT.Format(dateFmt), activeExtendedFrom, activeExtendedTo,

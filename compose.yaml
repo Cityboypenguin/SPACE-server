@@ -31,6 +31,9 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-space-storage}
       MINIO_PRIVATE_BUCKET: ${MINIO_PRIVATE_BUCKET:-space-storage-private}
+      # DM の添付だけを入れる置き場。匿名読み取りを付けないので、表示は
+      # 署名付きURLで配られる（internal/upload.MessageMedia 参照）。
+      MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
       MINIO_USE_SSL: "false"
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
@@ -74,14 +77,17 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-space-storage}
       MINIO_PRIVATE_BUCKET: ${MINIO_PRIVATE_BUCKET:-space-storage-private}
+      MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
       mc mb local/$${MINIO_BUCKET:-space-storage} --ignore-existing;
       mc mb local/$${MINIO_PRIVATE_BUCKET:-space-storage-private} --ignore-existing;
+      mc mb local/$${MESSAGE_MEDIA_CONTAINER:-space-message-media} --ignore-existing;
       mc anonymous set download local/$${MINIO_BUCKET:-space-storage};
       printf '<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader></CORSRule></CORSConfiguration>' > /tmp/cors.xml;
       mc cors set local/$${MINIO_BUCKET:-space-storage} /tmp/cors.xml;
+      mc cors set local/$${MESSAGE_MEDIA_CONTAINER:-space-message-media} /tmp/cors.xml;
       exit 0;
       "
 

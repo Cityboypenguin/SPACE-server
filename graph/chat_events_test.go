@@ -122,12 +122,6 @@ func (f *fakeGetMessageByID) Execute(_ context.Context, _ int64) (*model.Message
 	return f.msg, nil
 }
 
-type fakeGetAnonymousIdentity struct{ identity *model.RoomAnonymousIdentity }
-
-func (f *fakeGetAnonymousIdentity) Execute(_ context.Context, _, _ int64) (*model.RoomAnonymousIdentity, error) {
-	return f.identity, nil
-}
-
 type fakeMarkAllAsReadByActor struct{ calls int }
 
 func (f *fakeMarkAllAsReadByActor) Execute(_ context.Context, _ string, _ int64) error {
@@ -163,7 +157,6 @@ func newPublisherHarnessWith(runner chatEventAsyncRunner) *publisherHarness {
 		Async:                 runner,
 		// 引用返信の通知先（返信元の投稿者）。返信を含むイベントを流したテストだけが使う。
 		GetMessage:                     &fakeGetMessageByID{msg: &model.Message{ID: 99, UserID: 42}},
-		GetAnonymousIdentity:           &fakeGetAnonymousIdentity{},
 		MarkNotificationsAsReadByActor: &fakeMarkAllAsReadByActor{},
 	})
 	return h
@@ -193,7 +186,7 @@ func TestChatEventPublisher_MessageSent_CourseRoomUsesTheRegistrantRoute(t *test
 	if len(h.sse.events) != 1 || h.sse.events[0].userID != 21 {
 		t.Fatalf("room_changed events = %+v, want exactly one for the enrolled user 21", h.sse.events)
 	}
-	// 授業内チャットは匿名。DM 通知を出す相手も居ない。
+	// 返信もメンションも無いので通知は出ない（DM 通知は DM だけ）。
 	if len(h.notify.published) != 0 {
 		t.Errorf("notifications = %+v, want none in a course room", h.notify.published)
 	}
@@ -202,8 +195,8 @@ func TestChatEventPublisher_MessageSent_CourseRoomUsesTheRegistrantRoute(t *test
 // room_changed のペイロードの形。
 //
 // unreadCount は載せない（未読数は受け取った側が自分ぶんだけ取り直す）。actorID も
-// 載せない（授業内チャットは匿名なので、投稿者を特定できる情報を配ると匿名性が崩れる）。
-// 代わりに宛先から投稿者を外してあるので hasNewMessage は常に true。
+// 載せない（宛先から投稿者を外してあるので、受け取った側には要らない）。
+// そのため hasNewMessage は常に true。
 func TestChatEventPublisher_MessageSent_RoomChangedCarriesFactsOnly(t *testing.T) {
 	h := newPublisherHarness()
 	room := &model.Room{ID: 1, Type: model.RoomTypeCourse}
@@ -246,7 +239,7 @@ func TestChatEventPublisher_MessageSent_RoomChangedCarriesFactsOnly(t *testing.T
 		t.Error("payload carries unreadCount; the server must not compute unread counts for everyone")
 	}
 	if _, ok := ev.data["actorID"]; ok {
-		t.Error("payload carries actorID; 授業内チャットの匿名性が崩れる")
+		t.Error("payload carries actorID; the recipients already exclude the actor")
 	}
 }
 
@@ -397,8 +390,8 @@ func TestChatEventPublisher_MessageDeleted_PublishesSynchronously(t *testing.T) 
 	}
 }
 
-// 既読の配信は相手側の既読表示のためのもの。授業内チャットは匿名なので、
-// 誰が読んだか（実ユーザーID）をルームの購読者へ流さない。
+// 既読の配信は相手側の既読表示のためのもの。授業内チャットは既読表示を出さないので、
+// 誰が読んだかをルームの購読者へ流さない。
 func TestChatEventPublisher_RoomMarkedAsRead_CourseRoomDoesNotBroadcastTheReader(t *testing.T) {
 	h := newPublisherHarness()
 	room := &model.Room{ID: 1, Type: model.RoomTypeCourse}
@@ -410,7 +403,7 @@ func TestChatEventPublisher_RoomMarkedAsRead_CourseRoomDoesNotBroadcastTheReader
 
 	roomGraphID := encodeGraphID("room", room.ID)
 	if got := len(h.pubsub.published[roomGraphID+":read_status"]); got != 0 {
-		t.Errorf("read_status publishes = %d, want 0 in an anonymous course room", got)
+		t.Errorf("read_status publishes = %d, want 0 in a course room", got)
 	}
 	// 既読を打った本人（の別タブ・別端末）へ「更新された」ことだけを送る。
 	// 数は送らない: 既読位置は画面に出した最後までなので 0 とは限らず、
@@ -527,9 +520,8 @@ func TestChatEventPublisher_MessageSent_ReplyNotificationNamesTheRoom(t *testing
 	}
 }
 
-// 授業ルームの返信通知は、授業名を出しつつ匿名ラベルのまま（actor は載せない）。
-// 場所を言うために実名を漏らしてしまっては元も子もない。
-func TestChatEventPublisher_MessageSent_CourseReplyNotificationNamesTheCourseAndStaysAnonymous(t *testing.T) {
+// 授業ルームの返信通知も他のルームと同じく、授業名を出し、返信した人を actor に載せる。
+func TestChatEventPublisher_MessageSent_CourseReplyNotificationNamesTheCourseAndTheActor(t *testing.T) {
 	h := newPublisherHarness()
 	room := &model.Room{ID: 1, Name: "情報工学概論", Type: model.RoomTypeCourse}
 
@@ -546,8 +538,8 @@ func TestChatEventPublisher_MessageSent_CourseReplyNotificationNamesTheCourseAnd
 	if !strings.Contains(notified.Message, room.Name) {
 		t.Errorf("message = %q, want it to name the course %q", notified.Message, room.Name)
 	}
-	if notified.ActorID != nil {
-		t.Errorf("actorID = %v, want nil in an anonymous course room", *notified.ActorID)
+	if notified.ActorID == nil || *notified.ActorID != 10 {
+		t.Errorf("actorID = %v, want the replier 10", notified.ActorID)
 	}
 }
 

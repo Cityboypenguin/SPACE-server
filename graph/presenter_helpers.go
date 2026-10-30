@@ -9,7 +9,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	"github.com/Cityboypenguin/SPACE-server/repository"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
@@ -20,7 +19,7 @@ import (
 // すると、クライアントの未読ページ取得の起点が ID と時刻で揺れてしまう。
 //
 // helpers.go に置くのは、gqlgen generate がリゾルバファイル内の「リゾルバでない
-// 関数」をコメントアウトしてしまうため（anonymousUserForCourseRoom と同じ理由）。
+// 関数」をコメントアウトしてしまうため（authorUser と同じ理由）。
 func applyRoomReadStatus(gqlRoom *gqlmodel.Room, status *roomusecase.RoomReadStatus) {
 	if gqlRoom == nil || status == nil {
 		return
@@ -69,77 +68,20 @@ func (r *Resolver) communityAvatarURL(c *model.Community) string {
 	return r.StorageRepository.PublicURL(c.AvatarMedia.StorageKey)
 }
 
-// anonymousUserForCourseRoom returns the synthetic User to display for authorUserID
-// when roomID is a course-type room (F-05), or nil once we know it is some other
-// room type, so the caller falls back to showing the real user. Used by the
-// message/question/answer/poll
-// user field resolvers. This lives in helpers.go (not schema.resolvers.go) because
-// gqlgen comments out any function in the resolver file that isn't a recognized
-// resolver stub on every `gqlgen generate` run.
+// authorUser は投稿（メッセージ・質問・回答・投票）の投稿者を表示用の User にする。
 //
-// 表示は読み取りだけで完結させる。匿名IDの採番は投稿時（usecase/chat・質問・
-// 回答・投票の作成時）に済ませてあるので、ここでは Get しか呼ばない。以前は
-// 表示時に GetOrCreate を呼んでいて、読むだけのクエリが DB に書き込む副作用を
-// 持っていた。
-//
-// 実名へ倒すのは「授業ルームではないと分かった」ときだけ。分からなかったとき
-// （ルームIDが解けない・ルームが引けない・匿名IDが引けない）は番号なしの「匿名」を
-// 返す（理由は anonymousPlaceholderUser のコメント）。
-//
-// 「分からない」を実名側へ倒してはいけない。実名の漏えいは取り消せないのに対し、
-// 非授業ルームが一時的に「匿名」と出るのは、その場かぎりの表示崩れで済む。
-// 障害中に DM が「匿名」になるのは目に見えて分かるが、授業ルームが実名になるのは
-// 画面上は正常に見えるため誰も気づけない。
-//
-// ルームも匿名IDも DataLoader 経由で引く。理由は2つある。
-//   - 一覧（メッセージ・質問・回答・投票）では項目ごとにこの関数が呼ばれるので、
-//     直接引くと項目数ぶんのクエリになる。
-//   - Message は userID と user の2フィールドが同じ解決を通るので、1メッセージで
-//     2回引いていた。DataLoader のリクエスト内キャッシュで両方とも1回に畳まれ、
-//     しかも必ず同じ匿名IDが返る（別々に引くと途中で採番されたときに食い違う）。
-//
-// 負のキャッシュ（行が無い、を覚えてしまうこと）は問題にならない。この関数に渡る
-// のは常に「その部屋に投稿した人」で、投稿時に必ず採番されている（usecase/chat の
-// ensureAnonymousIdentity ほか）ため、行が無いのは採番前の古いデータだけ。
-func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string, authorUserID int64) *gqlmodel.User {
-	rid, err := decodeGraphID(ctx, "room", roomID)
+// スキーマ上どの user も非null（User!）なので、退会したユーザーの投稿で nil を返すと
+// その投稿を含む一覧ごと落ちる。不存在は「削除されたアカウント」の代替で埋め、
+// 読み込みエラーはそのまま返す（一時的な障害で退会済み扱いにしないため）。
+func authorUser(ctx context.Context, userID int64) (*gqlmodel.User, error) {
+	u, err := dataloader.For(ctx).UserLoader.Load(ctx, userID)
 	if err != nil {
-		// ルームIDが解けないと種別を確かめようがない。自前で符号化したIDなので
-		// 通常は起きないが、起きたときに実名を出す口にはしない。
-		logChatLookup(err, chatLookupCourseRoom).
-			Str("room_graph_id", roomID).
-			Int64("author_user_id", authorUserID).
-			Msg("failed to decode the room id; hiding the author instead of showing the real user")
-		return anonymousPlaceholderUser()
+		return nil, err
 	}
-
-	room, err := dataloader.For(ctx).RoomLoader.Load(ctx, rid)
-	if err != nil || room == nil {
-		// ここで nil を返すと「授業ルームではない」と同じ扱いになり、匿名のはずの
-		// 投稿者が実名で出る。種別が確かめられない以上、授業ルームかもしれないので
-		// 匿名側へ倒す。ローダーは不存在を nil で返す（エラーにしない）ので両方ここで拾う。
-		logChatLookup(err, chatLookupCourseRoom).
-			Int64("room_id", rid).
-			Int64("author_user_id", authorUserID).
-			Msg("failed to load the room; hiding the author instead of showing the real user")
-		return anonymousPlaceholderUser()
+	if u == nil {
+		return toGraphDeletedUserWithID(userID), nil
 	}
-	if room.Type != model.RoomTypeCourse {
-		return nil
-	}
-
-	identity, err := dataloader.For(ctx).AnonymousIdentityLoader.Load(ctx, repository.RoomUserKey{RoomID: rid, UserID: authorUserID})
-	if err != nil {
-		logChatLookup(err, chatLookupAnonymousLabel).
-			Int64("room_id", rid).
-			Int64("author_user_id", authorUserID).
-			Msg("failed to load anonymous identity for course room")
-		return anonymousPlaceholderUser()
-	}
-	if identity == nil {
-		return anonymousPlaceholderUser()
-	}
-	return toGraphAnonymousUser(identity)
+	return toGraphUser(u), nil
 }
 
 func containsInt64(slice []int64, val int64) bool {
@@ -286,9 +228,6 @@ func toNullableInt(v *int32) *int {
 // notificationTargetMessage resolves the Notification/NotificationGroup targetMessage
 // field: the chat message a reply notification points at. 削除済み・対象が
 // メッセージ以外・いま読む権限が無いなら nil を返す。
-//
-// 返す Message は messageResolver 経由で解決されるので、授業内チャットなら user
-// フィールドは自動的に匿名表示になる。
 //
 // 通知に対象メッセージのIDが載っているからといって、本文を返してよい理由にはならない。
 // 通知は配信時点の権限で作られるので、受け取ってから退出・キックされた利用者の手元にも

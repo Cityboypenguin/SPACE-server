@@ -481,8 +481,9 @@ type PostPage struct {
 }
 
 type PresignedUploadURL struct {
-	UploadURL string `json:"uploadUrl"`
-	ObjectKey string `json:"objectKey"`
+	UploadURL string          `json:"uploadUrl"`
+	ObjectKey string          `json:"objectKey"`
+	Headers   []*UploadHeader `json:"headers"`
 }
 
 type Profile struct {
@@ -547,6 +548,7 @@ type Room struct {
 	CreatedAt           string  `json:"createdAt"`
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
+	IsPartnerWithdrawn  bool    `json:"isPartnerWithdrawn"`
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
 	LastReadMessageID   *string `json:"lastReadMessageID,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`
@@ -658,6 +660,11 @@ type UpdateUserInput struct {
 	CurrentPassword *string `json:"currentPassword,omitempty"`
 }
 
+type UploadHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type User struct {
 	ID        string  `json:"ID"`
 	AccountID string  `json:"accountID"`
@@ -686,9 +693,10 @@ type UserAccountPage struct {
 }
 
 type UserAuthPayload struct {
-	Token        string       `json:"token"`
-	RefreshToken string       `json:"refreshToken"`
-	User         *UserAccount `json:"user"`
+	Token           string       `json:"token"`
+	RefreshToken    string       `json:"refreshToken"`
+	User            *UserAccount `json:"user"`
+	AccountRestored bool         `json:"accountRestored"`
 }
 
 type UserPage struct {

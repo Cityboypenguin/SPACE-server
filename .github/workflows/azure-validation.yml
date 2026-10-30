@@ -1,0 +1,43 @@
+name: Validate Azure migration tooling
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'db/**'
+      - 'deploy/azure/**'
+      - 'compose.azure.yaml'
+      - '.github/workflows/*azure*.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build purge tool and run Go tests with isolated MySQL
+        env:
+          SPACE_TEST_MYSQL_DSN: root:test-only-password@tcp(127.0.0.1:3306)/
+          COURSE_PURGE_BIN: ${{ runner.temp }}/coursepurge
+        run: |
+          go build -o "$COURSE_PURGE_BIN" ./scripts/coursepurge
+          go test ./...
+      - name: Validate shell and migration orchestration
+        run: |
+          bash -n scripts/deploy_azure.sh scripts/azure_migration.sh scripts/migrate_message_media.sh
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v

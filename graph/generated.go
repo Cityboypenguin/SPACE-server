@@ -518,6 +518,7 @@ type ComplexityRoot struct {
 	}
 
 	PresignedUploadUrl struct {
+		Headers   func(childComplexity int) int
 		ObjectKey func(childComplexity int) int
 		UploadURL func(childComplexity int) int
 	}
@@ -597,6 +598,7 @@ type ComplexityRoot struct {
 		PresignedAvatarUploadURL        func(childComplexity int, contentType string) int
 		PresignedCommunityIconUploadURL func(childComplexity int, contentType string) int
 		PresignedMediaUploadURL         func(childComplexity int, contentType string) int
+		PresignedMessageMediaUploadURL  func(childComplexity int, contentType string) int
 		PresignedTermsDocumentUploadURL func(childComplexity int) int
 		Question                        func(childComplexity int, id string) int
 		Questions                       func(childComplexity int, roomID string, limit *int32, offset *int32) int
@@ -652,6 +654,7 @@ type ComplexityRoot struct {
 		CreatedAt           func(childComplexity int) int
 		ID                  func(childComplexity int) int
 		IsMessagingDisabled func(childComplexity int) int
+		IsPartnerWithdrawn  func(childComplexity int) int
 		LastReadAt          func(childComplexity int) int
 		LastReadMessageID   func(childComplexity int) int
 		Name                func(childComplexity int) int
@@ -734,6 +737,11 @@ type ComplexityRoot struct {
 		ID        func(childComplexity int) int
 	}
 
+	UploadHeader struct {
+		Name  func(childComplexity int) int
+		Value func(childComplexity int) int
+	}
+
 	User struct {
 		AccountID func(childComplexity int) int
 		AvatarURL func(childComplexity int) int
@@ -762,9 +770,10 @@ type ComplexityRoot struct {
 	}
 
 	UserAuthPayload struct {
-		RefreshToken func(childComplexity int) int
-		Token        func(childComplexity int) int
-		User         func(childComplexity int) int
+		AccountRestored func(childComplexity int) int
+		RefreshToken    func(childComplexity int) int
+		Token           func(childComplexity int) int
+		User            func(childComplexity int) int
 	}
 
 	UserPage struct {
@@ -987,6 +996,7 @@ type QueryResolver interface {
 	MyCourseRoomUnreadCounts(ctx context.Context) ([]*model.CourseRoomUnread, error)
 	PresignedAvatarUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
+	PresignedMessageMediaUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*model.PresignedUploadURL, error)
 	PresignedTermsDocumentUploadURL(ctx context.Context) (*model.PresignedUploadURL, error)
 	AdminListMediaMissingDimensions(ctx context.Context, limit *int32, offset *int32) ([]*model.Media, error)
@@ -3693,6 +3703,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PostPage.Total(childComplexity), true
 
+	case "PresignedUploadUrl.headers":
+		if e.ComplexityRoot.PresignedUploadUrl.Headers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PresignedUploadUrl.Headers(childComplexity), true
 	case "PresignedUploadUrl.objectKey":
 		if e.ComplexityRoot.PresignedUploadUrl.ObjectKey == nil {
 			break
@@ -4379,6 +4395,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedMediaUploadURL(childComplexity, args["contentType"].(string)), true
+	case "Query.presignedMessageMediaUploadUrl":
+		if e.ComplexityRoot.Query.PresignedMessageMediaUploadURL == nil {
+			break
+		}
+
+		args, err := ec.field_Query_presignedMessageMediaUploadUrl_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.PresignedMessageMediaUploadURL(childComplexity, args["contentType"].(string)), true
 	case "Query.presignedTermsDocumentUploadUrl":
 		if e.ComplexityRoot.Query.PresignedTermsDocumentUploadURL == nil {
 			break
@@ -4746,6 +4773,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Room.IsMessagingDisabled(childComplexity), true
+	case "Room.isPartnerWithdrawn":
+		if e.ComplexityRoot.Room.IsPartnerWithdrawn == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Room.IsPartnerWithdrawn(childComplexity), true
 	case "Room.lastReadAt":
 		if e.ComplexityRoot.Room.LastReadAt == nil {
 			break
@@ -5122,6 +5155,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TimetableEntry.ID(childComplexity), true
 
+	case "UploadHeader.name":
+		if e.ComplexityRoot.UploadHeader.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Name(childComplexity), true
+	case "UploadHeader.value":
+		if e.ComplexityRoot.UploadHeader.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Value(childComplexity), true
+
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
 			break
@@ -5233,6 +5279,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.UserAccountPage.Total(childComplexity), true
 
+	case "UserAuthPayload.accountRestored":
+		if e.ComplexityRoot.UserAuthPayload.AccountRestored == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserAuthPayload.AccountRestored(childComplexity), true
 	case "UserAuthPayload.refreshToken":
 		if e.ComplexityRoot.UserAuthPayload.RefreshToken == nil {
 			break
@@ -6238,6 +6290,8 @@ func (ec *executionContext) childFields_PresignedUploadUrl(ctx context.Context, 
 		return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
 	case "objectKey":
 		return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+	case "headers":
+		return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
 }
@@ -6328,6 +6382,8 @@ func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.
 		return ec.fieldContext_Room_updatedAt(ctx, field)
 	case "isMessagingDisabled":
 		return ec.fieldContext_Room_isMessagingDisabled(ctx, field)
+	case "isPartnerWithdrawn":
+		return ec.fieldContext_Room_isPartnerWithdrawn(ctx, field)
 	case "lastReadAt":
 		return ec.fieldContext_Room_lastReadAt(ctx, field)
 	case "lastReadMessageID":
@@ -6450,6 +6506,16 @@ func (ec *executionContext) childFields_TimetableEntry(ctx context.Context, fiel
 	return nil, fmt.Errorf("no field named %q was found under type TimetableEntry", field.Name)
 }
 
+func (ec *executionContext) childFields_UploadHeader(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_UploadHeader_name(ctx, field)
+	case "value":
+		return ec.fieldContext_UploadHeader_value(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UploadHeader", field.Name)
+}
+
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -6512,6 +6578,8 @@ func (ec *executionContext) childFields_UserAuthPayload(ctx context.Context, fie
 		return ec.fieldContext_UserAuthPayload_refreshToken(ctx, field)
 	case "user":
 		return ec.fieldContext_UserAuthPayload_user(ctx, field)
+	case "accountRestored":
+		return ec.fieldContext_UserAuthPayload_accountRestored(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserAuthPayload", field.Name)
 }
@@ -9619,6 +9687,20 @@ func (ec *executionContext) field_Query_presignedCommunityIconUploadUrl_args(ctx
 }
 
 func (ec *executionContext) field_Query_presignedMediaUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "contentType",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["contentType"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_presignedMessageMediaUploadUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "contentType",
@@ -20849,6 +20931,38 @@ func (ec *executionContext) fieldContext_PresignedUploadUrl_objectKey(_ context.
 	return graphql.NewScalarFieldContext("PresignedUploadUrl", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PresignedUploadUrl_headers(ctx context.Context, field graphql.CollectedField, obj *model.PresignedUploadURL) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Headers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+			return ec.marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PresignedUploadUrl_headers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PresignedUploadUrl",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UploadHeader(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Profile_user(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22595,6 +22709,50 @@ func (ec *executionContext) fieldContext_Query_presignedMediaUploadUrl(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_presignedMediaUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_presignedMessageMediaUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_presignedMessageMediaUploadUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().PresignedMessageMediaUploadURL(ctx, fc.Args["contentType"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PresignedUploadURL) graphql.Marshaler {
+			return ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_presignedMessageMediaUploadUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PresignedUploadUrl(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_presignedMessageMediaUploadUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -25262,6 +25420,29 @@ func (ec *executionContext) fieldContext_Room_isMessagingDisabled(_ context.Cont
 	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Room_isPartnerWithdrawn(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Room_isPartnerWithdrawn(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsPartnerWithdrawn, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Room_isPartnerWithdrawn(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Room", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Room_lastReadAt(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26656,6 +26837,52 @@ func (ec *executionContext) fieldContext_TimetableEntry_createdAt(_ context.Cont
 	return graphql.NewScalarFieldContext("TimetableEntry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _UploadHeader_name(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UploadHeader_value(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_value(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _User_ID(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27155,6 +27382,29 @@ func (ec *executionContext) fieldContext_UserAuthPayload_user(_ context.Context,
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _UserAuthPayload_accountRestored(ctx context.Context, field graphql.CollectedField, obj *model.UserAuthPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserAuthPayload_accountRestored(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AccountRestored, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UserAuthPayload_accountRestored(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserAuthPayload", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _UserPage_items(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
@@ -34019,6 +34269,11 @@ func (ec *executionContext) _PresignedUploadUrl(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "headers":
+			out.Values[i] = ec._PresignedUploadUrl_headers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -34969,6 +35224,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_presignedMediaUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedMessageMediaUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedMessageMediaUploadUrl(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -36523,6 +36800,11 @@ func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "isPartnerWithdrawn":
+			out.Values[i] = ec._Room_isPartnerWithdrawn(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "lastReadAt":
 			out.Values[i] = ec._Room_lastReadAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -37047,6 +37329,49 @@ func (ec *executionContext) _TimetableEntry(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var uploadHeaderImplementors = []string{"UploadHeader"}
+
+func (ec *executionContext) _UploadHeader(ctx context.Context, sel ast.SelectionSet, obj *model.UploadHeader) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, uploadHeaderImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UploadHeader")
+		case "name":
+			out.Values[i] = ec._UploadHeader_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._UploadHeader_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *model.User) graphql.Marshaler {
@@ -37293,6 +37618,11 @@ func (ec *executionContext) _UserAuthPayload(ctx context.Context, sel ast.Select
 			}
 		case "user":
 			out.Values[i] = ec._UserAuthPayload_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accountRestored":
+			out.Values[i] = ec._UserAuthPayload_accountRestored(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -39257,6 +39587,32 @@ func (ec *executionContext) unmarshalNUpdateProfileInput2githubᚗcomᚋCityboyp
 func (ec *executionContext) unmarshalNUpdateUserInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUpdateUserInput(ctx context.Context, v any) (model.UpdateUserInput, error) {
 	res, err := ec.unmarshalInputUpdateUserInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx context.Context, sel ast.SelectionSet, v *model.UploadHeader) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UploadHeader(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.User) graphql.Marshaler {

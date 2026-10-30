@@ -50,6 +50,18 @@ func (r *queryResolver) PresignedMediaUploadURL(ctx context.Context, contentType
 	return r.presignedUploadURL(ctx, upload.Media, strconv.FormatInt(claims.ID, 10), contentType)
 }
 
+// PresignedMessageMediaUploadURL is the resolver for the presignedMessageMediaUploadUrl field.
+//
+// PresignedMediaUploadURL と分けてあるのは置き場が違うため。DM の添付は非公開の
+// コンテナーへ入れ、表示は期限付きの署名付きURLで配る（upload.MessageMedia 参照）。
+func (r *queryResolver) PresignedMessageMediaUploadURL(ctx context.Context, contentType string) (*gqlmodel.PresignedUploadURL, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.presignedUploadURL(ctx, upload.MessageMedia, strconv.FormatInt(claims.ID, 10), contentType)
+}
+
 // PresignedCommunityIconUploadURL is the resolver for the presignedCommunityIconUploadUrl field.
 func (r *queryResolver) PresignedCommunityIconUploadURL(ctx context.Context, contentType string) (*gqlmodel.PresignedUploadURL, error) {
 	claims, err := requireAuth(ctx)

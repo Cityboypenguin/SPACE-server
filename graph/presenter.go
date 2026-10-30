@@ -187,51 +187,10 @@ func toGraphTimetableEntry(t *model.Timetable, course *model.Course) *gqlmodel.T
 	}
 }
 
-// toGraphAnonymousUser builds a synthetic User for a course-room author, using the
-// per-room anonymous identity instead of the real account. The ID is derived from
-// the identity row (not the real user ID), so it cannot be correlated with the
-// user's identity elsewhere in the app.
-func toGraphAnonymousUser(identity *model.RoomAnonymousIdentity) *gqlmodel.User {
-	if identity == nil {
-		return nil
-	}
-	createdAt := identity.CreatedAt.Format(timeFormat)
-	return &gqlmodel.User{
-		ID:        encodeGraphID("anon", identity.ID),
-		AccountID: "",
-		Name:      identity.Label,
-		Role:      "",
-		Status:    "",
-		CreatedAt: createdAt,
-		UpdatedAt: createdAt,
-	}
-}
-
-// anonymousPlaceholderLabel は匿名IDの行が見つからないときに使う、番号なしの
-// 匿名ラベル。実名の代わりに出す安全側の表示名。
-const anonymousPlaceholderLabel = "匿名"
-
-// anonymousPlaceholderUser は授業ルームなのに匿名IDの行が見つからないときの表示。
-//
-// ここで実名（実ユーザー）にフォールバックしてはいけない。授業内チャットは
-// 匿名が前提なので、行が引けなかっただけで実名が出てしまうと匿名性が壊れる。
-// 番号を持たない「匿名」ラベルに退化させるのが安全側の倒し方。
-// 通常は投稿時に必ず採番される（usecase/chat の ensureAnonymousIdentity）ので、
-// ここに来るのは採番前の古いデータか、採番に失敗した投稿だけ。
-func anonymousPlaceholderUser() *gqlmodel.User {
-	return &gqlmodel.User{
-		ID:        encodeGraphID("anon", 0),
-		AccountID: "",
-		Name:      anonymousPlaceholderLabel,
-		Role:      "",
-		Status:    "",
-	}
-}
-
 // toGraphQuestion sets User/BestAnswer as ID-only placeholders (matching the
 // toGraphPost pattern): the questionResolver.User/BestAnswer field resolvers read
-// obj.User.ID / obj.BestAnswer.ID to know what to fetch (and, for User, whether to
-// anonymize it), since Question does not expose a raw askerUserID field.
+// obj.User.ID / obj.BestAnswer.ID to know what to fetch, since Question does not
+// expose a raw askerUserID field.
 func toGraphQuestion(q *model.Question) *gqlmodel.Question {
 	if q == nil {
 		return nil
@@ -278,7 +237,7 @@ func toGraphAnswerWithLikes(aw *repository.AnswerWithLikes) *gqlmodel.Answer {
 
 // toGraphPoll sets User as an ID-only placeholder (matching the toGraphPost/
 // toGraphQuestion pattern): the pollResolver.User field resolver reads obj.User.ID
-// to know what to fetch (and whether to anonymize it).
+// to know what to fetch.
 func toGraphPoll(p *model.Poll) *gqlmodel.Poll {
 	if p == nil {
 		return nil
