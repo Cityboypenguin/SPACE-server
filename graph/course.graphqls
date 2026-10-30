@@ -55,6 +55,8 @@ type Course {
   # Non-admin callers get 0. Meant to be shown before adminDeleteCourse, since that
   # deletion cascades away every one of these registrations.
   registeredCount: Int!
+  # Admin-only: how many messages are in this course chat.
+  messageCount: Int!
 }
 
 input AdminCreateCourseInput {

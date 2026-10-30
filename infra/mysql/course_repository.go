@@ -257,7 +257,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 	}
 	defer rows.Close()
 
-	items, err := scanCourses(rows)
+	items, err := scanCoursesWithMessageCount(rows)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -353,7 +353,8 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 	}
 
 	query := `
-	SELECT ` + courseColumns + `
+	SELECT ` + courseColumns + `,
+		COUNT(DISTINCT m.id) AS message_count
         FROM courses c
 		LEFT JOIN timetables cu ON c.id = cu.course_id
         LEFT JOIN messages m ON c.room_id = m.room_id
@@ -370,7 +371,7 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 	}
 	defer rows.Close()
 
-	items, err := scanCourses(rows)
+	items, err := scanCoursesWithMessageCount(rows)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -401,6 +402,25 @@ func scanCourses(rows *sql.Rows) ([]*model.Course, error) {
 		var c model.Course
 		var createdAt, updatedAt int64
 		if err := rows.Scan(&c.ID, &c.RoomID, &c.DayOfWeek, &c.Period, &c.TeacherName, &c.CourseName, &c.Year, &c.Semester, &c.DedupKey, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		c.CreatedAt = time.Unix(createdAt, 0)
+		c.UpdatedAt = time.Unix(updatedAt, 0)
+		list = append(list, &c)
+	}
+	return list, rows.Err()
+}
+
+func scanCoursesWithMessageCount(rows *sql.Rows) ([]*model.Course, error) {
+	var list []*model.Course
+	for rows.Next() {
+		var c model.Course
+		var createdAt, updatedAt int64
+		if err := rows.Scan(
+			&c.ID, &c.RoomID, &c.DayOfWeek, &c.Period, &c.TeacherName,
+			&c.CourseName, &c.Year, &c.Semester, &c.DedupKey, &createdAt,
+			&updatedAt, &c.MessageCount,
+		); err != nil {
 			return nil, err
 		}
 		c.CreatedAt = time.Unix(createdAt, 0)

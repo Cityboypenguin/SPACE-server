@@ -127,15 +127,16 @@ func toGraphCourse(c *model.Course) *gqlmodel.Course {
 		return nil
 	}
 	return &gqlmodel.Course{
-		ID:          encodeGraphID("course", c.ID),
-		RoomID:      encodeGraphID("room", c.RoomID),
-		DayOfWeek:   c.DayOfWeek,
-		Period:      int32(c.Period),
-		TeacherName: c.TeacherName,
-		CourseName:  c.CourseName,
-		Year:        int32(c.Year),
-		Semester:    c.Semester,
-		CreatedAt:   c.CreatedAt.Format(timeFormat),
+		ID:           encodeGraphID("course", c.ID),
+		RoomID:       encodeGraphID("room", c.RoomID),
+		DayOfWeek:    c.DayOfWeek,
+		Period:       int32(c.Period),
+		TeacherName:  c.TeacherName,
+		CourseName:   c.CourseName,
+		Year:         int32(c.Year),
+		Semester:     c.Semester,
+		CreatedAt:    c.CreatedAt.Format(timeFormat),
+		MessageCount: int32(c.MessageCount),
 	}
 }
 

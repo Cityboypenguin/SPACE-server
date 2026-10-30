@@ -204,6 +204,7 @@ type Course struct {
 	Semester        string `json:"semester"`
 	CreatedAt       string `json:"createdAt"`
 	RegisteredCount int32  `json:"registeredCount"`
+	MessageCount    int32  `json:"messageCount"`
 }
 
 type CourseImportStatus struct {

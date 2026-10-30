@@ -217,6 +217,7 @@ type ComplexityRoot struct {
 		CreatedAt       func(childComplexity int) int
 		DayOfWeek       func(childComplexity int) int
 		ID              func(childComplexity int) int
+		MessageCount    func(childComplexity int) int
 		Period          func(childComplexity int) int
 		RegisteredCount func(childComplexity int) int
 		RoomID          func(childComplexity int) int
@@ -1826,6 +1827,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Course.ID(childComplexity), true
+	case "Course.messageCount":
+		if e.ComplexityRoot.Course.MessageCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Course.MessageCount(childComplexity), true
 	case "Course.period":
 		if e.ComplexityRoot.Course.Period == nil {
 			break
@@ -5925,6 +5932,8 @@ func (ec *executionContext) childFields_Course(ctx context.Context, field graphq
 		return ec.fieldContext_Course_createdAt(ctx, field)
 	case "registeredCount":
 		return ec.fieldContext_Course_registeredCount(ctx, field)
+	case "messageCount":
+		return ec.fieldContext_Course_messageCount(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Course", field.Name)
 }
@@ -13600,6 +13609,29 @@ func (ec *executionContext) _Course_registeredCount(ctx context.Context, field g
 	)
 }
 func (ec *executionContext) fieldContext_Course_registeredCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Course_messageCount(ctx context.Context, field graphql.CollectedField, obj *model.Course) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Course_messageCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MessageCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Course_messageCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -31526,6 +31558,11 @@ func (ec *executionContext) _Course(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "registeredCount":
 			out.Values[i] = ec._Course_registeredCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "messageCount":
+			out.Values[i] = ec._Course_messageCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

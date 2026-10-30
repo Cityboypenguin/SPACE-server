@@ -13,15 +13,16 @@ const (
 )
 
 type Course struct {
-	ID          int64
-	RoomID      int64
-	DayOfWeek   string
-	Period      int
-	TeacherName string
-	CourseName  string
-	Year        int
-	Semester    string
-	DedupKey    string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID           int64
+	RoomID       int64
+	DayOfWeek    string
+	Period       int
+	TeacherName  string
+	CourseName   string
+	Year         int
+	Semester     string
+	DedupKey     string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	MessageCount int
 }
