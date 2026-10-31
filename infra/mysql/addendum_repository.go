@@ -21,32 +21,51 @@ func NewMySQLAddendumRepository(db *sql.DB) repository.AddendumRepository {
 }
 
 func (r *MySQLAddendumRepository) CreateQuestionAddendum(ctx context.Context, a *model.Addendum, max int) error {
-	return r.create(ctx, "question_addenda", "question_id", a, max)
+	return r.create(ctx, "questions", "question_addenda", "question_id", a, max)
 }
 
 func (r *MySQLAddendumRepository) CreateAnswerAddendum(ctx context.Context, a *model.Addendum, max int) error {
-	return r.create(ctx, "answer_addenda", "answer_id", a, max)
+	return r.create(ctx, "answers", "answer_addenda", "answer_id", a, max)
 }
 
-// create は、数の確認と追加を1つの文にする（確認してから足す2段だと、同時に足された分だけ上限を超える）。
-// table / col は呼び出し元の定数だけ（利用者の入力は入らない）。
-func (r *MySQLAddendumRepository) create(ctx context.Context, table, col string, a *model.Addendum, max int) error {
-	res, err := r.DB.ExecContext(ctx,
-		`INSERT INTO `+table+` (`+col+`, user_id, body, created_at)
-		 SELECT ?, ?, ?, ? FROM DUAL WHERE (SELECT COUNT(*) FROM `+table+` WHERE `+col+` = ?) < ?`,
-		a.TargetID, a.UserID, a.Body, a.CreatedAt.Unix(), a.TargetID, max)
+// create は、数の確認と追加を1つのトランザクションで行う。先に親（質問・回答）の行を
+// ロックするので、同じ質問・回答への追記は直列になり、同時に足されても max を超えない
+// （数えてから足す2段だと、同時に数えた分だけ超える。分離レベルに頼らず親の行で止める）。
+// parent / table / col は呼び出し元の定数だけ（利用者の入力は入らない）。
+func (r *MySQLAddendumRepository) create(ctx context.Context, parent, table, col string, a *model.Addendum, max int) (err error) {
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var locked int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM `+parent+` WHERE id = ? FOR UPDATE`, a.TargetID).Scan(&locked); err != nil {
 		return err
 	}
-	if n == 0 {
-		return repository.ErrAddendumLimit
+	var count int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table+` WHERE `+col+` = ?`, a.TargetID).Scan(&count); err != nil {
+		return err
+	}
+	if count >= max {
+		err = repository.ErrAddendumLimit
+		return err
+	}
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO `+table+` (`+col+`, user_id, body, created_at) VALUES (?, ?, ?, ?)`,
+		a.TargetID, a.UserID, a.Body, a.CreatedAt.Unix())
+	if err != nil {
+		return err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
 		return err
 	}
 	a.ID = id

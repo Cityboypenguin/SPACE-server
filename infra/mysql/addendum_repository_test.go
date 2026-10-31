@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -91,5 +92,41 @@ func TestAddendumRepository_ListAnswererIDsIsDistinct(t *testing.T) {
 	}
 	if len(ids) != 2 || ids[0] != 11 || ids[1] != 12 {
 		t.Errorf("ids = %v, want [11 12] (重複なし)", ids)
+	}
+}
+
+// 同時に追記しても、上限を超えない。
+func TestAddendumRepository_ConcurrentCreatesRespectTheLimit(t *testing.T) {
+	repo, cleanup := addendumTestRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Unix(1700000000, 0)
+	const limit, attempts = 3, 12
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	succeeded := 0
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a, _ := model.NewAddendum(1, 10, "同時", now)
+			err := repo.CreateQuestionAddendum(ctx, a, limit)
+			if err == nil {
+				mu.Lock()
+				succeeded++
+				mu.Unlock()
+			} else if !errors.Is(err, repository.ErrAddendumLimit) {
+				t.Errorf("unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	got, err := repo.ListQuestionAddenda(ctx, []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if succeeded != limit || len(got[1]) != limit {
+		t.Errorf("succeeded = %d, stored = %d, want exactly %d", succeeded, len(got[1]), limit)
 	}
 }
