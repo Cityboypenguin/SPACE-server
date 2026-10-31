@@ -11,6 +11,8 @@ previous=$(sed -n 's/^ACR_IMAGE=//p' .env)
 [[ "$previous" =~ ^20260926project202609cr.azurecr.io/space-server:[A-Za-z0-9_.-]+$ ]] || { echo 'Invalid previous image' >&2; exit 2; }
 bash scripts/acr_login.sh
 ACR_IMAGE="$image" "${compose[@]}" pull app
+# app の起動でマイグレーションが走るので、その前に DB を保存する。失敗したら入れ替えない。
+flock /run/space-db-backup.lock "${SPACE_BACKUP_CMD:-/usr/local/bin/space-db-backup.sh}"
 set_image() {
   python3 - "$1" <<'PY'
 import os, pathlib, sys, tempfile

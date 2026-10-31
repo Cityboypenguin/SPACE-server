@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class DeployTests(unittest.TestCase):
     def test_success_and_rollback_preserve_secrets_and_dependencies(self):
-        for fail in (False, True):
-            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+        for fail, fail_backup in ((False, False), (True, False), (False, True)):
+            with self.subTest(fail=fail, fail_backup=fail_backup), tempfile.TemporaryDirectory() as directory:
                 d = Path(directory)
                 (d / 'scripts').mkdir()
                 (d / 'scripts/acr_login.sh').write_text('exit 0\n')
@@ -22,7 +22,7 @@ class DeployTests(unittest.TestCase):
                 (d / '.env').write_text(f'ACR_IMAGE={old}\nJWT_SECRET=test-placeholder\n')
                 (d / '.env').chmod(0o600)
                 commands = {
-                    'flock': '#!/bin/sh\nexit 0\n',
+                    'flock': '#!/bin/sh\nif test "$1" = -n; then exit 0; fi\nprintf "backup\\n" >> "$TRACE"\nif test "$FAIL_BACKUP" = yes; then exit 1; fi\n',
                     'sleep': '#!/bin/sh\nexit 0\n',
                     'docker': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TRACE"\n',
                     'curl': '#!/bin/sh\nif test "$FAIL_NEW" = yes && grep -q "' + new + '" .env; then exit 1; fi\nprintf 200\n',
@@ -31,14 +31,19 @@ class DeployTests(unittest.TestCase):
                     (d / name).write_text(content)
                     (d / name).chmod(0o700)
                 env = dict(os.environ, PATH=str(d) + ':' + os.environ['PATH'],
-                           SPACE_DEPLOY_DIR=str(d), TRACE=str(d / 'trace'), FAIL_NEW='yes' if fail else 'no')
+                           SPACE_DEPLOY_DIR=str(d), TRACE=str(d / 'trace'), FAIL_NEW='yes' if fail else 'no',
+                           FAIL_BACKUP='yes' if fail_backup else 'no')
                 result = subprocess.run(['bash', str(ROOT / 'scripts/deploy_azure.sh'), new],
                                         env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 1 if fail else 0, result.stderr)
+                self.assertEqual(result.returncode, 1 if fail or fail_backup else 0, result.stderr)
                 self.assertEqual((d / '.env').read_text(),
-                                 f'ACR_IMAGE={old if fail else new}\nJWT_SECRET=test-placeholder\n')
+                                 f'ACR_IMAGE={old if fail or fail_backup else new}\nJWT_SECRET=test-placeholder\n')
                 trace = (d / 'trace').read_text()
-                self.assertIn('up -d --no-deps app', trace)
+                self.assertIn('backup', trace)
+                if fail_backup:
+                    self.assertNotIn('up -d', trace)
+                else:
+                    self.assertLess(trace.index('backup'), trace.index('up -d --no-deps app'))
                 self.assertNotIn(' down', trace)
                 self.assertNotIn('test-placeholder', result.stdout + result.stderr)
                 self.assertEqual((d / '.env').stat().st_mode & 0o777, 0o600)

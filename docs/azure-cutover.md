@@ -13,9 +13,10 @@ AWS の `Deploy to ECS` は人間が停止し、サーバー・クライアン�
 クライアントの main は S3 と SWA の両方に配信されるため、無影響とは扱わない。
 AWS 向け `.github/workflows/deploy.yml` は切替完了後の別変更で削除する。
 
-Azure ワークフローは当面 `workflow_dispatch` だけで起動する。main に入る前は Actions の
-選択肢に出ない場合があるため、レビュー中はデプロイしない。GitHub Environment
-`azure-production` に承認者を設定し、切替日を決めて人間が承認する。
+Azure ワークフローは `main` への push で起動し、テストと DB バックアップのあとに VM を更新する。
+手動実行もできる。`main` に入るまでは自動で動かない。切替当日、`Develop` を `main` に
+入れると VM へ自動デプロイされ app が再起動するので、完了を確認してから次へ進む。
+完全に自動にするため、GitHub Environment `azure-production` に承認者は設定しない。
 登録する GitHub Secrets（値の登録は人間が行う）:
 
 | Secret | 内容 |
