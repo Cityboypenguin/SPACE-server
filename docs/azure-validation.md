@@ -77,3 +77,28 @@ VM、本番、main は変更していない。Docker Desktop の使い捨て MyS
 
 本番コピーのリハーサル、実Blobの削除確認、実ログイン・DM復号・SSE/WebSocket、VMデプロイは今回も未実施。
 到達バージョンの差分一覧は `azure-cutover.md` の統合時の表を参照。
+
+## 2026-11-01 本番DBコピーのリハーサル
+
+統合ブランチ `488f993` のイメージで、今のVMを使って実施した。作業中はnginxで接続元を制限し、
+SMTPと死活監視を止めた。AWSの本番は読み取りのみ。
+
+| 項目 | 結果 |
+| --- | --- |
+| `deploy_azure.sh` | 成功。DBバックアップ後にappを入れ替え |
+| 復元 | v73、users 466、messages 1844 |
+| マイグレーション | clean 73→108、10秒 |
+| 投稿の削除 | messages 60、questions 3、answers 4、polls 3、notifications 1。添付0 |
+| 残存データ | users 466、timetables 798、courses 8914、rooms 9056、DM 789 |
+| 画像の差分 | 128件を検証付きでコピー、303秒 |
+| DM添付の移動 | 117件、517秒。公開側の残り0。匿名アクセスは401 |
+| Blobの実在 | DBのstorage_key 963件すべて実在 |
+| DM本文の復号 | 789件成功、失敗0 |
+| 件数照合 | `verify_azure_counts.py` 一致 |
+| API、CORS、WebSocket前の疎通 | `/`、`/query`、SWAからのCORSを確認 |
+
+見つけて直した不具合: coursepurge の照合順序エラー。sync の全件再転送（`--missing-only` を追加）。
+
+未実施: 実ブラウザでのログイン、投稿、アップロード、DMの表示、SSE/WebSocketの動作、メール送信、
+Redis失効情報の取り込み、CloudFront経由の接続、切り替えの通しの所要時間の計測。
+

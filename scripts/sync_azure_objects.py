@@ -23,6 +23,8 @@ def main():
     p.add_argument('--prefix', default='')
     p.add_argument('--apply', action='store_true')
     p.add_argument('--exclude-manifest', type=Path, help='coursepurge journal; prevents reupload of deleted images')
+    p.add_argument('--missing-only', action='store_true',
+                   help='skip keys already in Blob with the same size; for the maintenance window')
     args = p.parse_args()
     excluded = set()
     if args.exclude_manifest:
@@ -33,10 +35,17 @@ def main():
     # CLI paginates automatically; do not use --no-paginate.
     objects = json.loads(run('aws', 's3api', 'list-objects-v2', '--bucket', args.bucket,
                              '--prefix', args.prefix, '--output', 'json')).get('Contents', [])
+    present = {}
+    if args.missing_only:
+        blobs = json.loads(run('az', 'storage', 'blob', 'list', '--account-name', args.account,
+                               '--container-name', args.container, '--auth-mode', 'login',
+                               '--prefix', args.prefix, '--num-results', '*', '--only-show-errors',
+                               '--query', '[].{name:name,size:properties.contentLength}', '-o', 'json'))
+        present = {b['name']: b['size'] for b in blobs}
     moved = 0
     for obj in objects:
         key = obj['Key']
-        if key in excluded:
+        if key in excluded or (args.missing_only and present.get(key) == obj['Size']):
             continue
         if not args.apply:
             moved += 1

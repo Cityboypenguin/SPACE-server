@@ -152,7 +152,8 @@ func main() {
 			if entity == "polls" {
 				singular = "poll"
 			}
-			predicates = append(predicates, "(LOWER(target_type)='"+singular+"' AND target_id IN (SELECT CAST(id AS CHAR) FROM purge_"+entity+"))")
+			// user_reports.target_id は文字列、notifications は数値で、照合順序も接続と異なる。
+			predicates = append(predicates, "(LOWER(target_type)='"+singular+"' AND CAST(target_id AS CHAR) COLLATE utf8mb4_bin IN (SELECT CAST(id AS CHAR) COLLATE utf8mb4_bin FROM purge_"+entity+"))")
 		}
 		where := strings.Join(predicates, " OR ")
 		m.Counts[t] = scalar(tx, "SELECT COUNT(*) FROM "+t+" WHERE "+where)

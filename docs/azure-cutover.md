@@ -74,6 +74,9 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
    dirtyなら停止して調査し、versionの強制変更はしない。
 4. 下記の投稿削除を実行する。DB件数とBlob削除確認まで成功させる。件数照合用に削除記録を保管する。
 5. `scripts/sync_azure_objects.py` で画像の差分を運ぶ。既定は候補件数のみ。
+   メンテナンス中は `--missing-only` を付ける。付けないと全件（約1.3GB）を転送し直す。
+   本番コピーのリハーサルでは128件で約5分、DM添付117件の移動で約9分かかった。
+   実行中はVMの `/etc/cron.d/space-healthcheck` を外す。外さないと監視がappを再起動する。
    `--bucket <AWS公開bucket> --container space-avatars --account <account>` に加え、
    **必ず `--exclude-manifest /secure/course-purge.json`** を渡して削除済み画像の再投入を防ぐ。
    確認後に `--apply` を付ける。S3は読取りのみ。アップロード後は取得してSHA256を検証する。
