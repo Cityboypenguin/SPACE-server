@@ -343,7 +343,9 @@ type ComplexityRoot struct {
 		AddMessageReaction                func(childComplexity int, roomID string, messageID string, emoji string) int
 		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
 		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
+		AdminCreateNGWord                 func(childComplexity int, pattern string, matchType model.NGWordMatchType) int
 		AdminDeleteCourse                 func(childComplexity int, id string) int
+		AdminDeleteNGWord                 func(childComplexity int, id string) int
 		AdminDeletePost                   func(childComplexity int, id string) int
 		AdminDeleteQuestion               func(childComplexity int, id string) int
 		AdminRegisterTimetableEntry       func(childComplexity int, userID string, courseID string) int
@@ -442,6 +444,31 @@ type ComplexityRoot struct {
 		VerifyEmailOtp                    func(childComplexity int, email string, otp string) int
 		VerifyPasswordResetOtp            func(childComplexity int, email string, otp string) int
 		VotePoll                          func(childComplexity int, pollID string, optionIDs []string) int
+	}
+
+	NGWord struct {
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		MatchType func(childComplexity int) int
+		Pattern   func(childComplexity int) int
+	}
+
+	NGWordCount struct {
+		Count   func(childComplexity int) int
+		Pattern func(childComplexity int) int
+	}
+
+	NGWordStats struct {
+		ByUser func(childComplexity int) int
+		ByWord func(childComplexity int) int
+		Total  func(childComplexity int) int
+	}
+
+	NGWordUserCount struct {
+		AccountID func(childComplexity int) int
+		Count     func(childComplexity int) int
+		Name      func(childComplexity int) int
+		UserID    func(childComplexity int) int
 	}
 
 	Notification struct {
@@ -569,6 +596,8 @@ type ComplexityRoot struct {
 		AdminListMediaMissingDimensions func(childComplexity int, limit *int32, offset *int32) int
 		AdminListPosts                  func(childComplexity int, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int, limit *int32, offset *int32) int
+		AdminNGWordStats                func(childComplexity int) int
+		AdminNGWords                    func(childComplexity int) int
 		AdminSearchUsers                func(childComplexity int, keyword string, limit *int32, offset *int32) int
 		Administrators                  func(childComplexity int, limit *int32, offset *int32) int
 		Announcement                    func(childComplexity int, id string) int
@@ -857,6 +886,8 @@ type MutationResolver interface {
 	AdminSetTimetableEntryColor(ctx context.Context, id string, userID string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
 	AdminSetUserTimetable(ctx context.Context, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	AdminDeleteQuestion(ctx context.Context, id string) (bool, error)
+	AdminCreateNGWord(ctx context.Context, pattern string, matchType model.NGWordMatchType) (*model.NGWord, error)
+	AdminDeleteNGWord(ctx context.Context, id string) (bool, error)
 	AdminTriggerCourseImport(ctx context.Context, year int32) (*model.CourseImportStatus, error)
 	AdminCreateCourse(ctx context.Context, input model.AdminCreateCourseInput) (*model.Course, error)
 	AdminDeleteCourse(ctx context.Context, id string) (bool, error)
@@ -992,6 +1023,8 @@ type QueryResolver interface {
 	AdminListCommunities(ctx context.Context, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.AdminCommunityPage, error)
 	AdminGetCommunity(ctx context.Context, id string) (*model.AdminCommunity, error)
 	AdminListPosts(ctx context.Context, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) (*model.PostPage, error)
+	AdminNGWords(ctx context.Context) ([]*model.NGWord, error)
+	AdminNGWordStats(ctx context.Context) (*model.NGWordStats, error)
 	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.CoursePage, error)
 	Announcements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
@@ -2341,6 +2374,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminCreateCourse(childComplexity, args["input"].(model.AdminCreateCourseInput)), true
+	case "Mutation.adminCreateNGWord":
+		if e.ComplexityRoot.Mutation.AdminCreateNGWord == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminCreateNGWord_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminCreateNGWord(childComplexity, args["pattern"].(string), args["matchType"].(model.NGWordMatchType)), true
 	case "Mutation.adminDeleteCourse":
 		if e.ComplexityRoot.Mutation.AdminDeleteCourse == nil {
 			break
@@ -2352,6 +2396,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminDeleteCourse(childComplexity, args["id"].(string)), true
+	case "Mutation.adminDeleteNGWord":
+		if e.ComplexityRoot.Mutation.AdminDeleteNGWord == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminDeleteNGWord_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminDeleteNGWord(childComplexity, args["id"].(string)), true
 	case "Mutation.adminDeletePost":
 		if e.ComplexityRoot.Mutation.AdminDeletePost == nil {
 			break
@@ -3406,6 +3461,88 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.VotePoll(childComplexity, args["pollID"].(string), args["optionIDs"].([]string)), true
 
+	case "NGWord.createdAt":
+		if e.ComplexityRoot.NGWord.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWord.CreatedAt(childComplexity), true
+	case "NGWord.ID":
+		if e.ComplexityRoot.NGWord.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWord.ID(childComplexity), true
+	case "NGWord.matchType":
+		if e.ComplexityRoot.NGWord.MatchType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWord.MatchType(childComplexity), true
+	case "NGWord.pattern":
+		if e.ComplexityRoot.NGWord.Pattern == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWord.Pattern(childComplexity), true
+
+	case "NGWordCount.count":
+		if e.ComplexityRoot.NGWordCount.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordCount.Count(childComplexity), true
+	case "NGWordCount.pattern":
+		if e.ComplexityRoot.NGWordCount.Pattern == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordCount.Pattern(childComplexity), true
+
+	case "NGWordStats.byUser":
+		if e.ComplexityRoot.NGWordStats.ByUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordStats.ByUser(childComplexity), true
+	case "NGWordStats.byWord":
+		if e.ComplexityRoot.NGWordStats.ByWord == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordStats.ByWord(childComplexity), true
+	case "NGWordStats.total":
+		if e.ComplexityRoot.NGWordStats.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordStats.Total(childComplexity), true
+
+	case "NGWordUserCount.accountID":
+		if e.ComplexityRoot.NGWordUserCount.AccountID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordUserCount.AccountID(childComplexity), true
+	case "NGWordUserCount.count":
+		if e.ComplexityRoot.NGWordUserCount.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordUserCount.Count(childComplexity), true
+	case "NGWordUserCount.name":
+		if e.ComplexityRoot.NGWordUserCount.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordUserCount.Name(childComplexity), true
+	case "NGWordUserCount.userID":
+		if e.ComplexityRoot.NGWordUserCount.UserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NGWordUserCount.UserID(childComplexity), true
+
 	case "Notification.actor":
 		if e.ComplexityRoot.Notification.Actor == nil {
 			break
@@ -4021,6 +4158,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminListTerms(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminNGWordStats":
+		if e.ComplexityRoot.Query.AdminNGWordStats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminNGWordStats(childComplexity), true
+	case "Query.adminNGWords":
+		if e.ComplexityRoot.Query.AdminNGWords == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminNGWords(childComplexity), true
 	case "Query.adminSearchUsers":
 		if e.ComplexityRoot.Query.AdminSearchUsers == nil {
 			break
@@ -6238,6 +6387,56 @@ func (ec *executionContext) childFields_MessageReaction(ctx context.Context, fie
 	return nil, fmt.Errorf("no field named %q was found under type MessageReaction", field.Name)
 }
 
+func (ec *executionContext) childFields_NGWord(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_NGWord_ID(ctx, field)
+	case "pattern":
+		return ec.fieldContext_NGWord_pattern(ctx, field)
+	case "matchType":
+		return ec.fieldContext_NGWord_matchType(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_NGWord_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NGWord", field.Name)
+}
+
+func (ec *executionContext) childFields_NGWordCount(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "pattern":
+		return ec.fieldContext_NGWordCount_pattern(ctx, field)
+	case "count":
+		return ec.fieldContext_NGWordCount_count(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NGWordCount", field.Name)
+}
+
+func (ec *executionContext) childFields_NGWordStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "total":
+		return ec.fieldContext_NGWordStats_total(ctx, field)
+	case "byWord":
+		return ec.fieldContext_NGWordStats_byWord(ctx, field)
+	case "byUser":
+		return ec.fieldContext_NGWordStats_byUser(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NGWordStats", field.Name)
+}
+
+func (ec *executionContext) childFields_NGWordUserCount(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "userID":
+		return ec.fieldContext_NGWordUserCount_userID(ctx, field)
+	case "name":
+		return ec.fieldContext_NGWordUserCount_name(ctx, field)
+	case "accountID":
+		return ec.fieldContext_NGWordUserCount_accountID(ctx, field)
+	case "count":
+		return ec.fieldContext_NGWordUserCount_count(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NGWordUserCount", field.Name)
+}
+
 func (ec *executionContext) childFields_Notification(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -6930,7 +7129,43 @@ func (ec *executionContext) field_Mutation_adminCreateCourse_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_adminCreateNGWord_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "pattern",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["pattern"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "matchType",
+		func(ctx context.Context, v any) (model.NGWordMatchType, error) {
+			return ec.unmarshalNNGWordMatchType2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordMatchType(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["matchType"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_adminDeleteCourse_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminDeleteNGWord_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
@@ -16002,6 +16237,94 @@ func (ec *executionContext) fieldContext_Mutation_adminDeleteQuestion(ctx contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_adminCreateNGWord(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminCreateNGWord(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminCreateNGWord(ctx, fc.Args["pattern"].(string), fc.Args["matchType"].(model.NGWordMatchType))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.NGWord) graphql.Marshaler {
+			return ec.marshalNNGWord2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWord(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminCreateNGWord(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NGWord(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminCreateNGWord_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminDeleteNGWord(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminDeleteNGWord(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminDeleteNGWord(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminDeleteNGWord(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminDeleteNGWord_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_adminTriggerCourseImport(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19866,6 +20189,323 @@ func (ec *executionContext) fieldContext_Mutation_setTimetableProfileVisibility(
 	return fc, nil
 }
 
+func (ec *executionContext) _NGWord_ID(ctx context.Context, field graphql.CollectedField, obj *model.NGWord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWord_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWord_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWord", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NGWord_pattern(ctx context.Context, field graphql.CollectedField, obj *model.NGWord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWord_pattern(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pattern, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWord_pattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWord", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NGWord_matchType(ctx context.Context, field graphql.CollectedField, obj *model.NGWord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWord_matchType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MatchType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.NGWordMatchType) graphql.Marshaler {
+			return ec.marshalNNGWordMatchType2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordMatchType(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWord_matchType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWord", field, false, false, errors.New("field of type NGWordMatchType does not have child fields"))
+}
+
+func (ec *executionContext) _NGWord_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.NGWord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWord_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWord_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWord", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordCount_pattern(ctx context.Context, field graphql.CollectedField, obj *model.NGWordCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordCount_pattern(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pattern, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordCount_pattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordCount", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordCount_count(ctx context.Context, field graphql.CollectedField, obj *model.NGWordCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordCount_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordCount", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordStats_total(ctx context.Context, field graphql.CollectedField, obj *model.NGWordStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordStats_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordStats_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordStats_byWord(ctx context.Context, field graphql.CollectedField, obj *model.NGWordStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordStats_byWord(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ByWord, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.NGWordCount) graphql.Marshaler {
+			return ec.marshalNNGWordCount2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordCountᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordStats_byWord(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NGWordStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NGWordCount(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NGWordStats_byUser(ctx context.Context, field graphql.CollectedField, obj *model.NGWordStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordStats_byUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ByUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.NGWordUserCount) graphql.Marshaler {
+			return ec.marshalNNGWordUserCount2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordUserCountᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordStats_byUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NGWordStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NGWordUserCount(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NGWordUserCount_userID(ctx context.Context, field graphql.CollectedField, obj *model.NGWordUserCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordUserCount_userID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordUserCount_userID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordUserCount", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordUserCount_name(ctx context.Context, field graphql.CollectedField, obj *model.NGWordUserCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordUserCount_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordUserCount_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordUserCount", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordUserCount_accountID(ctx context.Context, field graphql.CollectedField, obj *model.NGWordUserCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordUserCount_accountID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AccountID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordUserCount_accountID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordUserCount", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NGWordUserCount_count(ctx context.Context, field graphql.CollectedField, obj *model.NGWordUserCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NGWordUserCount_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NGWordUserCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NGWordUserCount", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _Notification_ID(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22360,6 +23000,70 @@ func (ec *executionContext) fieldContext_Query_adminListPosts(ctx context.Contex
 	if fc.Args, err = ec.field_Query_adminListPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminNGWords(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminNGWords(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminNGWords(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.NGWord) graphql.Marshaler {
+			return ec.marshalNNGWord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminNGWords(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NGWord(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminNGWordStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminNGWordStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminNGWordStats(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.NGWordStats) graphql.Marshaler {
+			return ec.marshalNNGWordStats2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordStats(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminNGWordStats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NGWordStats(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -33249,6 +33953,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "adminCreateNGWord":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminCreateNGWord(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminDeleteNGWord":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminDeleteNGWord(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "adminTriggerCourseImport":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_adminTriggerCourseImport(ctx, field)
@@ -33876,6 +34594,203 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setTimetableProfileVisibility(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var nGWordImplementors = []string{"NGWord"}
+
+func (ec *executionContext) _NGWord(ctx context.Context, sel ast.SelectionSet, obj *model.NGWord) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nGWordImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NGWord")
+		case "ID":
+			out.Values[i] = ec._NGWord_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pattern":
+			out.Values[i] = ec._NGWord_pattern(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "matchType":
+			out.Values[i] = ec._NGWord_matchType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._NGWord_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var nGWordCountImplementors = []string{"NGWordCount"}
+
+func (ec *executionContext) _NGWordCount(ctx context.Context, sel ast.SelectionSet, obj *model.NGWordCount) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nGWordCountImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NGWordCount")
+		case "pattern":
+			out.Values[i] = ec._NGWordCount_pattern(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._NGWordCount_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var nGWordStatsImplementors = []string{"NGWordStats"}
+
+func (ec *executionContext) _NGWordStats(ctx context.Context, sel ast.SelectionSet, obj *model.NGWordStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nGWordStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NGWordStats")
+		case "total":
+			out.Values[i] = ec._NGWordStats_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "byWord":
+			out.Values[i] = ec._NGWordStats_byWord(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "byUser":
+			out.Values[i] = ec._NGWordStats_byUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var nGWordUserCountImplementors = []string{"NGWordUserCount"}
+
+func (ec *executionContext) _NGWordUserCount(ctx context.Context, sel ast.SelectionSet, obj *model.NGWordUserCount) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nGWordUserCountImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NGWordUserCount")
+		case "userID":
+			out.Values[i] = ec._NGWordUserCount_userID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._NGWordUserCount_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accountID":
+			out.Values[i] = ec._NGWordUserCount_accountID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._NGWordUserCount_count(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -35544,6 +36459,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_adminListPosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminNGWords":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminNGWords(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminNGWordStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminNGWordStats(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -39887,6 +40846,104 @@ func (ec *executionContext) marshalNMessageReaction2ᚖgithubᚗcomᚋCityboypen
 		return graphql.Null
 	}
 	return ec._MessageReaction(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNGWord2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.NGWord) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNGWord2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWord(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNGWord2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWord(ctx context.Context, sel ast.SelectionSet, v *model.NGWord) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NGWord(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNGWordCount2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordCountᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.NGWordCount) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNGWordCount2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordCount(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNGWordCount2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordCount(ctx context.Context, sel ast.SelectionSet, v *model.NGWordCount) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NGWordCount(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNNGWordMatchType2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordMatchType(ctx context.Context, v any) (model.NGWordMatchType, error) {
+	var res model.NGWordMatchType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNNGWordMatchType2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordMatchType(ctx context.Context, sel ast.SelectionSet, v model.NGWordMatchType) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNNGWordStats2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordStats(ctx context.Context, sel ast.SelectionSet, v *model.NGWordStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NGWordStats(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNGWordUserCount2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordUserCountᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.NGWordUserCount) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNGWordUserCount2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordUserCount(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNGWordUserCount2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNGWordUserCount(ctx context.Context, sel ast.SelectionSet, v *model.NGWordUserCount) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NGWordUserCount(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNNotification2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐNotificationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Notification) graphql.Marshaler {

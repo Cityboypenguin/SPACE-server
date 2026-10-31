@@ -55,6 +55,7 @@ import (
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -523,7 +524,12 @@ func main() {
 		CheckRoomWritable:  checkRoomWritableUseCase,
 		CheckBlockRelation: checkBlockRelationUseCase,
 	})
+	// NGワード。授業内チャットのメッセージ・質問・回答を、投稿の前に検査する。
+	ngWordRepository := mysql.NewMySQLNGWordRepository(database)
+	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
+	ngWordAdmin := ngwordusecase.NewAdminService(ngWordRepository, ngWordGuard)
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
+		NGWords:                      ngWordGuard,
 		Access:                       chatAccessPolicy,
 		GetRoom:                      getRoomUseCase,
 		GetRoomUserRole:              getRoomUserRoleUseCase,
@@ -559,6 +565,13 @@ func main() {
 		GetCourseRoomReadStatus: getCourseRoomReadStatusUseCase,
 		Events:                  chatEventPublisher,
 	})
+
+	// 質問・回答の投稿と編集には、NGワードの検査を前置きする。
+	questionUseCases := di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository)
+	questionUseCases.CreateQuestionUseCase = ngwordusecase.GuardCreateQuestion(questionUseCases.CreateQuestionUseCase, ngWordGuard)
+	questionUseCases.UpdateQuestionUseCase = ngwordusecase.GuardUpdateQuestion(questionUseCases.UpdateQuestionUseCase, ngWordGuard)
+	questionUseCases.AnswerQuestionUseCase = ngwordusecase.GuardAnswerQuestion(questionUseCases.AnswerQuestionUseCase, ngWordGuard)
+	questionUseCases.UpdateAnswerUseCase = ngwordusecase.GuardUpdateAnswer(questionUseCases.UpdateAnswerUseCase, ngWordGuard)
 
 	resolver := &graph.Resolver{
 		StorageRepository:     storageRepository,
@@ -666,11 +679,12 @@ func main() {
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
 		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		QuestionUseCases:  questionUseCases,
 		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
+		NGWordAdmin:                  ngWordAdmin,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
 		ManageUserSettingUsecase:     *manageUserSettingUseCase,
 		GetAnalyticsUseCase:          getAnalyticsUseCase,

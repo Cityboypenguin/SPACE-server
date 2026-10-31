@@ -783,3 +783,71 @@ func (r *subscriptionResolver) AdminCourseImportStatusUpdated(ctx context.Contex
 		},
 	), nil
 }
+
+// AdminCreateNGWord is the resolver for the adminCreateNGWord field.
+func (r *mutationResolver) AdminCreateNGWord(ctx context.Context, pattern string, matchType gqlmodel.NGWordMatchType) (*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	w, err := r.NGWordAdmin.Create(ctx, pattern, fromGraphNGWordMatchType(matchType))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphNGWord(w), nil
+}
+
+// AdminDeleteNGWord is the resolver for the adminDeleteNGWord field.
+func (r *mutationResolver) AdminDeleteNGWord(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "ng_word", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid ng word id")
+	}
+	return r.NGWordAdmin.Delete(ctx, numericID)
+}
+
+// AdminNGWords is the resolver for the adminNGWords field.
+func (r *queryResolver) AdminNGWords(ctx context.Context) ([]*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	words, err := r.NGWordAdmin.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.NGWord, 0, len(words))
+	for _, w := range words {
+		out = append(out, toGraphNGWord(w))
+	}
+	return out, nil
+}
+
+// AdminNGWordStats is the resolver for the adminNGWordStats field.
+func (r *queryResolver) AdminNGWordStats(ctx context.Context) (*gqlmodel.NGWordStats, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	stats, err := r.NGWordAdmin.Stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.NGWordStats{
+		Total:  int32(stats.Total),
+		ByWord: make([]*gqlmodel.NGWordCount, 0, len(stats.ByWord)),
+		ByUser: make([]*gqlmodel.NGWordUserCount, 0, len(stats.ByUser)),
+	}
+	for _, c := range stats.ByWord {
+		out.ByWord = append(out.ByWord, &gqlmodel.NGWordCount{Pattern: c.Pattern, Count: int32(c.Count)})
+	}
+	for _, c := range stats.ByUser {
+		out.ByUser = append(out.ByUser, &gqlmodel.NGWordUserCount{
+			UserID:    encodeGraphID("user", c.UserID),
+			Name:      c.Name,
+			AccountID: c.AccountID,
+			Count:     int32(c.Count),
+		})
+	}
+	return out, nil
+}

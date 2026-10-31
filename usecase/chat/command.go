@@ -8,11 +8,13 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
@@ -54,6 +56,9 @@ type MessageCommandDeps struct {
 	// GetOrCreateAnonymousIdentity は授業ルームへの投稿時に匿名IDを確定させる。
 	GetOrCreateAnonymousIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase
 
+	// NGWords は授業内チャットの投稿の前に、NGワードを検査する。nil なら検査しない。
+	NGWords ngword.Guard
+
 	// Events は配信・通知の出口。nil を渡すと何もしない実装が入る。
 	Events EventPublisher
 }
@@ -67,6 +72,9 @@ type messageCommandService struct {
 func NewMessageCommandService(deps MessageCommandDeps) MessageCommandService {
 	if deps.Events == nil {
 		deps.Events = NoopEventPublisher{}
+	}
+	if deps.NGWords == nil {
+		deps.NGWords = ngword.NoopGuard{}
 	}
 	return &messageCommandService{deps: deps}
 }
@@ -106,6 +114,11 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 
 	access, err := s.deps.Access.ensureWriteAccessFor(ctx, claims, in.RoomID)
 	if err != nil {
+		return nil, err
+	}
+
+	// NGワードは授業内チャットだけが対象（スタンプには文面が無い）。管理者の投稿は止めない。
+	if err := s.screenNGWords(ctx, claims, access.Room, in.Content); err != nil {
 		return nil, err
 	}
 
@@ -171,6 +184,11 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	// スタンプのメッセージには、直す本文が無い（削除はできる）。
 	if existing.StampID != nil {
 		return nil, apperr.InvalidInput("スタンプは編集できません")
+	}
+
+	// 編集後の本文も、投稿と同じくNGワードを検査する（直して通す抜け道を作らない）。
+	if err := s.screenNGWords(ctx, claims, room, in.Content); err != nil {
+		return nil, err
 	}
 
 	// 本文を空にする編集は、添付が1枚も無いときだけ弾く
@@ -309,6 +327,15 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 //
 // 権限判定ではなく「投稿という行為に伴う副作用」なので、AccessPolicy ではなく
 // 送信サービス側に置いている。
+// screenNGWords は授業ルームの投稿だけにNGワードの検査をかける（管理者は除く）。
+func (s *messageCommandService) screenNGWords(ctx context.Context, claims *auth.Claims, room *model.Room, content string) error {
+	if room == nil || room.Type != model.RoomTypeCourse || authz.IsAdminRole(claims.Role) {
+		return nil
+	}
+	roomID := room.ID
+	return s.deps.NGWords.Screen(ctx, claims.ID, &roomID, model.NGWordSourceMessage, content)
+}
+
 func (s *messageCommandService) ensureAnonymousIdentity(ctx context.Context, room *model.Room, userID int64) error {
 	if room == nil || room.Type != model.RoomTypeCourse {
 		return nil

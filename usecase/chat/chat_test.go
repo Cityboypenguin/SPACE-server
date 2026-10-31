@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
@@ -104,11 +105,13 @@ func (f *fakeGetMessage) Execute(_ context.Context, _ int64) (*model.Message, er
 }
 
 type fakeSendMessage struct {
+	calls         int
 	savedMentions []*model.Mention
 	savedStampID  *string
 }
 
 func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error) {
+	f.calls++
 	f.savedMentions = mentions
 	f.savedStampID = stampID
 	return &model.Message{ID: 100, RoomID: roomID, UserID: userID, Content: content, ReplyToID: replyToID, StampID: stampID, Mentions: mentions}, nil
@@ -506,6 +509,44 @@ func TestSendMessage_CourseRoomAssignsAnonymousIdentityAtPostTime(t *testing.T) 
 	}
 	if h.anonIdentity.roomID != courseRoomID {
 		t.Errorf("allocated in room %d, want %d", h.anonIdentity.roomID, courseRoomID)
+	}
+}
+
+// fakeNGGuard は contains を含む文面を止める。screened は検査に回った回数。
+type fakeNGGuard struct {
+	contains string
+	screened int
+}
+
+func (g *fakeNGGuard) Screen(_ context.Context, _ int64, _ *int64, _ model.NGWordSource, texts ...string) error {
+	g.screened++
+	for _, t := range texts {
+		if strings.Contains(t, g.contains) {
+			return apperr.InvalidInput("blocked")
+		}
+	}
+	return nil
+}
+
+func TestSendMessage_NGWordBlocksOnlyInCourseRooms(t *testing.T) {
+	h := newHarness()
+	guard := &fakeNGGuard{contains: "NG"}
+	h.commandDeps.NGWords = guard
+	h.rebuild()
+
+	_, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (授業内チャットはNGワードで止める)", err)
+	}
+	if h.sendMessage.calls != 0 {
+		t.Error("a blocked message must not be saved")
+	}
+
+	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("community room: err = %v, want nil (対象は授業内チャットだけ)", err)
+	}
+	if _, err := h.commands.SendMessage(ctxAsAdmin(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("admin: err = %v, want nil (管理者の投稿は止めない)", err)
 	}
 }
 

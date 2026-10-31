@@ -632,3 +632,23 @@ func toGraphCommunityStatItem(c *model.CommunityStatItem) *gqlmodel.CommunitySta
 		MessageCount: int32(c.MessageCount),
 	}
 }
+
+func toGraphNGWord(w *model.NGWord) *gqlmodel.NGWord {
+	matchType := gqlmodel.NGWordMatchTypeWord
+	if w.MatchType == model.NGWordMatchRegex {
+		matchType = gqlmodel.NGWordMatchTypeRegex
+	}
+	return &gqlmodel.NGWord{
+		ID:        encodeGraphID("ng_word", w.ID),
+		Pattern:   w.Pattern,
+		MatchType: matchType,
+		CreatedAt: w.CreatedAt.Format(timeFormat),
+	}
+}
+
+func fromGraphNGWordMatchType(t gqlmodel.NGWordMatchType) model.NGWordMatchType {
+	if t == gqlmodel.NGWordMatchTypeRegex {
+		return model.NGWordMatchRegex
+	}
+	return model.NGWordMatchWord
+}

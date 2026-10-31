@@ -399,6 +399,31 @@ type MessageReaction struct {
 type Mutation struct {
 }
 
+type NGWord struct {
+	ID        string          `json:"ID"`
+	Pattern   string          `json:"pattern"`
+	MatchType NGWordMatchType `json:"matchType"`
+	CreatedAt string          `json:"createdAt"`
+}
+
+type NGWordCount struct {
+	Pattern string `json:"pattern"`
+	Count   int32  `json:"count"`
+}
+
+type NGWordStats struct {
+	Total  int32              `json:"total"`
+	ByWord []*NGWordCount     `json:"byWord"`
+	ByUser []*NGWordUserCount `json:"byUser"`
+}
+
+type NGWordUserCount struct {
+	UserID    string `json:"userID"`
+	Name      string `json:"name"`
+	AccountID string `json:"accountID"`
+	Count     int32  `json:"count"`
+}
+
 type Notification struct {
 	ID            string   `json:"ID"`
 	Type          string   `json:"type"`
@@ -1078,6 +1103,61 @@ func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e InquiryStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type NGWordMatchType string
+
+const (
+	NGWordMatchTypeWord  NGWordMatchType = "WORD"
+	NGWordMatchTypeRegex NGWordMatchType = "REGEX"
+)
+
+var AllNGWordMatchType = []NGWordMatchType{
+	NGWordMatchTypeWord,
+	NGWordMatchTypeRegex,
+}
+
+func (e NGWordMatchType) IsValid() bool {
+	switch e {
+	case NGWordMatchTypeWord, NGWordMatchTypeRegex:
+		return true
+	}
+	return false
+}
+
+func (e NGWordMatchType) String() string {
+	return string(e)
+}
+
+func (e *NGWordMatchType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = NGWordMatchType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid NGWordMatchType", str)
+	}
+	return nil
+}
+
+func (e NGWordMatchType) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *NGWordMatchType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e NGWordMatchType) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

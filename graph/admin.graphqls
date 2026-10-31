@@ -37,6 +37,9 @@ extend type Query {
     limit: Int = 20
     offset: Int = 0
   ): PostPage!
+  # 授業内チャットのNGワードの一覧と、止めた回数の集計。
+  adminNGWords: [NGWord!]!
+  adminNGWordStats: NGWordStats!
   adminListCourses(
     year: Int
     semester: String
@@ -68,6 +71,9 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
+  # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答）。
+  adminCreateNGWord(pattern: String!, matchType: NGWordMatchType!): NGWord!
+  adminDeleteNGWord(id: ID!): Boolean!
   adminTriggerCourseImport(year: Int!): CourseImportStatus!
   adminCreateCourse(input: AdminCreateCourseInput!): Course!
   # Deletes the course's chat room, which cascades to the course row itself, every
@@ -269,4 +275,37 @@ enum AdminPostStatus {
   ALL
   ACTIVE
   DELETED
+}
+
+enum NGWordMatchType {
+  # 含む。大小・全半角は区別しない。
+  WORD
+  # 正規表現（RE2）。例: 9桁の数字 (^|\D)\d{9}($|\D)
+  REGEX
+}
+
+type NGWord {
+  ID: ID!
+  pattern: String!
+  matchType: NGWordMatchType!
+  createdAt: String!
+}
+
+# 止めた回数。本文は残さない。
+type NGWordStats {
+  total: Int!
+  byWord: [NGWordCount!]!
+  byUser: [NGWordUserCount!]!
+}
+
+type NGWordCount {
+  pattern: String!
+  count: Int!
+}
+
+type NGWordUserCount {
+  userID: ID!
+  name: String!
+  accountID: String!
+  count: Int!
 }
