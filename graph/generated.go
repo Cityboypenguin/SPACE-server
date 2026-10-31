@@ -63,6 +63,26 @@ type ComplexityRoot struct {
 		Total func(childComplexity int) int
 	}
 
+	AdminCourseChatImage struct {
+		CourseName        func(childComplexity int) int
+		CreatedAt         func(childComplexity int) int
+		Height            func(childComplexity int) int
+		ID                func(childComplexity int) int
+		RoomID            func(childComplexity int) int
+		Source            func(childComplexity int) int
+		TargetDeleted     func(childComplexity int) int
+		URL               func(childComplexity int) int
+		UploaderAccountID func(childComplexity int) int
+		UploaderID        func(childComplexity int) int
+		UploaderName      func(childComplexity int) int
+		Width             func(childComplexity int) int
+	}
+
+	AdminCourseChatImagePage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Administrator struct {
 		CreatedAt func(childComplexity int) int
 		Email     func(childComplexity int) int
@@ -354,6 +374,7 @@ type ComplexityRoot struct {
 		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
 		AdminCreateNGWord                 func(childComplexity int, pattern string, matchType model.NGWordMatchType) int
 		AdminDeleteCourse                 func(childComplexity int, id string) int
+		AdminDeleteCourseChatImage        func(childComplexity int, mediaID string) int
 		AdminDeleteNGWord                 func(childComplexity int, id string) int
 		AdminDeletePost                   func(childComplexity int, id string) int
 		AdminDeleteQuestion               func(childComplexity int, id string) int
@@ -601,6 +622,7 @@ type ComplexityRoot struct {
 		AdminListAnnouncements          func(childComplexity int, limit *int32, offset *int32) int
 		AdminListCommunities            func(childComplexity int, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
+		AdminListCourseChatImages       func(childComplexity int, roomID *string, source *model.CourseChatImageSource, limit *int32, offset *int32) int
 		AdminListCourseYears            func(childComplexity int) int
 		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListMediaMissingDimensions func(childComplexity int, limit *int32, offset *int32) int
@@ -898,6 +920,7 @@ type MutationResolver interface {
 	AdminSetTimetableEntryColor(ctx context.Context, id string, userID string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
 	AdminSetUserTimetable(ctx context.Context, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) ([]*model.TimetableEntry, error)
 	AdminDeleteQuestion(ctx context.Context, id string) (bool, error)
+	AdminDeleteCourseChatImage(ctx context.Context, mediaID string) (bool, error)
 	AdminCreateNGWord(ctx context.Context, pattern string, matchType model.NGWordMatchType) (*model.NGWord, error)
 	AdminDeleteNGWord(ctx context.Context, id string) (bool, error)
 	AdminTriggerCourseImport(ctx context.Context, year int32) (*model.CourseImportStatus, error)
@@ -1040,6 +1063,7 @@ type QueryResolver interface {
 	AdminListPosts(ctx context.Context, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) (*model.PostPage, error)
 	AdminNGWords(ctx context.Context) ([]*model.NGWord, error)
 	AdminNGWordStats(ctx context.Context) (*model.NGWordStats, error)
+	AdminListCourseChatImages(ctx context.Context, roomID *string, source *model.CourseChatImageSource, limit *int32, offset *int32) (*model.AdminCourseChatImagePage, error)
 	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.CoursePage, error)
 	Announcements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
@@ -1210,6 +1234,92 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdminCommunityPage.Total(childComplexity), true
+
+	case "AdminCourseChatImage.courseName":
+		if e.ComplexityRoot.AdminCourseChatImage.CourseName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.CourseName(childComplexity), true
+	case "AdminCourseChatImage.createdAt":
+		if e.ComplexityRoot.AdminCourseChatImage.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.CreatedAt(childComplexity), true
+	case "AdminCourseChatImage.height":
+		if e.ComplexityRoot.AdminCourseChatImage.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.Height(childComplexity), true
+	case "AdminCourseChatImage.ID":
+		if e.ComplexityRoot.AdminCourseChatImage.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.ID(childComplexity), true
+	case "AdminCourseChatImage.roomID":
+		if e.ComplexityRoot.AdminCourseChatImage.RoomID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.RoomID(childComplexity), true
+	case "AdminCourseChatImage.source":
+		if e.ComplexityRoot.AdminCourseChatImage.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.Source(childComplexity), true
+	case "AdminCourseChatImage.targetDeleted":
+		if e.ComplexityRoot.AdminCourseChatImage.TargetDeleted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.TargetDeleted(childComplexity), true
+	case "AdminCourseChatImage.url":
+		if e.ComplexityRoot.AdminCourseChatImage.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.URL(childComplexity), true
+	case "AdminCourseChatImage.uploaderAccountID":
+		if e.ComplexityRoot.AdminCourseChatImage.UploaderAccountID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.UploaderAccountID(childComplexity), true
+	case "AdminCourseChatImage.uploaderID":
+		if e.ComplexityRoot.AdminCourseChatImage.UploaderID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.UploaderID(childComplexity), true
+	case "AdminCourseChatImage.uploaderName":
+		if e.ComplexityRoot.AdminCourseChatImage.UploaderName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.UploaderName(childComplexity), true
+	case "AdminCourseChatImage.width":
+		if e.ComplexityRoot.AdminCourseChatImage.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImage.Width(childComplexity), true
+
+	case "AdminCourseChatImagePage.items":
+		if e.ComplexityRoot.AdminCourseChatImagePage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImagePage.Items(childComplexity), true
+	case "AdminCourseChatImagePage.total":
+		if e.ComplexityRoot.AdminCourseChatImagePage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCourseChatImagePage.Total(childComplexity), true
 
 	case "Administrator.createdAt":
 		if e.ComplexityRoot.Administrator.CreatedAt == nil {
@@ -2459,6 +2569,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminDeleteCourse(childComplexity, args["id"].(string)), true
+	case "Mutation.adminDeleteCourseChatImage":
+		if e.ComplexityRoot.Mutation.AdminDeleteCourseChatImage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminDeleteCourseChatImage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminDeleteCourseChatImage(childComplexity, args["mediaID"].(string)), true
 	case "Mutation.adminDeleteNGWord":
 		if e.ComplexityRoot.Mutation.AdminDeleteNGWord == nil {
 			break
@@ -4177,6 +4298,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminListConsents(childComplexity, args["termsID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminListCourseChatImages":
+		if e.ComplexityRoot.Query.AdminListCourseChatImages == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListCourseChatImages_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListCourseChatImages(childComplexity, args["roomID"].(*string), args["source"].(*model.CourseChatImageSource), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListCourseYears":
 		if e.ComplexityRoot.Query.AdminListCourseYears == nil {
 			break
@@ -5910,6 +6042,46 @@ func (ec *executionContext) childFields_AdminCommunityPage(ctx context.Context, 
 	return nil, fmt.Errorf("no field named %q was found under type AdminCommunityPage", field.Name)
 }
 
+func (ec *executionContext) childFields_AdminCourseChatImage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_AdminCourseChatImage_ID(ctx, field)
+	case "source":
+		return ec.fieldContext_AdminCourseChatImage_source(ctx, field)
+	case "url":
+		return ec.fieldContext_AdminCourseChatImage_url(ctx, field)
+	case "width":
+		return ec.fieldContext_AdminCourseChatImage_width(ctx, field)
+	case "height":
+		return ec.fieldContext_AdminCourseChatImage_height(ctx, field)
+	case "roomID":
+		return ec.fieldContext_AdminCourseChatImage_roomID(ctx, field)
+	case "courseName":
+		return ec.fieldContext_AdminCourseChatImage_courseName(ctx, field)
+	case "uploaderID":
+		return ec.fieldContext_AdminCourseChatImage_uploaderID(ctx, field)
+	case "uploaderName":
+		return ec.fieldContext_AdminCourseChatImage_uploaderName(ctx, field)
+	case "uploaderAccountID":
+		return ec.fieldContext_AdminCourseChatImage_uploaderAccountID(ctx, field)
+	case "targetDeleted":
+		return ec.fieldContext_AdminCourseChatImage_targetDeleted(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AdminCourseChatImage_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminCourseChatImage", field.Name)
+}
+
+func (ec *executionContext) childFields_AdminCourseChatImagePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_AdminCourseChatImagePage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_AdminCourseChatImagePage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminCourseChatImagePage", field.Name)
+}
+
 func (ec *executionContext) childFields_Administrator(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -7285,6 +7457,20 @@ func (ec *executionContext) field_Mutation_adminCreateNGWord_args(ctx context.Co
 		return nil, err
 	}
 	args["matchType"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminDeleteCourseChatImage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "mediaID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mediaID"] = arg0
 	return args, nil
 }
 
@@ -9430,6 +9616,44 @@ func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminListCourseChatImages_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "source",
+		func(ctx context.Context, v any) (*model.CourseChatImageSource, error) {
+			return ec.unmarshalOCourseChatImageSource2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["source"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_adminListCourses_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11350,6 +11574,337 @@ func (ec *executionContext) _AdminCommunityPage_total(ctx context.Context, field
 }
 func (ec *executionContext) fieldContext_AdminCommunityPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AdminCommunityPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_ID(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_source(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.CourseChatImageSource) graphql.Marshaler {
+			return ec.marshalNCourseChatImageSource2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type CourseChatImageSource does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_url(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_width(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_width(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_height(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_height(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int32) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint32(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_roomID(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_roomID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_courseName(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_courseName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CourseName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_courseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_uploaderID(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_uploaderID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploaderID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_uploaderID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_uploaderName(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_uploaderName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploaderName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_uploaderName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_uploaderAccountID(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_uploaderAccountID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploaderAccountID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_uploaderAccountID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_targetDeleted(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_targetDeleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetDeleted, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_targetDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImage_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImage_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImage_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminCourseChatImagePage_items(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImagePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImagePage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.AdminCourseChatImage) graphql.Marshaler {
+			return ec.marshalNAdminCourseChatImage2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImageᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImagePage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminCourseChatImagePage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminCourseChatImage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdminCourseChatImagePage_total(ctx context.Context, field graphql.CollectedField, obj *model.AdminCourseChatImagePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCourseChatImagePage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCourseChatImagePage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCourseChatImagePage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Administrator_ID(ctx context.Context, field graphql.CollectedField, obj *model.Administrator) (ret graphql.Marshaler) {
@@ -16469,6 +17024,50 @@ func (ec *executionContext) fieldContext_Mutation_adminDeleteQuestion(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_adminDeleteQuestion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminDeleteCourseChatImage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminDeleteCourseChatImage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminDeleteCourseChatImage(ctx, fc.Args["mediaID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminDeleteCourseChatImage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminDeleteCourseChatImage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -23422,6 +24021,50 @@ func (ec *executionContext) fieldContext_Query_adminNGWordStats(_ context.Contex
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_NGWordStats(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminListCourseChatImages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminListCourseChatImages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListCourseChatImages(ctx, fc.Args["roomID"].(*string), fc.Args["source"].(*model.CourseChatImageSource), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AdminCourseChatImagePage) graphql.Marshaler {
+			return ec.marshalNAdminCourseChatImagePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImagePage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminListCourseChatImages(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminCourseChatImagePage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListCourseChatImages_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -31890,6 +32533,142 @@ func (ec *executionContext) _AdminCommunityPage(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var adminCourseChatImageImplementors = []string{"AdminCourseChatImage"}
+
+func (ec *executionContext) _AdminCourseChatImage(ctx context.Context, sel ast.SelectionSet, obj *model.AdminCourseChatImage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminCourseChatImageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminCourseChatImage")
+		case "ID":
+			out.Values[i] = ec._AdminCourseChatImage_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "source":
+			out.Values[i] = ec._AdminCourseChatImage_source(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._AdminCourseChatImage_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "width":
+			out.Values[i] = ec._AdminCourseChatImage_width(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "height":
+			out.Values[i] = ec._AdminCourseChatImage_height(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "roomID":
+			out.Values[i] = ec._AdminCourseChatImage_roomID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "courseName":
+			out.Values[i] = ec._AdminCourseChatImage_courseName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploaderID":
+			out.Values[i] = ec._AdminCourseChatImage_uploaderID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploaderName":
+			out.Values[i] = ec._AdminCourseChatImage_uploaderName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploaderAccountID":
+			out.Values[i] = ec._AdminCourseChatImage_uploaderAccountID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "targetDeleted":
+			out.Values[i] = ec._AdminCourseChatImage_targetDeleted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AdminCourseChatImage_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var adminCourseChatImagePageImplementors = []string{"AdminCourseChatImagePage"}
+
+func (ec *executionContext) _AdminCourseChatImagePage(ctx context.Context, sel ast.SelectionSet, obj *model.AdminCourseChatImagePage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminCourseChatImagePageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminCourseChatImagePage")
+		case "items":
+			out.Values[i] = ec._AdminCourseChatImagePage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._AdminCourseChatImagePage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var administratorImplementors = []string{"Administrator"}
 
 func (ec *executionContext) _Administrator(ctx context.Context, sel ast.SelectionSet, obj *model.Administrator) graphql.Marshaler {
@@ -34425,6 +35204,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "adminDeleteQuestion":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_adminDeleteQuestion(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminDeleteCourseChatImage":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminDeleteCourseChatImage(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -37031,6 +37817,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_adminNGWordStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListCourseChatImages":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListCourseChatImages(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -40639,6 +41447,42 @@ func (ec *executionContext) marshalNAdminCommunityPage2ᚖgithubᚗcomᚋCityboy
 	return ec._AdminCommunityPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAdminCourseChatImage2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImageᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AdminCourseChatImage) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAdminCourseChatImage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImage(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAdminCourseChatImage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImage(ctx context.Context, sel ast.SelectionSet, v *model.AdminCourseChatImage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminCourseChatImage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAdminCourseChatImagePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCourseChatImagePage(ctx context.Context, sel ast.SelectionSet, v *model.AdminCourseChatImagePage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminCourseChatImagePage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNAdminCreateCourseInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCreateCourseInput(ctx context.Context, v any) (model.AdminCreateCourseInput, error) {
 	res, err := ec.unmarshalInputAdminCreateCourseInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -40959,6 +41803,16 @@ func (ec *executionContext) marshalNCourse2ᚖgithubᚗcomᚋCityboypenguinᚋSP
 		return graphql.Null
 	}
 	return ec._Course(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCourseChatImageSource2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx context.Context, v any) (model.CourseChatImageSource, error) {
+	var res model.CourseChatImageSource
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCourseChatImageSource2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx context.Context, sel ast.SelectionSet, v model.CourseChatImageSource) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNCourseImportState2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseImportState(ctx context.Context, v any) (model.CourseImportState, error) {
@@ -42485,6 +43339,22 @@ func (ec *executionContext) marshalOCourse2ᚖgithubᚗcomᚋCityboypenguinᚋSP
 		return graphql.Null
 	}
 	return ec._Course(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOCourseChatImageSource2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx context.Context, v any) (*model.CourseChatImageSource, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.CourseChatImageSource)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOCourseChatImageSource2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourseChatImageSource(ctx context.Context, sel ast.SelectionSet, v *model.CourseChatImageSource) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOFavorite2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐFavorite(ctx context.Context, sel ast.SelectionSet, v *model.Favorite) graphql.Marshaler {

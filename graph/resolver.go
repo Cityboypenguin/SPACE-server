@@ -29,6 +29,7 @@ import (
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
@@ -162,6 +163,9 @@ type Resolver struct {
 	// TermsBroadcastScheduler は「effectiveDate に terms_updated を配信する」タイマーの
 	// 唯一の入口。起動時（cmd/server/main.go）も同じインスタンスを使う。
 	TermsBroadcastScheduler *termsusecase.BroadcastScheduler
+
+	// CourseImages は授業内チャットの画像の一元管理（管理画面）。
+	CourseImages *courseimageusecase.Service
 
 	// Addenda は質問・回答への追記。
 	Addenda *addendumusecase.Service

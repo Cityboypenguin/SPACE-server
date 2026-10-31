@@ -30,6 +30,26 @@ type AdminCommunityPage struct {
 	Total int32             `json:"total"`
 }
 
+type AdminCourseChatImage struct {
+	ID                string                `json:"ID"`
+	Source            CourseChatImageSource `json:"source"`
+	URL               string                `json:"url"`
+	Width             *int32                `json:"width,omitempty"`
+	Height            *int32                `json:"height,omitempty"`
+	RoomID            string                `json:"roomID"`
+	CourseName        string                `json:"courseName"`
+	UploaderID        string                `json:"uploaderID"`
+	UploaderName      string                `json:"uploaderName"`
+	UploaderAccountID string                `json:"uploaderAccountID"`
+	TargetDeleted     bool                  `json:"targetDeleted"`
+	CreatedAt         string                `json:"createdAt"`
+}
+
+type AdminCourseChatImagePage struct {
+	Items []*AdminCourseChatImage `json:"items"`
+	Total int32                   `json:"total"`
+}
+
 type AdminCreateCourseInput struct {
 	DayOfWeek   string `json:"dayOfWeek"`
 	Period      int32  `json:"period"`
@@ -933,6 +953,63 @@ func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
 }
 
 func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseChatImageSource string
+
+const (
+	CourseChatImageSourceMessage  CourseChatImageSource = "MESSAGE"
+	CourseChatImageSourceQuestion CourseChatImageSource = "QUESTION"
+	CourseChatImageSourceAnswer   CourseChatImageSource = "ANSWER"
+)
+
+var AllCourseChatImageSource = []CourseChatImageSource{
+	CourseChatImageSourceMessage,
+	CourseChatImageSourceQuestion,
+	CourseChatImageSourceAnswer,
+}
+
+func (e CourseChatImageSource) IsValid() bool {
+	switch e {
+	case CourseChatImageSourceMessage, CourseChatImageSourceQuestion, CourseChatImageSourceAnswer:
+		return true
+	}
+	return false
+}
+
+func (e CourseChatImageSource) String() string {
+	return string(e)
+}
+
+func (e *CourseChatImageSource) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseChatImageSource(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseChatImageSource", str)
+	}
+	return nil
+}
+
+func (e CourseChatImageSource) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseChatImageSource) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseChatImageSource) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

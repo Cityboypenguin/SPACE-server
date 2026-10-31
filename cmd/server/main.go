@@ -51,6 +51,7 @@ import (
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
@@ -551,6 +552,9 @@ func main() {
 		Events:     chatEventPublisher,
 	})
 	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
+	// 授業内チャットの画像の一元管理。
+	courseChatImageRepository := mysql.NewMySQLCourseChatImageRepository(database)
+	courseImageService := courseimageusecase.NewService(courseChatImageRepository, storageRepository)
 	// 質問・回答への追記。
 	addendumRepository := mysql.NewMySQLAddendumRepository(database)
 	addendumService := addendumusecase.NewService(addendumusecase.Deps{
@@ -690,6 +694,7 @@ func main() {
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
+		CourseImages:                 courseImageService,
 		Addenda:                      addendumService,
 		NGWordAdmin:                  ngWordAdmin,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,

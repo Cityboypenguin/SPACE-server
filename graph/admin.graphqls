@@ -40,6 +40,13 @@ extend type Query {
   # 授業内チャットのNGワードの一覧と、止めた回数の集計。
   adminNGWords: [NGWord!]!
   adminNGWordStats: NGWordStats!
+  # 授業内チャットに上がった画像（メッセージ・質問・回答）の一覧。新しい順。
+  adminListCourseChatImages(
+    roomID: ID
+    source: CourseChatImageSource
+    limit: Int = 24
+    offset: Int = 0
+  ): AdminCourseChatImagePage!
   adminListCourses(
     year: Int
     semester: String
@@ -71,6 +78,8 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
+  # 授業内チャットの画像を消す（ファイルも消える。取り消せない）。
+  adminDeleteCourseChatImage(mediaID: ID!): Boolean!
   # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答）。
   adminCreateNGWord(pattern: String!, matchType: NGWordMatchType!): NGWord!
   adminDeleteNGWord(id: ID!): Boolean!
@@ -308,4 +317,32 @@ type NGWordUserCount {
   name: String!
   accountID: String!
   count: Int!
+}
+
+enum CourseChatImageSource {
+  MESSAGE
+  QUESTION
+  ANSWER
+}
+
+type AdminCourseChatImage {
+  # 画像(media)のID。adminDeleteCourseChatImage に渡す。
+  ID: ID!
+  source: CourseChatImageSource!
+  url: String!
+  width: Int
+  height: Int
+  roomID: ID!
+  courseName: String!
+  uploaderID: ID!
+  uploaderName: String!
+  uploaderAccountID: String!
+  # 添付先のメッセージが削除済み（画面には出ないが、ファイルは残っている）。
+  targetDeleted: Boolean!
+  createdAt: String!
+}
+
+type AdminCourseChatImagePage {
+  items: [AdminCourseChatImage!]!
+  total: Int!
 }
