@@ -111,6 +111,38 @@ func (c *delegationKeyCache) get(ctx context.Context) (*service.UserDelegationCr
 	return c.udc, c.expiry, nil
 }
 
+// credentialEnvVars は DefaultAzureCredential が資格情報として読む変数。
+var credentialEnvVars = []string{
+	"AZURE_TENANT_ID",
+	"AZURE_CLIENT_ID",
+	"AZURE_CLIENT_SECRET",
+	"AZURE_CLIENT_CERTIFICATE_PATH",
+	"AZURE_USERNAME",
+	"AZURE_PASSWORD",
+}
+
+// clearEmptyCredentialEnv は、空文字で置かれている資格情報の変数を消す。
+//
+// 空文字は「設定されていない」のと同じ意味しか持たないが、SDK は「存在するか」で
+// 判断する。空の AZURE_CLIENT_ID は「利用者割り当て ID を指定された（中身は空）」と
+// 解釈され、マネージド ID での取得ごと失敗する。
+//
+//	ManagedIdentityCredential: empty managedidentity.UserAssignedClientID
+//
+// compose は値を与えていない変数も空文字で渡すので（${AZURE_CLIENT_ID:-}）、
+// Azure 上の VM でマネージド ID を使う構成がこれだけで起動しなくなる（実機で確認）。
+// 消しても失う情報は無い。
+//
+// プロセス全体の環境を書き換えるが、起動時に1度だけで、対象は自分の設定のうち
+// 中身が無いものだけ。SDK の環境の読み取りに影響させるには、これより手前の層が無い。
+func clearEmptyCredentialEnv() {
+	for _, name := range credentialEnvVars {
+		if value, ok := os.LookupEnv(name); ok && strings.TrimSpace(value) == "" {
+			_ = os.Unsetenv(name)
+		}
+	}
+}
+
 // New はどちらの資格情報で署名するかを環境変数から決める。
 //
 // AZURE_STORAGE_ACCOUNT_KEY があればアカウントキー、無ければ Entra ID
@@ -168,6 +200,11 @@ func New(ctx context.Context) (*AzureBlobStorageRepository, error) {
 		// AZURE_CLIENT_SECRET → マネージド ID → 手元の az login の順に探す。
 		// だから本番（アプリ登録）、Azure 上の VM（マネージド ID、シークレット不要）、
 		// 開発者の手元が、同じコードと同じ設定で動く。
+		//
+		// ただし、その前に空文字の変数を消しておく必要がある。理由は
+		// clearEmptyCredentialEnv のコメント参照。
+		clearEmptyCredentialEnv()
+
 		cred, err := azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create azure identity credential: %w", err)
@@ -264,6 +301,14 @@ func (r *AzureBlobStorageRepository) PresignedPutURL(ctx context.Context, object
 		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
 }
 
+// UploadRequestHeaders は Azure Blob への PUT に必須のヘッダーを返す。
+//
+// これが無いと Azure は 400 MissingRequiredHeader を返し、本文は一切保存されない
+// （実機で確認）。ブロック BLOB 以外を作る予定は無いので固定でよい。
+func (r *AzureBlobStorageRepository) UploadRequestHeaders() map[string]string {
+	return map[string]string{"x-ms-blob-type": "BlockBlob"}
+}
+
 // StatObject は保存済み BLOB の実寸と Content-Type を返す。
 // SAS ではサイズを縛れないので、受け入れ時にここで実物を測る
 // （repository.StorageRepository のコメント参照）。
@@ -316,7 +361,53 @@ const azureCopySourceTTL = 5 * time.Minute
 // 宛先側の条件は付けない。Azure 単体なら効かせられるが、もう一方の実装（MinIO）
 // では効かないため、それを前提にすると保管先によって保証が変わる。宛先が一度きり
 // しか書かれないことは呼び出し側で保証している（repository.StorageRepository 参照）。
-func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error {
+// setServingHeaders は、アプリが参照するキーに「どう配るか」を書き込む。
+//
+// Azure の Set Blob Properties は、指定しなかった欄を消す。だから
+// Content-Type も Cache-Control も毎回いっしょに渡す（片方だけ渡すと
+// もう片方が空になる）。
+//
+// contentType は受け入れ側が実物のバイト列から確かめた値。コピーで引き継がれる
+// のは利用者が PUT 時に申告した値なので、ここで確かめた値に上書きする。
+func (r *AzureBlobStorageRepository) setServingHeaders(ctx context.Context, dst *blob.Client, contentType string) error {
+	disposition := repository.ServedContentDisposition
+	cacheControl := repository.ServedCacheControl
+	if _, err := dst.SetHTTPHeaders(ctx, blob.HTTPHeaders{
+		BlobContentType:        &contentType,
+		BlobContentDisposition: &disposition,
+		BlobCacheControl:       &cacheControl,
+	}, nil); err != nil {
+		return fmt.Errorf("failed to set serving headers: %w", err)
+	}
+	return nil
+}
+
+// ObjectHead は先頭 limit バイトと、そのとき読んだ実体の ETag を返す。
+func (r *AzureBlobStorageRepository) ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error) {
+	blobClient := r.client.ServiceClient().NewContainerClient(r.containerName).NewBlobClient(objectKey)
+	resp, err := blobClient.DownloadStream(ctx, &blob.DownloadStreamOptions{
+		Range: blob.HTTPRange{Offset: 0, Count: limit},
+	})
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil, "", repository.ErrObjectNotFound
+		}
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	head, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, "", err
+	}
+	etag := ""
+	if resp.ETag != nil {
+		etag = string(*resp.ETag)
+	}
+	return head, etag, nil
+}
+
+func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error {
 	if srcETag == "" {
 		// 条件を付けられないなら写さない（MinIO 実装と同じ理由）。
 		return fmt.Errorf("refusing to copy %q without a source ETag", srcKey)
@@ -335,13 +426,26 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 		if bloberror.HasCode(err, bloberror.SourceConditionNotMet, bloberror.ConditionNotMet) {
 			return repository.ErrObjectChanged
 		}
+		// CannotVerifyCopySource は、実機で確かめた限り**条件の不一致でも**返る
+		// （URL 経由のコピーなので、Azure から見ると「元を読めなかった」になる）。
+		// つまりこの分類は、中身が差し替えられた場合を ErrObjectNotFound 側へ
+		// 入れている。
+		//
+		// それでも ErrObjectChanged へ移していないのは、Azure が同じコードを
+		// 「元が本当に無い」ときにも、署名や権限の一時的な不調のときにも使うため。
+		// コードだけでは区別できず、ErrObjectChanged へ寄せると、サーバー側の
+		// 不調を「アップロードされていないファイルが指定された」と利用者へ
+		// 返すことになる（Accept の分岐を参照）。
+		//
+		// どちらに分類してもコピーは行われないので、検査していないものが
+		// 公開されることはない。差があるのは文言と、障害時の追いやすさだけ。
 		if bloberror.HasCode(err, bloberror.BlobNotFound, bloberror.CannotVerifyCopySource) {
 			return repository.ErrObjectNotFound
 		}
 		return err
 	}
 	if started.CopyStatus != nil && *started.CopyStatus == blob.CopyStatusTypeSuccess {
-		return nil
+		return r.setServingHeaders(ctx, dst, contentType)
 	}
 
 	deadline := time.Now().Add(azureCopyPollTimeout)
@@ -360,7 +464,7 @@ func (r *AzureBlobStorageRepository) CopyObject(ctx context.Context, srcKey, dst
 			return err
 		}
 		if props.CopyStatus == nil {
-			return nil
+			return r.setServingHeaders(ctx, dst, contentType)
 		}
 		switch *props.CopyStatus {
 		case blob.CopyStatusTypeSuccess:

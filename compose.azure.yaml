@@ -55,6 +55,10 @@ services:
       #
       # Azure 上の VM でマネージド ID を使う場合、AZURE_* の資格情報は3つとも
       # 不要（シークレットを持たずに済むので一番安全）。
+      #
+      # ここは値を与えていなくても空文字で渡る。アプリ側は空文字を「未設定」として
+      # 扱う（infra/azure.clearEmptyCredentialEnv）。空のまま SDK へ渡すと
+      # マネージド ID での取得ごと失敗するため、あちらを消さないこと。
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
       AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME:-}
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
