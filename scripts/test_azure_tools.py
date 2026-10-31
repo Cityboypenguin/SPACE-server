@@ -87,11 +87,19 @@ class CountVerificationTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         before = {key: [100] for key in ('users', 'messages', 'questions', 'answers', 'polls',
-                                        'media', 'notifications', 'user_reports', 'archives')}
+                                        'media', 'notifications', 'user_reports', 'archives', 'timetables', 'courses', 'rooms')}
         before['schema'] = [73, 0]
-        after = {**before, 'schema': [102, 0], 'user_accounts': [100], 'messages': [40]}
+        after = {**before, 'schema': [108, 0], 'user_accounts': [100], 'messages': [40]}
         after.update({'course_' + key: [0] for key in ('messages', 'questions', 'answers', 'polls')})
         module.verify(before, after, {'counts': {'messages': 60}})
+        for table in ('users', 'timetables', 'courses', 'rooms'):
+            with self.subTest(table=table):
+                damaged = {**after, table: [99]}
+                with self.assertRaises(ValueError):
+                    module.verify(before, damaged, {'counts': {'messages': 60}})
+        for version, dirty in ((102, 0), (108, 1)):
+            with self.assertRaises(ValueError):
+                module.verify(before, {**after, 'schema': [version, dirty]}, {'counts': {'messages': 60}})
         after['users'] = [99]
         with self.assertRaises(ValueError):
             module.verify(before, after, {'counts': {'messages': 60}})

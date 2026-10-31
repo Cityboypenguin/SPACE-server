@@ -79,8 +79,8 @@ func main() {
 	check(err)
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if scalar(db, "SELECT COUNT(*) FROM schema_migrations WHERE version=102 AND dirty=0") != 1 {
-		panic("expected clean version 102")
+	if scalar(db, "SELECT COUNT(*) FROM schema_migrations WHERE version=108 AND dirty=0") != 1 {
+		panic("expected clean version 108")
 	}
 	m := manifest{Objects: []object{}, Target: cfg.Addr, Counts: map[string]int64{}, Database: cfg.DBName, Account: os.Getenv("AZURE_STORAGE_ACCOUNT_NAME")}
 	if *resume {

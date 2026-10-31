@@ -43,8 +43,10 @@ func TestPurgeIsolationAndBlobResume(t *testing.T) {
 	}
 	defer db.Close()
 	statements := []string{
-		`CREATE TABLE schema_migrations(version BIGINT,dirty BOOLEAN)`, `INSERT INTO schema_migrations VALUES(102,0)`,
+		`CREATE TABLE schema_migrations(version BIGINT,dirty BOOLEAN)`, `INSERT INTO schema_migrations VALUES(108,0)`,
 		`CREATE TABLE rooms(id BIGINT PRIMARY KEY,type VARCHAR(32))`, `INSERT INTO rooms VALUES(1,'course'),(2,'dm')`,
+		`CREATE TABLE courses(id BIGINT PRIMARY KEY,room_id BIGINT,FOREIGN KEY(room_id) REFERENCES rooms(id))`, `INSERT INTO courses VALUES(1,1)`,
+		`CREATE TABLE timetables(user_id BIGINT,course_id BIGINT,FOREIGN KEY(course_id) REFERENCES courses(id))`, `INSERT INTO timetables VALUES(1,1)`,
 		`CREATE TABLE messages(id BIGINT PRIMARY KEY,room_id BIGINT)`, `INSERT INTO messages VALUES(1,1),(2,2)`,
 		`CREATE TABLE questions(id BIGINT PRIMARY KEY,room_id BIGINT,best_answer_id BIGINT NULL)`, `INSERT INTO questions VALUES(1,1,1),(2,2,NULL)`,
 		`CREATE TABLE answers(id BIGINT PRIMARY KEY,question_id BIGINT,FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE)`, `INSERT INTO answers VALUES(1,1),(2,2)`,
@@ -55,13 +57,19 @@ func TestPurgeIsolationAndBlobResume(t *testing.T) {
 		`INSERT INTO message_media VALUES(1,1),(2,1),(1,2),(1,3),(1,5),(1,6)`,
 		`CREATE TABLE question_media(question_id BIGINT,media_id BIGINT,FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE)`,
 		`CREATE TABLE answer_media(answer_id BIGINT,media_id BIGINT,FOREIGN KEY(answer_id) REFERENCES answers(id) ON DELETE CASCADE)`,
+		`INSERT INTO question_media VALUES(1,1),(2,1)`,
+		`INSERT INTO answer_media VALUES(1,1),(2,1)`,
+		`CREATE TABLE message_mentions(message_id BIGINT,FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE)`, `INSERT INTO message_mentions VALUES(1),(2)`,
+		`CREATE TABLE answer_likes(answer_id BIGINT,FOREIGN KEY(answer_id) REFERENCES answers(id) ON DELETE CASCADE)`, `INSERT INTO answer_likes VALUES(1),(2)`,
+		`CREATE TABLE poll_options(id BIGINT PRIMARY KEY,poll_id BIGINT,FOREIGN KEY(poll_id) REFERENCES polls(id) ON DELETE CASCADE)`, `INSERT INTO poll_options VALUES(1,1),(2,2)`,
+		`CREATE TABLE poll_votes(option_id BIGINT,FOREIGN KEY(option_id) REFERENCES poll_options(id) ON DELETE CASCADE)`, `INSERT INTO poll_votes VALUES(1),(2)`,
 		`CREATE TABLE post_media(post_id BIGINT,media_id BIGINT)`,
 		`CREATE TABLE profiles(avatar_media_id BIGINT)`, `INSERT INTO profiles VALUES(5)`,
 		`CREATE TABLE communities(avatar_media_id BIGINT)`,
 		`CREATE TABLE terms_of_service(object_key VARCHAR(255))`, `INSERT INTO terms_of_service VALUES('media/terms')`,
 		`CREATE TABLE user_activity_archives(object_key VARCHAR(512))`,
-		`CREATE TABLE notifications(target_type VARCHAR(64),target_id BIGINT)`, `INSERT INTO notifications VALUES('message',1),('post',1),('message',2)`,
-		`CREATE TABLE user_reports(target_type VARCHAR(64),target_id VARCHAR(255))`, `INSERT INTO user_reports VALUES('QUESTION','1'),('POST','1')`,
+		`CREATE TABLE notifications(target_type VARCHAR(64),target_id BIGINT)`, `INSERT INTO notifications VALUES('message',1),('question',1),('answer',1),('poll',1),('post',1),('message',2)`,
+		`CREATE TABLE user_reports(target_type VARCHAR(64),target_id VARCHAR(255))`, `INSERT INTO user_reports VALUES('MESSAGE','1'),('QUESTION','1'),('ANSWER','1'),('POLL','1'),('POST','1')`,
 	}
 	for _, s := range statements {
 		if _, e = db.Exec(s); e != nil {
@@ -123,6 +131,15 @@ esac
 	}
 	if count("media") != 3 || count("message_media") != 1 || count("notifications") != 2 || count("user_reports") != 1 {
 		t.Fatal("reference protection or cleanup failed")
+	}
+	for table, want := range map[string]int{"rooms": 2, "courses": 1, "timetables": 1, "question_media": 1, "answer_media": 1, "message_mentions": 1, "answer_likes": 1, "poll_options": 1, "poll_votes": 1} {
+		if count(table) != want {
+			t.Fatalf("purge changed protected rows or failed cascade: %s", table)
+		}
+	}
+	var dmRoom int
+	if e := db.QueryRow("SELECT room_id FROM messages WHERE id=2").Scan(&dmRoom); e != nil || dmRoom != 2 {
+		t.Fatal("DM lost")
 	}
 	b, e := os.ReadFile(journal)
 	if e != nil || !strings.Contains(string(b), "media/only-course") || strings.Contains(string(b), "media/duplicate-key") || strings.Contains(string(b), "media/terms") {

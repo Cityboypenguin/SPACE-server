@@ -59,6 +59,8 @@ type Course {
   # 既に登録している人の時間割には残る（クライアントは「廃止」と表示する）。
   discontinued: Boolean!
   discontinuedAt: String
+  # Admin-only: how many messages are in this course chat.
+  messageCount: Int!
 }
 
 input AdminCreateCourseInput {

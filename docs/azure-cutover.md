@@ -1,6 +1,6 @@
 # AWS → Azure VM 本番切り替え
 
-2026-10-30。`azure-go-live.md` の禁止事項を優先する。本番 DB は約29.7MB。
+2026-11-01。`azure-go-live.md` の禁止事項を優先する。本番 DB は約29.7MB。
 この手順書は人間がレビューして実行するためのもの。作業ブランチでは本番を変更しない。
 サーバー・クライアントの main の push/merge、AWS、DNS、VM の秘密情報の変更は人間が行う。
 `31843d4` は混在コミットのため丸ごと revert しない。
@@ -70,7 +70,7 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
    appを停止しVMのDBだけを再作成する。ダンプのハッシュと clean v73 を確認する。
    実行前にVMのバックアップも確保する。間違ったVMで実行しない。
 3. VMを外部から遮断したまま `sudo bash scripts/azure_migration.sh migrate --confirm-migrate`。
-   app起動でマイグレーションし、clean v102 と所要秒数を確認してappを停止する。
+   app起動でマイグレーションし、clean v108 と所要秒数を確認してappを停止する。
    dirtyなら停止して調査し、versionの強制変更はしない。
 4. 下記の投稿削除を実行する。DB件数とBlob削除確認まで成功させる。件数照合用に削除記録を保管する。
 5. `scripts/sync_azure_objects.py` で画像の差分を運ぶ。既定は候補件数のみ。
@@ -84,6 +84,7 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
 7. `sudo bash scripts/azure_migration.sh counts > /secure/after.tsv` を保存し、
    `python3 scripts/verify_azure_counts.py --before /secure/before.tsv --after /secure/after.tsv --manifest /secure/course-purge.json` で削除件数との差分を照合する。
    授業投稿はすべて0、その他は削除記録と差分が一致すること。
+   時間割・授業・ルームの総件数も移行前と一致すること。
    DM添付の公開キーが0で、コピー・参照変更・公開側削除が完了していることを確認する。
    privateアーカイブの件数・バイト数・内容ハッシュとDB参照を照合する。
    Redis失効情報を取り込み、VM側のメンテナンス設定を独立に確認してからappを起動する。
@@ -97,7 +98,7 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
 
 `go build -o /secure/coursepurge ./scripts/coursepurge` で作成する（VM向けは
 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`）。接続先 `DB_HOST`/`DB_PORT`/`DB_NAME`/
-`DB_USER`/`DB_PASSWORD` を安全に環境変数で渡す。DBは clean v102 が必要。
+`DB_USER`/`DB_PASSWORD` を安全に環境変数で渡す。DBは clean v108 が必要。
 Blob削除は Azure CLI のログイン済み作業者で実行し、`AZURE_STORAGE_ACCOUNT_NAME`、
 必要ならコンテナー名の環境変数も指定する。値をターミナルへ出さない。
 
@@ -202,7 +203,7 @@ VM内のDB/Redis監視と組み合わせる。
 
 | 確認 | 合格条件 |
 | --- | --- |
-| マイグレーション | clean 73→102、dirtyなし、所要秒数を記録 |
+| マイグレーション | clean 73→108、dirtyなし、所要秒数を記録 |
 | 削除 | 下見と削除件数一致、授業4種0、DM等残存、共有media保持、公開Blob404 |
 | ログイン/refresh | 正常ログイン、移行した失効トークンは拒否 |
 | 投稿/画像/アップロード | 表示、保存、アバター・質問回答添付が成功 |
@@ -214,5 +215,28 @@ VM内のDB/Redis監視と組み合わせる。
 
 Azureへの書込みを始める前なら、APIのCloudFront originをAWSへ戻し、元DBと元アプリの組合せを維持する。
 Azureで書込み後はAWSへ戻すだけでは投稿が失われる。書込みを止め、Azureのデータを保全して差分を調整する。
-移行後のv102DBをv73アプリへ直接戻さない。NS変更後は2日間の混在を前提に両経路を維持する。
+移行後のv108DBをv73アプリへ直接戻さない。NS変更後は2日間の混在を前提に両経路を維持する。
 AWS資源、旧証明書、Route 53の削除は安定稼働と復旧可能性を人間が確認した後に別途行う。
+
+## 統合時の v102 前提と v108 の差分（2026-11-01）
+
+この表は従来の移行ツールの前提と統合後の差分。要求に従い到達点は v108 へ更新済み。
+マイグレーションを新設したり、既存 SQL の内容を変更したりしていない。
+
+| 箇所 | 以前の前提 | 統合後 |
+| --- | --- | --- |
+| `scripts/azure_migration.sh` migrate | clean v102 を待機 | clean v108 を待機、経過秒表示も更新 |
+| `scripts/coursepurge/main.go` | clean v102 のみ許可 | clean v108 のみ許可 |
+| `scripts/verify_azure_counts.py` | clean 73→102 | clean 73→108、時間割・授業・ルームの件数保持も照合 |
+| `scripts/coursepurge/main_test.go` | v102 テスト用 DB | v108、時間割・授業・ルームと DM の保持、添付・投票・通知・通報の削除を検証 |
+| `scripts/test_azure_tools.py` | v102 照合結果 | v108 を検証し、旧 v102 と dirty v108 を拒否するケースを追加 |
+| `db/azure_migration_test.go` | 73→102 | 73→108、所要時間・DM・アカウント保持を確認 |
+| `docs/azure-go-live.md` / 本手順書 | v102 到達・古い匿名方針 | v108 到達、移行時に授業投稿を削除して実名表示 |
+| `docs/azure-validation.md` | v102 検証の過去記録 | 過去の結果は v102 のまま保存し、v108 の今回結果を追記 |
+
+v103 は授業の source / source_ref / source_name / discontinued_at と索引、v104 は
+source の補完、v105 は source_ref の補完、v106 は同期の確認待ち、v107 は同期実行履歴、
+v108 は授業ごとの同期変更履歴を追加する。削除ツールはこれらを保持する。
+`db/migrate_test.go` の `beforeCourseSync = 102` は同期導入直前を検証する基準なので維持。
+過去マイグレーションの v102 参照、過去の v102 検証記録、旧 v102 を拒否するテストも変更不要。
+`migrate_message_media.sh` のストレージ名に含まれる数字はスキーマバージョンではない。

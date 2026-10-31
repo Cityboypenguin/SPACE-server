@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a frozen v73 baseline to v102 after course purge; no DB writes."""
+"""Compare a frozen v73 baseline to v108 after course purge; no DB writes."""
 import argparse
 import json
 from pathlib import Path
@@ -16,10 +16,10 @@ def load(path):
 
 
 def verify(before, after, journal):
-    if before.get('schema') != [73, 0] or after.get('schema') != [102, 0]:
-        raise ValueError('expected clean 73 -> 102')
+    if before.get('schema') != [73, 0] or after.get('schema') != [108, 0]:
+        raise ValueError('expected clean 73 -> 108')
     for table in ('users', 'messages', 'questions', 'answers', 'polls', 'media',
-                  'notifications', 'user_reports', 'archives'):
+                  'notifications', 'user_reports', 'archives', 'timetables', 'courses', 'rooms'):
         removed = journal['counts'].get(table, 0)
         if table not in before or table not in after or after[table] != [before[table][0] - removed]:
             raise ValueError('count mismatch: ' + table)

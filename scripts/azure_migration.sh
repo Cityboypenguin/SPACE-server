@@ -30,6 +30,9 @@ case "$stage" in
       --default-character-set=utf8mb4 "$SOURCE_DB_NAME" -N -B <<'SQL'
 SELECT 'schema', version, dirty FROM schema_migrations;
 SELECT 'users', COUNT(*) FROM users;
+SELECT 'timetables', COUNT(*) FROM timetables;
+SELECT 'courses', COUNT(*) FROM courses;
+SELECT 'rooms', COUNT(*) FROM rooms;
 SELECT 'messages', COUNT(*) FROM messages;
 SELECT 'questions', COUNT(*) FROM questions;
 SELECT 'answers', COUNT(*) FROM answers;
@@ -59,8 +62,8 @@ SQL
     start=$SECONDS
     "${compose[@]}" up -d app
     for i in {1..120}; do
-      if [[ "$(version)" == $'102\t0' ]]; then
-        echo "Migrated 73 -> 102 in $((SECONDS-start)) seconds"
+      if [[ "$(version)" == $'108\t0' ]]; then
+        echo "Migrated 73 -> 108 in $((SECONDS-start)) seconds"
         "${compose[@]}" stop app
         exit 0
       fi
@@ -74,6 +77,9 @@ SQL
     mysql_vm <<'SQL'
 SELECT 'schema', version, dirty FROM schema_migrations;
 SELECT 'users', COUNT(*) FROM users;
+SELECT 'timetables', COUNT(*) FROM timetables;
+SELECT 'courses', COUNT(*) FROM courses;
+SELECT 'rooms', COUNT(*) FROM rooms;
 SELECT 'user_accounts', COUNT(*) FROM user_accounts;
 SELECT 'messages', COUNT(*) FROM messages;
 SELECT 'questions', COUNT(*) FROM questions;

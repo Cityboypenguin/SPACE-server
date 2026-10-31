@@ -20,15 +20,16 @@ const (
 )
 
 type Course struct {
-	ID          int64
-	RoomID      int64
-	DayOfWeek   string
-	Period      int
-	TeacherName string
-	CourseName  string
-	Year        int
-	Semester    string
-	DedupKey    string
+	MessageCount int
+	ID           int64
+	RoomID       int64
+	DayOfWeek    string
+	Period       int
+	TeacherName  string
+	CourseName   string
+	Year         int
+	Semester     string
+	DedupKey     string
 	// Source は取り込み元（CourseSourceSenshu / CourseSourceManual）。
 	Source string
 	// SourceRef は取り込み元での識別子（専修大学なら講義コード）。照合のためだけに使い、

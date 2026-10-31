@@ -36,6 +36,25 @@ type PostWriter interface {
 	RecalculateReplyCountsAffectedByUser(ctx context.Context, userID int64) error
 }
 
+// AdminPostStatus は管理画面の投稿一覧の削除状態での絞り込み。
+type AdminPostStatus string
+
+const (
+	AdminPostStatusAll     AdminPostStatus = ""
+	AdminPostStatusActive  AdminPostStatus = "active"
+	AdminPostStatusDeleted AdminPostStatus = "deleted"
+)
+
+// AdminPostFilter は管理画面の投稿一覧の絞り込み条件。
+//
+// 以前はクライアントが表示中の1ページ分（20件など）だけを対象に絞り込んでいたので、
+// 2ページ目以降にある投稿は検索に引っかからなかった。
+type AdminPostFilter struct {
+	// Keyword が空でなければ、本文・投稿者名・accountID の部分一致で絞り込む。
+	Keyword string
+	Status  AdminPostStatus
+}
+
 // PostLister は一覧・タイムラインを引く口。いずれも窓（PageQuery）を取る。
 type PostLister interface {
 	GetPostsByUserID(ctx context.Context, user_id int64, q PageQuery) ([]*model.Post, int, error)
@@ -44,6 +63,8 @@ type PostLister interface {
 	GetFeedPosts(ctx context.Context, viewerID int64, q PageQuery) ([]*model.Post, int, error)
 	CountNewFeedPosts(ctx context.Context, viewerID int64, since time.Time) (int, error)
 	ListPosts(ctx context.Context, q PageQuery) ([]*model.Post, int, error)
+	// AdminListPosts は管理画面の投稿一覧。削除済みも含めて引き、絞り込みは DB 側で行う。
+	AdminListPosts(ctx context.Context, f AdminPostFilter, q PageQuery) ([]*model.Post, int, error)
 	GetFavoritePostsByUserID(ctx context.Context, userID int64, q PageQuery) ([]*model.Post, int, error)
 }
 
