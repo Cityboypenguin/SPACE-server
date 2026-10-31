@@ -438,6 +438,11 @@ func publicSASExpiry(now time.Time) time.Time {
 
 func (r *AzureBlobStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := r.client.DeleteBlob(ctx, r.containerName, objectKey, nil)
+	// 無いものを消そうとしたのは成功と同じ（MinIO の RemoveObject と同じ扱い。
+	// 管理画面の画像削除をやり直せるようにするため）。
+	if bloberror.HasCode(err, bloberror.BlobNotFound) {
+		return nil
+	}
 	return err
 }
 
