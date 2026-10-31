@@ -215,6 +215,8 @@ models:
         resolver: true
       media:
         resolver: true
+      addenda:
+        resolver: true
       isMine:
         resolver: true
   Answer:
@@ -222,6 +224,8 @@ models:
       user:
         resolver: true
       media:
+        resolver: true
+      addenda:
         resolver: true
       isMine:
         resolver: true

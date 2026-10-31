@@ -40,6 +40,13 @@ type GetRepliesByPostIDsIncludeDeletedUseCase interface {
 type GetMessagesByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
 }
+
+// ListAddendaUseCase は複数の質問（または回答）の追記をまとめて引く（Question.addenda /
+// Answer.addenda 用）。追記が無いものは map に入らない。
+type ListAddendaUseCase interface {
+	Execute(ctx context.Context, ids []int64) (map[int64][]*model.Addendum, error)
+}
+
 type ListMessageReactionsByMessageIDsUseCase interface {
 	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.MessageReaction, error)
 }
@@ -147,6 +154,11 @@ type Loaders struct {
 	// Message.reactions のリゾルバは Load の前に Clear して古い集計を返さないようにしている
 	// （graph/chat.resolvers.go 参照）。
 	ReactionLoader *dataloadgen.Loader[int64, []*model.MessageReaction]
+	// QuestionAddendaLoader / AnswerAddendaLoader は Question.addenda / Answer.addenda 用。
+	// 追記は足されるたびに変わるので、購読（接続の間ローダーを使い回す）ではリゾルバが
+	// Load の前に Clear する。
+	QuestionAddendaLoader *dataloadgen.Loader[int64, []*model.Addendum]
+	AnswerAddendaLoader   *dataloadgen.Loader[int64, []*model.Addendum]
 	// PostMentionLoader / MessageMentionLoader は本文中のメンション用。
 	// 一覧表示で1件ずつ引くと N+1 になるためまとめて解決する。
 	PostMentionLoader    *dataloadgen.Loader[int64, []*model.Mention]
@@ -405,6 +417,8 @@ type UseCases struct {
 	CountAnswersByQuestionIDs      CountAnswersByQuestionIDsUseCase
 	GetMessagesByIDs               GetMessagesByIDsUseCase
 	ListMessageReactions           ListMessageReactionsByMessageIDsUseCase
+	ListQuestionAddenda            ListAddendaUseCase
+	ListAnswerAddenda              ListAddendaUseCase
 	ListMentionsByPostIDs          ListMentionsByPostIDsUseCase
 	ListMentionsByMessageIDs       ListMentionsByMessageIDsUseCase
 	GetRoomsByIDs                  GetRoomsByIDsUseCase
@@ -468,6 +482,9 @@ func New(uc UseCases) *Loaders {
 		FavoritedByMeLoader: dataloadgen.NewLoader(batchFavoritedBy(uc.ListPostIDsFavoritedBy.Execute), loaderOptions...),
 		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),
 		ReactionLoader:      dataloadgen.NewLoader(batchFromMap(uc.ListMessageReactions.Execute), loaderOptions...),
+
+		QuestionAddendaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListQuestionAddenda.Execute), loaderOptions...),
+		AnswerAddendaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListAnswerAddenda.Execute), loaderOptions...),
 
 		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
 		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), loaderOptions...),

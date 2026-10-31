@@ -29,6 +29,7 @@ import (
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
 	termsusecase "github.com/Cityboypenguin/SPACE-server/usecase/terms"
@@ -161,6 +162,9 @@ type Resolver struct {
 	// TermsBroadcastScheduler は「effectiveDate に terms_updated を配信する」タイマーの
 	// 唯一の入口。起動時（cmd/server/main.go）も同じインスタンスを使う。
 	TermsBroadcastScheduler *termsusecase.BroadcastScheduler
+
+	// Addenda は質問・回答への追記。
+	Addenda *addendumusecase.Service
 
 	// NGWordAdmin は管理画面でのNGワードの登録・削除・集計。
 	NGWordAdmin *ngwordusecase.AdminService

@@ -87,6 +87,17 @@ func inRoom(roomName, fallbackPlace, event string) string {
 	return "「" + place + "」で" + event
 }
 
+// MessageQuestionAddendumInRoom は、回答した質問に追記があったときの文言。
+// 授業内チャットは匿名なので、誰が追記したかは言わない。
+func MessageQuestionAddendumInRoom(roomName string) string {
+	return inRoom(roomName, "", "回答した質問に追記がありました")
+}
+
+// MessageAnswerAddendumInRoom は、自分の質問への回答に追記があったときの文言。
+func MessageAnswerAddendumInRoom(roomName string) string {
+	return inRoom(roomName, "", "あなたの質問への回答に追記がありました")
+}
+
 // truncateRunes は maxRunes を超える文字列を切り詰めて末尾に … を付ける。
 // バイト数ではなく文字数で測る（日本語は1文字3バイトなので、バイトで切ると
 // 文字の途中で切れて壊れた字が出る）。

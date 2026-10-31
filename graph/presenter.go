@@ -652,3 +652,15 @@ func fromGraphNGWordMatchType(t gqlmodel.NGWordMatchType) model.NGWordMatchType 
 	}
 	return model.NGWordMatchWord
 }
+
+func toGraphAddenda(kind string, list []*model.Addendum) []*gqlmodel.Addendum {
+	out := make([]*gqlmodel.Addendum, 0, len(list))
+	for _, a := range list {
+		out = append(out, &gqlmodel.Addendum{
+			ID:        encodeGraphID(kind, a.ID),
+			Body:      a.Body,
+			CreatedAt: a.CreatedAt.Format(timeFormat),
+		})
+	}
+	return out
+}

@@ -28,6 +28,10 @@ const (
 	// TypeMessageMention はコミュニティチャットでの @表示名 メンション。
 	// 返信と同じく遷移先がルーム内の該当メッセージなので、投稿のメンションとは別タイプにしている。
 	TypeMessageMention NotificationType = "message_mention"
+	// TypeQuestionAddendum / TypeAnswerAddendum は授業内チャットの質問・回答への追記（NTF-01, NTF-02）。
+	// 遷移先は授業のチャット画面（targetType=room, targetID=授業のルーム）。
+	TypeQuestionAddendum NotificationType = "question_addendum"
+	TypeAnswerAddendum   NotificationType = "answer_addendum"
 )
 
 type TargetType string

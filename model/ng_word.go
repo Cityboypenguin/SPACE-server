@@ -28,6 +28,8 @@ const (
 	NGWordSourceMessage  NGWordSource = "message"
 	NGWordSourceQuestion NGWordSource = "question"
 	NGWordSourceAnswer   NGWordSource = "answer"
+	// NGWordSourceAddendum は質問・回答への追記。
+	NGWordSourceAddendum NGWordSource = "addendum"
 )
 
 const (

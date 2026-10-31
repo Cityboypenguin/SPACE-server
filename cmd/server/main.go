@@ -42,6 +42,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -550,6 +551,18 @@ func main() {
 		Events:     chatEventPublisher,
 	})
 	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
+	// 質問・回答への追記。
+	addendumRepository := mysql.NewMySQLAddendumRepository(database)
+	addendumService := addendumusecase.NewService(addendumusecase.Deps{
+		Questions:       questionRepository,
+		Answers:         answerRepository,
+		Addenda:         addendumRepository,
+		RequireWritable: courseusecase.NewRequireWritableCourseRoomUseCase(courseRepository, systemSettingRepository, timetableRepository),
+		NGWords:         ngWordGuard,
+		QuestionEvents:  classroomEvents,
+		AnswerEvents:    classroomEvents,
+		Notifier:        graph.NewAddendumNotifier(notificationPublisher, getRoomUseCase),
+	})
 	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
 		Access:             chatAccessPolicy,
 		ListMessages:       listMessagesUseCase,
@@ -677,6 +690,7 @@ func main() {
 
 		CreateReportUsecase:          *createReportUseCase,
 		ManageReportUsecase:          *manageReportUseCase,
+		Addenda:                      addendumService,
 		NGWordAdmin:                  ngWordAdmin,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
 		ManageUserSettingUsecase:     *manageUserSettingUseCase,
@@ -798,6 +812,8 @@ func main() {
 		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
 		GetMessagesByIDs:               getMessagesByIDsUseCase,
 		ListMessageReactions:           listMessageReactionsUseCase,
+		ListQuestionAddenda:            addendumusecase.NewListQuestionAddendaUseCase(addendumRepository),
+		ListAnswerAddenda:              addendumusecase.NewListAnswerAddendaUseCase(addendumRepository),
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
 		GetRoomsByIDs:                  getRoomsByIDsUseCase,

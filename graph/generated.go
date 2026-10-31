@@ -47,6 +47,12 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	Addendum struct {
+		Body      func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+	}
+
 	AdminCommunity struct {
 		Community func(childComplexity int) int
 		Owner     func(childComplexity int) int
@@ -147,6 +153,7 @@ type ComplexityRoot struct {
 	}
 
 	Answer struct {
+		Addenda    func(childComplexity int) int
 		Body       func(childComplexity int) int
 		CreatedAt  func(childComplexity int) int
 		ID         func(childComplexity int) int
@@ -340,7 +347,9 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		AddAnswerAddendum                 func(childComplexity int, answerID string, body string) int
 		AddMessageReaction                func(childComplexity int, roomID string, messageID string, emoji string) int
+		AddQuestionAddendum               func(childComplexity int, questionID string, body string) int
 		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
 		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
 		AdminCreateNGWord                 func(childComplexity int, pattern string, matchType model.NGWordMatchType) int
@@ -677,6 +686,7 @@ type ComplexityRoot struct {
 	}
 
 	Question struct {
+		Addenda     func(childComplexity int) int
 		AnswerCount func(childComplexity int) int
 		Answers     func(childComplexity int, limit *int32, offset *int32) int
 		BestAnswer  func(childComplexity int) int
@@ -853,6 +863,7 @@ type AnswerResolver interface {
 	User(ctx context.Context, obj *model.Answer) (*model.User, error)
 
 	Media(ctx context.Context, obj *model.Answer) ([]*model.Media, error)
+	Addenda(ctx context.Context, obj *model.Answer) ([]*model.Addendum, error)
 
 	IsMine(ctx context.Context, obj *model.Answer) (bool, error)
 }
@@ -916,6 +927,8 @@ type MutationResolver interface {
 	AnswerQuestion(ctx context.Context, questionID string, body string, mediaInputs []*model.MediaUploadInput) (*model.Answer, error)
 	UpdateAnswer(ctx context.Context, id string, body string, deletedMediaIDs []string) (*model.Answer, error)
 	DeleteAnswer(ctx context.Context, id string) (bool, error)
+	AddQuestionAddendum(ctx context.Context, questionID string, body string) (*model.Question, error)
+	AddAnswerAddendum(ctx context.Context, answerID string, body string) (*model.Answer, error)
 	LikeAnswer(ctx context.Context, id string) (*model.Answer, error)
 	UnlikeAnswer(ctx context.Context, id string) (*model.Answer, error)
 	SelectBestAnswer(ctx context.Context, questionID string, answerID string) (*model.Question, error)
@@ -1109,6 +1122,7 @@ type QuestionResolver interface {
 	Answers(ctx context.Context, obj *model.Question, limit *int32, offset *int32) (*model.AnswerPage, error)
 	AnswerCount(ctx context.Context, obj *model.Question) (int32, error)
 	Media(ctx context.Context, obj *model.Question) ([]*model.Media, error)
+	Addenda(ctx context.Context, obj *model.Question) ([]*model.Addendum, error)
 
 	IsMine(ctx context.Context, obj *model.Question) (bool, error)
 }
@@ -1149,6 +1163,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Addendum.body":
+		if e.ComplexityRoot.Addendum.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Addendum.Body(childComplexity), true
+	case "Addendum.createdAt":
+		if e.ComplexityRoot.Addendum.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Addendum.CreatedAt(childComplexity), true
+	case "Addendum.ID":
+		if e.ComplexityRoot.Addendum.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Addendum.ID(childComplexity), true
 
 	case "AdminCommunity.community":
 		if e.ComplexityRoot.AdminCommunity.Community == nil {
@@ -1608,6 +1641,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AnnouncementPage.Total(childComplexity), true
 
+	case "Answer.addenda":
+		if e.ComplexityRoot.Answer.Addenda == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Answer.Addenda(childComplexity), true
 	case "Answer.body":
 		if e.ComplexityRoot.Answer.Body == nil {
 			break
@@ -2341,6 +2380,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MessageReaction.ReactedByMe(childComplexity), true
 
+	case "Mutation.addAnswerAddendum":
+		if e.ComplexityRoot.Mutation.AddAnswerAddendum == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addAnswerAddendum_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddAnswerAddendum(childComplexity, args["answerID"].(string), args["body"].(string)), true
 	case "Mutation.addMessageReaction":
 		if e.ComplexityRoot.Mutation.AddMessageReaction == nil {
 			break
@@ -2352,6 +2402,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddMessageReaction(childComplexity, args["roomID"].(string), args["messageID"].(string), args["emoji"].(string)), true
+	case "Mutation.addQuestionAddendum":
+		if e.ComplexityRoot.Mutation.AddQuestionAddendum == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addQuestionAddendum_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddQuestionAddendum(childComplexity, args["questionID"].(string), args["body"].(string)), true
 	case "Mutation.addUserToRoom":
 		if e.ComplexityRoot.Mutation.AddUserToRoom == nil {
 			break
@@ -4923,6 +4984,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Users(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 
+	case "Question.addenda":
+		if e.ComplexityRoot.Question.Addenda == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Question.Addenda(childComplexity), true
 	case "Question.answerCount":
 		if e.ComplexityRoot.Question.AnswerCount == nil {
 			break
@@ -5803,6 +5870,18 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
 
+func (ec *executionContext) childFields_Addendum(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Addendum_ID(ctx, field)
+	case "body":
+		return ec.fieldContext_Addendum_body(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Addendum_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Addendum", field.Name)
+}
+
 func (ec *executionContext) childFields_AdminCommunity(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "community":
@@ -6013,6 +6092,8 @@ func (ec *executionContext) childFields_Answer(ctx context.Context, field graphq
 		return ec.fieldContext_Answer_body(ctx, field)
 	case "media":
 		return ec.fieldContext_Answer_media(ctx, field)
+	case "addenda":
+		return ec.fieldContext_Answer_addenda(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Answer_createdAt(ctx, field)
 	case "updatedAt":
@@ -6673,6 +6754,8 @@ func (ec *executionContext) childFields_Question(ctx context.Context, field grap
 		return ec.fieldContext_Question_answerCount(ctx, field)
 	case "media":
 		return ec.fieldContext_Question_media(ctx, field)
+	case "addenda":
+		return ec.fieldContext_Question_addenda(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Question_createdAt(ctx, field)
 	case "updatedAt":
@@ -7071,6 +7154,28 @@ func (ec *executionContext) childFields___Type(ctx context.Context, field graphq
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_addAnswerAddendum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "answerID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["answerID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "body",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["body"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addMessageReaction_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -7098,6 +7203,28 @@ func (ec *executionContext) field_Mutation_addMessageReaction_args(ctx context.C
 		return nil, err
 	}
 	args["emoji"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addQuestionAddendum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "questionID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["questionID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "body",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["body"] = arg1
 	return args, nil
 }
 
@@ -11027,6 +11154,75 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
+func (ec *executionContext) _Addendum_ID(ctx context.Context, field graphql.CollectedField, obj *model.Addendum) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Addendum_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Addendum_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Addendum", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Addendum_body(ctx context.Context, field graphql.CollectedField, obj *model.Addendum) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Addendum_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Addendum_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Addendum", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Addendum_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Addendum) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Addendum_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Addendum_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Addendum", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _AdminCommunity_community(ctx context.Context, field graphql.CollectedField, obj *model.AdminCommunity) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -12943,6 +13139,38 @@ func (ec *executionContext) fieldContext_Answer_media(_ context.Context, field g
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Answer_addenda(ctx context.Context, field graphql.CollectedField, obj *model.Answer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Answer_addenda(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Answer().Addenda(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Addendum) graphql.Marshaler {
+			return ec.marshalNAddendum2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddendumᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Answer_addenda(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Answer",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Addendum(ctx, field)
 		},
 	}
 	return fc, nil
@@ -17551,6 +17779,94 @@ func (ec *executionContext) fieldContext_Mutation_deleteAnswer(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteAnswer_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addQuestionAddendum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addQuestionAddendum(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddQuestionAddendum(ctx, fc.Args["questionID"].(string), fc.Args["body"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Question) graphql.Marshaler {
+			return ec.marshalNQuestion2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐQuestion(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addQuestionAddendum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Question(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addQuestionAddendum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addAnswerAddendum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addAnswerAddendum(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddAnswerAddendum(ctx, fc.Args["answerID"].(string), fc.Args["body"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Answer) graphql.Marshaler {
+			return ec.marshalNAnswer2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAnswer(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addAnswerAddendum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Answer(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addAnswerAddendum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -26479,6 +26795,38 @@ func (ec *executionContext) fieldContext_Question_media(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Question_addenda(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Question_addenda(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Question().Addenda(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Addendum) graphql.Marshaler {
+			return ec.marshalNAddendum2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddendumᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Question_addenda(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Question",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Addendum(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Question_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Question) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31366,6 +31714,54 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 
 // region    **************************** object.gotpl ****************************
 
+var addendumImplementors = []string{"Addendum"}
+
+func (ec *executionContext) _Addendum(ctx context.Context, sel ast.SelectionSet, obj *model.Addendum) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, addendumImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Addendum")
+		case "ID":
+			out.Values[i] = ec._Addendum_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._Addendum_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Addendum_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var adminCommunityImplementors = []string{"AdminCommunity"}
 
 func (ec *executionContext) _AdminCommunity(ctx context.Context, sel ast.SelectionSet, obj *model.AdminCommunity) graphql.Marshaler {
@@ -32080,6 +32476,44 @@ func (ec *executionContext) _Answer(ctx context.Context, sel ast.SelectionSet, o
 					}
 				}()
 				res = ec._Answer_media(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "addenda":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Answer_addenda(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -34159,6 +34593,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteAnswer":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteAnswer(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addQuestionAddendum":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addQuestionAddendum(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addAnswerAddendum":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addAnswerAddendum(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -38444,6 +38892,44 @@ func (ec *executionContext) _Question(ctx context.Context, sel ast.SelectionSet,
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "addenda":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Question_addenda(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			out.Values[i] = ec._Question_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -40009,6 +40495,32 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 func (ec *executionContext) unmarshalNAddUserToRoomInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddUserToRoomInput(ctx context.Context, v any) (model.AddUserToRoomInput, error) {
 	res, err := ec.unmarshalInputAddUserToRoomInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAddendum2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddendumᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Addendum) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAddendum2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddendum(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAddendum2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddendum(ctx context.Context, sel ast.SelectionSet, v *model.Addendum) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Addendum(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAdminCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunityᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AdminCommunity) graphql.Marshaler {

@@ -14,6 +14,12 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type Addendum struct {
+	ID        string `json:"ID"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type AdminCommunity struct {
 	Community *Community `json:"community"`
 	Owner     *User      `json:"owner,omitempty"`
@@ -123,16 +129,17 @@ type AnnouncementPage struct {
 }
 
 type Answer struct {
-	ID         string   `json:"ID"`
-	QuestionID string   `json:"questionID"`
-	User       *User    `json:"user"`
-	Body       string   `json:"body"`
-	Media      []*Media `json:"media"`
-	CreatedAt  string   `json:"createdAt"`
-	UpdatedAt  string   `json:"updatedAt"`
-	IsMine     bool     `json:"isMine"`
-	LikeCount  int32    `json:"likeCount"`
-	LikedByMe  bool     `json:"likedByMe"`
+	ID         string      `json:"ID"`
+	QuestionID string      `json:"questionID"`
+	User       *User       `json:"user"`
+	Body       string      `json:"body"`
+	Media      []*Media    `json:"media"`
+	Addenda    []*Addendum `json:"addenda"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+	IsMine     bool        `json:"isMine"`
+	LikeCount  int32       `json:"likeCount"`
+	LikedByMe  bool        `json:"likedByMe"`
 }
 
 type AnswerPage struct {
@@ -551,6 +558,7 @@ type Question struct {
 	Answers     *AnswerPage `json:"answers"`
 	AnswerCount int32       `json:"answerCount"`
 	Media       []*Media    `json:"media"`
+	Addenda     []*Addendum `json:"addenda"`
 	CreatedAt   string      `json:"createdAt"`
 	UpdatedAt   string      `json:"updatedAt"`
 	IsMine      bool        `json:"isMine"`

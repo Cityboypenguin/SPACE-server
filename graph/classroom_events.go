@@ -4,10 +4,14 @@ import (
 	"context"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
+	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
 // classroomEventPublisher は質問・回答・投票の配信アダプタ。
@@ -112,3 +116,80 @@ var (
 	_ = (*gqlmodel.Answer)(nil)
 	_ = (*gqlmodel.Poll)(nil)
 )
+
+// addendumNotifier は質問・回答への追記の通知（NTF-01, NTF-02）。
+//
+// 授業内チャットは匿名なので、通知に追記した人を載せない（ActorID なし・文言にも出さない）。
+// 遷移先は授業のチャット画面（targetType=room, targetID=授業のルーム）で、質問を開くための
+// 追加の手がかりは SSE の Extra に載せる。失敗は送信の成否に影響させず、ログだけ残す。
+type addendumNotifier struct {
+	pub   notificationuc.NotificationPublisher
+	rooms roomusecase.GetRoomUseCase
+}
+
+var _ addendumusecase.Notifier = &addendumNotifier{}
+
+func NewAddendumNotifier(pub notificationuc.NotificationPublisher, rooms roomusecase.GetRoomUseCase) *addendumNotifier {
+	return &addendumNotifier{pub: pub, rooms: rooms}
+}
+
+func (n *addendumNotifier) QuestionAddendumAdded(ctx context.Context, q *model.Question, answererIDs []int64) {
+	if len(answererIDs) == 0 {
+		return
+	}
+	room := n.room(ctx, q.RoomID)
+	message := notificationuc.MessageQuestionAddendumInRoom(room.Name)
+	targetType := notificationuc.TargetRoom
+	roomID := q.RoomID
+	params := make([]notificationuc.PublishParams, 0, len(answererIDs))
+	for _, id := range answererIDs {
+		params = append(params, notificationuc.PublishParams{
+			UserID:     id,
+			Type:       notificationuc.TypeQuestionAddendum,
+			TargetType: &targetType,
+			TargetID:   &roomID,
+			Message:    message,
+			Extra: map[string]any{
+				"roomID":     encodeGraphID("room", q.RoomID),
+				"roomType":   room.Type,
+				"questionID": encodeGraphID("question", q.ID),
+			},
+		})
+	}
+	if err := n.pub.PublishBatch(ctx, params); err != nil {
+		logger.Log.Error().Err(err).Str("component", "addendum_notification").
+			Int64("question_id", q.ID).Msg("failed to publish question addendum notifications")
+	}
+}
+
+func (n *addendumNotifier) AnswerAddendumAdded(ctx context.Context, q *model.Question, a *model.Answer) {
+	room := n.room(ctx, q.RoomID)
+	targetType := notificationuc.TargetRoom
+	roomID := q.RoomID
+	if err := n.pub.Publish(ctx, notificationuc.PublishParams{
+		UserID:     q.AskerUserID,
+		Type:       notificationuc.TypeAnswerAddendum,
+		TargetType: &targetType,
+		TargetID:   &roomID,
+		Message:    notificationuc.MessageAnswerAddendumInRoom(room.Name),
+		Extra: map[string]any{
+			"roomID":     encodeGraphID("room", q.RoomID),
+			"roomType":   room.Type,
+			"questionID": encodeGraphID("question", q.ID),
+			"answerID":   encodeGraphID("answer", a.ID),
+		},
+	}); err != nil {
+		logger.Log.Error().Err(err).Str("component", "addendum_notification").
+			Int64("answer_id", a.ID).Msg("failed to publish answer addendum notification")
+	}
+}
+
+// room は通知の文言と遷移先に使うルームを引く。引けなくても通知は出す（授業内チャットなので
+// 種別は course、名前は空のまま場所を言わない文言になる）。
+func (n *addendumNotifier) room(ctx context.Context, roomID int64) *model.Room {
+	room, err := n.rooms.Execute(ctx, roomID)
+	if err != nil || room == nil {
+		return &model.Room{ID: roomID, Type: model.RoomTypeCourse}
+	}
+	return room
+}

@@ -18,6 +18,10 @@ extend type Mutation {
   # 残る場合に限り空にできる（投稿時と同じ条件）。
   updateAnswer(id: ID!, body: String!, deletedMediaIDs: [ID!]): Answer!
   deleteAnswer(id: ID!): Boolean!
+  # 質問・回答への追記。元の本文は変えず、追記用の枠に足す。追記できるのは質問者（質問）・
+  # 回答者（回答）本人だけ。質問には回答している人へ、回答には質問者へ通知する。
+  addQuestionAddendum(questionID: ID!, body: String!): Question!
+  addAnswerAddendum(answerID: ID!, body: String!): Answer!
   likeAnswer(id: ID!): Answer!
   unlikeAnswer(id: ID!): Answer!
   selectBestAnswer(questionID: ID!, answerID: ID!): Question!
@@ -51,9 +55,18 @@ type Question {
   answers(limit: Int = 20, offset: Int = 0): AnswerPage!
   answerCount: Int!
   media: [Media!]!
+  # 追記（古い順）。
+  addenda: [Addendum!]!
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!
+}
+
+# 質問・回答への追記1件。
+type Addendum {
+  ID: ID!
+  body: String!
+  createdAt: String!
 }
 
 type Answer {
@@ -62,6 +75,8 @@ type Answer {
   user: User!
   body: String!
   media: [Media!]!
+  # 追記（古い順）。
+  addenda: [Addendum!]!
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!
