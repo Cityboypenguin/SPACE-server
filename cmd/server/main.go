@@ -535,6 +535,15 @@ func main() {
 		GetOrCreateAnonymousIdentity: getOrCreateAnonymousIdentityUseCase,
 		Events:                       chatEventPublisher,
 	})
+	messageReactionRepository := mysql.NewMySQLMessageReactionRepository(database)
+	chatReactionService := chatusecase.NewMessageReactionService(chatusecase.MessageReactionDeps{
+		Access:     chatAccessPolicy,
+		GetRoom:    getRoomUseCase,
+		GetMessage: getMessageByIDUseCase,
+		Reactions:  messageReactionRepository,
+		Events:     chatEventPublisher,
+	})
+	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
 	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
 		Access:             chatAccessPolicy,
 		ListMessages:       listMessagesUseCase,
@@ -724,10 +733,11 @@ func main() {
 		CourseImportTracker: courseImportTracker,
 
 		ChatUseCases: graph.ChatUseCases{
-			ChatAccess:   chatAccessPolicy,
-			ChatCommands: chatCommandService,
-			ChatQueries:  chatQueryService,
-			ChatReads:    chatReadService,
+			ChatAccess:    chatAccessPolicy,
+			ChatCommands:  chatCommandService,
+			ChatReactions: chatReactionService,
+			ChatQueries:   chatQueryService,
+			ChatReads:     chatReadService,
 		},
 	}
 
@@ -780,6 +790,7 @@ func main() {
 		CountFavoritesByPostIDs:        countFavoritesByPostIDsUseCase,
 		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
 		GetMessagesByIDs:               getMessagesByIDsUseCase,
+		ListMessageReactions:           listMessageReactionsUseCase,
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
 		GetRoomsByIDs:                  getRoomsByIDsUseCase,

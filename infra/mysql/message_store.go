@@ -22,11 +22,11 @@ func (r *MySQLMessageRepository) SaveMessage(ctx context.Context, m *model.Messa
 	}
 	// author_role は投稿時点の立場を焼き付ける（model.NewMessage が既定値を入れる）。
 	query := `
-		INSERT INTO messages (room_id, user_id, author_role, content, reply_to_message_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO messages (room_id, user_id, author_role, content, stamp_id, reply_to_message_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	result, err := db.ExecContext(ctx, query,
-		m.RoomID, m.UserID, m.AuthorRole, content, m.ReplyToID,
+		m.RoomID, m.UserID, m.AuthorRole, content, m.StampID, m.ReplyToID,
 		m.CreatedAt.Unix(), m.UpdatedAt.Unix(),
 	)
 	if err != nil {

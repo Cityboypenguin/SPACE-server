@@ -273,6 +273,8 @@ type ChatUseCases struct {
 	ChatCommands chatusecase.MessageCommandService
 	ChatQueries  chatusecase.MessageQueryService
 	ChatReads    chatusecase.ReadReceiptService
+	// ChatReactions はメッセージへのリアクションの付け外し。
+	ChatReactions chatusecase.MessageReactionService
 }
 
 type CommunityUseCases struct {

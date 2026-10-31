@@ -38,7 +38,7 @@ func NewMySQLMessageRepository(db *sql.DB) (*MySQLMessageRepository, error) {
 
 // messageColumns は messages を読むときの共通の列並び。scanMessage と対になっており、
 // 片方だけ直すと取り違えるので必ず一緒に変更する。
-const messageColumns = "id, room_id, user_id, author_role, content, reply_to_message_id, created_at, updated_at"
+const messageColumns = "id, room_id, user_id, author_role, content, stamp_id, reply_to_message_id, created_at, updated_at"
 
 // qualifiedMessageColumns は messageColumns にテーブル別名を付けた並びを返す。
 // JOIN を伴う SELECT でも列並びを1箇所に保つためのヘルパ。
@@ -59,8 +59,12 @@ type rowScanner interface {
 func (r *MySQLMessageRepository) scanMessage(scanner rowScanner) (*model.Message, error) {
 	var m model.Message
 	var createdAt, updatedAt int64
-	if err := scanner.Scan(&m.ID, &m.RoomID, &m.UserID, &m.AuthorRole, &m.Content, &m.ReplyToID, &createdAt, &updatedAt); err != nil {
+	var stampID sql.NullString
+	if err := scanner.Scan(&m.ID, &m.RoomID, &m.UserID, &m.AuthorRole, &m.Content, &stampID, &m.ReplyToID, &createdAt, &updatedAt); err != nil {
 		return nil, err
+	}
+	if stampID.Valid {
+		m.StampID = &stampID.String
 	}
 	m.CreatedAt = time.Unix(createdAt, 0)
 	m.UpdatedAt = time.Unix(updatedAt, 0)

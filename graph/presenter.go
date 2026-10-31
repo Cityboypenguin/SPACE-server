@@ -321,6 +321,7 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		RoomID:    encodeGraphID("room", msg.RoomID),
 		UserID:    encodeGraphID("user", msg.UserID),
 		Content:   msg.Content,
+		StampID:   msg.StampID,
 		CreatedAt: msg.CreatedAt.Format(timeFormat),
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}

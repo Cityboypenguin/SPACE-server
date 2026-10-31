@@ -367,25 +367,33 @@ type Mention struct {
 }
 
 type Message struct {
-	ID        string     `json:"ID"`
-	RoomID    string     `json:"roomID"`
-	Room      *Room      `json:"room"`
-	UserID    string     `json:"userID"`
-	User      *User      `json:"user"`
-	Content   string     `json:"content"`
-	Media     []*Media   `json:"media"`
-	CreatedAt string     `json:"createdAt"`
-	UpdatedAt string     `json:"updatedAt"`
-	IsMine    bool       `json:"isMine"`
-	ReplyToID *string    `json:"replyToID,omitempty"`
-	ReplyTo   *Message   `json:"replyTo,omitempty"`
-	Mentions  []*Mention `json:"mentions"`
+	ID        string             `json:"ID"`
+	RoomID    string             `json:"roomID"`
+	Room      *Room              `json:"room"`
+	UserID    string             `json:"userID"`
+	User      *User              `json:"user"`
+	Content   string             `json:"content"`
+	StampID   *string            `json:"stampID,omitempty"`
+	Media     []*Media           `json:"media"`
+	CreatedAt string             `json:"createdAt"`
+	UpdatedAt string             `json:"updatedAt"`
+	IsMine    bool               `json:"isMine"`
+	ReplyToID *string            `json:"replyToID,omitempty"`
+	ReplyTo   *Message           `json:"replyTo,omitempty"`
+	Mentions  []*Mention         `json:"mentions"`
+	Reactions []*MessageReaction `json:"reactions"`
 }
 
 type MessagePage struct {
 	Items         []*Message `json:"items"`
 	HasMoreBefore bool       `json:"hasMoreBefore"`
 	HasMoreAfter  bool       `json:"hasMoreAfter"`
+}
+
+type MessageReaction struct {
+	Emoji       string `json:"emoji"`
+	Count       int32  `json:"count"`
+	ReactedByMe bool   `json:"reactedByMe"`
 }
 
 type Mutation struct {

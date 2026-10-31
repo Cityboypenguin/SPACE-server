@@ -184,7 +184,7 @@ func (p *chatEventPublisher) broadcastRoomChanged(ctx context.Context, ev chatus
 		"messageID": encodeGraphID("message", ev.Message.ID),
 		// 宛先から投稿者を除いてあるので、受け取った時点で必ず「自分以外の新着」。
 		"hasNewMessage": true,
-		"lastMessage":   messagePreview(ev.Message.Content, ev.HasMedia),
+		"lastMessage":   messageSummary(ev.Message, ev.HasMedia),
 		"sentAt":        roomChangedSentAt(time.Now()),
 	}
 	for _, userID := range recipients {
@@ -246,7 +246,7 @@ func (p *chatEventPublisher) roomChangedRecipients(ctx context.Context, ev chatu
 // publishSentNotifications は送信に伴う通知（DM・引用返信・メンション）をまとめて出す。
 // どれもベストエフォートで、失敗はログに残して先へ進む。
 func (p *chatEventPublisher) publishSentNotifications(ctx context.Context, ev chatusecase.MessageSentEvent) {
-	previewMessage := messagePreview(ev.Message.Content, ev.HasMedia)
+	previewMessage := messageSummary(ev.Message, ev.HasMedia)
 
 	// DM ルームの場合、相手に通知を送る
 	if ev.Room.Type == model.RoomTypeDM {
@@ -520,6 +520,15 @@ func (p *chatEventPublisher) publishMentionNotifications(ctx context.Context, ro
 			Int("recipients", len(params)).
 			Msg("failed to publish mention notifications")
 	}
+}
+
+// messageSummary はメッセージ1件の一覧プレビュー・通知文言。スタンプだけのメッセージは本文が空なので、
+// 「新しいメッセージが届きました」ではなく「スタンプ」と分かる文言にする。
+func messageSummary(m *model.Message, hasMedia bool) string {
+	if m.StampID != nil {
+		return "[スタンプを送信しました]"
+	}
+	return messagePreview(m.Content, hasMedia)
 }
 
 // messagePreview は一覧画面のプレビュー・通知文言に使う要約テキストを作る。

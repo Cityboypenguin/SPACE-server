@@ -12,6 +12,9 @@ extend type Query {
     around: ID
   ): MessagePage!
   room(id: ID!): Room
+  # メッセージに付けてよいリアクションの絵文字の一覧。画面の絵文字ピッカーはこれを使う
+  # （サーバーが許す絵文字とクライアントの表示がずれないようにするため）。
+  messageReactionEmojis: [String!]!
   myDMRooms(limit: Int = 20, offset: Int = 0): RoomPage!
 }
 
@@ -34,8 +37,17 @@ extend type Mutation {
     mentionUserIDs: [ID!]
     # 引用返信の返信先メッセージID。同じルームの未削除メッセージのみ指定できる。
     replyToID: ID
+    # スタンプだけのメッセージを送るときのスタンプのID（"stamp:xxx"。リアクションと同じ許可リスト）。
+    # 本文・添付・メンションとは同時に送れない（content は空にする）。スタンプのメッセージは編集できない。
+    stampID: String
   ): Message!
   deleteMessage(roomID: ID!, id: ID!): Boolean!
+  # メッセージにリアクションを付ける／外す。1人が複数の絵文字を付けられるが、同じ絵文字は
+  # 1人1回まで（付け直しも外し直しも冪等で、エラーにならない）。付けてよい絵文字は
+  # messageReactionEmojis の一覧のものだけ。更新後のメッセージを返し、同じ内容が
+  # messageUpdated でルームの購読者にも配信される。
+  addMessageReaction(roomID: ID!, messageID: ID!, emoji: String!): Message!
+  removeMessageReaction(roomID: ID!, messageID: ID!, emoji: String!): Message!
   updateMessage(
     roomID: ID!
     id: ID!
@@ -94,6 +106,8 @@ type Message {
   userID: ID!
   user: User!
   content: String!
+  # スタンプだけのメッセージのとき、そのスタンプのID。通常のメッセージは null。
+  stampID: String
   media: [Media!]!
   createdAt: String!
   updatedAt: String!
@@ -103,6 +117,15 @@ type Message {
   replyTo: Message
   # 本文中のメンション。コミュニティのみ。
   mentions: [Mention!]!
+  # 絵文字ごとのリアクションの集計。付けられた順で、1つも無ければ空配列。
+  reactions: [MessageReaction!]!
+}
+
+type MessageReaction {
+  emoji: String!
+  count: Int!
+  # 自分がこの絵文字を付けているか。
+  reactedByMe: Boolean!
 }
 
 type MessagePage {

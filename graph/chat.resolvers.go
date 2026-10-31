@@ -149,6 +149,35 @@ func (r *messageResolver) Mentions(ctx context.Context, obj *gqlmodel.Message) (
 	return resolveMentions(ctx, mentions)
 }
 
+// Reactions is the resolver for the reactions field.
+func (r *messageResolver) Reactions(ctx context.Context, obj *gqlmodel.Message) ([]*gqlmodel.MessageReaction, error) {
+	numericID, err := decodeGraphID(ctx, "message", obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	// 購読（WebSocket）の ctx は接続の間ずっと同じローダーを使い回すので、同じメッセージの
+	// 2回目以降の配信がキャッシュした古い集計を返してしまう。リアクションは付け外しで
+	// 変わる値なので、読む前に必ずこのキーのキャッシュを捨てる。同じキーの Load は
+	// 引き続き1つのバッチに束ねられるため、一覧表示の N+1 は起きない。
+	loader := dataloader.For(ctx).ReactionLoader
+	loader.Clear(numericID)
+	reactions, err := loader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.MessageReaction, 0, len(reactions))
+	for _, reaction := range reactions {
+		result = append(result, &gqlmodel.MessageReaction{
+			Emoji:       reaction.Emoji,
+			Count:       int32(reaction.Count),
+			ReactedByMe: reaction.ReactedByMe,
+		})
+	}
+	return result, nil
+}
+
 // CreateRoom is the resolver for the createRoom field.
 func (r *mutationResolver) CreateRoom(ctx context.Context, input gqlmodel.CreateRoomInput) (*gqlmodel.Room, error) {
 	if _, err := requireAuth(ctx); err != nil {
@@ -310,7 +339,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 // 権限判定（授業の学期・履修 / membership / ブロック）、メンションの検証、
 // 保存後の配信・通知は全て ChatCommands 側にある。ここは GraphQL ID のデコードと
 // GraphQL 型への変換だけを行う。
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*gqlmodel.Message, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -336,8 +365,15 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 	ucMediaInputs := r.toMediaInputs(mediaInputs)
 
+	// 空文字は「スタンプ無し」として扱う（クライアントが空で送ってきても通常のメッセージにする）。
+	var stamp *string
+	if stampID != nil && *stampID != "" {
+		stamp = stampID
+	}
+
 	msg, err := r.ChatCommands.SendMessage(ctx, chatusecase.SendMessageInput{
 		RoomID:         rid,
+		StampID:        stamp,
 		Content:        content,
 		MediaInputs:    ucMediaInputs,
 		MentionUserIDs: mentionIDs,
@@ -366,6 +402,50 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 	}
 
 	return r.ChatCommands.DeleteMessage(ctx, chatusecase.DeleteMessageInput{RoomID: rid, MessageID: numericID})
+}
+
+// AddMessageReaction is the resolver for the addMessageReaction field.
+func (r *mutationResolver) AddMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*gqlmodel.Message, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	mid, err := decodeGraphID(ctx, "message", messageID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.ChatReactions.AddReaction(ctx, chatusecase.MessageReactionInput{RoomID: rid, MessageID: mid, Emoji: emoji})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphMessage(msg), nil
+}
+
+// RemoveMessageReaction is the resolver for the removeMessageReaction field.
+func (r *mutationResolver) RemoveMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*gqlmodel.Message, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	mid, err := decodeGraphID(ctx, "message", messageID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.ChatReactions.RemoveReaction(ctx, chatusecase.MessageReactionInput{RoomID: rid, MessageID: mid, Emoji: emoji})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphMessage(msg), nil
 }
 
 // UpdateMessage is the resolver for the updateMessage field.
@@ -503,6 +583,14 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 		items = append(items, toGraphMessage(msg))
 	}
 	return &gqlmodel.MessagePage{Items: items, HasMoreBefore: page.HasMoreBefore, HasMoreAfter: page.HasMoreAfter}, nil
+}
+
+// MessageReactionEmojis is the resolver for the messageReactionEmojis field.
+func (r *queryResolver) MessageReactionEmojis(ctx context.Context) ([]string, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	return model.AllowedMessageReactionEmojis(), nil
 }
 
 // Room is the resolver for the room field.
@@ -705,7 +793,8 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 		}
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
-			gqlRoom.Content = &lastMsg.Content
+			summary := lastMessageText(lastMsg)
+			gqlRoom.Content = &summary
 		}
 
 		applyRoomReadStatus(gqlRoom, readStatusMap[room.ID])

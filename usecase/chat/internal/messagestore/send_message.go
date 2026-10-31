@@ -47,7 +47,8 @@ type SendMessageUseCase interface {
 	// replyToID を渡すと引用返信になる。返信先は同じルームの未削除メッセージである
 	// 必要があり、そうでなければエラーになる。
 	// mentions は ResolveMentionsUseCase で検証済みのメンション（コミュニティのみ）。
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error)
+	// stampID を渡すとスタンプだけのメッセージになる（本文・添付・メンションとは同時に送れない）。
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -82,10 +83,17 @@ func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (_ *model.Message, err error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (_ *model.Message, err error) {
 	content = strings.TrimSpace(content)
 	if err := validateContent(content); err != nil {
 		return nil, err
+	}
+	// スタンプの検証は、添付のアップロードを受け入れる前に済ませる（受け入れた後で弾くと後始末が要る）。
+	if stampID != nil && (content != "" || len(mediaInputs) > 0 || len(mentions) > 0) {
+		return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
+	}
+	if stampID != nil && !model.IsAllowedMessageStamp(*stampID) {
+		return nil, apperr.InvalidInput("このスタンプは使えません")
 	}
 
 	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
@@ -124,6 +132,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 		UserID:    userID,
 		ReplyToID: replyToID,
 		Content:   content,
+		StampID:   stampID,
 		MediaKeys: mediaKeys,
 		CreatedAt: now,
 		UpdatedAt: now,

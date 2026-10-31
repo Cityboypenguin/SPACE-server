@@ -26,6 +26,9 @@ type Message struct {
 	// ケース（削除済み）を扱う必要がある。
 	ReplyToID *int64
 	Content   string
+	// StampID はスタンプだけを送ったメッセージのスタンプのID（"stamp:xxx"）。通常のメッセージは nil。
+	// スタンプのメッセージは本文・添付・メンションを持たない。
+	StampID *string
 	// Mentions は本文中のメンション。書き込み時に解決したものを保持し、
 	// 読み出し時は必要なときだけ（GraphQL の mentions フィールド解決時に）埋める。
 	Mentions  []*Mention
@@ -72,6 +75,8 @@ type CreateMessageParam struct {
 	UserID    int64
 	ReplyToID *int64
 	Content   string
+	// StampID を渡すと、スタンプだけのメッセージになる（本文・添付とは同時に送れない）。
+	StampID *string
 	// MediaKeys は添付のストレージキー。本文が空でも添付があれば送信できるため、
 	// 「本文と添付が両方空」を弾くためにここで受け取る（保存自体は media 側の責務）。
 	MediaKeys []string
@@ -91,7 +96,16 @@ type UpdateMessageParam struct {
 // 生成経路（通常送信・将来の別経路）が増えても検証が漏れないようにする。
 func NewMessage(param CreateMessageParam) (*Message, error) {
 	content := strings.TrimSpace(param.Content)
-	if content == "" && len(param.MediaKeys) == 0 {
+	if param.StampID != nil {
+		// スタンプのメッセージは、スタンプ1つだけで成り立つ。本文や添付が混ざると、
+		// 表示（スタンプだけを大きく出す）とプレビュー文言の前提が崩れる。
+		if content != "" || len(param.MediaKeys) > 0 {
+			return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
+		}
+		if !IsAllowedMessageStamp(*param.StampID) {
+			return nil, apperr.InvalidInput("このスタンプは使えません")
+		}
+	} else if content == "" && len(param.MediaKeys) == 0 {
 		return nil, apperr.InvalidInput("content or media is required")
 	}
 
@@ -115,6 +129,7 @@ func NewMessage(param CreateMessageParam) (*Message, error) {
 		AuthorRole: authorRole,
 		ReplyToID:  param.ReplyToID,
 		Content:    content,
+		StampID:    param.StampID,
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
 	}, nil

@@ -82,6 +82,8 @@ type SendMessageInput struct {
 	// （message.MentionsSupported: コミュニティのみ）から判定させる。
 	MentionUserIDs []int64
 	ReplyToID      *int64
+	// StampID を渡すと、スタンプだけのメッセージを送る（本文・添付・メンションは付けられない）。
+	StampID *string
 }
 
 type UpdateMessageInput struct {
@@ -110,6 +112,11 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 	// メンションが成立するルームか（コミュニティのみ）の判定は ResolveMentions 側に
 	// あり、ここは検証済みの結果だけを保存に渡す。リゾルバから ResolveMentions を
 	// 直接呼ぶ経路は無くしてあるので、別経路から実名メンションを通す余地は無い。
+	// スタンプには本文が無いのでメンションは成立しない。黙って捨てずに、組み合わせが誤りだと返す
+	// （クライアントの送信ミスに気づけるように）。本文・添付との併用の拒否は保存側（messagestore）が持つ。
+	if in.StampID != nil && len(in.MentionUserIDs) > 0 {
+		return nil, apperr.InvalidInput("スタンプはメンションと一緒に送れません")
+	}
 	mentions, err := s.deps.ResolveMentions.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
@@ -119,7 +126,7 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		return nil, err
 	}
 
-	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, mentions)
+	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, in.StampID, mentions)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +167,10 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	if !existing.CanBeEditedBy(claims.ID, isAdmin) {
 		audit.LogDenied(ctx, "update_message", "message", in.MessageID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")
+	}
+	// スタンプのメッセージには、直す本文が無い（削除はできる）。
+	if existing.StampID != nil {
+		return nil, apperr.InvalidInput("スタンプは編集できません")
 	}
 
 	// 本文を空にする編集は、添付が1枚も無いときだけ弾く
@@ -351,7 +362,13 @@ func (s *messageCommandService) ensureMessageNotEmptied(ctx context.Context, exi
 // メッセージIDが実在するかどうかを外から測れてしまうので、どちらも
 // "message not found" に寄せている。
 func (s *messageCommandService) loadMessageInRoom(ctx context.Context, roomID, messageID int64) (*model.Message, error) {
-	msg, err := s.deps.GetMessage.Execute(ctx, messageID)
+	return loadMessageInRoom(ctx, s.deps.GetMessage, roomID, messageID)
+}
+
+// loadMessageInRoom は上のメソッドの本体。リアクション（reaction.go）など、
+// 同じ照合が要る別サービスからも使うため、サービスに依存しない形で切り出してある。
+func loadMessageInRoom(ctx context.Context, getMessage messageusecase.GetMessageByIDUseCase, roomID, messageID int64) (*model.Message, error) {
+	msg, err := getMessage.Execute(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message")
 	}

@@ -114,6 +114,7 @@ func nopUseCases() UseCases {
 			return nil, nil
 		}),
 		GetMessagesByIDs:         mapFn[*model.Message](func(context.Context, []int64) (map[int64]*model.Message, error) { return nil, nil }),
+		ListMessageReactions:     mapFn[[]*model.MessageReaction](func(context.Context, []int64) (map[int64][]*model.MessageReaction, error) { return nil, nil }),
 		ListMentionsByPostIDs:    mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
 		ListMentionsByMessageIDs: mapFn[[]*model.Mention](func(context.Context, []int64) (map[int64][]*model.Mention, error) { return nil, nil }),
 		GetRoomsByIDs:            mapFn[*model.Room](func(context.Context, []int64) (map[int64]*model.Room, error) { return nil, nil }),
