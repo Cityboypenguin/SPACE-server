@@ -159,6 +159,11 @@ func (r *notificationResolver) TargetMessage(ctx context.Context, obj *gqlmodel.
 	return r.notificationTargetMessage(ctx, obj.TargetType, obj.TargetID)
 }
 
+// TargetQuestion is the resolver for the targetQuestion field.
+func (r *notificationResolver) TargetQuestion(ctx context.Context, obj *gqlmodel.Notification) (*gqlmodel.Question, error) {
+	return r.notificationTargetQuestion(ctx, obj.TargetType, obj.TargetID)
+}
+
 // TargetMessage is the resolver for the targetMessage field.
 func (r *notificationGroupResolver) TargetMessage(ctx context.Context, obj *gqlmodel.NotificationGroup) (*gqlmodel.Message, error) {
 	return r.notificationTargetMessage(ctx, obj.TargetType, obj.TargetID)

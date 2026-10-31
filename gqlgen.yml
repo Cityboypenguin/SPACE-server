@@ -199,6 +199,8 @@ models:
         resolver: true
       targetMessage:
         resolver: true
+      targetQuestion:
+        resolver: true
   NotificationGroup:
     fields:
       targetMessage:

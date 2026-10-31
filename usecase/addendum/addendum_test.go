@@ -47,7 +47,9 @@ func (f *fakeAddenda) CreateQuestionAddendum(_ context.Context, a *model.Addendu
 func (f *fakeAddenda) CreateAnswerAddendum(ctx context.Context, a *model.Addendum, max int) error {
 	return f.CreateQuestionAddendum(ctx, a, max)
 }
-func (f *fakeAddenda) ListAnswererIDs(context.Context, int64) ([]int64, error) { return f.answerers, nil }
+func (f *fakeAddenda) ListAnswererIDs(context.Context, int64) ([]int64, error) {
+	return f.answerers, nil
+}
 
 type fakeWritable struct{ err error }
 

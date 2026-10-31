@@ -81,14 +81,15 @@ print("   - 空の追記:", err(gql(AQ, {"i": q["ID"], "b": "   "}, users["a"]))
 print("   - 1001文字:", err(gql(AQ, {"i": q["ID"], "b": "あ" * 1001}, users["a"])))
 print("   - 未ログイン:", err(gql(AQ, {"i": q["ID"], "b": "x"})))
 
-QN = "query{myNotifications(limit:50){items{ID type message targetType actor{ID}}}}"
+QN = "query{myNotifications(limit:50){items{ID type message targetType targetID targetQuestion{ID roomID} actor{ID}}}}"
 
 def notes(user, typ):
     # myNotifications の type 絞り込みは actorID と一緒のときだけ効くので、ここで絞る。
     return [n for n in ok(gql(QN, token=users[user]))["myNotifications"]["items"] if n["type"] == typ]
 nb = notes("b", "question_addendum")
-assert len(nb) == 1 and nb[0]["actor"] is None and nb[0]["targetType"] == "room", nb
-print("6. 回答している b に『質問に追記』の通知が1件(追記した人は載らない):", nb[0]["message"])
+assert len(nb) == 1 and nb[0]["actor"] is None and nb[0]["targetType"] == "question", nb
+assert nb[0]["targetQuestion"]["ID"] == q["ID"] and nb[0]["targetQuestion"]["roomID"] == course["roomID"], nb
+print("6. 回答している b に『質問に追記』の通知が1件(追記した人は載らない・遷移先の質問が引ける):", nb[0]["message"])
 for n in ("a", "c"):
     assert notes(n, "question_addendum") == [], n
 print("   - 質問者本人 a と無関係の c には通知が出ない OK")
@@ -105,7 +106,7 @@ assert r["body"] == "来週の金曜です" and [x["body"] for x in r["addenda"]
 print("8. 回答者 b が回答に追記。元の本文は変わらない OK")
 print("   - 質問者 a が回答に追記:", err(gql(AA, {"i": ans["ID"], "b": "x"}, users["a"])))
 na = notes("a", "answer_addendum")
-assert len(na) == 1 and na[0]["actor"] is None, na
+assert len(na) == 1 and na[0]["actor"] is None and na[0]["targetQuestion"]["ID"] == q["ID"], na
 print("9. 質問者 a に『回答に追記』の通知が1件:", na[0]["message"])
 nb2 = notes("b", "answer_addendum")
 assert nb2 == [], nb2

@@ -377,6 +377,9 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 const notificationTargetTypePost = "post"
 const notificationTargetTypeMessage = "message"
 
+// notificationTargetTypeQuestion は追記の通知の遷移先（質問）。
+const notificationTargetTypeQuestion = "question"
+
 func toGraphNotification(n *model.Notification, h notificationHydration) *gqlmodel.Notification {
 	if n == nil {
 		return nil

@@ -432,16 +432,17 @@ type NGWordUserCount struct {
 }
 
 type Notification struct {
-	ID            string   `json:"ID"`
-	Type          string   `json:"type"`
-	Actor         *User    `json:"actor,omitempty"`
-	TargetType    *string  `json:"targetType,omitempty"`
-	TargetID      *string  `json:"targetID,omitempty"`
-	TargetPost    *Post    `json:"targetPost,omitempty"`
-	TargetMessage *Message `json:"targetMessage,omitempty"`
-	Message       string   `json:"message"`
-	IsRead        bool     `json:"isRead"`
-	CreatedAt     string   `json:"createdAt"`
+	ID             string    `json:"ID"`
+	Type           string    `json:"type"`
+	Actor          *User     `json:"actor,omitempty"`
+	TargetType     *string   `json:"targetType,omitempty"`
+	TargetID       *string   `json:"targetID,omitempty"`
+	TargetPost     *Post     `json:"targetPost,omitempty"`
+	TargetMessage  *Message  `json:"targetMessage,omitempty"`
+	TargetQuestion *Question `json:"targetQuestion,omitempty"`
+	Message        string    `json:"message"`
+	IsRead         bool      `json:"isRead"`
+	CreatedAt      string    `json:"createdAt"`
 }
 
 type NotificationGroup struct {

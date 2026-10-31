@@ -120,8 +120,8 @@ var (
 // addendumNotifier は質問・回答への追記の通知（NTF-01, NTF-02）。
 //
 // 授業内チャットは匿名なので、通知に追記した人を載せない（ActorID なし・文言にも出さない）。
-// 遷移先は授業のチャット画面（targetType=room, targetID=授業のルーム）で、質問を開くための
-// 追加の手がかりは SSE の Extra に載せる。失敗は送信の成否に影響させず、ログだけ残す。
+// 遷移先は授業の質問箱の、その質問（targetType=question, targetID=質問）。ルームは質問から
+// 引けるので、SSE の Extra にだけ roomID / roomType を添える。失敗は送信の成否に影響させず、ログだけ残す。
 type addendumNotifier struct {
 	pub   notificationuc.NotificationPublisher
 	rooms roomusecase.GetRoomUseCase
@@ -139,15 +139,15 @@ func (n *addendumNotifier) QuestionAddendumAdded(ctx context.Context, q *model.Q
 	}
 	room := n.room(ctx, q.RoomID)
 	message := notificationuc.MessageQuestionAddendumInRoom(room.Name)
-	targetType := notificationuc.TargetRoom
-	roomID := q.RoomID
+	targetType := notificationuc.TargetQuestion
+	questionID := q.ID
 	params := make([]notificationuc.PublishParams, 0, len(answererIDs))
 	for _, id := range answererIDs {
 		params = append(params, notificationuc.PublishParams{
 			UserID:     id,
 			Type:       notificationuc.TypeQuestionAddendum,
 			TargetType: &targetType,
-			TargetID:   &roomID,
+			TargetID:   &questionID,
 			Message:    message,
 			Extra: map[string]any{
 				"roomID":     encodeGraphID("room", q.RoomID),
@@ -164,13 +164,13 @@ func (n *addendumNotifier) QuestionAddendumAdded(ctx context.Context, q *model.Q
 
 func (n *addendumNotifier) AnswerAddendumAdded(ctx context.Context, q *model.Question, a *model.Answer) {
 	room := n.room(ctx, q.RoomID)
-	targetType := notificationuc.TargetRoom
-	roomID := q.RoomID
+	targetType := notificationuc.TargetQuestion
+	questionID := q.ID
 	if err := n.pub.Publish(ctx, notificationuc.PublishParams{
 		UserID:     q.AskerUserID,
 		Type:       notificationuc.TypeAnswerAddendum,
 		TargetType: &targetType,
-		TargetID:   &roomID,
+		TargetID:   &questionID,
 		Message:    notificationuc.MessageAnswerAddendumInRoom(room.Name),
 		Extra: map[string]any{
 			"roomID":     encodeGraphID("room", q.RoomID),
