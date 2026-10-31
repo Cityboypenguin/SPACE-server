@@ -566,13 +566,6 @@ func main() {
 		Events:                  chatEventPublisher,
 	})
 
-	// 質問・回答の投稿と編集には、NGワードの検査を前置きする。
-	questionUseCases := di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository)
-	questionUseCases.CreateQuestionUseCase = ngwordusecase.GuardCreateQuestion(questionUseCases.CreateQuestionUseCase, ngWordGuard)
-	questionUseCases.UpdateQuestionUseCase = ngwordusecase.GuardUpdateQuestion(questionUseCases.UpdateQuestionUseCase, ngWordGuard)
-	questionUseCases.AnswerQuestionUseCase = ngwordusecase.GuardAnswerQuestion(questionUseCases.AnswerQuestionUseCase, ngWordGuard)
-	questionUseCases.UpdateAnswerUseCase = ngwordusecase.GuardUpdateAnswer(questionUseCases.UpdateAnswerUseCase, ngWordGuard)
-
 	resolver := &graph.Resolver{
 		StorageRepository:     storageRepository,
 		MaintenanceRepository: maintenanceRepository,
@@ -679,7 +672,7 @@ func main() {
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
 		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  questionUseCases,
+		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository, ngWordGuard),
 		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
 		CreateReportUsecase:          *createReportUseCase,

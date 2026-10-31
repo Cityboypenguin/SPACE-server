@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -117,5 +118,41 @@ func TestUpdateQuestion_RejectsOtherUsersQuestion(t *testing.T) {
 	}
 	if len(mediaRepo.deleted) != 0 {
 		t.Fatalf("no media must be deleted, got %v", mediaRepo.deleted)
+	}
+}
+
+type countingNGGuard struct {
+	blocks bool
+	calls  int
+}
+
+func (g *countingNGGuard) Screen(context.Context, int64, *int64, model.NGWordSource, ...string) error {
+	g.calls++
+	if g.blocks {
+		return apperr.InvalidInput("blocked")
+	}
+	return nil
+}
+
+// NGワードの検査は、投稿してよい人（自分の質問・書き込める授業）にだけかかる。
+// 権限の無い試行まで数えると、止めた回数の集計が崩れる。
+func TestUpdateQuestion_NGWordIsCheckedOnlyAfterAuthorization(t *testing.T) {
+	questionRepo := &fakeQuestionRepoForUpdate{question: &model.Question{ID: 1, RoomID: 5, AskerUserID: 7}}
+	guard := &countingNGGuard{blocks: true}
+	uc := NewUpdateQuestionUseCase(nil, questionRepo, &fakeMediaRepoForUpdate{}, fakeTxManager{}, &fakeRequireWritable{}, WithNGWordGuard(guard))
+
+	if _, err := uc.Execute(askerCtx(99), 1, "NG", nil); err == nil {
+		t.Fatal("a non-asker must be rejected")
+	}
+	if guard.calls != 0 {
+		t.Errorf("guard called %d times for a non-asker, want 0", guard.calls)
+	}
+
+	_, err := uc.Execute(askerCtx(7), 1, "NG", nil)
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput from the guard", err)
+	}
+	if guard.calls != 1 || questionRepo.updatedBody != nil {
+		t.Errorf("calls = %d, updated = %v; want one check and no save", guard.calls, questionRepo.updatedBody)
 	}
 }

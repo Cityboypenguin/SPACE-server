@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -18,6 +20,15 @@ type Guard interface {
 	// Screen は texts のどれかがNGワードに当たれば、止めた記録を残して InvalidInput を返す。
 	// roomID は分かるときだけ渡す（nil でよい）。
 	Screen(ctx context.Context, userID int64, roomID *int64, source model.NGWordSource, texts ...string) error
+}
+
+// ScreenFor は claims の本人の投稿を検査する。管理者の投稿は止めない。
+// g が nil なら何もしない（NGワードを使わない構成・テスト）。
+func ScreenFor(ctx context.Context, g Guard, claims *auth.Claims, roomID *int64, source model.NGWordSource, texts ...string) error {
+	if g == nil || claims == nil || authz.IsAdminRole(claims.Role) {
+		return nil
+	}
+	return g.Screen(ctx, claims.ID, roomID, source, texts...)
 }
 
 // NoopGuard は何も止めない（NGワードを使わない構成・テスト用）。

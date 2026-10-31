@@ -39,16 +39,12 @@ func (s *AdminService) Create(ctx context.Context, pattern string, matchType mod
 	if err != nil {
 		return nil, err
 	}
-	existing, err := s.repo.ListNGWords(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(existing) >= model.MaxNGWords {
-		return nil, apperr.InvalidInput("登録できるNGワードの数の上限に達しています")
-	}
-	if err := s.repo.CreateNGWord(ctx, w); err != nil {
+	if err := s.repo.CreateNGWord(ctx, w, model.MaxNGWords); err != nil {
 		if errors.Is(err, repository.ErrDuplicateKey) {
 			return nil, apperr.InvalidInput("このNGワードはすでに登録されています")
+		}
+		if errors.Is(err, repository.ErrNGWordLimit) {
+			return nil, apperr.InvalidInput("登録できるNGワードの数の上限に達しています")
 		}
 		return nil, err
 	}

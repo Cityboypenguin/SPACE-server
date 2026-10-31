@@ -22,7 +22,7 @@ func (r *fakeRepo) ListNGWords(context.Context) ([]*model.NGWord, error) {
 	r.lists++
 	return r.words, r.err
 }
-func (r *fakeRepo) CreateNGWord(_ context.Context, w *model.NGWord) error {
+func (r *fakeRepo) CreateNGWord(_ context.Context, w *model.NGWord, _ int) error {
 	for _, e := range r.words {
 		if e.Pattern == w.Pattern && e.MatchType == w.MatchType {
 			return repository.ErrDuplicateKey

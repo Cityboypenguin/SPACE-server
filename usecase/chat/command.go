@@ -329,11 +329,11 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 // 送信サービス側に置いている。
 // screenNGWords は授業ルームの投稿だけにNGワードの検査をかける（管理者は除く）。
 func (s *messageCommandService) screenNGWords(ctx context.Context, claims *auth.Claims, room *model.Room, content string) error {
-	if room == nil || room.Type != model.RoomTypeCourse || authz.IsAdminRole(claims.Role) {
+	if room == nil || room.Type != model.RoomTypeCourse {
 		return nil
 	}
 	roomID := room.ID
-	return s.deps.NGWords.Screen(ctx, claims.ID, &roomID, model.NGWordSourceMessage, content)
+	return ngword.ScreenFor(ctx, s.deps.NGWords, claims, &roomID, model.NGWordSourceMessage, content)
 }
 
 func (s *messageCommandService) ensureAnonymousIdentity(ctx context.Context, room *model.Room, userID int64) error {

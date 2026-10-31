@@ -107,9 +107,9 @@ func NewNGWord(pattern string, matchType NGWordMatchType, now time.Time) (*NGWor
 }
 
 func compileNGRegex(pattern string) (*regexp.Regexp, error) {
-	// パターンは正規化しない（小文字にすると \D が \d になって意味が変わる）。
-	// 文面のほうを正規化してから照合し、大小は (?i) で吸収する。
-	return regexp.Compile("(?i)" + pattern)
+	// パターンは全角・半角だけそろえる（小文字にすると \D が \d になって意味が変わるので、
+	// 大小は (?i) で吸収する）。文面のほうは NormalizeForNGWord でそろえてから照合する。
+	return regexp.Compile("(?i)" + norm.NFKC.String(pattern))
 }
 
 type compiledNGWord struct {

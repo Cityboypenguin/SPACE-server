@@ -41,15 +41,22 @@ func (r *MySQLNGWordRepository) ListNGWords(ctx context.Context) ([]*model.NGWor
 	return out, rows.Err()
 }
 
-func (r *MySQLNGWordRepository) CreateNGWord(ctx context.Context, w *model.NGWord) error {
+func (r *MySQLNGWordRepository) CreateNGWord(ctx context.Context, w *model.NGWord, max int) error {
+	// 数の確認と登録を1つの文にする（確認してから登録する2段だと、同時に登録された分だけ上限を超える）。
 	res, err := r.DB.ExecContext(ctx,
-		`INSERT INTO ng_words (pattern, match_type, created_at) VALUES (?, ?, ?)`,
-		w.Pattern, string(w.MatchType), w.CreatedAt.Unix())
+		`INSERT INTO ng_words (pattern, match_type, created_at)
+		 SELECT ?, ?, ? FROM DUAL WHERE (SELECT COUNT(*) FROM ng_words) < ?`,
+		w.Pattern, string(w.MatchType), w.CreatedAt.Unix(), max)
 	if err != nil {
 		if isDuplicateKeyError(err) {
 			return repository.ErrDuplicateKey
 		}
 		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return repository.ErrNGWordLimit
 	}
 	id, err := res.LastInsertId()
 	if err != nil {

@@ -75,6 +75,13 @@ func TestNewNGWord_Validation(t *testing.T) {
 	}
 }
 
+func TestNGWordMatcher_RegexIsWidthInsensitiveToo(t *testing.T) {
+	m := matcherOf(t, [2]string{"regex", "Ｒｅｓｐｏｎ[0-9]+"})
+	if m.Match("respon12") == nil || m.Match("ＲＥＳＰＯＮ１２") == nil {
+		t.Error("a regex written in full-width characters must match both widths")
+	}
+}
+
 func TestNGWordMatcher_SkipsBrokenRegex(t *testing.T) {
 	m := NewNGWordMatcher([]*NGWord{
 		{ID: 1, Pattern: "(", MatchType: NGWordMatchRegex},
