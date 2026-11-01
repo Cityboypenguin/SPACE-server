@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -126,9 +127,80 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 		return "user"
 	case gqlmodel.ReportTargetTypeCommunity:
 		return "community"
+	case gqlmodel.ReportTargetTypeMessage:
+		return "message"
 	default:
 		return ""
 	}
+}
+
+// toGraphUserReport は通報を管理者向けの形にする。reporter が nil なら退会済みとして扱う。
+func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *gqlmodel.UserReport {
+	targetType := gqlmodel.ReportTargetType(res.TargetType)
+	targetID := res.TargetID
+	if kind := reportTargetKind(targetType); kind != "" {
+		if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+			targetID = encodeGraphID(kind, numericID)
+		}
+	}
+	gqlReporter := toGraphDeletedUserWithID(res.ReporterID)
+	if reporter != nil {
+		gqlReporter = toGraphUser(reporter)
+	}
+	return &gqlmodel.UserReport{
+		ID:              res.ID,
+		TargetType:      targetType,
+		TargetID:        targetID,
+		Reason:          res.Reason,
+		CustomReason:    res.CustomReason,
+		Status:          gqlmodel.ReportStatus(res.Status),
+		Reporter:        gqlReporter,
+		Content:         res.PostContent,
+		ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+// toGraphReportedMessage は通報時点のメッセージを管理者向けの形にする。
+// 添付の URL だけは表示の時点で組む（署名付き URL は期限が切れるので保存できない）。
+func (r *Resolver) toGraphReportedMessage(m *model.ReportedMessage) *gqlmodel.ReportedMessage {
+	if m == nil {
+		return nil
+	}
+	media := make([]*gqlmodel.Media, 0, len(m.Media))
+	for _, item := range m.Media {
+		media = append(media, toGraphMedia(&model.Media{
+			ID:          item.ID,
+			StorageKey:  item.StorageKey,
+			ContentType: item.ContentType,
+			Width:       item.Width,
+			Height:      item.Height,
+			CreatedAt:   item.CreatedAt,
+		}, r.messageMediaURL(item.StorageKey)))
+	}
+	out := &gqlmodel.ReportedMessage{
+		MessageID:  encodeGraphID("message", m.MessageID),
+		RoomID:     encodeGraphID("room", m.RoomID),
+		RoomType:   m.RoomType,
+		RoomName:   m.RoomName,
+		AuthorName: m.AuthorName,
+		Content:    m.Content,
+		Media:      media,
+		CreatedAt:  m.CreatedAt.Format(timeFormat),
+		UpdatedAt:  m.UpdatedAt.Format(timeFormat),
+	}
+	if m.AuthorID != nil {
+		authorID := encodeGraphID("user", *m.AuthorID)
+		out.AuthorID = &authorID
+	}
+	if m.AuthorAccountID != "" {
+		out.AuthorAccountID = &m.AuthorAccountID
+	}
+	if out.AuthorName == "" {
+		out.AuthorName = deletedAccountDisplayName
+	}
+	return out
 }
 
 func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmodel.Profile, error) {

@@ -624,6 +624,20 @@ type ReportSearchFilter struct {
 	ReporterID *string           `json:"reporterID,omitempty"`
 }
 
+type ReportedMessage struct {
+	MessageID       string   `json:"messageID"`
+	RoomID          string   `json:"roomID"`
+	RoomType        string   `json:"roomType"`
+	RoomName        string   `json:"roomName"`
+	AuthorID        *string  `json:"authorID,omitempty"`
+	AuthorName      string   `json:"authorName"`
+	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
+	Content         string   `json:"content"`
+	Media           []*Media `json:"media"`
+	CreatedAt       string   `json:"createdAt"`
+	UpdatedAt       string   `json:"updatedAt"`
+}
+
 type Room struct {
 	ID                  string  `json:"ID"`
 	Content             *string `json:"content,omitempty"`
@@ -790,16 +804,17 @@ type UserPage struct {
 }
 
 type UserReport struct {
-	ID           string           `json:"ID"`
-	Reporter     *User            `json:"reporter"`
-	TargetType   ReportTargetType `json:"targetType"`
-	TargetID     string           `json:"targetID"`
-	Reason       string           `json:"reason"`
-	CustomReason *string          `json:"customReason,omitempty"`
-	Status       ReportStatus     `json:"status"`
-	CreatedAt    string           `json:"createdAt"`
-	UpdatedAt    string           `json:"updatedAt"`
-	Content      *string          `json:"content,omitempty"`
+	ID              string           `json:"ID"`
+	Reporter        *User            `json:"reporter"`
+	TargetType      ReportTargetType `json:"targetType"`
+	TargetID        string           `json:"targetID"`
+	Reason          string           `json:"reason"`
+	CustomReason    *string          `json:"customReason,omitempty"`
+	Status          ReportStatus     `json:"status"`
+	CreatedAt       string           `json:"createdAt"`
+	UpdatedAt       string           `json:"updatedAt"`
+	Content         *string          `json:"content,omitempty"`
+	ReportedMessage *ReportedMessage `json:"reportedMessage,omitempty"`
 }
 
 type UserTimetableProfile struct {
@@ -1460,17 +1475,19 @@ const (
 	ReportTargetTypePost      ReportTargetType = "POST"
 	ReportTargetTypeUser      ReportTargetType = "USER"
 	ReportTargetTypeCommunity ReportTargetType = "COMMUNITY"
+	ReportTargetTypeMessage   ReportTargetType = "MESSAGE"
 )
 
 var AllReportTargetType = []ReportTargetType{
 	ReportTargetTypePost,
 	ReportTargetTypeUser,
 	ReportTargetTypeCommunity,
+	ReportTargetTypeMessage,
 }
 
 func (e ReportTargetType) IsValid() bool {
 	switch e {
-	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity:
+	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage:
 		return true
 	}
 	return false

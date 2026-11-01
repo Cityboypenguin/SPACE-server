@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -122,5 +123,33 @@ func TestCreateReport_PropagatesSaveError(t *testing.T) {
 		Reason:     "spam",
 	}); err == nil {
 		t.Fatal("expected save error to propagate")
+	}
+}
+
+type fakeFindReportRepo struct {
+	repository.ReportRepository
+	report *model.Report
+}
+
+func (f *fakeFindReportRepo) FindByID(context.Context, string) (*model.Report, error) {
+	return f.report, nil
+}
+
+func TestManageReport_GetByIDRequiresAdmin(t *testing.T) {
+	want := &model.Report{ID: "r1"}
+	uc := NewManageReportUsecase(&fakeFindReportRepo{report: want})
+
+	studentCtx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "student"})
+	if _, err := uc.GetByID(studentCtx, "r1"); err == nil {
+		t.Fatal("a non-admin must not read a report")
+	}
+	if _, err := uc.GetByID(context.Background(), "r1"); err == nil {
+		t.Fatal("an unauthenticated caller must not read a report")
+	}
+
+	adminCtx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "admin"})
+	got, err := uc.GetByID(adminCtx, "r1")
+	if err != nil || got != want {
+		t.Fatalf("GetByID = %v, %v", got, err)
 	}
 }
