@@ -76,6 +76,7 @@ enum ReportTargetType {
   POST
   USER
   COMMUNITY
+  MESSAGE
 }
 
 type UserReport {
@@ -89,6 +90,25 @@ type UserReport {
   createdAt: String!
   updatedAt: String!
   content: String
+  # 通報を受けた時点のメッセージ。targetType が MESSAGE のときだけ入る。
+  # 管理者向けの応答だけに載せ、createReport の応答（通報者）には載せない。
+  reportedMessage: ReportedMessage
+}
+
+# 通報を受けた時点のメッセージ。あとから編集・削除されても変わらない。
+type ReportedMessage {
+  messageID: ID!
+  roomID: ID!
+  roomType: String!
+  roomName: String!
+  # 投稿者の利用者ID。授業内チャットは匿名が前提なので null（authorName は匿名ラベル）。
+  authorID: ID
+  authorName: String!
+  authorAccountID: String
+  content: String!
+  media: [Media!]!
+  createdAt: String!
+  updatedAt: String!
 }
 
 input ReportSearchFilter {

@@ -62,6 +62,35 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, fmt.Errorf("invalid target id")
 	}
 
+	if input.TargetType == gqlmodel.ReportTargetTypeMessage {
+		res, err := r.CreateMessageReportUsecase.Execute(ctx, report.CreateMessageReportInput{
+			ReporterID:   claims.ID,
+			MessageID:    numericTargetID,
+			Reason:       input.Reason,
+			CustomReason: input.CustomReason,
+		})
+		if err != nil {
+			return nil, err
+		}
+		reporter, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+		if err != nil || reporter == nil {
+			return nil, fmt.Errorf("failed to fetch reporter")
+		}
+		// reportedMessage は返さない。授業内チャットでも匿名ラベルしか持たないが、
+		// 通報時点の写しを読めるのは管理者だけ、という線をここで保つ。
+		return &gqlmodel.UserReport{
+			ID:           res.ID,
+			TargetType:   input.TargetType,
+			TargetID:     encodeGraphID(kind, numericTargetID),
+			Reason:       res.Reason,
+			CustomReason: res.CustomReason,
+			Status:       gqlmodel.ReportStatusPending,
+			Reporter:     toGraphUser(reporter),
+			CreatedAt:    res.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+		}, nil
+	}
+
 	var snapshotContent *string
 
 	if strings.ToUpper(string(input.TargetType)) == "POST" || input.TargetType == "post" {
@@ -131,16 +160,17 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	}
 
 	return &gqlmodel.UserReport{
-		ID:           res.ID,
-		TargetType:   targetType,
-		TargetID:     targetID,
-		Reason:       res.Reason,
-		CustomReason: res.CustomReason,
-		Status:       status,
-		Reporter:     toGraphUser(reporter),
-		Content:      res.PostContent,
-		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+		ID:              res.ID,
+		TargetType:      targetType,
+		TargetID:        targetID,
+		Reason:          res.Reason,
+		CustomReason:    res.CustomReason,
+		Status:          status,
+		Reporter:        toGraphUser(reporter),
+		Content:         res.PostContent,
+		ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -257,16 +287,17 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		}
 
 		gqlReports = append(gqlReports, &gqlmodel.UserReport{
-			ID:           res.ID,
-			TargetType:   targetType,
-			TargetID:     targetID,
-			Reason:       res.Reason,
-			CustomReason: res.CustomReason,
-			Status:       gqlmodel.ReportStatus(res.Status),
-			Reporter:     reporterUser,
-			Content:      reportContent,
-			CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+			ID:              res.ID,
+			TargetType:      targetType,
+			TargetID:        targetID,
+			Reason:          res.Reason,
+			CustomReason:    res.CustomReason,
+			Status:          gqlmodel.ReportStatus(res.Status),
+			Reporter:        reporterUser,
+			Content:         reportContent,
+			ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+			CreatedAt:       res.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 	return &gqlmodel.ReportPage{Items: gqlReports, Total: int32(total)}, nil

@@ -124,7 +124,10 @@ func main() {
 	postRepository := mysql.NewMySQLPostRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
-	reportRepository := mysql.NewMySQLReportRepository(database)
+	reportRepository, err := mysql.NewMySQLReportRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize report encryption")
+	}
 	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
@@ -660,7 +663,15 @@ func main() {
 		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
 
-		CreateReportUsecase:          *createReportUseCase,
+		CreateReportUsecase: *createReportUseCase,
+		CreateMessageReportUsecase: reportusecase.NewCreateMessageReportUsecase(reportusecase.CreateMessageReportDeps{
+			Reports:   createReportUseCase,
+			Access:    chatAccessPolicy,
+			Messages:  messageRepository,
+			Media:     mediaRepository,
+			Users:     getUserByIDUseCase,
+			Anonymous: getAnonymousIdentityUseCase,
+		}),
 		ManageReportUsecase:          *manageReportUseCase,
 		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
 		ManageUserSettingUsecase:     *manageUserSettingUseCase,

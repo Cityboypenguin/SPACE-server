@@ -661,6 +661,20 @@ type ComplexityRoot struct {
 		Total func(childComplexity int) int
 	}
 
+	ReportedMessage struct {
+		AuthorAccountID func(childComplexity int) int
+		AuthorID        func(childComplexity int) int
+		AuthorName      func(childComplexity int) int
+		Content         func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		Media           func(childComplexity int) int
+		MessageID       func(childComplexity int) int
+		RoomID          func(childComplexity int) int
+		RoomName        func(childComplexity int) int
+		RoomType        func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+	}
+
 	Room struct {
 		Content             func(childComplexity int) int
 		CreatedAt           func(childComplexity int) int
@@ -787,16 +801,17 @@ type ComplexityRoot struct {
 	}
 
 	UserReport struct {
-		Content      func(childComplexity int) int
-		CreatedAt    func(childComplexity int) int
-		CustomReason func(childComplexity int) int
-		ID           func(childComplexity int) int
-		Reason       func(childComplexity int) int
-		Reporter     func(childComplexity int) int
-		Status       func(childComplexity int) int
-		TargetID     func(childComplexity int) int
-		TargetType   func(childComplexity int) int
-		UpdatedAt    func(childComplexity int) int
+		Content         func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		CustomReason    func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Reason          func(childComplexity int) int
+		ReportedMessage func(childComplexity int) int
+		Reporter        func(childComplexity int) int
+		Status          func(childComplexity int) int
+		TargetID        func(childComplexity int) int
+		TargetType      func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
 	}
 
 	UserTimetableProfile struct {
@@ -4804,6 +4819,73 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ReportPage.Total(childComplexity), true
 
+	case "ReportedMessage.authorAccountID":
+		if e.ComplexityRoot.ReportedMessage.AuthorAccountID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.AuthorAccountID(childComplexity), true
+	case "ReportedMessage.authorID":
+		if e.ComplexityRoot.ReportedMessage.AuthorID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.AuthorID(childComplexity), true
+	case "ReportedMessage.authorName":
+		if e.ComplexityRoot.ReportedMessage.AuthorName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.AuthorName(childComplexity), true
+	case "ReportedMessage.content":
+		if e.ComplexityRoot.ReportedMessage.Content == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.Content(childComplexity), true
+	case "ReportedMessage.createdAt":
+		if e.ComplexityRoot.ReportedMessage.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.CreatedAt(childComplexity), true
+	case "ReportedMessage.media":
+		if e.ComplexityRoot.ReportedMessage.Media == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.Media(childComplexity), true
+	case "ReportedMessage.messageID":
+		if e.ComplexityRoot.ReportedMessage.MessageID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.MessageID(childComplexity), true
+	case "ReportedMessage.roomID":
+		if e.ComplexityRoot.ReportedMessage.RoomID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.RoomID(childComplexity), true
+	case "ReportedMessage.roomName":
+		if e.ComplexityRoot.ReportedMessage.RoomName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.RoomName(childComplexity), true
+	case "ReportedMessage.roomType":
+		if e.ComplexityRoot.ReportedMessage.RoomType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.RoomType(childComplexity), true
+	case "ReportedMessage.updatedAt":
+		if e.ComplexityRoot.ReportedMessage.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedMessage.UpdatedAt(childComplexity), true
+
 	case "Room.content":
 		if e.ComplexityRoot.Room.Content == nil {
 			break
@@ -5377,6 +5459,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserReport.Reason(childComplexity), true
+	case "UserReport.reportedMessage":
+		if e.ComplexityRoot.UserReport.ReportedMessage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserReport.ReportedMessage(childComplexity), true
 	case "UserReport.reporter":
 		if e.ComplexityRoot.UserReport.Reporter == nil {
 			break
@@ -6414,6 +6502,34 @@ func (ec *executionContext) childFields_ReportPage(ctx context.Context, field gr
 	return nil, fmt.Errorf("no field named %q was found under type ReportPage", field.Name)
 }
 
+func (ec *executionContext) childFields_ReportedMessage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "messageID":
+		return ec.fieldContext_ReportedMessage_messageID(ctx, field)
+	case "roomID":
+		return ec.fieldContext_ReportedMessage_roomID(ctx, field)
+	case "roomType":
+		return ec.fieldContext_ReportedMessage_roomType(ctx, field)
+	case "roomName":
+		return ec.fieldContext_ReportedMessage_roomName(ctx, field)
+	case "authorID":
+		return ec.fieldContext_ReportedMessage_authorID(ctx, field)
+	case "authorName":
+		return ec.fieldContext_ReportedMessage_authorName(ctx, field)
+	case "authorAccountID":
+		return ec.fieldContext_ReportedMessage_authorAccountID(ctx, field)
+	case "content":
+		return ec.fieldContext_ReportedMessage_content(ctx, field)
+	case "media":
+		return ec.fieldContext_ReportedMessage_media(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ReportedMessage_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_ReportedMessage_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportedMessage", field.Name)
+}
+
 func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -6652,6 +6768,8 @@ func (ec *executionContext) childFields_UserReport(ctx context.Context, field gr
 		return ec.fieldContext_UserReport_updatedAt(ctx, field)
 	case "content":
 		return ec.fieldContext_UserReport_content(ctx, field)
+	case "reportedMessage":
+		return ec.fieldContext_UserReport_reportedMessage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserReport", field.Name)
 }
@@ -25561,6 +25679,268 @@ func (ec *executionContext) fieldContext_ReportPage_total(_ context.Context, fie
 	return graphql.NewScalarFieldContext("ReportPage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _ReportedMessage_messageID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_messageID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MessageID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_messageID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_roomID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_roomID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_roomType(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_roomType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_roomType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_roomName(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_roomName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_roomName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_authorID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_authorID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_authorID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_authorName(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_authorName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_authorName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_authorAccountID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_authorAccountID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorAccountID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_authorAccountID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_content(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_content(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Content, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_media(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_media(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Media, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Media) graphql.Marshaler {
+			return ec.marshalNMedia2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMediaᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportedMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReportedMessage_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedMessage_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.ReportedMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedMessage_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedMessage_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedMessage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Room_ID(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27941,6 +28321,38 @@ func (ec *executionContext) _UserReport_content(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_UserReport_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("UserReport", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UserReport_reportedMessage(ctx context.Context, field graphql.CollectedField, obj *model.UserReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserReport_reportedMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReportedMessage, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ReportedMessage) graphql.Marshaler {
+			return ec.marshalOReportedMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportedMessage(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserReport_reportedMessage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportedMessage(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _UserTimetableProfile_visible(ctx context.Context, field graphql.CollectedField, obj *model.UserTimetableProfile) (ret graphql.Marshaler) {
@@ -37120,6 +37532,94 @@ func (ec *executionContext) _ReportPage(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var reportedMessageImplementors = []string{"ReportedMessage"}
+
+func (ec *executionContext) _ReportedMessage(ctx context.Context, sel ast.SelectionSet, obj *model.ReportedMessage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportedMessageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportedMessage")
+		case "messageID":
+			out.Values[i] = ec._ReportedMessage_messageID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roomID":
+			out.Values[i] = ec._ReportedMessage_roomID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roomType":
+			out.Values[i] = ec._ReportedMessage_roomType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roomName":
+			out.Values[i] = ec._ReportedMessage_roomName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "authorID":
+			out.Values[i] = ec._ReportedMessage_authorID(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "authorName":
+			out.Values[i] = ec._ReportedMessage_authorName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "authorAccountID":
+			out.Values[i] = ec._ReportedMessage_authorAccountID(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "content":
+			out.Values[i] = ec._ReportedMessage_content(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "media":
+			out.Values[i] = ec._ReportedMessage_media(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ReportedMessage_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._ReportedMessage_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var roomImplementors = []string{"Room"}
 
 func (ec *executionContext) _Room(ctx context.Context, sel ast.SelectionSet, obj *model.Room) graphql.Marshaler {
@@ -38068,6 +38568,11 @@ func (ec *executionContext) _UserReport(ctx context.Context, sel ast.SelectionSe
 			}
 		case "content":
 			out.Values[i] = ec._UserReport_content(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reportedMessage":
+			out.Values[i] = ec._UserReport_reportedMessage(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -40490,6 +40995,13 @@ func (ec *executionContext) marshalOReportTargetType2ᚖgithubᚗcomᚋCityboype
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOReportedMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportedMessage(ctx context.Context, sel ast.SelectionSet, v *model.ReportedMessage) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ReportedMessage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalORoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom(ctx context.Context, sel ast.SelectionSet, v *model.Room) graphql.Marshaler {

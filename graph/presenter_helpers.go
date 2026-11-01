@@ -184,9 +184,52 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 		return "user"
 	case gqlmodel.ReportTargetTypeCommunity:
 		return "community"
+	case gqlmodel.ReportTargetTypeMessage:
+		return "message"
 	default:
 		return ""
 	}
+}
+
+// toGraphReportedMessage は通報時点のメッセージを管理者向けの形にする。
+// 添付の URL だけは表示の時点で組む（署名付き URL は期限が切れるので保存できない）。
+func (r *Resolver) toGraphReportedMessage(m *model.ReportedMessage) *gqlmodel.ReportedMessage {
+	if m == nil {
+		return nil
+	}
+	media := make([]*gqlmodel.Media, 0, len(m.Media))
+	for _, item := range m.Media {
+		media = append(media, toGraphMedia(&model.Media{
+			ID:          item.ID,
+			StorageKey:  item.StorageKey,
+			ContentType: item.ContentType,
+			Width:       item.Width,
+			Height:      item.Height,
+			CreatedAt:   item.CreatedAt,
+		}, r.StorageRepository.PublicURL(item.StorageKey)))
+	}
+	out := &gqlmodel.ReportedMessage{
+		MessageID:  encodeGraphID("message", m.MessageID),
+		RoomID:     encodeGraphID("room", m.RoomID),
+		RoomType:   m.RoomType,
+		RoomName:   m.RoomName,
+		AuthorName: m.AuthorName,
+		Content:    m.Content,
+		Media:      media,
+		CreatedAt:  m.CreatedAt.Format(timeFormat),
+		UpdatedAt:  m.UpdatedAt.Format(timeFormat),
+	}
+	if m.AuthorID != nil {
+		authorID := encodeGraphID("user", *m.AuthorID)
+		out.AuthorID = &authorID
+	}
+	if m.AuthorAccountID != "" {
+		out.AuthorAccountID = &m.AuthorAccountID
+	}
+	if out.AuthorName == "" {
+		out.AuthorName = deletedAccountDisplayName
+	}
+	return out
 }
 
 func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmodel.Profile, error) {
