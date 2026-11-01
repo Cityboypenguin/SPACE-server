@@ -13,7 +13,7 @@ import (
 
 // 通報時点のメッセージは DM の本文を含むので、平文で列に残らないことと、
 // 暗号化したものが読み戻せることを実物の MySQL で確かめる。
-func TestReportRepository_ReportedMessageIsEncryptedAndRoundTrips(t *testing.T) {
+func TestReportRepository_ReportedContentIsEncryptedAndRoundTrips(t *testing.T) {
 	db, cleanup := throwawaySchemaDB(t, "space_report_test", []string{
 		`CREATE TABLE user_reports (
 			id VARCHAR(255) NOT NULL,
@@ -45,10 +45,10 @@ func TestReportRepository_ReportedMessageIsEncryptedAndRoundTrips(t *testing.T) 
 	report := &model.Report{
 		ID: "r1", ReporterID: 1, TargetType: model.TargetMessage, TargetID: "9",
 		Reason: "SPAM", Status: model.StatusPending, CreatedAt: now, UpdatedAt: now,
-		ReportedMessage: &model.ReportedMessage{
-			MessageID: 9, RoomID: 5, RoomType: model.RoomTypeDM, AuthorID: &authorID, AuthorName: "実名",
+		ReportedContent: &model.ReportedContent{
+			ContentID: 9, RoomID: 5, RoomType: model.RoomTypeDM, AuthorID: &authorID, AuthorName: "実名",
 			Content:   body,
-			Media:     []model.ReportedMessageMedia{{ID: 3, StorageKey: "media/a.png", ContentType: "image/png", CreatedAt: now}},
+			Media:     []model.ReportedContentMedia{{ID: 3, StorageKey: "media/a.png", ContentType: "image/png", CreatedAt: now}},
 			CreatedAt: now, UpdatedAt: now,
 		},
 	}
@@ -68,18 +68,18 @@ func TestReportRepository_ReportedMessageIsEncryptedAndRoundTrips(t *testing.T) 
 	if err != nil {
 		t.Fatalf("FindByID: %v", err)
 	}
-	if got.ReportedMessage == nil || got.ReportedMessage.Content != body {
+	if got.ReportedContent == nil || got.ReportedContent.Content != body {
 		t.Fatal("snapshot did not round-trip through FindByID")
 	}
-	if got.ReportedMessage.AuthorID == nil || *got.ReportedMessage.AuthorID != 2 || len(got.ReportedMessage.Media) != 1 {
-		t.Fatalf("snapshot = %+v", got.ReportedMessage)
+	if got.ReportedContent.AuthorID == nil || *got.ReportedContent.AuthorID != 2 || len(got.ReportedContent.Media) != 1 {
+		t.Fatalf("snapshot = %+v", got.ReportedContent)
 	}
 
 	items, total, err := repo.Search(ctx, nil, repository.PageQuery{Limit: 10, WithTotal: true})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if total != 1 || len(items) != 1 || items[0].ReportedMessage == nil {
+	if total != 1 || len(items) != 1 || items[0].ReportedContent == nil {
 		t.Fatalf("Search = %d items, total %d", len(items), total)
 	}
 }

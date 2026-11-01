@@ -33,8 +33,8 @@ type CreateReportInput struct {
 	Reason       string
 	CustomReason *string
 	Content      *string
-	// ReportedMessage は通報時点のメッセージの写し。TargetMessage のときだけ渡す。
-	ReportedMessage *model.ReportedMessage
+	// ReportedContent は通報時点の内容の写し。メッセージ・質問・回答・投票のときだけ渡す。
+	ReportedContent *model.ReportedContent
 }
 
 func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInput) (*model.Report, error) {
@@ -72,7 +72,7 @@ func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInp
 	if input.Content != nil {
 		report.PostContent = input.Content
 	}
-	report.ReportedMessage = input.ReportedMessage
+	report.ReportedContent = input.ReportedContent
 
 	if err := u.reportRepo.Save(ctx, report); err != nil {
 		return nil, err

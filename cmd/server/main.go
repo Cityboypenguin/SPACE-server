@@ -700,12 +700,15 @@ func main() {
 		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository),
 
 		CreateReportUsecase: *createReportUseCase,
-		CreateMessageReportUsecase: reportusecase.NewCreateMessageReportUsecase(reportusecase.CreateMessageReportDeps{
-			Reports:  createReportUseCase,
-			Access:   chatAccessPolicy,
-			Messages: messageRepository,
-			Media:    mediaRepository,
-			Users:    getUserByIDUseCase,
+		CreateContentReportUsecase: reportusecase.NewCreateContentReportUsecase(reportusecase.CreateContentReportDeps{
+			Reports:   createReportUseCase,
+			Access:    chatAccessPolicy,
+			Messages:  messageRepository,
+			Questions: questionRepository,
+			Answers:   answerRepository,
+			Polls:     pollRepository,
+			Media:     mediaRepository,
+			Users:     getUserByIDUseCase,
 		}),
 		ManageReportUsecase:                *manageReportUseCase,
 		ManageNotificationRecipientUsecase: reportusecase.NewManageNotificationRecipientUsecase(reportNotificationRecipientRepository),

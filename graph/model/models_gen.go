@@ -645,8 +645,7 @@ type ReportSearchFilter struct {
 	ReporterID *string           `json:"reporterID,omitempty"`
 }
 
-type ReportedMessage struct {
-	MessageID       string   `json:"messageID"`
+type ReportedContent struct {
 	RoomID          string   `json:"roomID"`
 	RoomType        string   `json:"roomType"`
 	RoomName        string   `json:"roomName"`
@@ -655,6 +654,8 @@ type ReportedMessage struct {
 	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
 	Content         string   `json:"content"`
 	Media           []*Media `json:"media"`
+	ParentBody      *string  `json:"parentBody,omitempty"`
+	PollOptions     []string `json:"pollOptions"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
 }
@@ -835,7 +836,7 @@ type UserReport struct {
 	CreatedAt       string           `json:"createdAt"`
 	UpdatedAt       string           `json:"updatedAt"`
 	Content         *string          `json:"content,omitempty"`
-	ReportedMessage *ReportedMessage `json:"reportedMessage,omitempty"`
+	ReportedContent *ReportedContent `json:"reportedContent,omitempty"`
 }
 
 type UserTimetableProfile struct {
@@ -1497,6 +1498,9 @@ const (
 	ReportTargetTypeUser      ReportTargetType = "USER"
 	ReportTargetTypeCommunity ReportTargetType = "COMMUNITY"
 	ReportTargetTypeMessage   ReportTargetType = "MESSAGE"
+	ReportTargetTypeQuestion  ReportTargetType = "QUESTION"
+	ReportTargetTypeAnswer    ReportTargetType = "ANSWER"
+	ReportTargetTypePoll      ReportTargetType = "POLL"
 )
 
 var AllReportTargetType = []ReportTargetType{
@@ -1504,11 +1508,14 @@ var AllReportTargetType = []ReportTargetType{
 	ReportTargetTypeUser,
 	ReportTargetTypeCommunity,
 	ReportTargetTypeMessage,
+	ReportTargetTypeQuestion,
+	ReportTargetTypeAnswer,
+	ReportTargetTypePoll,
 }
 
 func (e ReportTargetType) IsValid() bool {
 	switch e {
-	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage:
+	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage, ReportTargetTypeQuestion, ReportTargetTypeAnswer, ReportTargetTypePoll:
 		return true
 	}
 	return false

@@ -92,7 +92,7 @@ func TestNotify_SendsToEveryRecipientWithoutReportContents(t *testing.T) {
 	report := &model.Report{
 		ID: "r1", ReporterID: 1, TargetType: model.TargetMessage, TargetID: "9", Reason: "HARASSMENT",
 		CustomReason: &customReason, PostContent: &content, CreatedAt: time.Unix(1700000000, 0),
-		ReportedMessage: &model.ReportedMessage{Content: "DM本文の秘密", AuthorName: "投稿者の名前"},
+		ReportedContent: &model.ReportedContent{Content: "DM本文の秘密", AuthorName: "投稿者の名前"},
 	}
 	mailer := &recordingMailer{failTo: "bad@example.com"}
 	repo := &fakeRecipientRepo{recipients: []*model.ReportNotificationRecipient{

@@ -62,10 +62,12 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, fmt.Errorf("invalid target id")
 	}
 
-	if input.TargetType == gqlmodel.ReportTargetTypeMessage {
-		res, err := r.CreateMessageReportUsecase.Execute(ctx, report.CreateMessageReportInput{
+	switch input.TargetType {
+	case gqlmodel.ReportTargetTypeMessage, gqlmodel.ReportTargetTypeQuestion, gqlmodel.ReportTargetTypeAnswer, gqlmodel.ReportTargetTypePoll:
+		res, err := r.CreateContentReportUsecase.Execute(ctx, report.CreateContentReportInput{
 			ReporterID:   claims.ID,
-			MessageID:    numericTargetID,
+			TargetType:   model.ReportTargetType(input.TargetType),
+			TargetID:     numericTargetID,
 			Reason:       input.Reason,
 			CustomReason: input.CustomReason,
 		})
@@ -76,7 +78,7 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		if err != nil || reporter == nil {
 			return nil, fmt.Errorf("failed to fetch reporter")
 		}
-		// reportedMessage は返さない。通報時点の写しを読めるのは管理者だけ。
+		// reportedContent は返さない。通報時点の写しを読めるのは管理者だけ。
 		return &gqlmodel.UserReport{
 			ID:           res.ID,
 			TargetType:   input.TargetType,
@@ -301,7 +303,7 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 			Status:          gqlmodel.ReportStatus(res.Status),
 			Reporter:        reporterUser,
 			Content:         reportContent,
-			ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+			ReportedContent: r.toGraphReportedContent(res.ReportedContent),
 			CreatedAt:       res.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 		})
