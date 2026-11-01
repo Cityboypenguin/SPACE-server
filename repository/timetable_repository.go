@@ -25,6 +25,11 @@ var ErrTimetableConflict = errors.New("timetable entries changed since baseline 
 // contains two courses occupying the same day/period slot.
 var ErrTimetableSlotConflict = errors.New("desired courses contain a duplicate day/period slot")
 
+// ErrCourseDiscontinued is returned by Upsert / ReplaceForSemester when asked to newly
+// register a course that has been discontinued (dropped from the syllabus). Entries
+// that already exist are kept; only new registrations are refused.
+var ErrCourseDiscontinued = errors.New("the course has been discontinued")
+
 type TimetableRepository interface {
 	// Upsert registers courseID into userID's timetable. Any existing registration
 	// by the same user for a course occupying the same day/period slot is replaced,

@@ -70,13 +70,13 @@ func threadHarness() (*ThreadService, *harness, *threadStore, *threadMessageStor
 	store := &threadStore{rooms: rooms}
 	messages := &threadMessageStore{}
 	tx := &threadTx{}
-	s := &ThreadService{Access: h.access, Rooms: &threadRoomStore{rooms: rooms}, Threads: store, Tx: tx, Writers: MessageWriters{system: messages}, Role: &fakeRoomUserRole{}, Anonymous: h.anonIdentity, Events: h.events}
+	s := &ThreadService{Access: h.access, Rooms: &threadRoomStore{rooms: rooms}, Threads: store, Tx: tx, Writers: MessageWriters{system: messages}, Role: &fakeRoomUserRole{}, Events: h.events}
 	return s, h, store, messages, tx
 }
 func TestThreadCreateAnnouncement(t *testing.T) {
 	for _, parentID := range []int64{communityRoomID, courseRoomID} {
 		t.Run(string(rune('0'+parentID)), func(t *testing.T) {
-			s, h, store, messages, tx := threadHarness()
+			s, _, store, messages, tx := threadHarness()
 			result, err := s.Create(ctxAsUser(10), parentID, "  課題の相談  ")
 			if err != nil {
 				t.Fatal(err)
@@ -90,9 +90,6 @@ func TestThreadCreateAnnouncement(t *testing.T) {
 			msg := messages.message
 			if msg.RoomID != parentID || msg.ThreadRoomID == nil || *msg.ThreadRoomID != result.Room.ID {
 				t.Fatalf("incorrect announcement link: %+v", msg)
-			}
-			if parentID == courseRoomID && h.anonIdentity.calls != 1 {
-				t.Fatal("course identity must be assigned on the parent")
 			}
 		})
 	}
@@ -188,7 +185,7 @@ func TestCourseThreadKeepsParentRestrictions(t *testing.T) {
 
 }
 
-func TestCourseThreadSendKeepsParentIdentityAndChildMessages(t *testing.T) {
+func TestCourseThreadSendKeepsRealAuthorAndChildMessages(t *testing.T) {
 	s, h, _, _, _ := threadHarness()
 	thread, err := s.Create(ctxAsUser(10), courseRoomID, "相談")
 	if err != nil {
@@ -198,8 +195,8 @@ func TestCourseThreadSendKeepsParentIdentityAndChildMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if message.RoomID != thread.Room.ID || h.anonIdentity.roomID != courseRoomID {
-		t.Fatal("thread posts must stay in the child room while using the parent's identity")
+	if message.RoomID != thread.Room.ID || message.UserID != 10 {
+		t.Fatal("thread posts must stay in the child room and retain the real author")
 	}
 }
 func TestThreadAnnouncementCannotBeEditedOrDeleted(t *testing.T) {

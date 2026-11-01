@@ -3,9 +3,12 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/messagecrypto"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -13,20 +16,66 @@ import (
 var _ repository.ReportRepository = &MySQLReportRepository{}
 
 type MySQLReportRepository struct {
-	DB *sql.DB
+	DB     *sql.DB
+	cipher *messagecrypto.Cipher
 }
 
-func NewMySQLReportRepository(db *sql.DB) repository.ReportRepository {
-	return &MySQLReportRepository{DB: db}
+func NewMySQLReportRepository(db *sql.DB) (repository.ReportRepository, error) {
+	cipher, err := messagecrypto.New(os.Getenv("MESSAGE_ENCRYPTION_KEY"))
+	if err != nil {
+		return nil, err
+	}
+	return &MySQLReportRepository{DB: db, cipher: cipher}, nil
+}
+
+// reportColumns は user_reports を読むときの共通の列並び。scanReport と対になっている。
+const reportColumns = "id, reporter_id, target_type, target_id, reason, custom_reason, content, message_snapshot, status, created_at, updated_at"
+
+// encodeReportedMessage は通報時点のメッセージを保存用に暗号化する。
+// messages.content は暗号化して保存しているので、DM の本文が通報をきっかけに
+// 平文で残らないようにする。
+func (r *MySQLReportRepository) encodeReportedMessage(m *model.ReportedMessage) (sql.NullString, error) {
+	if m == nil {
+		return sql.NullString{}, nil
+	}
+	body, err := json.Marshal(m)
+	if err != nil {
+		return sql.NullString{}, fmt.Errorf("marshal reported message: %w", err)
+	}
+	encrypted, err := r.cipher.Encrypt(string(body))
+	if err != nil {
+		return sql.NullString{}, fmt.Errorf("encrypt reported message: %w", err)
+	}
+	return sql.NullString{String: encrypted, Valid: true}, nil
+}
+
+func (r *MySQLReportRepository) decodeReportedMessage(value sql.NullString) (*model.ReportedMessage, error) {
+	if !value.Valid {
+		return nil, nil
+	}
+	body, err := r.cipher.Decrypt(value.String)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt reported message: %w", err)
+	}
+	var m model.ReportedMessage
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		return nil, fmt.Errorf("unmarshal reported message: %w", err)
+	}
+	return &m, nil
 }
 
 func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) error {
+	snapshot, err := r.encodeReportedMessage(report.ReportedMessage)
+	if err != nil {
+		return err
+	}
+
 	query := `
-		INSERT INTO user_reports (id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO user_reports (` + reportColumns + `)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := r.DB.ExecContext(ctx, query,
+	_, err = r.DB.ExecContext(ctx, query,
 		report.ID,
 		report.ReporterID,
 		string(report.TargetType),
@@ -34,6 +83,7 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
 		report.Reason,
 		report.CustomReason,
 		report.PostContent,
+		snapshot,
 		string(report.Status),
 		report.CreatedAt.Unix(),
 		report.UpdatedAt.Unix(),
@@ -44,38 +94,43 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
 	return nil
 }
 
-func scanReport(s interface {
+func (r *MySQLReportRepository) scanReport(s interface {
 	Scan(...any) error
 }) (*model.Report, error) {
-	var r model.Report
+	var report model.Report
 	var targetTypeStr, statusStr string
 	var createdAtUnix, updatedAtUnix int64
-	var content sql.NullString
+	var content, snapshot sql.NullString
 	if err := s.Scan(
-		&r.ID, &r.ReporterID, &targetTypeStr, &r.TargetID,
-		&r.Reason, &r.CustomReason, &content, &statusStr, &createdAtUnix, &updatedAtUnix,
+		&report.ID, &report.ReporterID, &targetTypeStr, &report.TargetID,
+		&report.Reason, &report.CustomReason, &content, &snapshot, &statusStr, &createdAtUnix, &updatedAtUnix,
 	); err != nil {
 		return nil, err
 	}
-	r.TargetType = model.ReportTargetType(targetTypeStr)
-	r.Status = model.ReportStatus(statusStr)
-	r.CreatedAt = time.Unix(createdAtUnix, 0)
-	r.UpdatedAt = time.Unix(updatedAtUnix, 0)
+	report.TargetType = model.ReportTargetType(targetTypeStr)
+	report.Status = model.ReportStatus(statusStr)
+	report.CreatedAt = time.Unix(createdAtUnix, 0)
+	report.UpdatedAt = time.Unix(updatedAtUnix, 0)
 	if content.Valid {
-		r.PostContent = &content.String
+		report.PostContent = &content.String
 	}
-	return &r, nil
+	reportedMessage, err := r.decodeReportedMessage(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	report.ReportedMessage = reportedMessage
+	return &report, nil
 }
 
 func (r *MySQLReportRepository) FindByID(ctx context.Context, id string) (*model.Report, error) {
 	query := `
-		SELECT id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at
+		SELECT ` + reportColumns + `
         FROM user_reports
         WHERE id = ?
         LIMIT 1
     `
 	row := r.DB.QueryRowContext(ctx, query, id)
-	report, err := scanReport(row)
+	report, err := r.scanReport(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -125,7 +180,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 	}
 
 	query := `
-		SELECT id, reporter_id, target_type, target_id, reason, custom_reason, content, status, created_at, updated_at
+		SELECT ` + reportColumns + `
         FROM user_reports
         WHERE 1=1
     `
@@ -157,7 +212,7 @@ func (r *MySQLReportRepository) Search(ctx context.Context, filter *model.Report
 
 	var reports []*model.Report
 	for rows.Next() {
-		report, err := scanReport(rows)
+		report, err := r.scanReport(rows)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan row in search reports: %w", err)
 		}

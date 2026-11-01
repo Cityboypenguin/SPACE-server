@@ -208,17 +208,19 @@ type CommunityStatsPage struct {
 }
 
 type Course struct {
-	ID              string `json:"ID"`
-	RoomID          string `json:"roomID"`
-	DayOfWeek       string `json:"dayOfWeek"`
-	Period          int32  `json:"period"`
-	TeacherName     string `json:"teacherName"`
-	CourseName      string `json:"courseName"`
-	Year            int32  `json:"year"`
-	Semester        string `json:"semester"`
-	CreatedAt       string `json:"createdAt"`
-	RegisteredCount int32  `json:"registeredCount"`
-	MessageCount    int32  `json:"messageCount"`
+	ID              string  `json:"ID"`
+	RoomID          string  `json:"roomID"`
+	DayOfWeek       string  `json:"dayOfWeek"`
+	Period          int32   `json:"period"`
+	TeacherName     string  `json:"teacherName"`
+	CourseName      string  `json:"courseName"`
+	Year            int32   `json:"year"`
+	Semester        string  `json:"semester"`
+	CreatedAt       string  `json:"createdAt"`
+	RegisteredCount int32   `json:"registeredCount"`
+	Discontinued    bool    `json:"discontinued"`
+	DiscontinuedAt  *string `json:"discontinuedAt,omitempty"`
+	MessageCount    int32   `json:"messageCount"`
 }
 
 type CourseImportStatus struct {
@@ -232,6 +234,8 @@ type CourseImportStatus struct {
 	ProcessedCount  *int32            `json:"processedCount,omitempty"`
 	TotalCount      *int32            `json:"totalCount,omitempty"`
 	ProgressPercent *int32            `json:"progressPercent,omitempty"`
+	DryRun          bool              `json:"dryRun"`
+	SyncRunID       *string           `json:"syncRunID,omitempty"`
 }
 
 type CoursePage struct {
@@ -242,6 +246,76 @@ type CoursePage struct {
 type CourseRoomUnread struct {
 	RoomID      string `json:"roomID"`
 	UnreadCount int32  `json:"unreadCount"`
+}
+
+type CourseSnapshot struct {
+	CourseID    *string `json:"courseID,omitempty"`
+	SourceRef   string  `json:"sourceRef"`
+	Semester    string  `json:"semester"`
+	DayOfWeek   string  `json:"dayOfWeek"`
+	Period      int32   `json:"period"`
+	CourseName  string  `json:"courseName"`
+	TeacherName string  `json:"teacherName"`
+}
+
+type CourseSyncChange struct {
+	ID                string               `json:"ID"`
+	Kind              CourseSyncChangeKind `json:"kind"`
+	CourseID          *string              `json:"courseID,omitempty"`
+	ReviewID          *string              `json:"reviewID,omitempty"`
+	CourseName        string               `json:"courseName"`
+	TeacherName       string               `json:"teacherName"`
+	Detail            string               `json:"detail"`
+	Before            *CourseSnapshot      `json:"before,omitempty"`
+	After             *CourseSnapshot      `json:"after,omitempty"`
+	RegisteredCount   int32                `json:"registeredCount"`
+	UnregisteredCount int32                `json:"unregisteredCount"`
+}
+
+type CourseSyncChangePage struct {
+	Items []*CourseSyncChange `json:"items"`
+	Total int32               `json:"total"`
+}
+
+type CourseSyncReview struct {
+	ID         string                 `json:"ID"`
+	Year       int32                  `json:"year"`
+	Kind       CourseSyncReviewKind   `json:"kind"`
+	Status     CourseSyncReviewStatus `json:"status"`
+	Message    string                 `json:"message"`
+	Existing   []*CourseSnapshot      `json:"existing"`
+	Proposed   []*CourseSnapshot      `json:"proposed"`
+	CreatedAt  string                 `json:"createdAt"`
+	ResolvedAt *string                `json:"resolvedAt,omitempty"`
+}
+
+type CourseSyncReviewPage struct {
+	Items []*CourseSyncReview `json:"items"`
+	Total int32               `json:"total"`
+}
+
+type CourseSyncRun struct {
+	ID                       string  `json:"ID"`
+	Year                     int32   `json:"year"`
+	DryRun                   bool    `json:"dryRun"`
+	SiteTotal                int32   `json:"siteTotal"`
+	ListedRows               int32   `json:"listedRows"`
+	UnidentifiedRows         int32   `json:"unidentifiedRows"`
+	CreatedCount             int32   `json:"createdCount"`
+	UpdatedCount             int32   `json:"updatedCount"`
+	DiscontinuedCount        int32   `json:"discontinuedCount"`
+	RestoredCount            int32   `json:"restoredCount"`
+	ReviewCount              int32   `json:"reviewCount"`
+	UnchangedCount           int32   `json:"unchangedCount"`
+	UnregisteredCount        int32   `json:"unregisteredCount"`
+	DiscontinueSkippedReason *string `json:"discontinueSkippedReason,omitempty"`
+	StartedAt                string  `json:"startedAt"`
+	FinishedAt               string  `json:"finishedAt"`
+}
+
+type CourseSyncRunPage struct {
+	Items []*CourseSyncRun `json:"items"`
+	Total int32            `json:"total"`
 }
 
 type CreateAdministratorInput struct {
@@ -507,8 +581,9 @@ type PostPage struct {
 }
 
 type PresignedUploadURL struct {
-	UploadURL string `json:"uploadUrl"`
-	ObjectKey string `json:"objectKey"`
+	UploadURL string          `json:"uploadUrl"`
+	ObjectKey string          `json:"objectKey"`
+	Headers   []*UploadHeader `json:"headers"`
 }
 
 type Profile struct {
@@ -564,6 +639,20 @@ type ReportSearchFilter struct {
 	ReporterID *string           `json:"reporterID,omitempty"`
 }
 
+type ReportedMessage struct {
+	MessageID       string   `json:"messageID"`
+	RoomID          string   `json:"roomID"`
+	RoomType        string   `json:"roomType"`
+	RoomName        string   `json:"roomName"`
+	AuthorID        *string  `json:"authorID,omitempty"`
+	AuthorName      string   `json:"authorName"`
+	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
+	Content         string   `json:"content"`
+	Media           []*Media `json:"media"`
+	CreatedAt       string   `json:"createdAt"`
+	UpdatedAt       string   `json:"updatedAt"`
+}
+
 type Room struct {
 	ID                  string  `json:"ID"`
 	Content             *string `json:"content,omitempty"`
@@ -573,6 +662,7 @@ type Room struct {
 	CreatedAt           string  `json:"createdAt"`
 	UpdatedAt           string  `json:"updatedAt"`
 	IsMessagingDisabled bool    `json:"isMessagingDisabled"`
+	IsPartnerWithdrawn  bool    `json:"isPartnerWithdrawn"`
 	LastReadAt          *string `json:"lastReadAt,omitempty"`
 	LastReadMessageID   *string `json:"lastReadMessageID,omitempty"`
 	UnreadCount         int32   `json:"unreadCount"`
@@ -684,6 +774,11 @@ type UpdateUserInput struct {
 	CurrentPassword *string `json:"currentPassword,omitempty"`
 }
 
+type UploadHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type User struct {
 	ID        string  `json:"ID"`
 	AccountID string  `json:"accountID"`
@@ -712,9 +807,10 @@ type UserAccountPage struct {
 }
 
 type UserAuthPayload struct {
-	Token        string       `json:"token"`
-	RefreshToken string       `json:"refreshToken"`
-	User         *UserAccount `json:"user"`
+	Token           string       `json:"token"`
+	RefreshToken    string       `json:"refreshToken"`
+	User            *UserAccount `json:"user"`
+	AccountRestored bool         `json:"accountRestored"`
 }
 
 type UserPage struct {
@@ -723,16 +819,17 @@ type UserPage struct {
 }
 
 type UserReport struct {
-	ID           string           `json:"ID"`
-	Reporter     *User            `json:"reporter"`
-	TargetType   ReportTargetType `json:"targetType"`
-	TargetID     string           `json:"targetID"`
-	Reason       string           `json:"reason"`
-	CustomReason *string          `json:"customReason,omitempty"`
-	Status       ReportStatus     `json:"status"`
-	CreatedAt    string           `json:"createdAt"`
-	UpdatedAt    string           `json:"updatedAt"`
-	Content      *string          `json:"content,omitempty"`
+	ID              string           `json:"ID"`
+	Reporter        *User            `json:"reporter"`
+	TargetType      ReportTargetType `json:"targetType"`
+	TargetID        string           `json:"targetID"`
+	Reason          string           `json:"reason"`
+	CustomReason    *string          `json:"customReason,omitempty"`
+	Status          ReportStatus     `json:"status"`
+	CreatedAt       string           `json:"createdAt"`
+	UpdatedAt       string           `json:"updatedAt"`
+	Content         *string          `json:"content,omitempty"`
+	ReportedMessage *ReportedMessage `json:"reportedMessage,omitempty"`
 }
 
 type UserTimetableProfile struct {
@@ -970,6 +1067,244 @@ func (e CourseImportState) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type CourseSyncChangeKind string
+
+const (
+	CourseSyncChangeKindCreated      CourseSyncChangeKind = "CREATED"
+	CourseSyncChangeKindUpdated      CourseSyncChangeKind = "UPDATED"
+	CourseSyncChangeKindDiscontinued CourseSyncChangeKind = "DISCONTINUED"
+	CourseSyncChangeKindRestored     CourseSyncChangeKind = "RESTORED"
+	CourseSyncChangeKindReview       CourseSyncChangeKind = "REVIEW"
+)
+
+var AllCourseSyncChangeKind = []CourseSyncChangeKind{
+	CourseSyncChangeKindCreated,
+	CourseSyncChangeKindUpdated,
+	CourseSyncChangeKindDiscontinued,
+	CourseSyncChangeKindRestored,
+	CourseSyncChangeKindReview,
+}
+
+func (e CourseSyncChangeKind) IsValid() bool {
+	switch e {
+	case CourseSyncChangeKindCreated, CourseSyncChangeKindUpdated, CourseSyncChangeKindDiscontinued, CourseSyncChangeKindRestored, CourseSyncChangeKindReview:
+		return true
+	}
+	return false
+}
+
+func (e CourseSyncChangeKind) String() string {
+	return string(e)
+}
+
+func (e *CourseSyncChangeKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseSyncChangeKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseSyncChangeKind", str)
+	}
+	return nil
+}
+
+func (e CourseSyncChangeKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseSyncChangeKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseSyncChangeKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseSyncReviewDecision string
+
+const (
+	CourseSyncReviewDecisionSame      CourseSyncReviewDecision = "SAME"
+	CourseSyncReviewDecisionDifferent CourseSyncReviewDecision = "DIFFERENT"
+	CourseSyncReviewDecisionIgnored   CourseSyncReviewDecision = "IGNORED"
+)
+
+var AllCourseSyncReviewDecision = []CourseSyncReviewDecision{
+	CourseSyncReviewDecisionSame,
+	CourseSyncReviewDecisionDifferent,
+	CourseSyncReviewDecisionIgnored,
+}
+
+func (e CourseSyncReviewDecision) IsValid() bool {
+	switch e {
+	case CourseSyncReviewDecisionSame, CourseSyncReviewDecisionDifferent, CourseSyncReviewDecisionIgnored:
+		return true
+	}
+	return false
+}
+
+func (e CourseSyncReviewDecision) String() string {
+	return string(e)
+}
+
+func (e *CourseSyncReviewDecision) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseSyncReviewDecision(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseSyncReviewDecision", str)
+	}
+	return nil
+}
+
+func (e CourseSyncReviewDecision) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseSyncReviewDecision) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseSyncReviewDecision) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseSyncReviewKind string
+
+const (
+	CourseSyncReviewKindCodeReused      CourseSyncReviewKind = "CODE_REUSED"
+	CourseSyncReviewKindCodeReissued    CourseSyncReviewKind = "CODE_REISSUED"
+	CourseSyncReviewKindSlotAmbiguous   CourseSyncReviewKind = "SLOT_AMBIGUOUS"
+	CourseSyncReviewKindSemesterChanged CourseSyncReviewKind = "SEMESTER_CHANGED"
+)
+
+var AllCourseSyncReviewKind = []CourseSyncReviewKind{
+	CourseSyncReviewKindCodeReused,
+	CourseSyncReviewKindCodeReissued,
+	CourseSyncReviewKindSlotAmbiguous,
+	CourseSyncReviewKindSemesterChanged,
+}
+
+func (e CourseSyncReviewKind) IsValid() bool {
+	switch e {
+	case CourseSyncReviewKindCodeReused, CourseSyncReviewKindCodeReissued, CourseSyncReviewKindSlotAmbiguous, CourseSyncReviewKindSemesterChanged:
+		return true
+	}
+	return false
+}
+
+func (e CourseSyncReviewKind) String() string {
+	return string(e)
+}
+
+func (e *CourseSyncReviewKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseSyncReviewKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseSyncReviewKind", str)
+	}
+	return nil
+}
+
+func (e CourseSyncReviewKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseSyncReviewKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseSyncReviewKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseSyncReviewStatus string
+
+const (
+	CourseSyncReviewStatusPending   CourseSyncReviewStatus = "PENDING"
+	CourseSyncReviewStatusSame      CourseSyncReviewStatus = "SAME"
+	CourseSyncReviewStatusDifferent CourseSyncReviewStatus = "DIFFERENT"
+	CourseSyncReviewStatusIgnored   CourseSyncReviewStatus = "IGNORED"
+	CourseSyncReviewStatusApplied   CourseSyncReviewStatus = "APPLIED"
+)
+
+var AllCourseSyncReviewStatus = []CourseSyncReviewStatus{
+	CourseSyncReviewStatusPending,
+	CourseSyncReviewStatusSame,
+	CourseSyncReviewStatusDifferent,
+	CourseSyncReviewStatusIgnored,
+	CourseSyncReviewStatusApplied,
+}
+
+func (e CourseSyncReviewStatus) IsValid() bool {
+	switch e {
+	case CourseSyncReviewStatusPending, CourseSyncReviewStatusSame, CourseSyncReviewStatusDifferent, CourseSyncReviewStatusIgnored, CourseSyncReviewStatusApplied:
+		return true
+	}
+	return false
+}
+
+func (e CourseSyncReviewStatus) String() string {
+	return string(e)
+}
+
+func (e *CourseSyncReviewStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseSyncReviewStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseSyncReviewStatus", str)
+	}
+	return nil
+}
+
+func (e CourseSyncReviewStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseSyncReviewStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseSyncReviewStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type InquiryCategory string
 
 const (
@@ -1155,17 +1490,19 @@ const (
 	ReportTargetTypePost      ReportTargetType = "POST"
 	ReportTargetTypeUser      ReportTargetType = "USER"
 	ReportTargetTypeCommunity ReportTargetType = "COMMUNITY"
+	ReportTargetTypeMessage   ReportTargetType = "MESSAGE"
 )
 
 var AllReportTargetType = []ReportTargetType{
 	ReportTargetTypePost,
 	ReportTargetTypeUser,
 	ReportTargetTypeCommunity,
+	ReportTargetTypeMessage,
 }
 
 func (e ReportTargetType) IsValid() bool {
 	switch e {
-	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity:
+	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage:
 		return true
 	}
 	return false

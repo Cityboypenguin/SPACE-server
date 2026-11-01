@@ -127,7 +127,8 @@ func (r *MySQLBlockRepository) SearchBlockers(ctx context.Context, userID int64,
 		SELECT bl.id, bl.user_id, bl.blocked_user_id, bl.created_at
 		FROM blocks bl
 		JOIN users u ON bl.blocked_user_id = u.id
-		WHERE bl.user_id = ? AND (u.name LIKE ? OR u.account_id LIKE ?)
+		JOIN user_accounts a ON a.user_id = u.id
+		WHERE bl.user_id = ? AND (a.name LIKE ? OR a.account_id LIKE ?) AND ` + visibleUserCond + `
 		ORDER BY bl.id DESC
 		LIMIT ? OFFSET ?
 	`

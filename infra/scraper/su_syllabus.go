@@ -110,10 +110,16 @@ func (s *SenshuSyllabusScraper) Close() error {
 // for this year (nil/empty is fine, e.g. for a year's first-ever import). A
 // re-scrape of a year that's already fully imported is a very common case (an
 // admin re-running the import to pick up a handful of newly-published courses),
-// and every course whose dedup_key is already known is guaranteed to be a no-op
-// on import regardless of what FetchCourses returns for it - so disambiguation,
-// which is the expensive part (an extra page fetch per colliding row), is
-// skipped entirely for any colliding group where every member is already known.
+// and an already-known course already carries whatever campus suffix it needs -
+// so disambiguation, which is the expensive part (an extra page fetch per
+// colliding row), is skipped entirely for any colliding group where every member
+// is already known. Such rows come back with Disambiguated=false and a bare
+// CourseName; the sync keeps the stored (suffixed) name for them unless the
+// course's name itself changed (see courseusecase.nextCourseName).
+//
+// The returned FetchResult also says how complete the listing was (see
+// courseusecase.FetchCompleteness): the sync only discontinues courses that
+// vanished from a listing it read in full.
 //
 // onProgress, if non-nil, is called with a running (fetched, total) pair as work
 // completes: after every listing page, and then again for every detail-page fetch
@@ -122,16 +128,17 @@ func (s *SenshuSyllabusScraper) Close() error {
 // far longer in that second phase than fetching the listing itself, so without
 // this the reported progress would look frozen the moment the listing finishes
 // even though the run is still working.
-func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool, onProgress func(fetched, total int)) (courses []courseusecase.ScrapedCourseInput, skipped int, err error) {
+func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, knownDedupKeys map[string]bool, onProgress func(fetched, total int)) (*FetchResult, error) {
 	var rows []scrapedRow
+	result := &FetchResult{}
 
 	body, err := s.get(ctx, senshuSearchDo)
 	if err != nil {
-		return nil, 0, fmt.Errorf("fetching search form: %w", err)
+		return nil, fmt.Errorf("fetching search form: %w", err)
 	}
 	timestamp, err := extractTimestamp(body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	body, err = s.post(ctx, senshuSearchDo, url.Values{
@@ -152,13 +159,13 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 		"buttonName":                       {"searchKougi"},
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("submitting search: %w", err)
+		return nil, fmt.Errorf("submitting search: %w", err)
 	}
 
 	// Switch the just-established search session over to the largest page size.
 	timestamp, err = extractTimestamp(body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	body, err = s.post(ctx, senshuSearchDo, url.Values{
 		"timestamp":         {timestamp},
@@ -168,17 +175,16 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 		"navigateKougiList": {"dummy"},
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("switching page size: %w", err)
+		return nil, fmt.Errorf("switching page size: %w", err)
 	}
 
 	total, err := extractTotalCount(body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	pageRows, rowsSkipped := parseRows(body, year)
-	rows = append(rows, pageRows...)
-	skipped += rowsSkipped
+	result.Completeness.SiteTotal = total
+	result.addPage(parseListing(body, year), &rows)
 	if onProgress != nil {
 		onProgress(len(rows), total)
 	}
@@ -186,12 +192,12 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 	totalPages := (total + pageSize - 1) / pageSize
 	for page := 2; page <= totalPages; page++ {
 		if err := sleepCtx(ctx, s.RequestInterval); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 
 		timestamp, err = extractTimestamp(body)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		body, err = s.post(ctx, senshuSearchDo, url.Values{
 			"timestamp":         {timestamp},
@@ -200,22 +206,37 @@ func (s *SenshuSyllabusScraper) FetchCourses(ctx context.Context, year int, know
 			"navigateKougiList": {"dummy"},
 		})
 		if err != nil {
-			return nil, 0, fmt.Errorf("fetching page %d: %w", page, err)
+			return nil, fmt.Errorf("fetching page %d: %w", page, err)
 		}
 
-		pageRows, rowsSkipped := parseRows(body, year)
-		rows = append(rows, pageRows...)
-		skipped += rowsSkipped
+		result.addPage(parseListing(body, year), &rows)
 		if onProgress != nil {
 			onProgress(len(rows), total)
 		}
 	}
 
-	courses, err = s.disambiguateCampuses(ctx, rows, knownDedupKeys, onProgress, len(rows), total)
+	courses, err := s.disambiguateCampuses(ctx, rows, knownDedupKeys, onProgress, len(rows), total)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return courses, skipped, nil
+	result.Courses = courses
+	return result, nil
+}
+
+// FetchResult is what FetchCourses read from the site.
+type FetchResult struct {
+	Courses []courseusecase.ScrapedCourseInput
+	// SkippedSlots counts the slots that could not be mapped to a weekly
+	// day/period pair (e.g. 定時外), plus rows whose 講義コード could not be read.
+	SkippedSlots int
+	Completeness courseusecase.FetchCompleteness
+}
+
+func (r *FetchResult) addPage(page listingPage, rows *[]scrapedRow) {
+	*rows = append(*rows, page.rows...)
+	r.SkippedSlots += page.skipped
+	r.Completeness.ListedRows += page.listed
+	r.Completeness.UnidentifiedRows += page.unidentified
 }
 
 func (s *SenshuSyllabusScraper) get(ctx context.Context, target string) (string, error) {
@@ -343,12 +364,34 @@ type scrapedRow struct {
 // doesn't discard the rest of the same row's slots - they're reported back
 // instead of being silently dropped.
 func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
+	page := parseListing(body, year)
+	return page.rows, page.skipped
+}
+
+// listingPage is one listing page as parseListing read it.
+type listingPage struct {
+	rows    []scrapedRow
+	skipped int
+	// listed counts the listing rows (courses, not slots) the row pattern matched -
+	// compared against the site's own total to tell whether anything was missed.
+	listed int
+	// unidentified counts rows whose 講義コード could not be read, which therefore
+	// can't be matched against what's already stored.
+	unidentified int
+}
+
+func parseListing(body string, year int) listingPage {
+	var page listingPage
+	var rows []scrapedRow
+	skipped := 0
 	for _, m := range rowRe.FindAllStringSubmatch(body, -1) {
+		page.listed++
 		href, name, periodCell, teacher := m[1], m[2], m[3], m[4]
 
 		kougicdMatch := kougicdRe.FindStringSubmatch(href)
 		if kougicdMatch == nil {
 			skipped++
+			page.unidentified++
 			continue
 		}
 		kougicd := kougicdMatch[1]
@@ -397,6 +440,8 @@ func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
 					Year:        year,
 					Semester:    semester,
 					DedupKey:    dedupKey,
+					SourceRef:   kougicd,
+					SourceName:  courseName,
 				},
 				detailPath: detailPath,
 			})
@@ -407,7 +452,8 @@ func parseRows(body string, year int) (rows []scrapedRow, skipped int) {
 			skipped++
 		}
 	}
-	return rows, skipped
+	page.rows, page.skipped = rows, skipped
+	return page
 }
 
 // disambiguationKey groups rows that a student browsing the timetable/search UI
@@ -458,9 +504,9 @@ func allKnown(rows []scrapedRow, idxs []int, knownDedupKeys map[string]bool) boo
 //     students can tell which one to register for.
 //
 // A colliding group is skipped entirely - no page fetches at all - when every
-// member's dedup_key is already in knownDedupKeys: re-importing an already-known
-// course is always a no-op, so there's nothing disambiguation could change about
-// the outcome for that group.
+// member's dedup_key is already in knownDedupKeys: those courses were already
+// told apart when first imported, and the sync keeps their stored names (it only
+// takes a name from a row this function actually checked - Disambiguated).
 //
 // detailFetchConcurrency bounds how many disambiguation detail-page fetches run
 // at once. Unlike the listing pages (which share one session-scoped, single-use
@@ -540,6 +586,12 @@ func (s *SenshuSyllabusScraper) disambiguateCampuses(ctx context.Context, rows [
 				}
 				bodies[j] = body
 				reportFetch()
+			}
+
+			// この組の名前は今回確かめたもの（サフィックスの有無も含めて正）として
+			// 同期に渡す。idxs は組ごとに重ならないのでロックは要らない。
+			for _, i := range idxs {
+				rows[i].course.Disambiguated = true
 			}
 
 			if allSameContent(bodies) {

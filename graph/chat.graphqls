@@ -73,7 +73,12 @@ type Room {
   user: [User!]!
   createdAt: String!
   updatedAt: String!
+  # isMessagingDisabled は入力欄を閉じるか（DM の相手をブロックしている・されている、
+  # または相手が退会している）。
   isMessagingDisabled: Boolean!
+  # isPartnerWithdrawn は DM の相手が退会しているか（退会手続き中・削除済み）。
+  # 入力欄を閉じた理由を出し分けるために使う。DM 以外は常に false。
+  isPartnerWithdrawn: Boolean!
   lastReadAt: String
   # 自分がこのルームをどこまで読んだかを表すメッセージID。まだ一度も読んでいない
   # （または列が追加される前から既読位置を時刻でしか持っていない）なら null。

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 )
 
@@ -35,7 +36,7 @@ func TestDeleteAdministrator_ConcurrentDeletesKeepTheLastOne(t *testing.T) {
 	db, cleanup := administratorTestDB(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "administrator"})
 	for _, name := range []string{"admin-a", "admin-b"} {
 		if _, err := db.ExecContext(ctx,
 			`INSERT INTO administrators (name, email, hashed_password, created_at, updated_at) VALUES (?, ?, 'x', 0, 0)`,
@@ -79,7 +80,7 @@ func TestDeleteAdministrator_ConcurrentDeletesKeepTheLastOne(t *testing.T) {
 		go func(i int, id int64) {
 			defer done.Done()
 			start.Wait()
-			results[i], errs[i] = uc.Execute(context.Background(), id)
+			results[i], errs[i] = uc.Execute(ctx, id)
 		}(i, id)
 	}
 	start.Done()
@@ -117,7 +118,7 @@ func TestDeleteAdministrator_RefusesToDeleteTheOnlyAdministrator(t *testing.T) {
 	db, cleanup := administratorTestDB(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "administrator"})
 	res, err := db.ExecContext(ctx,
 		`INSERT INTO administrators (name, email, hashed_password, created_at, updated_at) VALUES ('solo', 'solo@example.com', 'x', 0, 0)`)
 	if err != nil {

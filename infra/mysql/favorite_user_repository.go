@@ -127,7 +127,8 @@ func (r *MySQLFavoriteUserRepository) SearchFavoriteUsers(ctx context.Context, u
 		SELECT fu.id, fu.user_id, fu.favorite_user_id, fu.created_at
 		FROM favorite_users fu
 		JOIN users u ON fu.favorite_user_id = u.id
-		WHERE fu.user_id = ? AND (u.name LIKE ? OR u.account_id LIKE ?)
+		JOIN user_accounts a ON a.user_id = u.id
+		WHERE fu.user_id = ? AND (a.name LIKE ? OR a.account_id LIKE ?) AND ` + visibleUserCond + `
 		ORDER BY fu.id DESC
 		LIMIT ? OFFSET ?
 	`

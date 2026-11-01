@@ -61,9 +61,6 @@ type ListMentionsByMessageIDsUseCase interface {
 type GetRoomsByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Room, error)
 }
-type GetQuestionsByIDsUseCase interface {
-	Execute(ctx context.Context, ids []int64) (map[int64]*model.Question, error)
-}
 type GetAnswersByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*repository.AnswerWithLikes, error)
 }
@@ -75,9 +72,6 @@ type ListPollOptionResultsByPollIDsUseCase interface {
 }
 type CountPollVotersByPollIDsUseCase interface {
 	Execute(ctx context.Context, pollIDs []int64) (map[int64]int, error)
-}
-type GetAnonymousIdentitiesUseCase interface {
-	Execute(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error)
 }
 
 type ctxKey string
@@ -145,13 +139,9 @@ type Loaders struct {
 	MessageMentionLoader *dataloadgen.Loader[int64, []*model.Mention]
 	// PostLoader は Post.parent と Favorite.post 用。削除済み・不存在は nil を返す。
 	PostLoader *dataloadgen.Loader[int64, *model.Post]
-	// RoomLoader は Message.room と、授業ルームかどうかの判定（匿名表示）用。
+	// RoomLoader は Message.room 用。
 	// 不存在は nil を返す。
 	RoomLoader *dataloadgen.Loader[int64, *model.Room]
-	// QuestionLoader は Answer.user が匿名表示かを決めるためのルーム特定用。
-	// 回答は質問を経由しないとルームが分からないので、1画面で同じ質問を何度も引く。
-	// 不存在は nil を返す。
-	QuestionLoader *dataloadgen.Loader[int64, *model.Question]
 	// AnswerLoader は Question.bestAnswer 用。不存在は nil を返す。
 	AnswerLoader *dataloadgen.Loader[int64, *repository.AnswerWithLikes]
 	// AnswerPageLoader は Question.answers 用。回答が無い質問も
@@ -164,10 +154,6 @@ type Loaders struct {
 	// 選択肢が無い投票は nil スライス、投票者が居ない投票は 0 になる。
 	PollOptionLoader     *dataloadgen.Loader[int64, []*repository.PollOptionResult]
 	PollVoterCountLoader *dataloadgen.Loader[int64, int]
-	// AnonymousIdentityLoader は授業内チャットの匿名表示名（匿名NNN）用。
-	// 行が無い（＝そのルームで投稿したことがない）場合は nil を返す。
-	// 呼び出し側はそこで実名へフォールバックしてはいけない。
-	AnonymousIdentityLoader *dataloadgen.Loader[repository.RoomUserKey, *model.RoomAnonymousIdentity]
 }
 
 // batchFromMap は「キーのスライスを受け取り map[K]V を返す関数」を DataLoader が要求する
@@ -399,12 +385,10 @@ type UseCases struct {
 	ListMentionsByPostIDs          ListMentionsByPostIDsUseCase
 	ListMentionsByMessageIDs       ListMentionsByMessageIDsUseCase
 	GetRoomsByIDs                  GetRoomsByIDsUseCase
-	GetQuestionsByIDs              GetQuestionsByIDsUseCase
 	GetAnswersByIDs                GetAnswersByIDsUseCase
 	ListAnswerPagesByQuestionIDs   ListAnswerPagesByQuestionIDsUseCase
 	ListPollOptionResultsByPollIDs ListPollOptionResultsByPollIDsUseCase
 	CountPollVotersByPollIDs       CountPollVotersByPollIDsUseCase
-	GetAnonymousIdentities         GetAnonymousIdentitiesUseCase
 }
 
 // batchWait は全ローダー共通のバッチ待ち時間。
@@ -462,15 +446,13 @@ func New(uc UseCases) *Loaders {
 		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
 		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), loaderOptions...),
 
-		PostLoader:              dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), loaderOptions...),
-		RoomLoader:              dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), loaderOptions...),
-		QuestionLoader:          dataloadgen.NewLoader(batchFromMap(uc.GetQuestionsByIDs.Execute), loaderOptions...),
-		AnswerLoader:            dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
-		AnswerPageLoader:        dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
-		AnswerCountLoader:       dataloadgen.NewLoader(batchFromMap(uc.CountAnswersByQuestionIDs.Execute), loaderOptions...),
-		PollOptionLoader:        dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
-		PollVoterCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
-		AnonymousIdentityLoader: dataloadgen.NewLoader(batchFromMap(uc.GetAnonymousIdentities.Execute), loaderOptions...),
+		PostLoader:           dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), loaderOptions...),
+		RoomLoader:           dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), loaderOptions...),
+		AnswerLoader:         dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
+		AnswerPageLoader:     dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
+		AnswerCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountAnswersByQuestionIDs.Execute), loaderOptions...),
+		PollOptionLoader:     dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
+		PollVoterCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
 	}
 }
 

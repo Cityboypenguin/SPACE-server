@@ -16,14 +16,33 @@ import (
 // 「誰のキーか」はここで ctx から決める。ユースケースに引数で言わせると、
 // 正しい値を渡す責任がそちらに残り、入口が増えたときにそこだけ取り違えられる
 // （internal/authz.CallerID のコメントと同じ理由）。
+// 置き場は2つある。種別ごとにどちらへ入れるかが決まっており（Kind.Private）、
+// 呼び出し側は選べない。選べる形にすると、DM の添付を公開側へ入れる経路が
+// 引数の取り違えだけで生まれる。
 type Acceptor struct {
-	store ObjectStore
+	public  ObjectStore
+	private ObjectStore
 }
 
 var _ uploadusecase.Acceptor = (*Acceptor)(nil)
 
-func NewAcceptor(store ObjectStore) *Acceptor {
-	return &Acceptor{store: store}
+// NewAcceptor は公開・非公開の2つの置き場を束ねる。
+//
+// private が nil なら非公開の種別は受け入れない（黙って公開側へ落とさない）。
+// 配線の漏れを、DM の添付が公開されるという形で出さないため。
+func NewAcceptor(public, private ObjectStore) *Acceptor {
+	return &Acceptor{public: public, private: private}
+}
+
+// storeFor は種別に対応する置き場を返す。
+func (a *Acceptor) storeFor(k Kind) (ObjectStore, error) {
+	if !k.Private {
+		return a.public, nil
+	}
+	if a.private == nil {
+		return nil, fmt.Errorf("no private object store is configured for %s", k.Prefix)
+	}
+	return a.private, nil
 }
 
 // Accept は申告されたキーを受け入れ、保存してよいキーを返す。
@@ -45,10 +64,26 @@ func (a *Acceptor) Accept(ctx context.Context, kind uploadusecase.Kind, objectKe
 		}
 		owner = fmt.Sprintf("%d", callerID)
 	}
-	return Accept(ctx, a.store, objectKey, want, owner)
+	store, err := a.storeFor(want)
+	if err != nil {
+		return "", err
+	}
+	return Accept(ctx, store, objectKey, want, owner)
 }
 
 // Discard は受け入れで公開したオブジェクトを取り消す（保存に失敗したとき）。
+//
+// どちらの置き場に入れたかはキーの先頭セグメントから引ける（Kind.Private）。
+// 引けないキーは受け入れが作ったものではないので、何もしない（Discard 本体も
+// 同じ理由で形を検めている）。
 func (a *Acceptor) Discard(ctx context.Context, objectKey string) {
-	Discard(ctx, a.store, objectKey)
+	kind, ok := KindForObjectKey(objectKey)
+	if !ok {
+		return
+	}
+	store, err := a.storeFor(kind)
+	if err != nil {
+		return
+	}
+	Discard(ctx, store, objectKey)
 }

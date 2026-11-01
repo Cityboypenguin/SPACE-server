@@ -6,7 +6,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"strings"
 	"time"
@@ -14,15 +13,14 @@ import (
 )
 
 type ThreadService struct {
-	Messages  repository.MessageReader
-	Access    AccessPolicy
-	Rooms     repository.RoomRepository
-	Threads   repository.ChatThreadRepository
-	Tx        repository.TxManager
-	Writers   MessageWriters
-	Role      roomusecase.GetRoomUserRoleUseCase
-	Anonymous anonusecase.GetOrCreateAnonymousIdentityUseCase
-	Events    EventPublisher
+	Messages repository.MessageReader
+	Access   AccessPolicy
+	Rooms    repository.RoomRepository
+	Threads  repository.ChatThreadRepository
+	Tx       repository.TxManager
+	Writers  MessageWriters
+	Role     roomusecase.GetRoomUserRoleUseCase
+	Events   EventPublisher
 }
 
 func threadTitle(title string) (string, error) {
@@ -48,11 +46,6 @@ func (s *ThreadService) Create(ctx context.Context, parentID int64, title string
 	parent := access.Room
 	if parent.ParentRoomID != nil || (parent.Type != model.RoomTypeCommunity && parent.Type != model.RoomTypeCourse) {
 		return nil, apperr.InvalidInput("このルームにはスレッドを作成できません")
-	}
-	if parent.Type == model.RoomTypeCourse {
-		if _, err := s.Anonymous.Execute(ctx, parentID, claims.ID); err != nil {
-			return nil, err
-		}
 	}
 	now := time.Now()
 	room := &model.Room{Name: title, Type: parent.Type, ParentRoomID: &parentID, ThreadCreatorID: &claims.ID, CreatedAt: now, UpdatedAt: now}

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
@@ -51,7 +52,7 @@ type UserReader interface {
 	SuggestUsersByPrefix(ctx context.Context, prefix string, limit int) ([]*model.User, error)
 }
 
-// UserWriter は公開列の更新と退会。
+// UserWriter は公開列の更新。
 type UserWriter interface {
 	// UpdateUser は公開列だけを UPDATE する。email にも hashed_password にも触れない。
 	//
@@ -61,7 +62,36 @@ type UserWriter interface {
 	// email も同じ理屈で SET から外してある（model.User が Email を持たなくなった
 	// 以上、ここで書こうとすれば空文字になる）。連絡先の変更は SaveCredentials 経由。
 	UpdateUser(ctx context.Context, u *model.User) error
-	DeleteUser(ctx context.Context, id int64) (bool, error)
+}
+
+// UserLifecycleRepository は退会の段階（users.status）を進める・戻す口。
+//
+// 利用者は users（識別子）と user_accounts（個人情報）の2行で表す。会話は users を
+// 参照し続けるので users の行は消さず、退会の最後に user_accounts の行だけを消す
+// （db/migrations/076 参照）。
+//
+//	active ──DeactivateUser──▶ deactivated ──PurgeUser──▶ deleted
+//	   ◀────ReactivateUser────┘
+//
+// 管理者による削除は deactivated を経ずに PurgeUser する。
+type UserLifecycleRepository interface {
+	// DeactivateUser は active の利用者を退会手続き中にし、認証情報の世代を進めて
+	// 発行済みのトークンを失効させる。active でなければ何もせず false を返す。
+	DeactivateUser(ctx context.Context, id int64, at time.Time) (bool, error)
+	// ReactivateUser は退会手続き中を active に戻す。退会手続き中でなければ false。
+	ReactivateUser(ctx context.Context, id int64) (bool, error)
+	// PurgeUser は個人情報（user_accounts の行）を消し、users を deleted にする。
+	// 本人の持ち物（プロフィール・投稿・フォロー・添付など）は外部キーの CASCADE で
+	// 一緒に消える。既に消えていれば false。2文を書くので TxManager.RunInTx の中で呼ぶこと。
+	PurgeUser(ctx context.Context, id int64, at time.Time) (bool, error)
+	// LockUserLifecycle は退会の段階を読み、その行を更新ロックする。存在しなければ nil。
+	// 個人情報を消す直前に「まだ消してよい状態か」を確かめ直すためのもの
+	// （猶予切れの一覧を取った後に、本人がログインして取り消しているかもしれない）。
+	// TxManager.RunInTx の中で呼ぶこと。
+	LockUserLifecycle(ctx context.Context, id int64) (*model.UserLifecycle, error)
+	// ListUserIDsToPurge は deactivated_at が before 以前の退会手続き中の利用者を、
+	// 古い順に最大 limit 件返す（猶予の切れた人を消す日次処理用）。
+	ListUserIDsToPurge(ctx context.Context, before time.Time, limit int) ([]int64, error)
 }
 
 // UserActivityRepository は活動記録（最終アクセス・活動日・活動時間帯）。
@@ -115,6 +145,7 @@ type UserCredentialsRepository interface {
 type UserRepository interface {
 	UserReader
 	UserWriter
+	UserLifecycleRepository
 	UserActivityRepository
 	UserAccountRepository
 	UserCredentialsRepository
