@@ -15,12 +15,14 @@ import (
 type CreateReportUsecase struct {
 	reportRepo  repository.ReportRepository
 	settingRepo repository.SystemSettingRepository
+	notifier    ReportCreatedNotifier
 }
 
-func NewCreateReportUsecase(reportRepo repository.ReportRepository, settingRepo repository.SystemSettingRepository) *CreateReportUsecase {
+func NewCreateReportUsecase(reportRepo repository.ReportRepository, settingRepo repository.SystemSettingRepository, notifier ReportCreatedNotifier) *CreateReportUsecase {
 	return &CreateReportUsecase{
 		reportRepo:  reportRepo,
 		settingRepo: settingRepo,
+		notifier:    notifier,
 	}
 }
 
@@ -75,6 +77,8 @@ func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInp
 	if err := u.reportRepo.Save(ctx, report); err != nil {
 		return nil, err
 	}
+
+	u.notifier.Notify(ctx, report)
 
 	return report, nil
 }

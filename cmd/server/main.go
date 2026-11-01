@@ -396,7 +396,10 @@ func main() {
 
 	// リポジトリからユースケースを組み立てる配線は internal/di に集約。
 
-	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
+	reportNotificationAsyncRunner := async.NewRunner("report_notification")
+	reportNotificationRecipientRepository := mysql.NewMySQLReportNotificationRecipientRepository(database)
+	reportCreatedNotifier := reportusecase.NewEmailReportCreatedNotifier(reportNotificationRecipientRepository, mailer, reportNotificationAsyncRunner)
+	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository, reportCreatedNotifier)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 	manageUserSettingUseCase := usersettingsusecase.NewManageUserSettingUsecase(userSettingRepository)
@@ -499,7 +502,7 @@ func main() {
 	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
 	announcementAsyncRunner := async.NewRunner("announcement")
 	userActivityAsyncRunner := async.NewRunner("user_activity")
-	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner}
+	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner, reportNotificationAsyncRunner}
 
 	// 認証済みリクエストの活動記録。毎リクエスト DB へ書かないよう、ユーザーごとに
 	// 間引いてから Runner へ渡す（internal/middleware/user_activity.go 参照）。
@@ -704,14 +707,15 @@ func main() {
 			Media:    mediaRepository,
 			Users:    getUserByIDUseCase,
 		}),
-		ManageReportUsecase:          *manageReportUseCase,
-		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
-		ManageUserSettingUsecase:     *manageUserSettingUseCase,
-		GetAnalyticsUseCase:          getAnalyticsUseCase,
-		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
-		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
-		RecordSessionUseCase:         recordSessionUseCase,
-		InvalidateAnalyticsSummary:   cachedAnalyticsRepo.InvalidateSummary,
+		ManageReportUsecase:                *manageReportUseCase,
+		ManageNotificationRecipientUsecase: reportusecase.NewManageNotificationRecipientUsecase(reportNotificationRecipientRepository),
+		ManageSystemSettingUsecase:         *manageSystemSettingUseCase,
+		ManageUserSettingUsecase:           *manageUserSettingUseCase,
+		GetAnalyticsUseCase:                getAnalyticsUseCase,
+		GetCommunityAnalyticsUseCase:       getCommunityAnalyticsUseCase,
+		GetTimeSeriesUseCase:               getTimeSeriesUseCase,
+		RecordSessionUseCase:               recordSessionUseCase,
+		InvalidateAnalyticsSummary:         cachedAnalyticsRepo.InvalidateSummary,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
@@ -1019,6 +1023,7 @@ func main() {
 	// DB 接続を閉じる前に片付ける。ここで待たないと、処理中の書き込みが
 	// 「閉じた DB」に当たって全部失敗する。待ちきれなかったぶんは諦める
 	// （どれもベストエフォート。chat.EventPublisher 参照）。
+	reportCreatedNotifier.Flush(shutdownCtx)
 	for _, runner := range asyncRunners {
 		if err := runner.Wait(shutdownCtx); err != nil {
 			logger.Log.Error().Err(err).Msg("async tasks did not drain before shutdown")

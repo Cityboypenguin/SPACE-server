@@ -153,6 +153,33 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	return r.toGraphUserReport(res, reporter), nil
 }
 
+// AddReportNotificationRecipient is the resolver for the addReportNotificationRecipient field.
+func (r *mutationResolver) AddReportNotificationRecipient(ctx context.Context, email string) (*gqlmodel.ReportNotificationRecipient, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	recipient, err := r.ManageNotificationRecipientUsecase.Add(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphReportNotificationRecipient(recipient), nil
+}
+
+// RemoveReportNotificationRecipient is the resolver for the removeReportNotificationRecipient field.
+func (r *mutationResolver) RemoveReportNotificationRecipient(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "report_notification_recipient", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid recipient id")
+	}
+	if err := r.ManageNotificationRecipientUsecase.Remove(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateInquiry is the resolver for the createInquiry field.
 func (r *mutationResolver) CreateInquiry(ctx context.Context, input gqlmodel.CreateInquiryInput) (*gqlmodel.Inquiry, error) {
 	inquiry, err := r.CreateInquiryUsecase.Execute(ctx, inquiryusecase.CreateInquiryInput{
@@ -299,6 +326,22 @@ func (r *queryResolver) GetReport(ctx context.Context, id string) (*gqlmodel.Use
 		return nil, fmt.Errorf("failed to fetch reporter")
 	}
 	return r.toGraphUserReport(res, reporter), nil
+}
+
+// ReportNotificationRecipients is the resolver for the reportNotificationRecipients field.
+func (r *queryResolver) ReportNotificationRecipients(ctx context.Context) ([]*gqlmodel.ReportNotificationRecipient, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	recipients, err := r.ManageNotificationRecipientUsecase.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.ReportNotificationRecipient, 0, len(recipients))
+	for _, recipient := range recipients {
+		out = append(out, toGraphReportNotificationRecipient(recipient))
+	}
+	return out, nil
 }
 
 // SearchInquiries is the resolver for the searchInquiries field.
