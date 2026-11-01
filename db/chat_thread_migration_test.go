@@ -12,7 +12,7 @@ func TestChatThreadMigrationFromDevelop(t *testing.T) {
 	if err := migrator.Migrate(109); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(112); err != nil {
 		t.Fatal(err)
 	}
 	version, dirty, err := migrator.Version()
