@@ -64,3 +64,11 @@ func (r *queryResolver) ChatThreads(ctx context.Context, parentRoomID string, li
 	}
 	return out, nil
 }
+
+func (r *queryResolver) HasUnreadChatThreads(ctx context.Context, parentRoomID string) (bool, error) {
+	id, err := decodeGraphID(ctx, "room", parentRoomID)
+	if err != nil {
+		return false, err
+	}
+	return r.ThreadService.HasUnread(ctx, id)
+}

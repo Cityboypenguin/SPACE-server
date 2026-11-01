@@ -22,11 +22,16 @@ func (s *threadRoomStore) SaveRoom(_ context.Context, r *model.Room) error {
 
 type threadStore struct {
 	repository.ChatThreadRepository
-	rooms   map[int64]*model.Room
-	created bool
-	updated bool
+	rooms        map[int64]*model.Room
+	created      bool
+	updated      bool
+	unreadCalled bool
 }
 
+func (s *threadStore) HasUnread(_ context.Context, parentID, viewerID int64) (bool, error) {
+	s.unreadCalled = true
+	return true, nil
+}
 func (s *threadStore) Create(_ context.Context, id, user int64) error { s.created = true; return nil }
 func (s *threadStore) Get(_ context.Context, id, user int64) (*model.ChatThread, error) {
 	r := s.rooms[id]
@@ -214,5 +219,16 @@ func TestThreadAnnouncementCannotBeEditedOrDeleted(t *testing.T) {
 	}
 	if h.updateMessage.called || h.deleteMessage.called {
 		t.Fatal("system announcement reached a mutation writer")
+	}
+}
+
+func TestThreadUnreadRequiresParentReadAccess(t *testing.T) {
+	s, _, store, _, _ := threadHarness()
+	if _, err := s.HasUnread(ctxAsUser(99), communityRoomID); err == nil || store.unreadCalled {
+		t.Fatal("nonmember can inspect thread unread state")
+	}
+	unread, err := s.HasUnread(ctxAsUser(10), communityRoomID)
+	if err != nil || !unread || !store.unreadCalled {
+		t.Fatal("parent member cannot see thread unread state", err)
 	}
 }

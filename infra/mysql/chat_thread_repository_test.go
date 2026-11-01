@@ -105,6 +105,57 @@ func TestChatThreadPersistenceAndMigration(t *testing.T) {
 	if len(list) != 1 || list[0].MessageCount != 2 || list[0].UnreadCount != 1 {
 		t.Fatalf("incorrect thread counts: %+v", list)
 	}
+
+	// Put the unread thread beyond the first page: aggregate badges must still find it.
+	for i := 0; i < 20; i++ {
+		newer := &model.Room{Name: "newer", Type: parent.Type, ParentRoomID: &parent.ID, CreatedAt: time.Unix(2000+int64(i), 0), UpdatedAt: now}
+		if err := rooms.SaveRoom(ctx, newer); err != nil {
+			t.Fatal(err)
+		}
+		if err := threads.Create(ctx, newer.ID, 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := threads.List(ctx, parent.ID, 10, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range page {
+		if item.UnreadCount != 0 {
+			t.Fatal("first page should contain only read threads")
+		}
+	}
+	unread, err := threads.HasUnread(ctx, parent.ID, 10)
+	if err != nil || !unread {
+		t.Fatalf("unread on later page was missed: %t %v", unread, err)
+	}
+	unread, err = threads.HasUnread(ctx, parent.ID, 11)
+	if err != nil || unread {
+		t.Fatalf("own messages must not be unread: %t %v", unread, err)
+	}
+	unread, err = threads.HasUnread(ctx, parent.ID+10000, 10)
+	if err != nil || unread {
+		t.Fatalf("unread leaked to another parent: %t %v", unread, err)
+	}
+	if _, err := db.Exec("UPDATE course_room_reads SET last_read_message_id=? WHERE room_id=? AND user_id=10", second.ID, child.ID); err != nil {
+		t.Fatal(err)
+	}
+	unread, err = threads.HasUnread(ctx, parent.ID, 10)
+	if err != nil || unread {
+		t.Fatalf("badge remained after marking read: %t %v", unread, err)
+	}
+	deleted := second
+	deleted.ID = 0
+	if err := messages.SaveMessage(ctx, &deleted); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE messages SET deleted_at=2000 WHERE id=?", deleted.ID); err != nil {
+		t.Fatal(err)
+	}
+	unread, err = threads.HasUnread(ctx, parent.ID, 10)
+	if err != nil || unread {
+		t.Fatalf("deleted messages must not be unread: %t %v", unread, err)
+	}
 	if err := tx.RunInTx(ctx, func(ctx context.Context) error { return threads.Update(ctx, child.ID, "新タイトル", true) }); err != nil {
 		t.Fatal(err)
 	}

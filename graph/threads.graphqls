@@ -1,4 +1,5 @@
 extend type Query {
+ hasUnreadChatThreads(parentRoomID: ID!): Boolean!
  chatThread(roomID: ID!): ChatThread
  chatThreads(parentRoomID: ID!, limit: Int = 20, offset: Int = 0): [ChatThread!]!
 }

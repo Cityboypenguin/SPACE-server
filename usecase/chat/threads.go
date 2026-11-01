@@ -184,3 +184,18 @@ func (s *ThreadService) Update(ctx context.Context, id int64, title *string, clo
 
 	return s.Get(ctx, id)
 }
+
+func (s *ThreadService) HasUnread(ctx context.Context, parentID int64) (bool, error) {
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	room, err := s.Access.EnsureReadAccess(ctx, parentID)
+	if err != nil {
+		return false, err
+	}
+	if room.ParentRoomID != nil || (room.Type != model.RoomTypeCommunity && room.Type != model.RoomTypeCourse) {
+		return false, apperr.InvalidInput("このルームにはスレッドがありません")
+	}
+	return s.Threads.HasUnread(ctx, parentID, claims.ID)
+}

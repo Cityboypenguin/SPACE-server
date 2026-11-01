@@ -87,3 +87,16 @@ func (r *MySQLChatThreadRepository) AnnouncementID(ctx context.Context, roomID i
 	}
 	return id, err
 }
+
+// HasUnread checks every child thread without depending on list pagination.
+func (r *MySQLChatThreadRepository) HasUnread(ctx context.Context, parentRoomID, viewerID int64) (bool, error) {
+	var unread bool
+	query := `SELECT EXISTS (
+  SELECT 1 FROM chat_threads t JOIN rooms r ON r.id=t.room_id
+  JOIN messages m ON m.room_id=r.id
+  LEFT JOIN course_room_reads cr ON cr.room_id=r.id AND cr.user_id=?
+  WHERE r.parent_room_id=? AND m.user_id<>? AND m.deleted_at IS NULL AND ` + unreadAfterSQL("m", "cr", "NULL") + `
+ )`
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, viewerID, parentRoomID, viewerID).Scan(&unread)
+	return unread, err
+}
