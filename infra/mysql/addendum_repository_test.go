@@ -20,7 +20,7 @@ func addendumTestRepo(t *testing.T) (*MySQLAddendumRepository, func()) {
 	mustExec(t, db, `CREATE TABLE users (id BIGINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))`)
 	mustExec(t, db, `CREATE TABLE questions (id BIGINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))`)
 	mustExec(t, db, `CREATE TABLE answers (id BIGINT NOT NULL AUTO_INCREMENT, question_id BIGINT NOT NULL, author_user_id BIGINT NOT NULL, PRIMARY KEY (id))`)
-	for _, f := range []string{"080_create_question_addenda.up.sql", "081_create_answer_addenda.up.sql"} {
+	for _, f := range []string{"078_create_question_addenda.up.sql", "079_create_answer_addenda.up.sql"} {
 		b, err := os.ReadFile("../../db/migrations/" + f)
 		if err != nil {
 			cleanup()
