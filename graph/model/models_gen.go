@@ -147,6 +147,20 @@ type Blocker struct {
 	CreatedAt     string `json:"createdAt"`
 }
 
+type ChatThread struct {
+	RoomID        string  `json:"roomID"`
+	ParentRoomID  string  `json:"parentRoomID"`
+	Title         string  `json:"title"`
+	IsClosed      bool    `json:"isClosed"`
+	CanManage     bool    `json:"canManage"`
+	CanWrite      bool    `json:"canWrite"`
+	CreatedAt     string  `json:"createdAt"`
+	UpdatedAt     string  `json:"updatedAt"`
+	MessageCount  int32   `json:"messageCount"`
+	UnreadCount   int32   `json:"unreadCount"`
+	LastMessageAt *string `json:"lastMessageAt,omitempty"`
+}
+
 type Community struct {
 	ID          string  `json:"ID"`
 	RoomID      string  `json:"roomID"`
@@ -367,19 +381,20 @@ type Mention struct {
 }
 
 type Message struct {
-	ID        string     `json:"ID"`
-	RoomID    string     `json:"roomID"`
-	Room      *Room      `json:"room"`
-	UserID    string     `json:"userID"`
-	User      *User      `json:"user"`
-	Content   string     `json:"content"`
-	Media     []*Media   `json:"media"`
-	CreatedAt string     `json:"createdAt"`
-	UpdatedAt string     `json:"updatedAt"`
-	IsMine    bool       `json:"isMine"`
-	ReplyToID *string    `json:"replyToID,omitempty"`
-	ReplyTo   *Message   `json:"replyTo,omitempty"`
-	Mentions  []*Mention `json:"mentions"`
+	Thread    *ChatThread `json:"thread,omitempty"`
+	ID        string      `json:"ID"`
+	RoomID    string      `json:"roomID"`
+	Room      *Room       `json:"room"`
+	UserID    string      `json:"userID"`
+	User      *User       `json:"user"`
+	Content   string      `json:"content"`
+	Media     []*Media    `json:"media"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
+	IsMine    bool        `json:"isMine"`
+	ReplyToID *string     `json:"replyToID,omitempty"`
+	ReplyTo   *Message    `json:"replyTo,omitempty"`
+	Mentions  []*Mention  `json:"mentions"`
 }
 
 type MessagePage struct {

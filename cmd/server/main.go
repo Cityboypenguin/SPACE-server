@@ -551,6 +551,11 @@ func main() {
 		Events:                  chatEventPublisher,
 	})
 
+	threadService := &chatusecase.ThreadService{
+		Access: chatAccessPolicy, Messages: messageRepository, Rooms: roomRepository, Threads: &mysql.MySQLChatThreadRepository{DB: database},
+		Tx: txManager, Writers: chatMessageWriters, Role: getRoomUserRoleUseCase,
+		Anonymous: getOrCreateAnonymousIdentityUseCase, Events: chatEventPublisher,
+	}
 	resolver := &graph.Resolver{
 		StorageRepository:     storageRepository,
 		MaintenanceRepository: maintenanceRepository,
@@ -724,10 +729,11 @@ func main() {
 		CourseImportTracker: courseImportTracker,
 
 		ChatUseCases: graph.ChatUseCases{
-			ChatAccess:   chatAccessPolicy,
-			ChatCommands: chatCommandService,
-			ChatQueries:  chatQueryService,
-			ChatReads:    chatReadService,
+			ThreadService: threadService,
+			ChatAccess:    chatAccessPolicy,
+			ChatCommands:  chatCommandService,
+			ChatQueries:   chatQueryService,
+			ChatReads:     chatReadService,
 		},
 	}
 

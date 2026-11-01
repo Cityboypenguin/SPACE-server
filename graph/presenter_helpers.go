@@ -128,7 +128,7 @@ func (r *Resolver) anonymousUserForCourseRoom(ctx context.Context, roomID string
 		return nil
 	}
 
-	identity, err := dataloader.For(ctx).AnonymousIdentityLoader.Load(ctx, repository.RoomUserKey{RoomID: rid, UserID: authorUserID})
+	identity, err := dataloader.For(ctx).AnonymousIdentityLoader.Load(ctx, repository.RoomUserKey{RoomID: room.PolicyRoomID(), UserID: authorUserID})
 	if err != nil {
 		logChatLookup(err, chatLookupAnonymousLabel).
 			Int64("room_id", rid).

@@ -88,6 +88,8 @@ type Room {
 }
 
 type Message {
+  # System announcement linking to a thread. Normal messages return null.
+  thread: ChatThread
   ID: ID!
   roomID: ID!
   room: Room!

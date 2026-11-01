@@ -561,7 +561,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor のブロック判定と
 	// 同じ規則に揃える（画面の状態と実際の送信可否が食い違わないようにするため）。
 	// 相手が1人に決まらない DM ではブロックを引けないので、向こうと同じく判定しない。
-	gqlRoom.IsMessagingDisabled = false
+	gqlRoom.IsMessagingDisabled = room.ThreadClosedAt != nil
 	if wantMessagingDisabled && room.Type == model.RoomTypeDM {
 		partnerID, ok := dmPartnerID(users, claims.ID)
 		if ok {

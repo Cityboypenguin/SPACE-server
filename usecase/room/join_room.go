@@ -37,7 +37,7 @@ func (uc *JoinRoomInteractor) Execute(ctx context.Context, roomID int64) (bool, 
 	if room == nil {
 		return false, errors.New("room not found")
 	}
-	if room.Type != model.RoomTypeCommunity {
+	if room.Type != model.RoomTypeCommunity || room.ParentRoomID != nil {
 		return false, errors.New("can only join community rooms")
 	}
 

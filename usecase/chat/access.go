@@ -115,7 +115,7 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 	}
 	// ここで要るのは「自分が入っているか」だけ。メンバー一覧を引いて探すと、
 	// 閲覧・購読・編集・削除のたびにルームの人数ぶんの行が戻る。
-	isMember, err := p.deps.IsRoomMember.Execute(ctx, room.ID, claims.ID)
+	isMember, err := p.deps.IsRoomMember.Execute(ctx, room.PolicyRoomID(), claims.ID)
 	if err != nil {
 		return fmt.Errorf("failed to verify room membership")
 	}
@@ -148,11 +148,14 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 // 新しく話しかけさせない」ための設定であって、既に送ってしまった自分の発言を消す
 // 手段まで奪う理由が無いため。
 func (p *accessPolicy) ensureMutateAccess(ctx context.Context, claims *auth.Claims, room *model.Room) error {
+	if room.ThreadClosedAt != nil && !authz.IsAdminRole(claims.Role) {
+		return errors.New("このスレッドはクローズされています")
+	}
 	if room.Type == model.RoomTypeCourse {
 		if authz.IsAdminRole(claims.Role) {
 			return nil
 		}
-		return p.deps.CheckRoomWritable.Execute(ctx, room.ID)
+		return p.deps.CheckRoomWritable.Execute(ctx, room.PolicyRoomID())
 	}
 	return p.ensureRoomParticipation(ctx, claims, room)
 }
@@ -191,8 +194,11 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 		return nil, fmt.Errorf("failed to get room")
 	}
 
+	if room.ThreadClosedAt != nil {
+		return nil, errors.New("このスレッドはクローズされています")
+	}
 	if room.Type == model.RoomTypeCourse {
-		if err := p.deps.CheckRoomWritable.Execute(ctx, roomID); err != nil {
+		if err := p.deps.CheckRoomWritable.Execute(ctx, room.PolicyRoomID()); err != nil {
 			return nil, err
 		}
 		return &writeAccess{Room: room}, nil
@@ -202,7 +208,7 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 	// membership を要求する（非メンバーのコミュニティへ管理者名義で書き込む機能は
 	// 元から無く、閲覧・モデレーションのために広げた管理者権限を「発言」まで
 	// 広げる理由が無いため）。閲覧・編集・削除とは意図的に別の規則。
-	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, roomID)
+	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, room.PolicyRoomID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}

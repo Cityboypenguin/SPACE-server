@@ -238,7 +238,7 @@ func roomChangedSentAt(now time.Time) string {
 // 運ばれてくる。同じクエリを2度投げないためにそれをそのまま使う。
 func (p *chatEventPublisher) roomChangedRecipients(ctx context.Context, ev chatusecase.MessageSentEvent) ([]int64, error) {
 	if ev.Room.Type == model.RoomTypeCourse {
-		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.ID)
+		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.PolicyRoomID())
 	}
 	return ev.MemberIDs, nil
 }
@@ -437,7 +437,7 @@ func (p *chatEventPublisher) publishMessageReplyNotification(ctx context.Context
 		// 匿名IDは投稿時に確定済みなので、ここは採番せず読むだけ。行が引けなくても
 		// 実名を出すわけにはいかないので、番号なしの「匿名」で通知する。
 		label := anonymousPlaceholderLabel
-		identity, err := p.deps.GetAnonymousIdentity.Execute(ctx, room.ID, actorID)
+		identity, err := p.deps.GetAnonymousIdentity.Execute(ctx, room.PolicyRoomID(), actorID)
 		if err != nil {
 			logChatDelivery(err, chatDeliveryAnonymousLabel).
 				Int64("room_id", room.ID).

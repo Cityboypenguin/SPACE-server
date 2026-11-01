@@ -267,6 +267,7 @@ type MessageRoomUseCases struct {
 // 参照）。埋め込みにしてあるので呼び出し側は r.ChatCommands.SendMessage(...) の
 // ように書ける。
 type ChatUseCases struct {
+	ThreadService *chatusecase.ThreadService
 	// ChatAccess は閲覧・書き込みの権限判定。他の3つもこれを共有しているので、
 	// 「リゾルバで判定して、サービスでも判定して」が二重にならない。
 	ChatAccess   chatusecase.AccessPolicy

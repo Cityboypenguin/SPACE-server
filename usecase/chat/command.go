@@ -110,7 +110,7 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 	// メンションが成立するルームか（コミュニティのみ）の判定は ResolveMentions 側に
 	// あり、ここは検証済みの結果だけを保存に渡す。リゾルバから ResolveMentions を
 	// 直接呼ぶ経路は無くしてあるので、別経路から実名メンションを通す余地は無い。
-	mentions, err := s.deps.ResolveMentions.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MentionUserIDs)
+	mentions, err := s.deps.ResolveMentions.Execute(ctx, access.Room.PolicyRoomID(), claims.ID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	}
 
 	// 編集後の本文でメンションを解決し直す。本文から消えたメンションは保存側で消える。
-	mentions, err := s.deps.ResolveMentions.Execute(ctx, existing.RoomID, existing.UserID, in.Content, in.MentionUserIDs)
+	mentions, err := s.deps.ResolveMentions.Execute(ctx, room.PolicyRoomID(), existing.UserID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,10 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		return false, err
 	}
 
+	if msg.ThreadRoomID != nil {
+		return false, apperr.InvalidInput("スレッドの作成案内は削除できません")
+	}
+
 	room, err := s.deps.GetRoom.Execute(ctx, msg.RoomID)
 	if err != nil {
 		// 下のルーム判定にルーム種別が要るので、引けないときは安全側に倒す。
@@ -256,7 +260,7 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		if room.Type != model.RoomTypeCommunity {
 			return false, errors.New("forbidden: can only delete your own messages")
 		}
-		role, err := s.deps.GetRoomUserRole.Execute(ctx, msg.RoomID)
+		role, err := s.deps.GetRoomUserRole.Execute(ctx, room.PolicyRoomID())
 		if err != nil {
 			// 役割が引けないときは安全側（拒否）に倒す。挙動は従来どおりだが、
 			// オーナーの削除が DB 障害で「権限がない」に化けているのと、本当に
@@ -302,7 +306,7 @@ func (s *messageCommandService) ensureAnonymousIdentity(ctx context.Context, roo
 	if room == nil || room.Type != model.RoomTypeCourse {
 		return nil
 	}
-	_, err := s.deps.GetOrCreateAnonymousIdentity.Execute(ctx, room.ID, userID)
+	_, err := s.deps.GetOrCreateAnonymousIdentity.Execute(ctx, room.PolicyRoomID(), userID)
 	return err
 }
 
