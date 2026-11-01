@@ -146,32 +146,12 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		r.InvalidateAnalyticsSummary()
 	}
 
+	// 更新は済んでいるので、通報者が退会済みでも失敗にしない。
 	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
-	if err != nil || reporter == nil {
+	if err != nil {
 		return nil, fmt.Errorf("failed to fetch reporter")
 	}
-
-	targetType := gqlmodel.ReportTargetType(res.TargetType)
-	targetID := res.TargetID
-	if kind := reportTargetKind(targetType); kind != "" {
-		if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
-			targetID = encodeGraphID(kind, numericID)
-		}
-	}
-
-	return &gqlmodel.UserReport{
-		ID:              res.ID,
-		TargetType:      targetType,
-		TargetID:        targetID,
-		Reason:          res.Reason,
-		CustomReason:    res.CustomReason,
-		Status:          status,
-		Reporter:        toGraphUser(reporter),
-		Content:         res.PostContent,
-		ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
-		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
-	}, nil
+	return r.toGraphUserReport(res, reporter), nil
 }
 
 // CreateInquiry is the resolver for the createInquiry field.
@@ -301,6 +281,25 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		})
 	}
 	return &gqlmodel.ReportPage{Items: gqlReports, Total: int32(total)}, nil
+}
+
+// GetReport is the resolver for the getReport field.
+func (r *queryResolver) GetReport(ctx context.Context, id string) (*gqlmodel.UserReport, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	res, err := r.ManageReportUsecase.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch reporter")
+	}
+	return r.toGraphUserReport(res, reporter), nil
 }
 
 // SearchInquiries is the resolver for the searchInquiries field.

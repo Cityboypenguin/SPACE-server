@@ -24,6 +24,17 @@ func (u *ManageReportUsecase) Search(ctx context.Context, filter *model.ReportSe
 	return u.reportRepo.Search(ctx, filter, q)
 }
 
+// GetByID は通報を1件返す。存在しなければ nil。
+func (u *ManageReportUsecase) GetByID(ctx context.Context, id string) (*model.Report, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	if id == "" {
+		return nil, errors.New("report ID is required")
+	}
+	return u.reportRepo.FindByID(ctx, id)
+}
+
 func (u *ManageReportUsecase) UpdateStatus(ctx context.Context, id string, status model.ReportStatus) (*model.Report, error) {
 	if _, err := authz.RequireAdmin(ctx); err != nil {
 		return nil, err

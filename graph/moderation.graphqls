@@ -6,6 +6,7 @@ extend type Query {
     limit: Int = 20
     offset: Int = 0
   ): ReportPage!
+  getReport(id: ID!): UserReport
   searchInquiries(
     status: InquiryStatus
     limit: Int = 20

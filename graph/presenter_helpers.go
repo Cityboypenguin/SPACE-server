@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -188,6 +189,34 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 		return "message"
 	default:
 		return ""
+	}
+}
+
+// toGraphUserReport は通報を管理者向けの形にする。reporter が nil なら退会済みとして扱う。
+func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *gqlmodel.UserReport {
+	targetType := gqlmodel.ReportTargetType(res.TargetType)
+	targetID := res.TargetID
+	if kind := reportTargetKind(targetType); kind != "" {
+		if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
+			targetID = encodeGraphID(kind, numericID)
+		}
+	}
+	gqlReporter := toGraphDeletedUserWithID(res.ReporterID)
+	if reporter != nil {
+		gqlReporter = toGraphUser(reporter)
+	}
+	return &gqlmodel.UserReport{
+		ID:              res.ID,
+		TargetType:      targetType,
+		TargetID:        targetID,
+		Reason:          res.Reason,
+		CustomReason:    res.CustomReason,
+		Status:          gqlmodel.ReportStatus(res.Status),
+		Reporter:        gqlReporter,
+		Content:         res.PostContent,
+		ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
