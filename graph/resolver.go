@@ -325,19 +325,20 @@ type CourseUseCases struct {
 }
 
 type QuestionUseCases struct {
-	CreateQuestionUseCase   questionusecase.CreateQuestionUseCase
-	UpdateQuestionUseCase   questionusecase.UpdateQuestionUseCase
-	ListQuestionsUseCase    questionusecase.ListQuestionsUseCase
-	GetQuestionByIDUseCase  questionusecase.GetQuestionByIDUseCase
-	SelectBestAnswerUseCase questionusecase.SelectBestAnswerUseCase
-	CancelBestAnswerUseCase questionusecase.CancelBestAnswerUseCase
-	DeleteQuestionUseCase   questionusecase.DeleteQuestionUseCase
-	DeleteMyQuestionUseCase questionusecase.DeleteMyQuestionUseCase
-	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
-	UpdateAnswerUseCase     answerusecase.UpdateAnswerUseCase
-	DeleteAnswerUseCase     answerusecase.DeleteAnswerUseCase
-	LikeAnswerUseCase       answerusecase.LikeAnswerUseCase
-	UnlikeAnswerUseCase     answerusecase.UnlikeAnswerUseCase
+	CreateQuestionUseCase           questionusecase.CreateQuestionUseCase
+	UpdateQuestionUseCase           questionusecase.UpdateQuestionUseCase
+	ListQuestionsUseCase            questionusecase.ListQuestionsUseCase
+	CountUnansweredQuestionsUseCase questionusecase.CountUnansweredQuestionsUseCase
+	GetQuestionByIDUseCase          questionusecase.GetQuestionByIDUseCase
+	SelectBestAnswerUseCase         questionusecase.SelectBestAnswerUseCase
+	CancelBestAnswerUseCase         questionusecase.CancelBestAnswerUseCase
+	DeleteQuestionUseCase           questionusecase.DeleteQuestionUseCase
+	DeleteMyQuestionUseCase         questionusecase.DeleteMyQuestionUseCase
+	AnswerQuestionUseCase           answerusecase.AnswerQuestionUseCase
+	UpdateAnswerUseCase             answerusecase.UpdateAnswerUseCase
+	DeleteAnswerUseCase             answerusecase.DeleteAnswerUseCase
+	LikeAnswerUseCase               answerusecase.LikeAnswerUseCase
+	UnlikeAnswerUseCase             answerusecase.UnlikeAnswerUseCase
 }
 
 type PollUseCases struct {

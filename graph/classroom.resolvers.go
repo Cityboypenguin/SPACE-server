@@ -393,6 +393,27 @@ func (r *queryResolver) Question(ctx context.Context, id string) (*gqlmodel.Ques
 	return toGraphQuestion(q), nil
 }
 
+// UnansweredQuestionCount is the resolver for the unansweredQuestionCount field.
+func (r *queryResolver) UnansweredQuestionCount(ctx context.Context, roomID string) (int32, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return 0, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid room id")
+	}
+	if _, err := r.requireRoomReadAccess(ctx, rid); err != nil {
+		return 0, err
+	}
+
+	count, err := r.CountUnansweredQuestionsUseCase.Execute(ctx, rid)
+	if err != nil {
+		return 0, err
+	}
+	return int32(count), nil
+}
+
 // Polls is the resolver for the polls field.
 func (r *queryResolver) Polls(ctx context.Context, roomID string, limit *int32, offset *int32) (*gqlmodel.PollPage, error) {
 	if _, err := requireAuth(ctx); err != nil {

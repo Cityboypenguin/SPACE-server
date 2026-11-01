@@ -89,6 +89,21 @@ func (r *MySQLQuestionRepository) ListQuestionsByRoomID(ctx context.Context, roo
 	return list, total, rows.Err()
 }
 
+// CountUnansweredQuestionsByRoomID は is_answered ではなく best_answer_id を見る。
+// ベストアンサーの回答が消えると外部キーの ON DELETE SET NULL で best_answer_id だけが
+// 空になるので、そちらが「いま決まっているか」の正になる。
+func (r *MySQLQuestionRepository) CountUnansweredQuestionsByRoomID(ctx context.Context, roomID int64) (int, error) {
+	var count int
+	err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM questions WHERE room_id = ? AND best_answer_id IS NULL`,
+		roomID,
+	).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *MySQLQuestionRepository) SetBestAnswer(ctx context.Context, questionID, answerID, askerUserID int64) (bool, error) {
 	result, err := r.DB.ExecContext(ctx,
 		`UPDATE questions SET best_answer_id = ?, is_answered = TRUE, updated_at = ? WHERE id = ? AND asker_user_id = ?`,

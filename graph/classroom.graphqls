@@ -3,6 +3,8 @@
 extend type Query {
   questions(roomID: ID!, limit: Int = 50, offset: Int = 0): QuestionPage!
   question(id: ID!): Question
+  # ベストアンサーが決まっていない質問の数。質問箱タブのバッジに使う。
+  unansweredQuestionCount(roomID: ID!): Int!
   polls(roomID: ID!, limit: Int = 50, offset: Int = 0): PollPage!
   poll(id: ID!): Poll
 }

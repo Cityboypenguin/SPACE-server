@@ -10,6 +10,8 @@ type QuestionRepository interface {
 	SaveQuestion(ctx context.Context, q *model.Question) error
 	GetQuestionByID(ctx context.Context, id int64) (*model.Question, error)
 	ListQuestionsByRoomID(ctx context.Context, roomID int64, q PageQuery) ([]*model.Question, int, error)
+	// CountUnansweredQuestionsByRoomID はベストアンサーが決まっていない質問を数える。
+	CountUnansweredQuestionsByRoomID(ctx context.Context, roomID int64) (int, error)
 	// UpdateQuestionBody edits a question's body, scoped to askerUserID so only the
 	// asker can edit it. Returns false if no row matched.
 	UpdateQuestionBody(ctx context.Context, questionID, askerUserID int64, body string) (bool, error)

@@ -105,19 +105,20 @@ func NewQuestionUseCases(
 ) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
-		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
-		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
-		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
-		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
-		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
-		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		CreateQuestionUseCase:           questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable),
+		UpdateQuestionUseCase:           questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
+		ListQuestionsUseCase:            questionusecase.NewListQuestionsUseCase(questionRepo),
+		CountUnansweredQuestionsUseCase: questionusecase.NewCountUnansweredQuestionsUseCase(questionRepo),
+		GetQuestionByIDUseCase:          questionusecase.NewGetQuestionByIDUseCase(questionRepo),
+		SelectBestAnswerUseCase:         questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		CancelBestAnswerUseCase:         questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
+		DeleteQuestionUseCase:           questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
+		DeleteMyQuestionUseCase:         questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
+		AnswerQuestionUseCase:           answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		UpdateAnswerUseCase:             answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		DeleteAnswerUseCase:             answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		LikeAnswerUseCase:               answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		UnlikeAnswerUseCase:             answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 	}
 }
 
