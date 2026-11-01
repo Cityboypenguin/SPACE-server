@@ -343,19 +343,43 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 		return nil, 0, err
 	}
 
+	sortOrder := "DESC"
+	if param.SortOrder != nil && strings.ToUpper(*param.SortOrder) == "ASC" {
+		sortOrder = "ASC"
+	}
+
+	orderByClause := "ORDER BY c.created_at DESC, c.id DESC"
+	if param.SortBy != nil {
+		switch *param.SortBy {
+		case "registeredCount":
+			orderByClause = "ORDER BY COUNT(DISTINCT cu.user_id) " + sortOrder + ", c.id DESC"
+		case "messageCount":
+			orderByClause = "ORDER BY COUNT(DISTINCT m.id) " + sortOrder + ", c.id DESC"
+		case "createdAt":
+			orderByClause = "ORDER BY c.created_at " + sortOrder + ", c.id DESC"
+		}
+	}
+
+	query := `
+	SELECT ` + courseColumns + `,
+		COUNT(DISTINCT m.id) AS message_count
+        FROM courses c
+		LEFT JOIN timetables cu ON c.id = cu.course_id
+        LEFT JOIN messages m ON c.room_id = m.room_id
+        ` + whereClause + `
+        GROUP BY c.id
+        ` + orderByClause + `
+        LIMIT ? OFFSET ?
+    `
+
 	queryArgs := append(append([]any{}, args...), param.Page.Limit, param.Page.Offset)
-	rows, err := r.DB.QueryContext(ctx,
-		`SELECT `+courseColumns+` FROM courses c `+whereClause+`
-		 ORDER BY c.year DESC, c.semester DESC, c.day_of_week, c.period, c.course_name, c.id
-		 LIMIT ? OFFSET ?`,
-		queryArgs...,
-	)
+	rows, err := r.DB.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 
-	items, err := scanCourses(rows)
+	items, err := scanCoursesWithMessageCount(rows)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -382,6 +406,18 @@ func scanCourses(rows *sql.Rows) ([]*model.Course, error) {
 	for rows.Next() {
 		var r courseRow
 		if err := rows.Scan(r.dest()...); err != nil {
+			return nil, err
+		}
+		list = append(list, r.course())
+	}
+	return list, rows.Err()
+}
+
+func scanCoursesWithMessageCount(rows *sql.Rows) ([]*model.Course, error) {
+	var list []*model.Course
+	for rows.Next() {
+		var r courseRow
+		if err := rows.Scan(append(r.dest(), &r.c.MessageCount)...); err != nil {
 			return nil, err
 		}
 		list = append(list, r.course())

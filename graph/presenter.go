@@ -136,6 +136,7 @@ func toGraphCourse(c *model.Course) *gqlmodel.Course {
 		Year:           int32(c.Year),
 		Semester:       c.Semester,
 		CreatedAt:      c.CreatedAt.Format(timeFormat),
+		MessageCount:   int32(c.MessageCount),
 		Discontinued:   c.IsDiscontinued(),
 		DiscontinuedAt: formatTimePtr(c.DiscontinuedAt),
 	}

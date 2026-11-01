@@ -15,6 +15,8 @@ type ListCoursesParam struct {
 	Semester  *string
 	DayOfWeek *string
 	Keyword   string
+	SortBy    *string
+	SortOrder *string
 	// Page は窓と「total を数えるか」。他の一覧と同じ repository.PageQuery に
 	// 揃えてある（以前は Limit/Offset の2フィールドだった）。
 	Page repository.PageQuery
@@ -43,6 +45,8 @@ func (uc *ListCoursesInteractor) Execute(ctx context.Context, param ListCoursesP
 		Semester:  param.Semester,
 		DayOfWeek: param.DayOfWeek,
 		Keyword:   param.Keyword,
+		SortBy:    param.SortBy,
+		SortOrder: param.SortOrder,
 		Page:      param.Page,
 	})
 }

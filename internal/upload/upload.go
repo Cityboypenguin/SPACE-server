@@ -289,7 +289,8 @@ func acceptedKeyFor(stagingKey string) (string, error) {
 // repository.StorageRepository がそのまま満たす。
 type ObjectStore interface {
 	StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error)
-	CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error
+	CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error
+	ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error)
 	DeleteObject(ctx context.Context, objectKey string) error
 }
 
@@ -344,7 +345,18 @@ type ObjectStore interface {
 //
 // 測る（StatObject）と写す（CopyObject）の間にもう一度置かれると、検査したものと
 // 別のものが公開される。写すときに「測ったときの ETag と同じなら」という条件を
-// 付けて塞いである（一致しなければ何も書かれず ErrObjectChanged が返る）。
+// 付けて塞いである。一致しなければ何も書かれない。
+//
+// ただし「何のエラーが返るか」は置き場によって違う。Azure は条件の不一致を
+// CannotVerifyCopySource で返してくるため（実機で確認）、ErrObjectChanged では
+// なく ErrObjectNotFound に分類される。Azure はこのコードを「元が本当に無い」
+// ときにも、署名や権限の一時的な不調のときにも使うので、コードだけでは
+// 区別できない。
+//
+// どちらに分類されても写しは行われないので、検査していないものが公開される
+// ことはない。変わるのは利用者へ返る文言だけ（errNotUploaded か、一般の
+// 保存失敗か）。ここを「Azure でも ErrObjectChanged が返る」前提で書き直すと、
+// サーバー側の不調を利用者の操作ミスとして表示することになる。
 func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind, owner string) (string, error) {
 	if err := CheckKey(objectKey, want, owner); err != nil {
 		return "", fmt.Errorf("invalid object key")
@@ -374,7 +386,7 @@ func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind,
 		return "", fmt.Errorf("invalid object key")
 	}
 
-	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag); err != nil {
+	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag, info.ContentType); err != nil {
 		if errors.Is(err, repository.ErrObjectChanged) {
 			// 測ってから写すまでの間に置き直された。検査していないものは公開しない。
 			return "", errNotUploaded
@@ -455,6 +467,27 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	if _, ok := kind.Ext(info.ContentType); !ok {
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sの形式が受け付けられません: %s", kind.Label, info.ContentType)
+	}
+
+	// ここまでで見たのは「利用者がそう名乗った」という記録だけ。署名付き PUT では
+	// Content-Type も利用者が決めるので、中身が HTML のファイルを image/png と
+	// 名乗って置ける。実物の先頭を読んで、名乗りと一致していることを確かめる。
+	head, headETag, err := store.ObjectHead(ctx, objectKey, sniffLimit)
+	if err != nil {
+		// 置き場の不調と「形式が違う」を言い分けない理由は無いので、素直に失敗を返す。
+		// 通すと検査が素通しになる。消さないのは、こちらの不調で利用者の
+		// アップロードを捨てないため。
+		return repository.ObjectInfo{}, fmt.Errorf("failed to verify the uploaded file")
+	}
+	// 大きさを測った要求と先頭を読んだ要求は別の往復なので、その間に置き直されて
+	// いれば「測ったもの」と「中身を確かめたもの」が別になる。写しは info.ETag を
+	// 条件に行うので、確かめたのが別物なら受け付けてはいけない。
+	if headETag != info.ETag {
+		return repository.ObjectInfo{}, errNotUploaded
+	}
+	if !contentTypeMatchesBytes(info.ContentType, head) {
+		_ = store.DeleteObject(ctx, objectKey)
+		return repository.ObjectInfo{}, fmt.Errorf("%sの中身が %s ではありません", kind.Label, info.ContentType)
 	}
 	return info, nil
 }

@@ -215,6 +215,7 @@ type PostUseCases struct {
 	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
 	CreatePostUseCase                        post.CreatePostUseCase
 	ListPostsUseCase                         post.ListPostsUseCase
+	AdminListPostsUseCase                    post.AdminListPostsUseCase
 	DeletePostUseCase                        post.DeletePostUseCase
 	UpdatePostUseCase                        post.UpdatePostUseCase
 	SearchPostsUseCase                       post.SearchPostsUseCase
@@ -289,6 +290,7 @@ type CommunityUseCases struct {
 	SearchCommunityUseCase        communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase      communityusecase.ListMyCommunitiesUseCase
 	ListAllCommunitiesUseCase     communityusecase.ListAllCommunitiesUseCase
+	AdminListCommunitiesUseCase   communityusecase.AdminListCommunitiesUseCase
 	GetRandomCommunitiesUseCase   communityusecase.GetRandomCommunitiesUseCase
 }
 

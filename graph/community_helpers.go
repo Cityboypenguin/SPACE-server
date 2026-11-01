@@ -90,3 +90,35 @@ func communityRoomIDs(communities []*model.Community) []int64 {
 	}
 	return ids
 }
+
+// toGraphAdminCommunities は管理画面向けに、人数とオーナーを一覧ぶんまとめて引いて写す。
+// 選択判定は呼び出し側で行う（一覧と単体とで選択パスの深さが違うため。
+// loadCommunityMembership と同じ形）。
+func (r *Resolver) toGraphAdminCommunities(ctx context.Context, communities []*model.Community, wantCount, wantOwner bool) ([]*gqlmodel.AdminCommunity, error) {
+	roomIDs := communityRoomIDs(communities)
+	membership, err := r.loadCommunityMembership(ctx, roomIDs, nil, wantCount, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var owners map[int64]*model.User
+	if wantOwner {
+		owners, err = r.AdminListCommunitiesUseCase.ListOwners(ctx, roomIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	items := make([]*gqlmodel.AdminCommunity, 0, len(communities))
+	for _, c := range communities {
+		if c == nil {
+			continue
+		}
+		item := &gqlmodel.AdminCommunity{Community: r.toGraphCommunityWith(c, membership)}
+		if owner := owners[c.RoomID]; owner != nil {
+			item.Owner = toGraphUser(owner)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}

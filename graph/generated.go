@@ -47,6 +47,16 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	AdminCommunity struct {
+		Community func(childComplexity int) int
+		Owner     func(childComplexity int) int
+	}
+
+	AdminCommunityPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	Administrator struct {
 		CreatedAt func(childComplexity int) int
 		Email     func(childComplexity int) int
@@ -209,6 +219,7 @@ type ComplexityRoot struct {
 		Discontinued    func(childComplexity int) int
 		DiscontinuedAt  func(childComplexity int) int
 		ID              func(childComplexity int) int
+		MessageCount    func(childComplexity int) int
 		Period          func(childComplexity int) int
 		RegisteredCount func(childComplexity int) int
 		RoomID          func(childComplexity int) int
@@ -593,6 +604,7 @@ type ComplexityRoot struct {
 	}
 
 	PresignedUploadUrl struct {
+		Headers   func(childComplexity int) int
 		ObjectKey func(childComplexity int) int
 		UploadURL func(childComplexity int) int
 	}
@@ -614,15 +626,18 @@ type ComplexityRoot struct {
 		AdminCourseSyncRuns             func(childComplexity int, year *int32, limit *int32, offset *int32) int
 		AdminGetAnalytics               func(childComplexity int) int
 		AdminGetBlockers                func(childComplexity int, userID string, limit *int32, offset *int32) int
+		AdminGetCommunity               func(childComplexity int, id string) int
 		AdminGetCommunityAnalytics      func(childComplexity int, limit *int32, offset *int32) int
 		AdminGetCourse                  func(childComplexity int, id string) int
 		AdminGetFavoriteUsers           func(childComplexity int, userID string, limit *int32, offset *int32) int
 		AdminGetTimeSeries              func(childComplexity int, granularity model.TimeSeriesGranularity, from string, to string) int
 		AdminListAnnouncements          func(childComplexity int, limit *int32, offset *int32) int
+		AdminListCommunities            func(childComplexity int, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListConsents               func(childComplexity int, termsID string, limit *int32, offset *int32) int
 		AdminListCourseYears            func(childComplexity int) int
-		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) int
+		AdminListCourses                func(childComplexity int, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) int
 		AdminListMediaMissingDimensions func(childComplexity int, limit *int32, offset *int32) int
+		AdminListPosts                  func(childComplexity int, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) int
 		AdminListTerms                  func(childComplexity int, limit *int32, offset *int32) int
 		AdminSearchUsers                func(childComplexity int, keyword string, limit *int32, offset *int32) int
 		Administrators                  func(childComplexity int, limit *int32, offset *int32) int
@@ -813,6 +828,11 @@ type ComplexityRoot struct {
 		Course    func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
+	}
+
+	UploadHeader struct {
+		Name  func(childComplexity int) int
+		Value func(childComplexity int) int
 	}
 
 	User struct {
@@ -1048,7 +1068,10 @@ type QueryResolver interface {
 	AdminCourseSyncReviews(ctx context.Context, year *int32, status *model.CourseSyncReviewStatus, limit *int32, offset *int32) (*model.CourseSyncReviewPage, error)
 	AdminListCourseYears(ctx context.Context) ([]int32, error)
 	AdminGetCourse(ctx context.Context, id string) (*model.Course, error)
-	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
+	AdminListCommunities(ctx context.Context, keyword *string, sortBy *model.AdminCommunitySortField, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.AdminCommunityPage, error)
+	AdminGetCommunity(ctx context.Context, id string) (*model.AdminCommunity, error)
+	AdminListPosts(ctx context.Context, keyword *string, status *model.AdminPostStatus, limit *int32, offset *int32) (*model.PostPage, error)
+	AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *model.SortOrder, limit *int32, offset *int32) (*model.CoursePage, error)
 	Announcements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
 	Announcement(ctx context.Context, id string) (*model.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, limit *int32, offset *int32) (*model.AnnouncementPage, error)
@@ -1172,6 +1195,32 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "AdminCommunity.community":
+		if e.ComplexityRoot.AdminCommunity.Community == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCommunity.Community(childComplexity), true
+	case "AdminCommunity.owner":
+		if e.ComplexityRoot.AdminCommunity.Owner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCommunity.Owner(childComplexity), true
+
+	case "AdminCommunityPage.items":
+		if e.ComplexityRoot.AdminCommunityPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCommunityPage.Items(childComplexity), true
+	case "AdminCommunityPage.total":
+		if e.ComplexityRoot.AdminCommunityPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminCommunityPage.Total(childComplexity), true
 
 	case "Administrator.createdAt":
 		if e.ComplexityRoot.Administrator.CreatedAt == nil {
@@ -1884,6 +1933,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Course.ID(childComplexity), true
+	case "Course.messageCount":
+		if e.ComplexityRoot.Course.MessageCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Course.MessageCount(childComplexity), true
 	case "Course.period":
 		if e.ComplexityRoot.Course.Period == nil {
 			break
@@ -4117,6 +4172,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PostPage.Total(childComplexity), true
 
+	case "PresignedUploadUrl.headers":
+		if e.ComplexityRoot.PresignedUploadUrl.Headers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PresignedUploadUrl.Headers(childComplexity), true
 	case "PresignedUploadUrl.objectKey":
 		if e.ComplexityRoot.PresignedUploadUrl.ObjectKey == nil {
 			break
@@ -4234,6 +4295,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminGetBlockers(childComplexity, args["userID"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminGetCommunity":
+		if e.ComplexityRoot.Query.AdminGetCommunity == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminGetCommunity_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminGetCommunity(childComplexity, args["id"].(string)), true
 	case "Query.adminGetCommunityAnalytics":
 		if e.ComplexityRoot.Query.AdminGetCommunityAnalytics == nil {
 			break
@@ -4289,6 +4361,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminListAnnouncements(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminListCommunities":
+		if e.ComplexityRoot.Query.AdminListCommunities == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListCommunities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListCommunities(childComplexity, args["keyword"].(*string), args["sortBy"].(*model.AdminCommunitySortField), args["sortOrder"].(*model.SortOrder), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListConsents":
 		if e.ComplexityRoot.Query.AdminListConsents == nil {
 			break
@@ -4316,7 +4399,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.AdminListCourses(childComplexity, args["year"].(*int32), args["semester"].(*string), args["dayOfWeek"].(*string), args["keyword"].(*string), args["limit"].(*int32), args["offset"].(*int32)), true
+		return e.ComplexityRoot.Query.AdminListCourses(childComplexity, args["year"].(*int32), args["semester"].(*string), args["dayOfWeek"].(*string), args["keyword"].(*string), args["sortBy"].(*string), args["sortOrder"].(*model.SortOrder), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListMediaMissingDimensions":
 		if e.ComplexityRoot.Query.AdminListMediaMissingDimensions == nil {
 			break
@@ -4328,6 +4411,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminListMediaMissingDimensions(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.adminListPosts":
+		if e.ComplexityRoot.Query.AdminListPosts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminListPosts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminListPosts(childComplexity, args["keyword"].(*string), args["status"].(*model.AdminPostStatus), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.adminListTerms":
 		if e.ComplexityRoot.Query.AdminListTerms == nil {
 			break
@@ -5607,6 +5701,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TimetableEntry.ID(childComplexity), true
 
+	case "UploadHeader.name":
+		if e.ComplexityRoot.UploadHeader.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Name(childComplexity), true
+	case "UploadHeader.value":
+		if e.ComplexityRoot.UploadHeader.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UploadHeader.Value(childComplexity), true
+
 	case "User.accountID":
 		if e.ComplexityRoot.User.AccountID == nil {
 			break
@@ -5989,6 +6096,26 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
 
+func (ec *executionContext) childFields_AdminCommunity(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "community":
+		return ec.fieldContext_AdminCommunity_community(ctx, field)
+	case "owner":
+		return ec.fieldContext_AdminCommunity_owner(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminCommunity", field.Name)
+}
+
+func (ec *executionContext) childFields_AdminCommunityPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_AdminCommunityPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_AdminCommunityPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminCommunityPage", field.Name)
+}
+
 func (ec *executionContext) childFields_Administrator(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "ID":
@@ -6325,6 +6452,8 @@ func (ec *executionContext) childFields_Course(ctx context.Context, field graphq
 		return ec.fieldContext_Course_discontinued(ctx, field)
 	case "discontinuedAt":
 		return ec.fieldContext_Course_discontinuedAt(ctx, field)
+	case "messageCount":
+		return ec.fieldContext_Course_messageCount(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Course", field.Name)
 }
@@ -6877,6 +7006,8 @@ func (ec *executionContext) childFields_PresignedUploadUrl(ctx context.Context, 
 		return ec.fieldContext_PresignedUploadUrl_uploadUrl(ctx, field)
 	case "objectKey":
 		return ec.fieldContext_PresignedUploadUrl_objectKey(ctx, field)
+	case "headers":
+		return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PresignedUploadUrl", field.Name)
 }
@@ -7089,6 +7220,16 @@ func (ec *executionContext) childFields_TimetableEntry(ctx context.Context, fiel
 		return ec.fieldContext_TimetableEntry_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TimetableEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_UploadHeader(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_UploadHeader_name(ctx, field)
+	case "value":
+		return ec.fieldContext_UploadHeader_value(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type UploadHeader", field.Name)
 }
 
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9403,6 +9544,20 @@ func (ec *executionContext) field_Query_adminGetCommunityAnalytics_args(ctx cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminGetCommunity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_adminGetCourse_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9499,6 +9654,52 @@ func (ec *executionContext) field_Query_adminListAnnouncements_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_adminListCommunities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy",
+		func(ctx context.Context, v any) (*model.AdminCommunitySortField, error) {
+			return ec.unmarshalOAdminCommunitySortField2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunitySortField(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortBy"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "sortOrder",
+		func(ctx context.Context, v any) (*model.SortOrder, error) {
+			return ec.unmarshalOSortOrder2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐSortOrder(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortOrder"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg4
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_adminListConsents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9564,22 +9765,38 @@ func (ec *executionContext) field_Query_adminListCourses_args(ctx context.Contex
 		return nil, err
 	}
 	args["keyword"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortBy"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "sortOrder",
+		func(ctx context.Context, v any) (*model.SortOrder, error) {
+			return ec.unmarshalOSortOrder2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐSortOrder(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sortOrder"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
 		func(ctx context.Context, v any) (*int32, error) {
 			return ec.unmarshalOInt2ᚖint32(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+	args["limit"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
 		func(ctx context.Context, v any) (*int32, error) {
 			return ec.unmarshalOInt2ᚖint32(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["offset"] = arg5
+	args["offset"] = arg7
 	return args, nil
 }
 
@@ -9602,6 +9819,44 @@ func (ec *executionContext) field_Query_adminListMediaMissingDimensions_args(ctx
 		return nil, err
 	}
 	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_adminListPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*model.AdminPostStatus, error) {
+			return ec.unmarshalOAdminPostStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminPostStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg3
 	return args, nil
 }
 
@@ -11222,6 +11477,125 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _AdminCommunity_community(ctx context.Context, field graphql.CollectedField, obj *model.AdminCommunity) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCommunity_community(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Community, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Community) graphql.Marshaler {
+			return ec.marshalNCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunity(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCommunity_community(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminCommunity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Community(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdminCommunity_owner(ctx context.Context, field graphql.CollectedField, obj *model.AdminCommunity) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCommunity_owner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Owner, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
+			return ec.marshalOUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCommunity_owner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminCommunity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdminCommunityPage_items(ctx context.Context, field graphql.CollectedField, obj *model.AdminCommunityPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCommunityPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.AdminCommunity) graphql.Marshaler {
+			return ec.marshalNAdminCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunityᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCommunityPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminCommunityPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminCommunity(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AdminCommunityPage_total(ctx context.Context, field graphql.CollectedField, obj *model.AdminCommunityPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminCommunityPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminCommunityPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminCommunityPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
 
 func (ec *executionContext) _Administrator_ID(ctx context.Context, field graphql.CollectedField, obj *model.Administrator) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -14126,6 +14500,29 @@ func (ec *executionContext) _Course_discontinuedAt(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_Course_discontinuedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Course_messageCount(ctx context.Context, field graphql.CollectedField, obj *model.Course) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Course_messageCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MessageCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Course_messageCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Course", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _CourseImportStatus_state(ctx context.Context, field graphql.CollectedField, obj *model.CourseImportStatus) (ret graphql.Marshaler) {
@@ -22982,6 +23379,38 @@ func (ec *executionContext) fieldContext_PresignedUploadUrl_objectKey(_ context.
 	return graphql.NewScalarFieldContext("PresignedUploadUrl", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PresignedUploadUrl_headers(ctx context.Context, field graphql.CollectedField, obj *model.PresignedUploadURL) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PresignedUploadUrl_headers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Headers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+			return ec.marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PresignedUploadUrl_headers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PresignedUploadUrl",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UploadHeader(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Profile_user(ctx context.Context, field graphql.CollectedField, obj *model.Profile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23811,6 +24240,138 @@ func (ec *executionContext) fieldContext_Query_adminGetCourse(ctx context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_adminListCommunities(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminListCommunities(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListCommunities(ctx, fc.Args["keyword"].(*string), fc.Args["sortBy"].(*model.AdminCommunitySortField), fc.Args["sortOrder"].(*model.SortOrder), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AdminCommunityPage) graphql.Marshaler {
+			return ec.marshalNAdminCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunityPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminListCommunities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminCommunityPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListCommunities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminGetCommunity(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminGetCommunity(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminGetCommunity(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AdminCommunity) graphql.Marshaler {
+			return ec.marshalOAdminCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunity(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminGetCommunity(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminCommunity(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminGetCommunity_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminListPosts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminListPosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminListPosts(ctx, fc.Args["keyword"].(*string), fc.Args["status"].(*model.AdminPostStatus), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PostPage) graphql.Marshaler {
+			return ec.marshalNPostPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPostPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminListPosts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminListPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_adminListCourses(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23821,7 +24382,7 @@ func (ec *executionContext) _Query_adminListCourses(ctx context.Context, field g
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().AdminListCourses(ctx, fc.Args["year"].(*int32), fc.Args["semester"].(*string), fc.Args["dayOfWeek"].(*string), fc.Args["keyword"].(*string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+			return ec.Resolvers.Query().AdminListCourses(ctx, fc.Args["year"].(*int32), fc.Args["semester"].(*string), fc.Args["dayOfWeek"].(*string), fc.Args["keyword"].(*string), fc.Args["sortBy"].(*string), fc.Args["sortOrder"].(*model.SortOrder), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.CoursePage) graphql.Marshaler {
@@ -29032,6 +29593,52 @@ func (ec *executionContext) fieldContext_TimetableEntry_createdAt(_ context.Cont
 	return graphql.NewScalarFieldContext("TimetableEntry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _UploadHeader_name(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _UploadHeader_value(ctx context.Context, field graphql.CollectedField, obj *model.UploadHeader) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UploadHeader_value(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_UploadHeader_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UploadHeader", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _User_ID(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32176,6 +32783,92 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 
 // region    **************************** object.gotpl ****************************
 
+var adminCommunityImplementors = []string{"AdminCommunity"}
+
+func (ec *executionContext) _AdminCommunity(ctx context.Context, sel ast.SelectionSet, obj *model.AdminCommunity) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminCommunityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminCommunity")
+		case "community":
+			out.Values[i] = ec._AdminCommunity_community(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "owner":
+			out.Values[i] = ec._AdminCommunity_owner(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var adminCommunityPageImplementors = []string{"AdminCommunityPage"}
+
+func (ec *executionContext) _AdminCommunityPage(ctx context.Context, sel ast.SelectionSet, obj *model.AdminCommunityPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminCommunityPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminCommunityPage")
+		case "items":
+			out.Values[i] = ec._AdminCommunityPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._AdminCommunityPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var administratorImplementors = []string{"Administrator"}
 
 func (ec *executionContext) _Administrator(ctx context.Context, sel ast.SelectionSet, obj *model.Administrator) graphql.Marshaler {
@@ -33390,6 +34083,11 @@ func (ec *executionContext) _Course(ctx context.Context, sel ast.SelectionSet, o
 		case "discontinuedAt":
 			out.Values[i] = ec._Course_discontinuedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "messageCount":
+			out.Values[i] = ec._Course_messageCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -36921,6 +37619,11 @@ func (ec *executionContext) _PresignedUploadUrl(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "headers":
+			out.Values[i] = ec._PresignedUploadUrl_headers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -37388,6 +38091,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_adminGetCourse(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListCommunities":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListCommunities(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminGetCommunity":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminGetCommunity(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminListPosts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminListPosts(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -40064,6 +40833,49 @@ func (ec *executionContext) _TimetableEntry(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var uploadHeaderImplementors = []string{"UploadHeader"}
+
+func (ec *executionContext) _UploadHeader(ctx context.Context, sel ast.SelectionSet, obj *model.UploadHeader) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, uploadHeaderImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UploadHeader")
+		case "name":
+			out.Values[i] = ec._UploadHeader_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._UploadHeader_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *model.User) graphql.Marshaler {
@@ -40903,6 +41715,42 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 func (ec *executionContext) unmarshalNAddUserToRoomInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAddUserToRoomInput(ctx context.Context, v any) (model.AddUserToRoomInput, error) {
 	res, err := ec.unmarshalInputAddUserToRoomInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAdminCommunity2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunityᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AdminCommunity) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAdminCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunity(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAdminCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunity(ctx context.Context, sel ast.SelectionSet, v *model.AdminCommunity) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminCommunity(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAdminCommunityPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunityPage(ctx context.Context, sel ast.SelectionSet, v *model.AdminCommunityPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminCommunityPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNAdminCreateCourseInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCreateCourseInput(ctx context.Context, v any) (model.AdminCreateCourseInput, error) {
@@ -42455,6 +43303,32 @@ func (ec *executionContext) unmarshalNUpdateUserInput2githubᚗcomᚋCityboypeng
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNUploadHeader2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeaderᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UploadHeader) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUploadHeader2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUploadHeader(ctx context.Context, sel ast.SelectionSet, v *model.UploadHeader) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UploadHeader(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNUser2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUserᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.User) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -42711,6 +43585,45 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalOAdminCommunity2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunity(ctx context.Context, sel ast.SelectionSet, v *model.AdminCommunity) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AdminCommunity(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAdminCommunitySortField2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunitySortField(ctx context.Context, v any) (*model.AdminCommunitySortField, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.AdminCommunitySortField)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAdminCommunitySortField2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminCommunitySortField(ctx context.Context, sel ast.SelectionSet, v *model.AdminCommunitySortField) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOAdminPostStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminPostStatus(ctx context.Context, v any) (*model.AdminPostStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.AdminPostStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAdminPostStatus2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdminPostStatus(ctx context.Context, sel ast.SelectionSet, v *model.AdminPostStatus) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOAdministrator2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐAdministrator(ctx context.Context, sel ast.SelectionSet, v *model.Administrator) graphql.Marshaler {
@@ -43015,6 +43928,22 @@ func (ec *executionContext) marshalORoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPAC
 		return graphql.Null
 	}
 	return ec._Room(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOSortOrder2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐSortOrder(ctx context.Context, v any) (*model.SortOrder, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.SortOrder)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOSortOrder2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐSortOrder(ctx context.Context, sel ast.SelectionSet, v *model.SortOrder) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {

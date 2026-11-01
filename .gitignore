@@ -73,3 +73,12 @@ logs/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
+# Migration artifacts contain personal data or tokens. Never commit.
+*.sql
+!db/migrations/*.sql
+*.sql.gz
+*.rdb
+course-purge*.json
+revocations*.json
+__pycache__/
