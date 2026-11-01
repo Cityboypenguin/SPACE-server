@@ -169,6 +169,8 @@ models:
         resolver: true
   Message:
     fields:
+      thread:
+        resolver: true
       mentions:
         resolver: true
       userID:

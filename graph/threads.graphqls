@@ -1,0 +1,22 @@
+extend type Query {
+ hasUnreadChatThreads(parentRoomID: ID!): Boolean!
+ chatThread(roomID: ID!): ChatThread
+ chatThreads(parentRoomID: ID!, limit: Int = 20, offset: Int = 0): [ChatThread!]!
+}
+extend type Mutation {
+ createChatThread(parentRoomID: ID!, title: String!): ChatThread!
+ updateChatThread(roomID: ID!, title: String, closed: Boolean): ChatThread!
+}
+type ChatThread {
+ roomID: ID!
+ parentRoomID: ID!
+ title: String!
+ isClosed: Boolean!
+ canManage: Boolean!
+ canWrite: Boolean!
+ createdAt: String!
+ updatedAt: String!
+ messageCount: Int!
+ unreadCount: Int!
+ lastMessageAt: String
+}

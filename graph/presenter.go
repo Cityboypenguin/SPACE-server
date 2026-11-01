@@ -393,6 +393,9 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		CreatedAt: msg.CreatedAt.Format(timeFormat),
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
+	if msg.ThreadRoomID != nil {
+		gql.Thread = &gqlmodel.ChatThread{RoomID: encodeGraphID("room", *msg.ThreadRoomID)}
+	}
 	if msg.ReplyToID != nil {
 		id := encodeGraphID("message", *msg.ReplyToID)
 		gql.ReplyToID = &id

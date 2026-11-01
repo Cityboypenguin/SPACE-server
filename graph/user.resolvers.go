@@ -503,7 +503,7 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string, pr
 
 	// これは閲覧判定ではなく「メンション候補を引けるのはメンバーだけ」という別規則。
 	// EnsureReadAccess は非メンバーの管理者にも閲覧を許すので、そこには寄せない。
-	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, rid)
+	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, room.PolicyRoomID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -511,7 +511,7 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string, pr
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	users, err := r.SearchRoomUsersUseCase.Execute(ctx, rid, prefix, resolveLimit(limit, 8, 50))
+	users, err := r.SearchRoomUsersUseCase.Execute(ctx, room.PolicyRoomID(), prefix, resolveLimit(limit, 8, 50))
 	if err != nil {
 		return nil, fmt.Errorf("failed to search room members")
 	}

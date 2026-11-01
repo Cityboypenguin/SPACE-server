@@ -14,9 +14,11 @@ import (
 // room / course の知識が要る判定は、メッセージ単体では決められないので
 // usecase 側（CheckRoomWritableUseCase など）に置く。
 type Message struct {
-	ID     int64
-	RoomID int64
-	UserID int64
+	// ThreadRoomID marks a system announcement. Only thread creation may set it.
+	ThreadRoomID *int64
+	ID           int64
+	RoomID       int64
+	UserID       int64
 	// AuthorRole は投稿時点での投稿者の立場（STUDENT / TEACHER）。
 	// 質問・回答・投票と同じく、あとから利用者の属性が変わっても
 	// 「そのとき誰として書いたか」が変わらないよう行に焼き付ける。
@@ -56,7 +58,7 @@ func (m *Message) CanBeEditedBy(userID int64, isAdmin bool) bool {
 	if m.IsDeleted() {
 		return false
 	}
-	return m.UserID == userID || isAdmin
+	return m.ThreadRoomID == nil && (m.UserID == userID || isAdmin)
 }
 
 // CanBeDeletedBy は userID がこのメッセージを削除してよいかを返す。

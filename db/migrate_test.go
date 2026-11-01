@@ -217,6 +217,12 @@ func TestAccountSplitMigration(t *testing.T) {
 		}
 		delete(fks, "user_accounts.user_id")
 
+		// Thread authors are retained identities, while their personal accounts can be erased.
+		if got := fks["chat_threads.created_by"]; got != (fkRule{"users", "SET NULL"}) {
+			t.Errorf("chat_threads.created_by -> %+v, want users SET NULL", got)
+		}
+		delete(fks, "chat_threads.created_by")
+
 		// 残りは全部、個人情報と一緒に消える持ち物。
 		var stray []string
 		for col, got := range fks {

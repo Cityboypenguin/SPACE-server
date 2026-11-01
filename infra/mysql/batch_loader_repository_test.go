@@ -62,12 +62,18 @@ func batchTestDB(t *testing.T) (*sql.DB, func()) {
 	ddl := []string{
 		`CREATE TABLE rooms (
 			id BIGINT NOT NULL AUTO_INCREMENT,
+            parent_room_id BIGINT NULL,
 			name VARCHAR(255) NOT NULL,
 			type VARCHAR(50) NOT NULL,
 			created_at BIGINT NOT NULL,
 			updated_at BIGINT NOT NULL,
 			PRIMARY KEY (id)
 		)`,
+		`CREATE TABLE chat_threads (
+            room_id BIGINT NOT NULL PRIMARY KEY,
+            created_by BIGINT NULL,
+            closed_at BIGINT NULL
+        )`,
 		`CREATE TABLE questions (
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			room_id BIGINT NOT NULL,

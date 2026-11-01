@@ -559,7 +559,7 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	// メンバー一覧は表示用なので、退会手続き中の人は載らず、削除済みの人は行ごと無い。
 	// どちらでも相手が1人に決まらないので、それを「相手が退会している」とみなす。
 	// 送信側が相手を GetUserByID（同じく表示用）で確かめるのと同じ結果になる。
-	gqlRoom.IsMessagingDisabled = false
+	gqlRoom.IsMessagingDisabled = room.ThreadClosedAt != nil
 	gqlRoom.IsPartnerWithdrawn = false
 	if (wantMessagingDisabled || wantPartnerWithdrawn) && room.Type == model.RoomTypeDM {
 		partnerID, ok := dmPartnerID(users, claims.ID)

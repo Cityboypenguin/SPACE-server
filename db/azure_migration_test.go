@@ -13,7 +13,8 @@ func TestAzureMigration73To108(t *testing.T) {
 	}
 	seedBeforeSplit(t, database)
 	start := time.Now()
-	if err := migrator.Up(); err != nil {
+	// Keep this historical cutover rehearsal fixed at its named target.
+	if err := migrator.Migrate(108); err != nil {
 		t.Fatal(err)
 	}
 	elapsed := time.Since(start)

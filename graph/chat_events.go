@@ -232,7 +232,7 @@ func roomChangedSentAt(now time.Time) string {
 // 運ばれてくる。同じクエリを2度投げないためにそれをそのまま使う。
 func (p *chatEventPublisher) roomChangedRecipients(ctx context.Context, ev chatusecase.MessageSentEvent) ([]int64, error) {
 	if ev.Room.Type == model.RoomTypeCourse {
-		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.ID)
+		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.PolicyRoomID())
 	}
 	return ev.MemberIDs, nil
 }
