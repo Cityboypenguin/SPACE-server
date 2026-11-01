@@ -7,6 +7,7 @@ extend type Query {
     offset: Int = 0
   ): ReportPage!
   getReport(id: ID!): UserReport
+  reportNotificationRecipients: [ReportNotificationRecipient!]!
   searchInquiries(
     status: InquiryStatus
     limit: Int = 20
@@ -21,6 +22,8 @@ extend type Mutation {
   unfreezeUser(id: ID!): Boolean!
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
+  addReportNotificationRecipient(email: String!): ReportNotificationRecipient!
+  removeReportNotificationRecipient(id: ID!): Boolean!
   createInquiry(input: CreateInquiryInput!): Inquiry!
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   setReportServiceStatus(enabled: Boolean!): Boolean!
@@ -110,6 +113,13 @@ type ReportedMessage {
   media: [Media!]!
   createdAt: String!
   updatedAt: String!
+}
+
+# 通報を受け付けたときにお知らせメールを送る宛先。
+type ReportNotificationRecipient {
+  ID: ID!
+  email: String!
+  createdAt: String!
 }
 
 input ReportSearchFilter {

@@ -36,8 +36,14 @@ func (f *fakeSettingRepo) GetBool(_ context.Context, _ string) (bool, error) {
 	return f.enabled, f.err
 }
 
+type fakeNotifier struct{ notified []*model.Report }
+
+func (f *fakeNotifier) Notify(_ context.Context, report *model.Report) {
+	f.notified = append(f.notified, report)
+}
+
 func newUsecase(reportRepo *fakeReportRepo, enabled bool) *CreateReportUsecase {
-	return NewCreateReportUsecase(reportRepo, &fakeSettingRepo{enabled: enabled})
+	return NewCreateReportUsecase(reportRepo, &fakeSettingRepo{enabled: enabled}, &fakeNotifier{})
 }
 
 func TestCreateReport_RejectedWhenDisabled(t *testing.T) {
@@ -151,5 +157,30 @@ func TestManageReport_GetByIDRequiresAdmin(t *testing.T) {
 	got, err := uc.GetByID(adminCtx, "r1")
 	if err != nil || got != want {
 		t.Fatalf("GetByID = %v, %v", got, err)
+	}
+}
+
+func TestCreateReport_NotifiesOnlyAfterSaving(t *testing.T) {
+	notifier := &fakeNotifier{}
+	input := CreateReportInput{ReporterID: 1, TargetType: model.TargetPost, TargetID: "42", Reason: "SPAM"}
+
+	repo := &fakeReportRepo{}
+	if _, err := NewCreateReportUsecase(repo, &fakeSettingRepo{enabled: true}, notifier).Execute(context.Background(), input); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(notifier.notified) != 1 || notifier.notified[0] != repo.saved {
+		t.Fatalf("notified = %v, want the saved report", notifier.notified)
+	}
+
+	notifier = &fakeNotifier{}
+	failing := &fakeReportRepo{saveErr: errors.New("db down")}
+	if _, err := NewCreateReportUsecase(failing, &fakeSettingRepo{enabled: true}, notifier).Execute(context.Background(), input); err == nil {
+		t.Fatal("expected the save error")
+	}
+	if _, err := NewCreateReportUsecase(&fakeReportRepo{}, &fakeSettingRepo{enabled: false}, notifier).Execute(context.Background(), input); err == nil {
+		t.Fatal("expected the disabled error")
+	}
+	if len(notifier.notified) != 0 {
+		t.Fatal("must not notify about a report that was not saved")
 	}
 }

@@ -628,6 +628,12 @@ type RemoveUserFromRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type ReportNotificationRecipient struct {
+	ID        string `json:"ID"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type ReportPage struct {
 	Items []*UserReport `json:"items"`
 	Total int32         `json:"total"`

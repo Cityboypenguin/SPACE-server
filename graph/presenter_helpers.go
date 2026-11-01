@@ -134,6 +134,14 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 	}
 }
 
+func toGraphReportNotificationRecipient(recipient *model.ReportNotificationRecipient) *gqlmodel.ReportNotificationRecipient {
+	return &gqlmodel.ReportNotificationRecipient{
+		ID:        encodeGraphID("report_notification_recipient", recipient.ID),
+		Email:     recipient.Email,
+		CreatedAt: recipient.CreatedAt.Format(time.RFC3339),
+	}
+}
+
 // toGraphUserReport は通報を管理者向けの形にする。reporter が nil なら退会済みとして扱う。
 func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *gqlmodel.UserReport {
 	targetType := gqlmodel.ReportTargetType(res.TargetType)

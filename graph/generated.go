@@ -421,6 +421,7 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		AddReportNotificationRecipient    func(childComplexity int, email string) int
 		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
 		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
 		AdminDeleteCourse                 func(childComplexity int, id string) int
@@ -489,6 +490,7 @@ type ComplexityRoot struct {
 		RefreshAdministratorToken         func(childComplexity int, refreshToken string) int
 		RefreshUserToken                  func(childComplexity int, refreshToken string) int
 		RegisterTimetableEntry            func(childComplexity int, courseID string) int
+		RemoveReportNotificationRecipient func(childComplexity int, id string) int
 		RemoveTimetableEntry              func(childComplexity int, id string) int
 		RemoveUserFromRoom                func(childComplexity int, input model.RemoveUserFromRoomInput) int
 		ReportMediaDimensions             func(childComplexity int, mediaID string, width int32, height int32) int
@@ -716,6 +718,7 @@ type ComplexityRoot struct {
 		Question                        func(childComplexity int, id string) int
 		Questions                       func(childComplexity int, roomID string, limit *int32, offset *int32) int
 		RandomCommunities               func(childComplexity int, limit int32) int
+		ReportNotificationRecipients    func(childComplexity int) int
 		Room                            func(childComplexity int, id string) int
 		SearchAdministrators            func(childComplexity int, name string) int
 		SearchBlockedUsers              func(childComplexity int, keyword string, limit *int32, offset *int32) int
@@ -755,6 +758,12 @@ type ComplexityRoot struct {
 	QuestionPage struct {
 		Items func(childComplexity int) int
 		Total func(childComplexity int) int
+	}
+
+	ReportNotificationRecipient struct {
+		CreatedAt func(childComplexity int) int
+		Email     func(childComplexity int) int
+		ID        func(childComplexity int) int
 	}
 
 	ReportPage struct {
@@ -1020,6 +1029,8 @@ type MutationResolver interface {
 	UnfreezeUser(ctx context.Context, id string) (bool, error)
 	CreateReport(ctx context.Context, input model.CreateReportInput) (*model.UserReport, error)
 	UpdateReportStatus(ctx context.Context, id string, status model.ReportStatus) (*model.UserReport, error)
+	AddReportNotificationRecipient(ctx context.Context, email string) (*model.ReportNotificationRecipient, error)
+	RemoveReportNotificationRecipient(ctx context.Context, id string) (bool, error)
 	CreateInquiry(ctx context.Context, input model.CreateInquiryInput) (*model.Inquiry, error)
 	UpdateInquiryStatus(ctx context.Context, id string, status model.InquiryStatus) (*model.Inquiry, error)
 	SetReportServiceStatus(ctx context.Context, enabled bool) (bool, error)
@@ -1142,6 +1153,7 @@ type QueryResolver interface {
 	AdminListMediaMissingDimensions(ctx context.Context, limit *int32, offset *int32) ([]*model.Media, error)
 	SearchReports(ctx context.Context, filter *model.ReportSearchFilter, limit *int32, offset *int32) (*model.ReportPage, error)
 	GetReport(ctx context.Context, id string) (*model.UserReport, error)
+	ReportNotificationRecipients(ctx context.Context) ([]*model.ReportNotificationRecipient, error)
 	SearchInquiries(ctx context.Context, status *model.InquiryStatus, limit *int32, offset *int32) (*model.InquiryPage, error)
 	GetInquiry(ctx context.Context, id string) (*model.Inquiry, error)
 	IsReportServiceEnabled(ctx context.Context) (bool, error)
@@ -2796,6 +2808,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MessagePage.Items(childComplexity), true
 
+	case "Mutation.addReportNotificationRecipient":
+		if e.ComplexityRoot.Mutation.AddReportNotificationRecipient == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addReportNotificationRecipient_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddReportNotificationRecipient(childComplexity, args["email"].(string)), true
 	case "Mutation.addUserToRoom":
 		if e.ComplexityRoot.Mutation.AddUserToRoom == nil {
 			break
@@ -3519,6 +3542,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RegisterTimetableEntry(childComplexity, args["courseID"].(string)), true
+	case "Mutation.removeReportNotificationRecipient":
+		if e.ComplexityRoot.Mutation.RemoveReportNotificationRecipient == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeReportNotificationRecipient_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RemoveReportNotificationRecipient(childComplexity, args["id"].(string)), true
 	case "Mutation.removeTimetableEntry":
 		if e.ComplexityRoot.Mutation.RemoveTimetableEntry == nil {
 			break
@@ -5161,6 +5195,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.RandomCommunities(childComplexity, args["limit"].(int32)), true
+	case "Query.reportNotificationRecipients":
+		if e.ComplexityRoot.Query.ReportNotificationRecipients == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ReportNotificationRecipients(childComplexity), true
 	case "Query.room":
 		if e.ComplexityRoot.Query.Room == nil {
 			break
@@ -5451,6 +5491,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.QuestionPage.Total(childComplexity), true
+
+	case "ReportNotificationRecipient.createdAt":
+		if e.ComplexityRoot.ReportNotificationRecipient.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportNotificationRecipient.CreatedAt(childComplexity), true
+	case "ReportNotificationRecipient.email":
+		if e.ComplexityRoot.ReportNotificationRecipient.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportNotificationRecipient.Email(childComplexity), true
+	case "ReportNotificationRecipient.ID":
+		if e.ComplexityRoot.ReportNotificationRecipient.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportNotificationRecipient.ID(childComplexity), true
 
 	case "ReportPage.items":
 		if e.ComplexityRoot.ReportPage.Items == nil {
@@ -7344,6 +7403,18 @@ func (ec *executionContext) childFields_QuestionPage(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type QuestionPage", field.Name)
 }
 
+func (ec *executionContext) childFields_ReportNotificationRecipient(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_ReportNotificationRecipient_ID(ctx, field)
+	case "email":
+		return ec.fieldContext_ReportNotificationRecipient_email(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ReportNotificationRecipient_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportNotificationRecipient", field.Name)
+}
+
 func (ec *executionContext) childFields_ReportPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "items":
@@ -7765,6 +7836,20 @@ func (ec *executionContext) childFields___Type(ctx context.Context, field graphq
 // endregion ************************** internal!.gotpl ***************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_addReportNotificationRecipient_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_addUserToRoom_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
@@ -8869,6 +8954,20 @@ func (ec *executionContext) field_Mutation_registerTimetableEntry_args(ctx conte
 		return nil, err
 	}
 	args["courseID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_removeReportNotificationRecipient_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -20745,6 +20844,94 @@ func (ec *executionContext) fieldContext_Mutation_updateReportStatus(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_addReportNotificationRecipient(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addReportNotificationRecipient(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddReportNotificationRecipient(ctx, fc.Args["email"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ReportNotificationRecipient) graphql.Marshaler {
+			return ec.marshalNReportNotificationRecipient2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportNotificationRecipient(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addReportNotificationRecipient(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportNotificationRecipient(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addReportNotificationRecipient_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeReportNotificationRecipient(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_removeReportNotificationRecipient(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RemoveReportNotificationRecipient(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_removeReportNotificationRecipient(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeReportNotificationRecipient_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createInquiry(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26510,6 +26697,38 @@ func (ec *executionContext) fieldContext_Query_getReport(ctx context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_reportNotificationRecipients(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_reportNotificationRecipients(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ReportNotificationRecipients(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.ReportNotificationRecipient) graphql.Marshaler {
+			return ec.marshalNReportNotificationRecipient2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportNotificationRecipientᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_reportNotificationRecipients(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportNotificationRecipient(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_searchInquiries(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28845,6 +29064,75 @@ func (ec *executionContext) _QuestionPage_total(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_QuestionPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("QuestionPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportNotificationRecipient_ID(ctx context.Context, field graphql.CollectedField, obj *model.ReportNotificationRecipient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportNotificationRecipient_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportNotificationRecipient_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportNotificationRecipient", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportNotificationRecipient_email(ctx context.Context, field graphql.CollectedField, obj *model.ReportNotificationRecipient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportNotificationRecipient_email(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportNotificationRecipient_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportNotificationRecipient", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportNotificationRecipient_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ReportNotificationRecipient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportNotificationRecipient_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportNotificationRecipient_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportNotificationRecipient", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ReportPage_items(ctx context.Context, field graphql.CollectedField, obj *model.ReportPage) (ret graphql.Marshaler) {
@@ -37464,6 +37752,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "addReportNotificationRecipient":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addReportNotificationRecipient(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "removeReportNotificationRecipient":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeReportNotificationRecipient(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createInquiry":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createInquiry(ctx, field)
@@ -40225,6 +40527,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "reportNotificationRecipients":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_reportNotificationRecipients(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "searchInquiries":
 			field := field
 
@@ -41604,6 +41928,54 @@ func (ec *executionContext) _QuestionPage(ctx context.Context, sel ast.Selection
 			}
 		case "total":
 			out.Values[i] = ec._QuestionPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reportNotificationRecipientImplementors = []string{"ReportNotificationRecipient"}
+
+func (ec *executionContext) _ReportNotificationRecipient(ctx context.Context, sel ast.SelectionSet, obj *model.ReportNotificationRecipient) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportNotificationRecipientImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportNotificationRecipient")
+		case "ID":
+			out.Values[i] = ec._ReportNotificationRecipient_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._ReportNotificationRecipient_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ReportNotificationRecipient_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -44519,6 +44891,32 @@ func (ec *executionContext) unmarshalNRecordSessionDataInput2githubᚗcomᚋCity
 func (ec *executionContext) unmarshalNRemoveUserFromRoomInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRemoveUserFromRoomInput(ctx context.Context, v any) (model.RemoveUserFromRoomInput, error) {
 	res, err := ec.unmarshalInputRemoveUserFromRoomInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNReportNotificationRecipient2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportNotificationRecipientᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ReportNotificationRecipient) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNReportNotificationRecipient2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportNotificationRecipient(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNReportNotificationRecipient2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportNotificationRecipient(ctx context.Context, sel ast.SelectionSet, v *model.ReportNotificationRecipient) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReportNotificationRecipient(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNReportPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportPage(ctx context.Context, sel ast.SelectionSet, v *model.ReportPage) graphql.Marshaler {
