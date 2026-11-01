@@ -31,10 +31,10 @@ func NewMySQLReportRepository(db *sql.DB) (repository.ReportRepository, error) {
 // reportColumns は user_reports を読むときの共通の列並び。scanReport と対になっている。
 const reportColumns = "id, reporter_id, target_type, target_id, reason, custom_reason, content, message_snapshot, status, created_at, updated_at"
 
-// encodeReportedMessage は通報時点のメッセージを保存用に暗号化する。
+// encodeReportedContent は通報時点のメッセージを保存用に暗号化する。
 // messages.content は暗号化して保存しているので、DM の本文が通報をきっかけに
 // 平文で残らないようにする。
-func (r *MySQLReportRepository) encodeReportedMessage(m *model.ReportedMessage) (sql.NullString, error) {
+func (r *MySQLReportRepository) encodeReportedContent(m *model.ReportedContent) (sql.NullString, error) {
 	if m == nil {
 		return sql.NullString{}, nil
 	}
@@ -49,7 +49,7 @@ func (r *MySQLReportRepository) encodeReportedMessage(m *model.ReportedMessage) 
 	return sql.NullString{String: encrypted, Valid: true}, nil
 }
 
-func (r *MySQLReportRepository) decodeReportedMessage(value sql.NullString) (*model.ReportedMessage, error) {
+func (r *MySQLReportRepository) decodeReportedContent(value sql.NullString) (*model.ReportedContent, error) {
 	if !value.Valid {
 		return nil, nil
 	}
@@ -57,7 +57,7 @@ func (r *MySQLReportRepository) decodeReportedMessage(value sql.NullString) (*mo
 	if err != nil {
 		return nil, fmt.Errorf("decrypt reported message: %w", err)
 	}
-	var m model.ReportedMessage
+	var m model.ReportedContent
 	if err := json.Unmarshal([]byte(body), &m); err != nil {
 		return nil, fmt.Errorf("unmarshal reported message: %w", err)
 	}
@@ -65,7 +65,7 @@ func (r *MySQLReportRepository) decodeReportedMessage(value sql.NullString) (*mo
 }
 
 func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) error {
-	snapshot, err := r.encodeReportedMessage(report.ReportedMessage)
+	snapshot, err := r.encodeReportedContent(report.ReportedContent)
 	if err != nil {
 		return err
 	}
@@ -114,11 +114,11 @@ func (r *MySQLReportRepository) scanReport(s interface {
 	if content.Valid {
 		report.PostContent = &content.String
 	}
-	reportedMessage, err := r.decodeReportedMessage(snapshot)
+	reportedContent, err := r.decodeReportedContent(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	report.ReportedMessage = reportedMessage
+	report.ReportedContent = reportedContent
 	return &report, nil
 }
 

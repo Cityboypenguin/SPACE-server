@@ -117,7 +117,7 @@ type Resolver struct {
 	PollUseCases
 
 	CreateReportUsecase                reportusecase.CreateReportUsecase
-	CreateMessageReportUsecase         *reportusecase.CreateMessageReportUsecase
+	CreateContentReportUsecase         *reportusecase.CreateContentReportUsecase
 	ManageReportUsecase                reportusecase.ManageReportUsecase
 	ManageNotificationRecipientUsecase *reportusecase.ManageNotificationRecipientUsecase
 

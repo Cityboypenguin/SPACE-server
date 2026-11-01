@@ -81,6 +81,9 @@ enum ReportTargetType {
   USER
   COMMUNITY
   MESSAGE
+  QUESTION
+  ANSWER
+  POLL
 }
 
 type UserReport {
@@ -94,14 +97,13 @@ type UserReport {
   createdAt: String!
   updatedAt: String!
   content: String
-  # 通報を受けた時点のメッセージ。targetType が MESSAGE のときだけ入る。
+  # 通報を受けた時点の内容。targetType が MESSAGE・QUESTION・ANSWER・POLL のときだけ入る。
   # 管理者向けの応答だけに載せ、createReport の応答（通報者）には載せない。
-  reportedMessage: ReportedMessage
+  reportedContent: ReportedContent
 }
 
-# 通報を受けた時点のメッセージ。あとから編集・削除されても変わらない。
-type ReportedMessage {
-  messageID: ID!
+# 通報を受けた時点の内容。あとから編集・削除されても変わらない。
+type ReportedContent {
   roomID: ID!
   roomType: String!
   roomName: String!
@@ -109,8 +111,13 @@ type ReportedMessage {
   authorID: ID
   authorName: String!
   authorAccountID: String
+  # メッセージ・質問・回答の本文、または投票の設問。
   content: String!
   media: [Media!]!
+  # 回答が答えている質問の本文。回答の通報だけで入る。
+  parentBody: String
+  # 投票の選択肢。投票の通報だけで入り、投票した人は含まない。
+  pollOptions: [String!]!
   createdAt: String!
   updatedAt: String!
 }

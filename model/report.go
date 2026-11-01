@@ -18,6 +18,9 @@ const (
 	TargetUser      ReportTargetType = "USER"      // ユーザー
 	TargetCommunity ReportTargetType = "COMMUNITY" // コミュニティ
 	TargetMessage   ReportTargetType = "MESSAGE"   // メッセージ（DM・コミュニティ・授業内チャット）
+	TargetQuestion  ReportTargetType = "QUESTION"  // 授業の質問
+	TargetAnswer    ReportTargetType = "ANSWER"    // 授業の質問への回答
+	TargetPoll      ReportTargetType = "POLL"      // 授業の投票
 )
 
 type Report struct {
@@ -33,34 +36,40 @@ type Report struct {
 	UpdatedAt    time.Time
 	PostID       *int64  `json:"postId"`
 	PostContent  *string `json:"postContent"`
-	// ReportedMessage は通報を受けた時点のメッセージ。TargetMessage のときだけ入る。
-	ReportedMessage *ReportedMessage
+	// ReportedContent は通報を受けた時点の内容。メッセージ・質問・回答・投票のときだけ入る。
+	ReportedContent *ReportedContent
 }
 
-// ReportedMessage は通報を受けた時点のメッセージの写し。
+// ReportedContent は通報を受けた時点の内容の写し。
 //
-// 通報後にメッセージが編集・削除されても、利用者が改名・退会しても、対応する側は
-// 通報された時点の内容を確認できる必要があるので、messages を参照せずに値を持つ。
+// 通報後に編集・削除されても、利用者が改名・退会しても、対応する側は通報された時点の
+// 内容を確認できる必要があるので、元の行を参照せずに値を持つ。
 // DB には JSON を暗号化して保存する（列を増やすと項目の追加のたびに移行が要るため）。
 // 項目名を変えると保存済みの通報が読めなくなるので、変えるときは旧名も読めるようにする。
-type ReportedMessage struct {
-	MessageID int64  `json:"messageId"`
+// メッセージだけが対象だった時期の通報があるため、ContentID の JSON 名は messageId のまま。
+type ReportedContent struct {
+	ContentID int64  `json:"messageId"`
 	RoomID    int64  `json:"roomId"`
 	RoomType  string `json:"roomType"`
 	RoomName  string `json:"roomName"`
 	// AuthorID は投稿者の利用者ID。退会済みの投稿者は AuthorID のみで名前は空。
 	// 授業内チャットが匿名表示だった時期の通報は nil で、表示名は匿名ラベルになっている。
-	AuthorID        *int64                 `json:"authorId"`
-	AuthorName      string                 `json:"authorName"`
-	AuthorAccountID string                 `json:"authorAccountId"`
-	Content         string                 `json:"content"`
-	Media           []ReportedMessageMedia `json:"media"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	UpdatedAt       time.Time              `json:"updatedAt"`
+	AuthorID        *int64 `json:"authorId"`
+	AuthorName      string `json:"authorName"`
+	AuthorAccountID string `json:"authorAccountId"`
+	// Content はメッセージ・質問・回答の本文、または投票の設問。
+	Content string                 `json:"content"`
+	Media   []ReportedContentMedia `json:"media"`
+	// ParentBody は回答が答えている質問の本文。回答だけでは読み取れない文脈を残す。
+	ParentBody *string `json:"parentBody,omitempty"`
+	// PollOptions は投票の選択肢。誰がどれに投票したかは持たない。
+	PollOptions []string  `json:"pollOptions,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// ReportedMessageMedia は通報を受けた時点の添付。
-type ReportedMessageMedia struct {
+// ReportedContentMedia は通報を受けた時点の添付。
+type ReportedContentMedia struct {
 	ID          int64     `json:"id"`
 	StorageKey  string    `json:"storageKey"`
 	ContentType string    `json:"contentType"`

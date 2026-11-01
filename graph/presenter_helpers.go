@@ -129,6 +129,12 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 		return "community"
 	case gqlmodel.ReportTargetTypeMessage:
 		return "message"
+	case gqlmodel.ReportTargetTypeQuestion:
+		return "question"
+	case gqlmodel.ReportTargetTypeAnswer:
+		return "answer"
+	case gqlmodel.ReportTargetTypePoll:
+		return "poll"
 	default:
 		return ""
 	}
@@ -164,15 +170,15 @@ func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *g
 		Status:          gqlmodel.ReportStatus(res.Status),
 		Reporter:        gqlReporter,
 		Content:         res.PostContent,
-		ReportedMessage: r.toGraphReportedMessage(res.ReportedMessage),
+		ReportedContent: r.toGraphReportedContent(res.ReportedContent),
 		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
-// toGraphReportedMessage は通報時点のメッセージを管理者向けの形にする。
+// toGraphReportedContent は通報時点の内容を管理者向けの形にする。
 // 添付の URL だけは表示の時点で組む（署名付き URL は期限が切れるので保存できない）。
-func (r *Resolver) toGraphReportedMessage(m *model.ReportedMessage) *gqlmodel.ReportedMessage {
+func (r *Resolver) toGraphReportedContent(m *model.ReportedContent) *gqlmodel.ReportedContent {
 	if m == nil {
 		return nil
 	}
@@ -187,16 +193,17 @@ func (r *Resolver) toGraphReportedMessage(m *model.ReportedMessage) *gqlmodel.Re
 			CreatedAt:   item.CreatedAt,
 		}, r.messageMediaURL(item.StorageKey)))
 	}
-	out := &gqlmodel.ReportedMessage{
-		MessageID:  encodeGraphID("message", m.MessageID),
-		RoomID:     encodeGraphID("room", m.RoomID),
-		RoomType:   m.RoomType,
-		RoomName:   m.RoomName,
-		AuthorName: m.AuthorName,
-		Content:    m.Content,
-		Media:      media,
-		CreatedAt:  m.CreatedAt.Format(timeFormat),
-		UpdatedAt:  m.UpdatedAt.Format(timeFormat),
+	out := &gqlmodel.ReportedContent{
+		RoomID:      encodeGraphID("room", m.RoomID),
+		RoomType:    m.RoomType,
+		RoomName:    m.RoomName,
+		AuthorName:  m.AuthorName,
+		Content:     m.Content,
+		Media:       media,
+		ParentBody:  m.ParentBody,
+		PollOptions: append([]string{}, m.PollOptions...),
+		CreatedAt:   m.CreatedAt.Format(timeFormat),
+		UpdatedAt:   m.UpdatedAt.Format(timeFormat),
 	}
 	if m.AuthorID != nil {
 		authorID := encodeGraphID("user", *m.AuthorID)
