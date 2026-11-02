@@ -56,6 +56,7 @@ import (
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
+	"github.com/Cityboypenguin/SPACE-server/usecase/loginguard"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
@@ -256,7 +257,8 @@ func main() {
 	getUserAccountsByIDsUseCase := userusecase.NewGetUserAccountsByIDsUseCase(userRepository)
 	searchUserAccountsUseCase := userusecase.NewSearchUserAccountsUseCase(userRepository)
 	suggestUsersUseCase := userusecase.NewSuggestUsersUseCase(userRepository)
-	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
+	loginGuard := loginguard.New(infraredis.NewRedisLoginAttemptRepository(redisClient))
+	loginUserUseCase := userusecase.NewGuardedLoginUserUseCase(userusecase.NewLoginUserUseCase(userRepository), loginGuard)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
@@ -280,7 +282,7 @@ func main() {
 	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository, txManager)
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
-	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+	loginAdministratorUseCase := administrator.NewGuardedLoginAdministratorUseCase(administrator.NewLoginAdministratorUseCase(administratorRepository), loginGuard)
 
 	// createPostUseCase / updatePostUseCase は通知発行のため notificationPublisher に依存する。
 	// publisher 構築後（下方）に生成する。

@@ -16,6 +16,12 @@ func NewMySQLSessionRepository(db *sql.DB) *MySQLSessionRepository {
 	return &MySQLSessionRepository{DB: db}
 }
 
+// sessionGapSeconds より間が空いたら別の利用として数える。Google Analytics の既定と同じ30分。
+//
+// クライアントはタブを隠すたびに送るので、送信の回数をそのまま数えると、タブを切り替えただけで
+// セッションが増えてしまう。
+const sessionGapSeconds = 30 * 60
+
 func (r *MySQLSessionRepository) RecordSession(ctx context.Context, userID int64, durationSeconds int, pageViews []repository.PageViewInput) error {
 	now := time.Now()
 	date := now.Format("2006-01-02")
@@ -31,10 +37,10 @@ func (r *MySQLSessionRepository) RecordSession(ctx context.Context, userID int64
 		INSERT INTO user_session_summaries (user_id, date, session_count, total_duration_seconds, created_at, updated_at)
 		VALUES (?, ?, 1, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			session_count = session_count + 1,
+			session_count = session_count + IF(updated_at <= ? - ?, 1, 0),
 			total_duration_seconds = total_duration_seconds + VALUES(total_duration_seconds),
 			updated_at = VALUES(updated_at)`,
-		userID, date, durationSeconds, nowUnix, nowUnix)
+		userID, date, durationSeconds, nowUnix, nowUnix, nowUnix, sessionGapSeconds)
 	if err != nil {
 		return err
 	}
