@@ -157,6 +157,9 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	if err := s.deps.Access.ensureMutateAccess(ctx, claims, room); err != nil {
 		return nil, err
 	}
+	if room.Type == model.RoomTypeCourse {
+		return nil, apperr.InvalidInput("授業内チャットのメッセージは編集できません")
+	}
 	if !existing.CanBeEditedBy(claims.ID, isAdmin) {
 		audit.LogDenied(ctx, "update_message", "message", in.MessageID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")

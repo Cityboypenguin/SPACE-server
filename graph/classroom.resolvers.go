@@ -11,6 +11,7 @@ import (
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 )
@@ -94,26 +95,11 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 
 // UpdateQuestion is the resolver for the updateQuestion field.
 func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Question, error) {
-	qid, err := decodeGraphID(ctx, "question", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid question id")
-	}
-
-	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
-	for _, strID := range deletedMediaIDs {
-		mediaID, err := decodeGraphID(ctx, "media", strID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid media id")
-		}
-		mediaIDs = append(mediaIDs, mediaID)
-	}
-
-	q, err := r.UpdateQuestionUseCase.Execute(ctx, qid, body, mediaIDs)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+	return nil, apperr.InvalidInput("質問は編集できません")
 
-	return toGraphQuestion(q), nil
 }
 
 // DeleteQuestion is the resolver for the deleteQuestion field.
@@ -148,27 +134,11 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 
 // UpdateAnswer is the resolver for the updateAnswer field.
 func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Answer, error) {
-	aid, err := decodeGraphID(ctx, "answer", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid answer id")
-	}
-
-	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
-	for _, strID := range deletedMediaIDs {
-		mediaID, err := decodeGraphID(ctx, "media", strID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid media id")
-		}
-		mediaIDs = append(mediaIDs, mediaID)
-	}
-
-	aw, err := r.UpdateAnswerUseCase.Execute(ctx, aid, body, mediaIDs)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
+	return nil, apperr.InvalidInput("回答は編集できません")
 
-	gqlA := toGraphAnswerWithLikes(aw)
-	return gqlA, nil
 }
 
 // DeleteAnswer is the resolver for the deleteAnswer field.

@@ -772,6 +772,22 @@ func TestUpdateMessage_ArchivedCourseRoomRejectsEdit(t *testing.T) {
 	}
 }
 
+func TestUpdateMessage_CourseRoomRejectsEdit(t *testing.T) {
+	h := newHarness()
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: courseRoomID, UserID: 10}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: courseRoomID, MessageID: 5, Content: "x"})
+	if err == nil {
+		t.Fatal("expected course chat message edits to be rejected")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Errorf("error code = %s, want %s", apperr.CodeOf(err), apperr.CodeInvalidInput)
+	}
+	if h.updateMessage.called {
+		t.Error("the message must not be updated in a course room")
+	}
+}
+
 // --- 本文も添付も無いメッセージを作らせない ---------------------------------
 
 func TestUpdateMessage_RejectsEmptyingAMessageWithoutMedia(t *testing.T) {
