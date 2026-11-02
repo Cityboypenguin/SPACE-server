@@ -2,6 +2,8 @@ package graph
 
 import (
 	"context"
+	"fmt"
+
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 )
 
@@ -14,6 +16,7 @@ func (r *mutationResolver) CreateChatThread(ctx context.Context, parentRoomID st
 	if err != nil {
 		return nil, err
 	}
+	r.publishChatThreadChanged(thread.Room)
 	return r.toGraphThread(ctx, thread)
 }
 func (r *mutationResolver) UpdateChatThread(ctx context.Context, roomID string, title *string, closed *bool) (*gqlmodel.ChatThread, error) {
@@ -25,6 +28,7 @@ func (r *mutationResolver) UpdateChatThread(ctx context.Context, roomID string, 
 	if err != nil {
 		return nil, err
 	}
+	r.publishChatThreadChanged(thread.Room)
 	return r.toGraphThread(ctx, thread)
 }
 func (r *queryResolver) ChatThread(ctx context.Context, roomID string) (*gqlmodel.ChatThread, error) {
@@ -71,4 +75,27 @@ func (r *queryResolver) HasUnreadChatThreads(ctx context.Context, parentRoomID s
 		return false, err
 	}
 	return r.ThreadService.HasUnread(ctx, id)
+}
+
+func (r *subscriptionResolver) ChatThreadChanged(ctx context.Context, parentRoomID string) (<-chan string, error) {
+	claims, err := requireAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := decodeGraphID(ctx, "room", parentRoomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	// スレッドは親ルームの権限に従うので、親ルームを読めれば購読できる。
+	if _, err := r.requireRoomReadAccess(ctx, pid); err != nil {
+		return nil, err
+	}
+	return subscribeTopicGuarded(
+		ctx,
+		r.PubSub,
+		chatThreadChangedTopic(pid),
+		subscriptionScope{UserID: claims.ID, RoomID: parentRoomID},
+		r.roomReadGuard(pid),
+		func(ev *ChatThreadChanged) (string, bool) { return ev.ThreadID, true },
+	), nil
 }

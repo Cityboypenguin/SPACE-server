@@ -7,6 +7,12 @@ extend type Mutation {
  createChatThread(parentRoomID: ID!, title: String!): ChatThread!
  updateChatThread(roomID: ID!, title: String, closed: Boolean): ChatThread!
 }
+extend type Subscription {
+ # 親ルームのスレッドが作られた・変更された・新着があったときに、そのスレッドの roomID が届く。
+ # 一覧と詳細は届いたら取り直す（中身は載せない。件数や未読は見る人ごとに違うため）。
+ # 授業を履修していない閲覧者にも届くよう、SSE の room_changed とは別に持つ。
+ chatThreadChanged(parentRoomID: ID!): ID!
+}
 type ChatThread {
  roomID: ID!
  parentRoomID: ID!

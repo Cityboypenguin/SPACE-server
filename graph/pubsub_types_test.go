@@ -81,6 +81,16 @@ func TestPubSubCodec_RoundTripsEverySubscriptionPayload(t *testing.T) {
 			},
 		},
 		{
+			name:  "chat_thread_changed",
+			value: &ChatThreadChanged{ThreadID: "r2"},
+			check: func(t *testing.T, got any) {
+				ev, ok := got.(*ChatThreadChanged)
+				if !ok || ev.ThreadID != "r2" {
+					t.Fatalf("中身が変わっている: %#v", got)
+				}
+			},
+		},
+		{
 			// 取り込み状況だけは値で流している。ポインタで登録すると
 			// 受け手の型アサーションが通らず、管理画面の進捗が止まる。
 			name:  "course_import_status",

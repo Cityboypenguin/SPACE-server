@@ -343,7 +343,8 @@ func main() {
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
-	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer)
+	passwordResetMailRunner := async.NewRunner("password_reset_mail")
+	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer, passwordResetMailRunner)
 	verifyPasswordResetOTPUseCase := userusecase.NewVerifyPasswordResetOTPUseCase(passwordResetRepository)
 	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository, loginGuard)
 
@@ -515,7 +516,7 @@ func main() {
 	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
 	announcementAsyncRunner := async.NewRunner("announcement")
 	userActivityAsyncRunner := async.NewRunner("user_activity")
-	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner, reportNotificationAsyncRunner}
+	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner, reportNotificationAsyncRunner, passwordResetMailRunner}
 
 	// 認証済みリクエストの活動記録。毎リクエスト DB へ書かないよう、ユーザーごとに
 	// 間引いてから Runner へ渡す（internal/middleware/user_activity.go 参照）。
