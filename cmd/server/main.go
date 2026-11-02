@@ -64,6 +64,7 @@ import (
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
+	reportedmediausecase "github.com/Cityboypenguin/SPACE-server/usecase/reportedmedia"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
@@ -462,11 +463,12 @@ func main() {
 		Rooms:     roomRepository,
 		RoomUsers: roomUserRepository,
 		// 唯一のオーナーが退会したとき、オーナーを引き継いだ人へ知らせる。
-		Communities: communityRepository,
-		Notifier:    notificationPublisher,
-		Media:       mediaRepository,
-		Objects:     uploadAcceptor,
-		TxManager:   txManager,
+		Communities:   communityRepository,
+		Notifier:      notificationPublisher,
+		Media:         mediaRepository,
+		ReportedMedia: reportedmediausecase.New(reportRepository, storageRepository, messageStorageRepository),
+		Objects:       uploadAcceptor,
+		TxManager:     txManager,
 	}
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(accountDeletionDeps)
 	deleteMyAccountUseCase := userusecase.NewDeleteMyAccountUseCase(accountDeletionDeps)
@@ -860,15 +862,21 @@ func main() {
 		},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
-	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
+	// IP ごとの制限は安価なため、JWT検証（DB/Redis照合あり）より前に置く
+	e.Use(authmiddleware.GraphQLIPRateLimit(infraredis.NewRateLimiterStore(
+		redisClient,
+		pubsubChannelPrefix,
+		authmiddleware.GraphQLIPRateLimitRate,
+		authmiddleware.GraphQLIPRateLimitBurst,
+	)))
+	e.Use(authmiddleware.MetricsMiddleware())
+	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.GraphQLRateLimit(infraredis.NewRateLimiterStore(
 		redisClient,
 		pubsubChannelPrefix,
 		authmiddleware.GraphQLRateLimitRate,
 		authmiddleware.GraphQLRateLimitBurst,
 	)))
-	e.Use(authmiddleware.MetricsMiddleware())
-	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())

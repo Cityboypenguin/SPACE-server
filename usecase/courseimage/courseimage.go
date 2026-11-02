@@ -19,6 +19,7 @@ import (
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
+	"github.com/Cityboypenguin/SPACE-server/usecase/reportedmedia"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
@@ -145,7 +146,7 @@ func (s *Service) Delete(ctx context.Context, mediaID int64) error {
 // 実体がもう無ければ（元のファイルを消したあとのやり直しなど）写さない。
 func (s *Service) moveToRemoved(ctx context.Context, img *model.CourseChatImage, removedKey string) error {
 	key := img.Media.StorageKey
-	err := copyObject(ctx, s.storeFor(img.Source, key), key, s.d.MessageStore, removedKey, img.Media.ContentType)
+	err := reportedmedia.CopyObject(ctx, s.storeFor(img.Source, key), key, s.d.MessageStore, removedKey, img.Media.ContentType)
 	if errors.Is(err, repository.ErrObjectNotFound) {
 		logger.Log.Warn().Str("component", "course_chat_image").Int64("media_id", img.Media.ID).Msg("the image has no stored object")
 		return nil
@@ -155,20 +156,6 @@ func (s *Service) moveToRemoved(ctx context.Context, img *model.CourseChatImage,
 	}
 	targetType, targetID := reportTarget(img.Source, img.TargetID)
 	return s.d.Reports.RepointReportedMedia(ctx, targetType, targetID, key, removedKey)
-}
-
-// copyObject は置き場をまたいで写す。添付は上限が小さいのでメモリに載せて写す。
-// 元が無ければ repository.ErrObjectNotFound を返す。
-func copyObject(ctx context.Context, from repository.StorageRepository, fromKey string, to repository.StorageRepository, toKey, contentType string) error {
-	info, err := from.StatObject(ctx, fromKey)
-	if err != nil {
-		return err
-	}
-	body, _, err := from.ObjectHead(ctx, fromKey, max(info.Size, 1))
-	if err != nil {
-		return err
-	}
-	return to.PutObject(ctx, toKey, contentType, body)
 }
 
 // ListRemoved は外した画像の一覧。通報の写しが指しているかも入れる。
@@ -212,7 +199,7 @@ func (s *Service) Restore(ctx context.Context, mediaID int64) error {
 		return translateRestoreError(err)
 	}
 	store := s.storeFor(img.Source, img.OriginalKey)
-	if err := copyObject(ctx, s.d.MessageStore, img.RemovedKey, store, img.OriginalKey, img.ContentType); err != nil {
+	if err := reportedmedia.CopyObject(ctx, s.d.MessageStore, img.RemovedKey, store, img.OriginalKey, img.ContentType); err != nil {
 		if errors.Is(err, repository.ErrObjectNotFound) {
 			return apperr.NotFound("画像のファイルが見つかりません")
 		}

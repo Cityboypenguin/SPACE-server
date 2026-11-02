@@ -129,7 +129,25 @@ func (r *deleteUserRoomUsers) SetRoomUserRole(_ context.Context, roomID, userID 
 	return nil
 }
 
-type deleteUserMedia struct{ keys map[int64][]string }
+type deleteUserMedia struct {
+	keys       map[int64][]string
+	reportable []repository.ReportableMedia
+}
+
+// deleteUserReportedMedia は、通報の写しが指す添付を残す口の代役。
+type deleteUserReportedMedia struct {
+	got []repository.ReportableMedia
+	err error
+}
+
+func (r *deleteUserReportedMedia) Retain(_ context.Context, media []repository.ReportableMedia) error {
+	r.got = media
+	return r.err
+}
+
+func (m *deleteUserMedia) ListReportableMediaByUploader(context.Context, int64) ([]repository.ReportableMedia, error) {
+	return m.reportable, nil
+}
 
 func (m *deleteUserMedia) ListStorageKeysByUploader(_ context.Context, userID int64) ([]string, error) {
 	return m.keys[userID], nil
@@ -169,6 +187,7 @@ type deletionFixture struct {
 	members  *deleteUserRoomUsers
 	media    *deleteUserMedia
 	objects  *deleteUserObjects
+	reported *deleteUserReportedMedia
 	notifier *deleteUserNotifier
 	now      time.Time
 }
@@ -180,6 +199,7 @@ func newDeletionFixture() *deletionFixture {
 		members:  &deleteUserRoomUsers{},
 		media:    &deleteUserMedia{keys: map[int64][]string{}},
 		objects:  &deleteUserObjects{},
+		reported: &deleteUserReportedMedia{},
 		notifier: &deleteUserNotifier{},
 		now:      time.Date(2026, 10, 6, 4, 0, 0, 0, time.UTC),
 	}
@@ -187,16 +207,17 @@ func newDeletionFixture() *deletionFixture {
 
 func (f *deletionFixture) deps() AccountDeletionDeps {
 	return AccountDeletionDeps{
-		Users:       f.users,
-		Posts:       &deleteUserPostRepo{},
-		Rooms:       f.rooms,
-		RoomUsers:   f.members,
-		Communities: deleteUserCommunities{},
-		Notifier:    f.notifier,
-		Media:       f.media,
-		Objects:     f.objects,
-		TxManager:   inlineUserTx{},
-		Now:         func() time.Time { return f.now },
+		Users:         f.users,
+		Posts:         &deleteUserPostRepo{},
+		Rooms:         f.rooms,
+		RoomUsers:     f.members,
+		Communities:   deleteUserCommunities{},
+		Notifier:      f.notifier,
+		Media:         f.media,
+		Objects:       f.objects,
+		ReportedMedia: f.reported,
+		TxManager:     inlineUserTx{},
+		Now:           func() time.Time { return f.now },
 	}
 }
 
@@ -426,5 +447,34 @@ func TestPurgeExpiredAccountsContinuesPastFailures(t *testing.T) {
 	}
 	if n != 1 || len(f.users.purged) != 1 || f.users.purged[0] != 2 {
 		t.Fatalf("purged=%d %v, want user 2 only", n, f.users.purged)
+	}
+}
+
+func TestDeleteUserRetainsReportedMediaBeforePurging(t *testing.T) {
+	f := newDeletionFixture()
+	f.addUser(5, model.UserStatusFrozen, nil)
+	f.media.keys[5] = []string{"media/a.png"}
+	f.media.reportable = []repository.ReportableMedia{{MediaID: 1, StorageKey: "media/a.png", TargetType: model.TargetQuestion, TargetID: 9}}
+	if _, err := NewDeleteUserUseCase(f.deps()).Execute(adminCtxFor(), 5); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.reported.got) != 1 || f.reported.got[0].StorageKey != "media/a.png" {
+		t.Errorf("retained = %+v", f.reported.got)
+	}
+	if len(f.users.purged) != 1 {
+		t.Errorf("purged = %v", f.users.purged)
+	}
+}
+
+func TestDeleteUserStopsWhenReportedMediaCannotBeRetained(t *testing.T) {
+	f := newDeletionFixture()
+	f.addUser(5, model.UserStatusFrozen, nil)
+	f.media.keys[5] = []string{"media/a.png"}
+	f.reported.err = errors.New("storage down")
+	if _, err := NewDeleteUserUseCase(f.deps()).Execute(adminCtxFor(), 5); err == nil {
+		t.Fatal("want an error")
+	}
+	if len(f.users.purged) != 0 || len(f.objects.discarded) != 0 {
+		t.Errorf("purged=%v discarded=%v", f.users.purged, f.objects.discarded)
 	}
 }
