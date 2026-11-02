@@ -18,7 +18,7 @@ func ngWordTestRepo(t *testing.T) (*MySQLNGWordRepository, func()) {
 	db, cleanup := unreadTestDB(t)
 	mustExec(t, db, `CREATE TABLE users (id BIGINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))`)
 	mustExec(t, db, `CREATE TABLE user_accounts (user_id BIGINT NOT NULL, account_id VARCHAR(255) NOT NULL, name VARCHAR(255) NOT NULL, PRIMARY KEY (user_id))`)
-	for _, f := range []string{"116_create_ng_words.up.sql", "117_create_ng_word_hits.up.sql"} {
+	for _, f := range []string{"116_create_ng_words.up.sql", "117_create_ng_word_hits.up.sql", "124_bind_ng_word_hits_to_account.up.sql"} {
 		b, err := os.ReadFile("../../db/migrations/" + f)
 		if err != nil {
 			cleanup()
@@ -104,5 +104,15 @@ func TestNGWordRepository_HitStatsSurviveDeletingTheWord(t *testing.T) {
 
 	if st, _ := repo.NGWordHitStats(ctx, 1); len(st.ByUser) != 1 {
 		t.Errorf("topN must limit the list, got %d", len(st.ByUser))
+	}
+
+	// 退会して個人情報が消えると、その人の記録も一緒に消え、合計と利用者別が合う。
+	mustExec(t, repo.DB, `DELETE FROM user_accounts WHERE user_id = 11`)
+	st, err := repo.NGWordHitStats(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Total != 2 || len(st.ByUser) != 1 || st.ByUser[0].AccountID != "alice" {
+		t.Errorf("after withdrawal: total = %d, by user = %+v", st.Total, st.ByUser)
 	}
 }

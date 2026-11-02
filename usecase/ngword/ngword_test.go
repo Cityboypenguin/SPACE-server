@@ -3,6 +3,7 @@ package ngword
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,11 +17,17 @@ type fakeRepo struct {
 	hits  []*model.NGWordHit
 	lists int
 	err   error
+	// onList は読み込みの途中で起きることの代役。
+	onList func()
 }
 
 func (r *fakeRepo) ListNGWords(context.Context) ([]*model.NGWord, error) {
 	r.lists++
-	return r.words, r.err
+	words := r.words
+	if r.onList != nil {
+		r.onList()
+	}
+	return words, r.err
 }
 func (r *fakeRepo) CreateNGWord(_ context.Context, w *model.NGWord, _ int) error {
 	for _, e := range r.words {
@@ -58,7 +65,7 @@ func TestGuard_BlocksAndRecords(t *testing.T) {
 		t.Errorf("recorded hit = %+v", h)
 	}
 	// どの言葉に当たったかを、ユーザー向けの文言に出さない。
-	if got := err.Error(); got != "" && contains(got, "Respon") {
+	if got := err.Error(); strings.Contains(got, "Respon") {
 		t.Errorf("the message must not reveal the word: %q", got)
 	}
 
@@ -68,15 +75,6 @@ func TestGuard_BlocksAndRecords(t *testing.T) {
 	if len(repo.hits) != 1 {
 		t.Errorf("a clean text must not be recorded")
 	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 func TestGuard_FailsOpenWhenTheListCannotBeLoaded(t *testing.T) {
@@ -107,5 +105,38 @@ func TestGuard_CachesAndInvalidates(t *testing.T) {
 	_ = g.Screen(context.Background(), 1, nil, model.NGWordSourceMessage, "x")
 	if repo.lists != 3 {
 		t.Errorf("lists = %d, want 3 (TTL を過ぎたら引き直す)", repo.lists)
+	}
+}
+
+// 読み込みの途中で登録が変わったら、古い内容を覚えない。ロックを持ったまま読むと、
+// ここの Invalidate が止まって、テストごと固まる。
+func TestGuard_DoesNotCacheAListThatChangedWhileLoading(t *testing.T) {
+	repo := &fakeRepo{words: []*model.NGWord{{ID: 1, Pattern: "abc", MatchType: model.NGWordMatchWord}}}
+	g := NewGuard(repo)
+	repo.onList = func() {
+		repo.onList = nil
+		g.Invalidate()
+	}
+
+	_ = g.Screen(context.Background(), 1, nil, model.NGWordSourceMessage, "x")
+	_ = g.Screen(context.Background(), 1, nil, model.NGWordSourceMessage, "x")
+	if repo.lists != 2 {
+		t.Errorf("lists = %d, want 2 (読み込み中に変わった内容は覚えない)", repo.lists)
+	}
+}
+
+func TestGuard_KeepsThePreviousListWhenReloadFails(t *testing.T) {
+	repo := &fakeRepo{words: []*model.NGWord{{ID: 1, Pattern: "abc", MatchType: model.NGWordMatchWord}}}
+	g := NewGuard(repo).(*guard)
+	now := time.Unix(1700000000, 0)
+	g.now = func() time.Time { return now }
+	if err := g.Screen(context.Background(), 1, nil, model.NGWordSourceMessage, "x"); err != nil {
+		t.Fatal(err)
+	}
+
+	now = now.Add(cacheTTL + time.Second)
+	repo.err = errors.New("db down")
+	if err := g.Screen(context.Background(), 1, nil, model.NGWordSourceMessage, "abc"); err == nil {
+		t.Error("the previous list must still block the word while the reload fails")
 	}
 }

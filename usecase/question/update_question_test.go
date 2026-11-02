@@ -58,7 +58,7 @@ func newUpdateQuestionFixture(attachedIDs ...int64) (*fakeQuestionRepoForUpdate,
 	for _, id := range attachedIDs {
 		mediaRepo.attached = append(mediaRepo.attached, &model.Media{ID: id})
 	}
-	uc := NewUpdateQuestionUseCase(nil, questionRepo, mediaRepo, fakeTxManager{}, &fakeRequireWritable{})
+	uc := NewUpdateQuestionUseCase(nil, questionRepo, mediaRepo, fakeTxManager{}, &fakeRequireWritable{}, nil)
 	return questionRepo, mediaRepo, uc
 }
 
@@ -139,7 +139,7 @@ func (g *countingNGGuard) Screen(context.Context, int64, *int64, model.NGWordSou
 func TestUpdateQuestion_NGWordIsCheckedOnlyAfterAuthorization(t *testing.T) {
 	questionRepo := &fakeQuestionRepoForUpdate{question: &model.Question{ID: 1, RoomID: 5, AskerUserID: 7}}
 	guard := &countingNGGuard{blocks: true}
-	uc := NewUpdateQuestionUseCase(nil, questionRepo, &fakeMediaRepoForUpdate{}, fakeTxManager{}, &fakeRequireWritable{}, WithNGWordGuard(guard))
+	uc := NewUpdateQuestionUseCase(nil, questionRepo, &fakeMediaRepoForUpdate{}, fakeTxManager{}, &fakeRequireWritable{}, guard)
 
 	if _, err := uc.Execute(askerCtx(99), 1, "NG", nil); err == nil {
 		t.Fatal("a non-asker must be rejected")

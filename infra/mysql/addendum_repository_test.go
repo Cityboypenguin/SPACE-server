@@ -64,6 +64,10 @@ func TestAddendumRepository_CreateListAndLimit(t *testing.T) {
 	if err := repo.CreateQuestionAddendum(ctx, third, 2); !errors.Is(err, repository.ErrAddendumLimit) {
 		t.Errorf("err = %v, want ErrAddendumLimit", err)
 	}
+	gone, _ := model.NewAddendum(99, 10, "消された質問へ", now)
+	if err := repo.CreateQuestionAddendum(ctx, gone, 2); !errors.Is(err, repository.ErrAddendumTargetNotFound) {
+		t.Errorf("err = %v, want ErrAddendumTargetNotFound", err)
+	}
 	// 上限は質問ごと。別の質問には足せる。
 	other, _ := model.NewAddendum(2, 10, "別の質問", now)
 	if err := repo.CreateQuestionAddendum(ctx, other, 2); err != nil {
@@ -96,6 +100,40 @@ func TestAddendumRepository_CreateListAndLimit(t *testing.T) {
 	gotA, err := repo.ListAnswerAddenda(ctx, []int64{1, 2})
 	if err != nil || len(gotA[1]) != 1 || len(gotA[2]) != 0 {
 		t.Errorf("answer addenda = %+v (err=%v)", gotA, err)
+	}
+}
+
+func TestAddendumRepository_DeleteRemovesOnlyThatAddendum(t *testing.T) {
+	repo, cleanup := addendumTestRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Unix(1700000000, 0)
+
+	first, _ := model.NewAddendum(1, 10, "一つ目", now)
+	second, _ := model.NewAddendum(1, 10, "二つ目", now)
+	for _, a := range []*model.Addendum{first, second} {
+		if err := repo.CreateQuestionAddendum(ctx, a, 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target, found, err := repo.DeleteQuestionAddendum(ctx, first.ID)
+	if err != nil || !found || target != 1 {
+		t.Fatalf("delete = %d, %v, %v; want question 1", target, found, err)
+	}
+	if _, found, err := repo.DeleteQuestionAddendum(ctx, first.ID); err != nil || found {
+		t.Errorf("second delete: found = %v, err = %v; want not found", found, err)
+	}
+	got, err := repo.ListQuestionAddenda(ctx, []int64{1})
+	if err != nil || len(got[1]) != 1 || got[1][0].Body != "二つ目" {
+		t.Errorf("left = %+v (err=%v), want only 二つ目", got[1], err)
+	}
+
+	answerAddendum, _ := model.NewAddendum(2, 10, "回答への追記", now)
+	if err := repo.CreateAnswerAddendum(ctx, answerAddendum, 10); err != nil {
+		t.Fatal(err)
+	}
+	if target, found, err := repo.DeleteAnswerAddendum(ctx, answerAddendum.ID); err != nil || !found || target != 2 {
+		t.Errorf("answer delete = %d, %v, %v; want answer 2", target, found, err)
 	}
 }
 

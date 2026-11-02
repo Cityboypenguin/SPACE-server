@@ -45,6 +45,15 @@ func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string
 		Int64("uploader_id", uploaderID), ctx).Send()
 }
 
+// LogAddendumDeleted records an administrator deleting one addendum of a question or an answer.
+func LogAddendumDeleted(ctx context.Context, kind string, addendumID int64, targetID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "addendum_deleted").
+		Str("kind", kind).
+		Int64("addendum_id", addendumID).
+		Int64("target_id", targetID), ctx).Send()
+}
+
 func LogProbe(ctx context.Context, action string, target string, suppliedID string, reason string) {
 	WithActor(logger.Log.Warn().
 		Str("event", "audit_probe").

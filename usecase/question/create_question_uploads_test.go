@@ -62,7 +62,7 @@ func newCreateQuestionFixture(saveErr error) (*promotingUploads, CreateQuestionU
 	uc := NewCreateQuestionUseCase(nil, uploads,
 		&fakeQuestionRepoForCreate{err: saveErr},
 		fakeMediaRepoForCreate{},
-		fakeTxManager{}, &fakeRequireWritable{})
+		fakeTxManager{}, &fakeRequireWritable{}, nil)
 	return uploads, uc
 }
 

@@ -94,6 +94,87 @@ func (r *MySQLReportRepository) Save(ctx context.Context, report *model.Report) 
 	return nil
 }
 
+// reportedMediaRow は通報の対象で絞った写し1件。
+type reportedMediaRow struct {
+	id      string
+	content *model.ReportedContent
+}
+
+func (r *MySQLReportRepository) reportedContentsOf(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, suffix string, targetType model.ReportTargetType, targetID string) ([]reportedMediaRow, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT id, message_snapshot FROM user_reports
+		WHERE target_type = ? AND target_id = ? AND message_snapshot IS NOT NULL`+suffix,
+		string(targetType), targetID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query reported contents: %w", err)
+	}
+	defer rows.Close()
+	var out []reportedMediaRow
+	for rows.Next() {
+		var row reportedMediaRow
+		var snapshot sql.NullString
+		if err := rows.Scan(&row.id, &snapshot); err != nil {
+			return nil, fmt.Errorf("failed to scan reported content: %w", err)
+		}
+		if row.content, err = r.decodeReportedContent(snapshot); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (r *MySQLReportRepository) HasReportedMedia(ctx context.Context, targetType model.ReportTargetType, targetID, storageKey string) (bool, error) {
+	rows, err := r.reportedContentsOf(ctx, r.DB, "", targetType, targetID)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		for _, m := range row.content.Media {
+			if m.StorageKey == storageKey {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (r *MySQLReportRepository) RepointReportedMedia(ctx context.Context, targetType model.ReportTargetType, targetID, oldKey, newKey string) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := r.reportedContentsOf(ctx, tx, " FOR UPDATE", targetType, targetID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		changed := false
+		for i := range row.content.Media {
+			if row.content.Media[i].StorageKey == oldKey {
+				row.content.Media[i].StorageKey = newKey
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		snapshot, err := r.encodeReportedContent(row.content)
+		if err != nil {
+			return err
+		}
+		// 通報の扱いが変わったわけではないので updated_at は動かさない。
+		if _, err := tx.ExecContext(ctx, `UPDATE user_reports SET message_snapshot = ? WHERE id = ?`, snapshot, row.id); err != nil {
+			return fmt.Errorf("failed to update reported content: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (r *MySQLReportRepository) scanReport(s interface {
 	Scan(...any) error
 }) (*model.Report, error) {

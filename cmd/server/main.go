@@ -586,7 +586,19 @@ func main() {
 	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
 	// 授業内チャットの画像の一元管理。
 	courseChatImageRepository := mysql.NewMySQLCourseChatImageRepository(database)
-	courseImageService := courseimageusecase.NewService(courseChatImageRepository, storageRepository, messageStorageRepository)
+	courseImageService := courseimageusecase.NewService(courseimageusecase.Deps{
+		Images:         courseChatImageRepository,
+		Reports:        reportRepository,
+		Public:         storageRepository,
+		MessageStore:   messageStorageRepository,
+		Messages:       messageRepository,
+		Questions:      questionRepository,
+		Answers:        answerRepository,
+		GetRoom:        getRoomUseCase,
+		ChatEvents:     chatEventPublisher,
+		QuestionEvents: classroomEvents,
+		AnswerEvents:   classroomEvents,
+	})
 	// 質問・回答への追記。
 	addendumRepository, err := mysql.NewMySQLAddendumRepository(database)
 	if err != nil {

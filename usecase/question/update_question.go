@@ -32,7 +32,8 @@ func NewUpdateQuestionUseCase(events EventPublisher,
 	mediaRepo mediaReplaceRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
-	opts ...Option,
+	// ng は本文を保存の前に検査する。権限と存在の確認のあとに呼ぶので、投稿できない人の試行は数えない。nil なら検査しない。
+	ng ngword.Guard,
 ) UpdateQuestionUseCase {
 	return &UpdateQuestionInteractor{
 		events:          orNoop(events),
@@ -40,7 +41,7 @@ func NewUpdateQuestionUseCase(events EventPublisher,
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
-		ng:              buildOptions(opts).ng,
+		ng:              ng,
 	}
 }
 

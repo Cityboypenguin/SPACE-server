@@ -37,7 +37,8 @@ func NewCreateQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
-	opts ...Option,
+	// ng は本文を保存の前に検査する。権限と存在の確認のあとに呼ぶので、投稿できない人の試行は数えない。nil なら検査しない。
+	ng ngword.Guard,
 ) CreateQuestionUseCase {
 	return &CreateQuestionInteractor{
 		events:          orNoop(events),
@@ -46,7 +47,7 @@ func NewCreateQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
-		ng:              buildOptions(opts).ng,
+		ng:              ng,
 	}
 }
 

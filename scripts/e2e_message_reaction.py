@@ -11,28 +11,14 @@
 最後に "ALL OK" が出れば成功。
 
 注意:
-- ローカル開発用DBにテスト用ユーザー(@example.test)・メッセージ・リアクションが残る。
+- ローカル開発用DBにテスト用ユーザー(@example.test)と投稿が残る。
   確認が終わったら消してよい(DELETE FROM messages/users WHERE ... @example.test)。
 - 管理者の認証情報は .env（SPACE_ENV_FILE で変更可）の INIT_ADMIN_* を読む(授業一覧の取得だけに使う)。
 - 購読の確認に websocket-client(pip install websocket-client)が要る。
 """
-import json, os, secrets, sys, urllib.request
+import json, secrets
 
-URL = "http://localhost:8080/query"
-
-def gql(query, variables=None, token=None):
-    req = urllib.request.Request(URL, data=json.dumps({"query": query, "variables": variables or {}}).encode(),
-                                 headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {})})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
-
-def ok(d):
-    assert "errors" not in d, d["errors"]
-    return d["data"]
-
-def err(d):
-    assert "errors" in d, f"expected an error, got {d}"
-    return d["errors"][0]["message"]
+from e2e_common import WS_URL, err, gql, ok, read_env
 
 run = secrets.token_hex(3)
 pw = "T" + secrets.token_urlsafe(12) + "1a"   # 使い捨てのテスト用パスワード(出力しない)
@@ -46,7 +32,7 @@ for name in ("a", "b", "c"):
 print("1. テスト用ユーザー3人を作成してログイン OK")
 
 # 管理者の授業一覧から現学期の授業を2つ取る。管理者の認証情報は .env(ローカル開発用)から読む。
-env = dict(l.strip().split("=", 1) for l in open(os.environ.get("SPACE_ENV_FILE", ".env"), encoding="utf-8") if "=" in l and not l.lstrip().startswith("#"))
+env = read_env()
 adm = ok(gql("mutation($i:LoginInput!){loginAdministrator(input:$i){token}}",
              {"i": {"email": env["INIT_ADMIN_EMAIL"], "password": env["INIT_ADMIN_PASSWORD"]}}))["loginAdministrator"]["token"]
 cur = ok(gql("query{currentSemester{year semester}}", token=adm))["currentSemester"]
@@ -137,7 +123,7 @@ print("17. スタンプのメッセージは、本人が削除できる OK")
 
 # --- リアルタイム配信(購読)。b の接続は同じメッセージの更新を続けて受け取る ---
 import websocket
-ws = websocket.create_connection("ws://localhost:8080/query", subprotocols=["graphql-transport-ws"], origin="http://localhost:5173", timeout=10)
+ws = websocket.create_connection(WS_URL, subprotocols=["graphql-transport-ws"], origin="http://localhost:5173", timeout=10)
 ws.send(json.dumps({"type": "connection_init", "payload": {"Authorization": f"Bearer {users['b']}"}}))
 while json.loads(ws.recv())["type"] != "connection_ack":
     pass

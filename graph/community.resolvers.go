@@ -358,7 +358,7 @@ func (r *queryResolver) CommunityMembers(ctx context.Context, communityID string
 // 本文が空なので、空のままにせず「スタンプ」と分かる文言にする。
 func lastMessageText(m *model.Message) string {
 	if m.StampID != nil {
-		return "[スタンプを送信しました]"
+		return stampMessageSummary
 	}
 	return m.Content
 }

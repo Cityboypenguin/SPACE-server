@@ -17,7 +17,8 @@ func TestStartupWithReportNotificationMigrationAlreadyApplied(t *testing.T) {
 		}
 	}
 	version, dirty, err := migrator.Version()
-	if err != nil || dirty || version != 113 {
+	// 起動時に後続のマイグレーションは流れるので、113 より前へ戻っていないことだけを見る。
+	if err != nil || dirty || version < 113 {
 		t.Fatalf("version=%d dirty=%t err=%v", version, dirty, err)
 	}
 	if count(t, database, "SELECT COUNT(*) FROM report_notification_recipients") != 1 {

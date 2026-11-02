@@ -39,6 +39,7 @@ func TestChatThreadPersistenceAndMigration(t *testing.T) {
 	apply("110_add_thread_parent_to_rooms.up.sql")
 	apply("111_create_chat_threads.up.sql")
 	apply("112_add_thread_link_to_messages.up.sql")
+	apply("115_add_stamp_id_to_messages.up.sql")
 	ctx := context.Background()
 	rooms := NewMySQLRoomRepository(db)
 	threads := &MySQLChatThreadRepository{DB: db}
