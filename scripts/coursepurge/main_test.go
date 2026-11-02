@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+
+	spacedb "github.com/Cityboypenguin/SPACE-server/db"
 )
 
 // Real MySQL is essential here: temporary-table rules and cascades differ from mocks.
@@ -42,8 +44,12 @@ func TestPurgeIsolationAndBlobResume(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
+	latest, e := spacedb.LatestVersion()
+	if e != nil {
+		t.Fatal(e)
+	}
 	statements := []string{
-		`CREATE TABLE schema_migrations(version BIGINT,dirty BOOLEAN)`, `INSERT INTO schema_migrations VALUES(108,0)`,
+		`CREATE TABLE schema_migrations(version BIGINT,dirty BOOLEAN)`, fmt.Sprintf(`INSERT INTO schema_migrations VALUES(%d,0)`, latest-1),
 		`CREATE TABLE rooms(id BIGINT PRIMARY KEY,type VARCHAR(32))`, `INSERT INTO rooms VALUES(1,'course'),(2,'dm')`,
 		`CREATE TABLE courses(id BIGINT PRIMARY KEY,room_id BIGINT,FOREIGN KEY(room_id) REFERENCES rooms(id))`, `INSERT INTO courses VALUES(1,1)`,
 		`CREATE TABLE timetables(user_id BIGINT,course_id BIGINT,FOREIGN KEY(course_id) REFERENCES courses(id))`, `INSERT INTO timetables VALUES(1,1)`,
@@ -99,6 +105,13 @@ esac
 		b, e := c.CombinedOutput()
 		return string(b), e
 	}
+	// A DB that the app of this commit has not finished migrating must be refused.
+	if output, e := run(); e == nil {
+		t.Fatalf("older schema accepted: %s", output)
+	}
+	if _, e = db.Exec("UPDATE schema_migrations SET version=?", latest); e != nil {
+		t.Fatal(e)
+	}
 	output, e := run()
 	if e != nil || !strings.Contains(output, "Dry run") {
 		t.Fatalf("dry run: %s %v", output, e)
@@ -146,7 +159,7 @@ esac
 		t.Fatalf("unsafe manifest: %s %v", b, e)
 	}
 	var saved manifest
-	if err := json.Unmarshal(b, &saved); err != nil || saved.Counts["messages"] != 1 || saved.Counts["media"] != 3 || saved.Target != cfg.Addr {
+	if err := json.Unmarshal(b, &saved); err != nil || saved.Counts["messages"] != 1 || saved.Counts["media"] != 3 || saved.Target != cfg.Addr || saved.Schema != latest {
 		t.Fatal("missing count or target metadata")
 	}
 	os.Remove(fail)

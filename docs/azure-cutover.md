@@ -70,7 +70,9 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
    appを停止しVMのDBだけを再作成する。ダンプのハッシュと clean v73 を確認する。
    実行前にVMのバックアップも確保する。間違ったVMで実行しない。
 3. VMを外部から遮断したまま `sudo bash scripts/azure_migration.sh migrate --confirm-migrate`。
-   app起動でマイグレーションし、clean v108 と所要秒数を確認してappを停止する。
+   app起動でマイグレーションし、app が応答した時点の clean な版と所要秒数を確認してappを停止する。
+   到達点は VM の image に入った最新のマイグレーション。事前に VM の image を `main` へ入れる
+   コミットにしておく。古い image のまま進めると、残りのマイグレーションが当日の自動デプロイ中に流れる。
    dirtyなら停止して調査し、versionの強制変更はしない。
 4. 下記の投稿削除を実行する。DB件数とBlob削除確認まで成功させる。件数照合用に削除記録を保管する。
 5. `scripts/sync_azure_objects.py` で画像の差分を運ぶ。既定は候補件数のみ。
@@ -101,7 +103,8 @@ HSTS は API ホストだけに限定し includeSubDomains/preload は付けな�
 
 `go build -o /secure/coursepurge ./scripts/coursepurge` で作成する（VM向けは
 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`）。接続先 `DB_HOST`/`DB_PORT`/`DB_NAME`/
-`DB_USER`/`DB_PASSWORD` を安全に環境変数で渡す。DBは clean v108 が必要。
+`DB_USER`/`DB_PASSWORD` を安全に環境変数で渡す。VM の image と同じコミットからビルドする。
+ツールは自分のコミットの最新マイグレーションで clean な DB だけを受け付け、その版を削除記録の `schema` に残す。
 Blob削除は Azure CLI のログイン済み作業者で実行し、`AZURE_STORAGE_ACCOUNT_NAME`、
 必要ならコンテナー名の環境変数も指定する。値をターミナルへ出さない。
 
@@ -206,7 +209,7 @@ VM内のDB/Redis監視と組み合わせる。
 
 | 確認 | 合格条件 |
 | --- | --- |
-| マイグレーション | clean 73→108、dirtyなし、所要秒数を記録 |
+| マイグレーション | clean 73→最新、dirtyなし、所要秒数を記録 |
 | 削除 | 下見と削除件数一致、授業4種0、DM等残存、共有media保持、公開Blob404 |
 | ログイン/refresh | 正常ログイン、移行した失効トークンは拒否 |
 | 投稿/画像/アップロード | 表示、保存、アバター・質問回答添付が成功 |
@@ -218,12 +221,16 @@ VM内のDB/Redis監視と組み合わせる。
 
 Azureへの書込みを始める前なら、APIのCloudFront originをAWSへ戻し、元DBと元アプリの組合せを維持する。
 Azureで書込み後はAWSへ戻すだけでは投稿が失われる。書込みを止め、Azureのデータを保全して差分を調整する。
-移行後のv108DBをv73アプリへ直接戻さない。NS変更後は2日間の混在を前提に両経路を維持する。
+移行後のDBをv73アプリへ直接戻さない。
+古い image は新しい DB では起動しない（`no migration found for version N`）。マイグレーションを含むデプロイの後は、
+`deploy_azure.sh` の自動切戻しも app を戻せないので、デプロイ直前のバックアップを復元してから旧 image を起動する。
+NS変更後は2日間の混在を前提に両経路を維持する。
 AWS資源、旧証明書、Route 53の削除は安定稼働と復旧可能性を人間が確認した後に別途行う。
 
 ## 統合時の v102 前提と v108 の差分（2026-11-01）
 
-この表は従来の移行ツールの前提と統合後の差分。要求に従い到達点は v108 へ更新済み。
+この表は従来の移行ツールの前提と統合後の差分（当時の記録）。2026-11-03 に、到達点を番号で持たず
+コミットの最新マイグレーションから求める形へ変えた（`db.LatestVersion`）。
 マイグレーションを新設したり、既存 SQL の内容を変更したりしていない。
 
 | 箇所 | 以前の前提 | 統合後 |

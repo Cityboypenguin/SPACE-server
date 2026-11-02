@@ -49,6 +49,33 @@ class DeployTests(unittest.TestCase):
                 self.assertEqual((d / '.env').stat().st_mode & 0o777, 0o600)
 
 
+class MigrateStageTests(unittest.TestCase):
+    def test_waits_for_app_and_accepts_only_clean_newer_version(self):
+        cases = (('126\t0', '200', 0), ('126\t1', '200', 1), ('73\t0', '200', 1), ('126\t0', '000', 1))
+        for after, status, code in cases:
+            with self.subTest(after=after, status=status), tempfile.TemporaryDirectory() as directory:
+                d = Path(directory)
+                commands = {
+                    'sleep': '#!/bin/sh\nexit 0\n',
+                    # The first version query is the pre-check on the restored v73 dump.
+                    'docker': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TRACE"\ncase "$*" in *" exec "*)\n'
+                              '  cat > /dev/null\n  if test -f "$SEEN"; then printf "$AFTER\\n"; else touch "$SEEN"; printf "73\\t0\\n"; fi;;\nesac\n',
+                    'curl': '#!/bin/sh\nprintf "%s" "$STATUS"\n',
+                }
+                for name, content in commands.items():
+                    (d / name).write_text(content)
+                    (d / name).chmod(0o700)
+                env = dict(os.environ, PATH=str(d) + ':' + os.environ['PATH'], TRACE=str(d / 'trace'),
+                           SEEN=str(d / 'seen'), AFTER=after, STATUS=status)
+                result = subprocess.run(['bash', str(ROOT / 'scripts/azure_migration.sh'), 'migrate', '--confirm-migrate'],
+                                        env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                trace = (d / 'trace').read_text()
+                self.assertLess(trace.index('up -d app'), trace.rindex('stop app'))
+                if code == 0:
+                    self.assertIn('Migrated 73 -> 126', result.stdout)
+
+
 class ObjectCopyTests(unittest.TestCase):
     def test_exclusions_prevent_reupload_and_uploaded_bytes_are_verified(self):
         spec = importlib.util.spec_from_file_location('sync', ROOT / 'scripts/sync_azure_objects.py')
@@ -89,20 +116,24 @@ class CountVerificationTests(unittest.TestCase):
         before = {key: [100] for key in ('users', 'messages', 'questions', 'answers', 'polls',
                                         'media', 'notifications', 'user_reports', 'archives', 'timetables', 'courses', 'rooms')}
         before['schema'] = [73, 0]
-        after = {**before, 'schema': [108, 0], 'user_accounts': [100], 'messages': [40]}
+        after = {**before, 'schema': [126, 0], 'user_accounts': [100], 'messages': [40]}
         after.update({'course_' + key: [0] for key in ('messages', 'questions', 'answers', 'polls')})
-        module.verify(before, after, {'counts': {'messages': 60}})
+        journal = {'counts': {'messages': 60}, 'schema': 126}
+        module.verify(before, after, journal)
         for table in ('users', 'timetables', 'courses', 'rooms'):
             with self.subTest(table=table):
                 damaged = {**after, table: [99]}
                 with self.assertRaises(ValueError):
-                    module.verify(before, damaged, {'counts': {'messages': 60}})
-        for version, dirty in ((102, 0), (108, 1)):
+                    module.verify(before, damaged, journal)
+        for version, dirty in ((108, 0), (126, 1)):
             with self.assertRaises(ValueError):
-                module.verify(before, {**after, 'schema': [version, dirty]}, {'counts': {'messages': 60}})
+                module.verify(before, {**after, 'schema': [version, dirty]}, journal)
+        for recorded in (None, 73, '126'):
+            with self.assertRaises(ValueError):
+                module.verify(before, after, {**journal, 'schema': recorded})
         after['users'] = [99]
         with self.assertRaises(ValueError):
-            module.verify(before, after, {'counts': {'messages': 60}})
+            module.verify(before, after, journal)
 
 
 class MessageMediaTests(unittest.TestCase):
