@@ -521,6 +521,7 @@ func main() {
 		GetRoomMemberIDs:   getUserIDsByRoomIDUseCase,
 		IsRoomMember:       isRoomMemberUseCase,
 		CheckRoomWritable:  checkRoomWritableUseCase,
+		SystemSettingRepo:  systemSettingRepository,
 		CheckBlockRelation: checkBlockRelationUseCase,
 	})
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{

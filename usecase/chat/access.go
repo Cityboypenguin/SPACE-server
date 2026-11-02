@@ -8,6 +8,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
@@ -50,6 +51,7 @@ type AccessPolicyDeps struct {
 
 	// CheckRoomWritable は授業ルームの学期・履修判定（非授業ルームは素通し）。
 	CheckRoomWritable  courseusecase.CheckRoomWritableUseCase
+	SystemSettingRepo  repository.SystemSettingRepository
 	CheckBlockRelation block.CheckBlockRelationUseCase
 }
 
@@ -90,6 +92,9 @@ func (p *accessPolicy) EnsureReadAccess(ctx context.Context, roomID int64) (*mod
 		return nil, err
 	}
 	if room.Type == model.RoomTypeCourse {
+		if err := courseusecase.EnsureCourseChatEnabled(ctx, p.deps.SystemSettingRepo); err != nil {
+			return nil, err
+		}
 		return room, nil
 	}
 

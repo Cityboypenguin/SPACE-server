@@ -381,6 +381,13 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	return enabled, nil
 }
 
+func (r *mutationResolver) ToggleCourseChat(ctx context.Context, enabled bool) (bool, error) {
+	if err := r.ManageSystemSettingUsecase.SetCourseChatEnabled(ctx, enabled); err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -478,6 +485,13 @@ func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return r.MaintenanceFlag.Load(), nil
+}
+
+func (r *queryResolver) CourseChatEnabled(ctx context.Context) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.ManageSystemSettingUsecase.IsCourseChatEnabled(ctx)
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.
@@ -722,10 +736,10 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	}
 
 	var sortOrderStr *string
-    if sortOrder != nil {
-        s := string(*sortOrder)
-        sortOrderStr = &s
-    }
+	if sortOrder != nil {
+		s := string(*sortOrder)
+		sortOrderStr = &s
+	}
 
 	items, total, err := r.ListCoursesUseCase.Execute(ctx, courseusecase.ListCoursesParam{
 		Year:      y,
@@ -744,16 +758,16 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	// 以前は一覧の1件ごとに COUNT を撃っていた（20件なら20本）。
 	// 単体の adminCourse と同じく、判定は共通の fieldRequested。
 	registeredCounts := map[int64]int{}
-    if fieldRequested(ctx, "items", "registeredCount") {
-        courseIDs := make([]int64, 0, len(items))
-        for _, c := range items {
-            courseIDs = append(courseIDs, c.ID)
-        }
-        registeredCounts, err = r.GetCourseRegisteredCountsUseCase.Execute(ctx, courseIDs)
-        if err != nil {
-            return nil, err
-        }
-    }
+	if fieldRequested(ctx, "items", "registeredCount") {
+		courseIDs := make([]int64, 0, len(items))
+		for _, c := range items {
+			courseIDs = append(courseIDs, c.ID)
+		}
+		registeredCounts, err = r.GetCourseRegisteredCountsUseCase.Execute(ctx, courseIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	gqlItems := make([]*gqlmodel.Course, 0, len(items))
 	for _, c := range items {
