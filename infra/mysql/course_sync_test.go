@@ -51,6 +51,7 @@ func courseSyncTestDB(t *testing.T) (*sql.DB, func()) {
 			PRIMARY KEY (id),
 			UNIQUE KEY unique_courses_dedup_key (dedup_key)
 		)`,
+		`CREATE TABLE messages (id BIGINT NOT NULL PRIMARY KEY, room_id BIGINT NOT NULL)`,
 		`CREATE TABLE timetables (
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,

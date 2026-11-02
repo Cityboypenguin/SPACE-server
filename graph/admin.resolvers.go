@@ -412,6 +412,13 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	return enabled, nil
 }
 
+func (r *mutationResolver) ToggleCourseChat(ctx context.Context, enabled bool) (bool, error) {
+	if err := r.ManageSystemSettingUsecase.SetCourseChatEnabled(ctx, enabled); err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -509,6 +516,13 @@ func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return r.MaintenanceFlag.Load(), nil
+}
+
+func (r *queryResolver) CourseChatEnabled(ctx context.Context) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.ManageSystemSettingUsecase.IsCourseChatEnabled(ctx)
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.

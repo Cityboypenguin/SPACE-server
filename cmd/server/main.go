@@ -565,6 +565,7 @@ func main() {
 		GetRoomMemberIDs:   getUserIDsByRoomIDUseCase,
 		IsRoomMember:       isRoomMemberUseCase,
 		CheckRoomWritable:  checkRoomWritableUseCase,
+		SystemSettingRepo:  systemSettingRepository,
 		CheckBlockRelation: checkBlockRelationUseCase,
 		GetUser:            getUserByIDUseCase,
 	})

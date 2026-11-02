@@ -262,16 +262,19 @@ func (f *fakeMarkRead) Execute(_ context.Context, roomID, _ int64, lastReadMessa
 // --- helpers ---------------------------------------------------------------
 
 const (
-	courseRoomID    int64 = 1
-	communityRoomID int64 = 2
-	dmRoomID        int64 = 3
+	courseRoomID       int64 = 1
+	courseThreadRoomID int64 = 800
+	communityRoomID    int64 = 2
+	dmRoomID           int64 = 3
 )
 
 func testRooms() map[int64]*model.Room {
+	parent := courseRoomID
 	return map[int64]*model.Room{
-		courseRoomID:    {ID: courseRoomID, Type: model.RoomTypeCourse},
-		communityRoomID: {ID: communityRoomID, Type: model.RoomTypeCommunity},
-		dmRoomID:        {ID: dmRoomID, Type: model.RoomTypeDM},
+		courseThreadRoomID: {ID: courseThreadRoomID, Type: model.RoomTypeCourse, ParentRoomID: &parent},
+		courseRoomID:       {ID: courseRoomID, Type: model.RoomTypeCourse},
+		communityRoomID:    {ID: communityRoomID, Type: model.RoomTypeCommunity},
+		dmRoomID:           {ID: dmRoomID, Type: model.RoomTypeDM},
 	}
 }
 
@@ -786,6 +789,36 @@ func TestUpdateMessage_ArchivedCourseRoomRejectsEdit(t *testing.T) {
 	}
 	if h.updateMessage.called {
 		t.Error("the message must not be updated when the course room is no longer writable")
+	}
+}
+
+func TestUpdateMessage_CourseRoomRejectsEdit(t *testing.T) {
+	h := newHarness()
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: courseRoomID, UserID: 10}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: courseRoomID, MessageID: 5, Content: "x"})
+	if err == nil {
+		t.Fatal("expected course chat message edits to be rejected")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Errorf("error code = %s, want %s", apperr.CodeOf(err), apperr.CodeInvalidInput)
+	}
+	if h.updateMessage.called {
+		t.Error("the message must not be updated in a course room")
+	}
+}
+
+// 授業のスレッドも親と同じ type を持つので、同じく編集できない。
+func TestUpdateMessage_CourseThreadRejectsEdit(t *testing.T) {
+	h := newHarness()
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: courseThreadRoomID, UserID: 10}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: courseThreadRoomID, MessageID: 5, Content: "x"})
+	if err == nil {
+		t.Fatal("expected course thread message edits to be rejected")
+	}
+	if h.updateMessage.called {
+		t.Error("the message must not be updated in a course thread")
 	}
 }
 
