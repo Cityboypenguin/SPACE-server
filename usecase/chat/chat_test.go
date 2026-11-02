@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
@@ -114,12 +115,16 @@ func (f *fakeGetMessage) Execute(_ context.Context, _ int64) (*model.Message, er
 }
 
 type fakeSendMessage struct {
+	calls         int
 	savedMentions []*model.Mention
+	savedStampID  *string
 }
 
-func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error) {
+func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error) {
+	f.calls++
 	f.savedMentions = mentions
-	return &model.Message{ID: 100, RoomID: roomID, UserID: userID, Content: content, ReplyToID: replyToID, Mentions: mentions}, nil
+	f.savedStampID = stampID
+	return &model.Message{ID: 100, RoomID: roomID, UserID: userID, Content: content, ReplyToID: replyToID, StampID: stampID, Mentions: mentions}, nil
 }
 
 type fakeUpdateMessage struct{ called bool }
@@ -491,6 +496,44 @@ func TestListMessages_GoesThroughTheSameReadPolicy(t *testing.T) {
 }
 
 // --- 送信 -------------------------------------------------------------------
+
+// fakeNGGuard は contains を含む文面を止める。screened は検査に回った回数。
+type fakeNGGuard struct {
+	contains string
+	screened int
+}
+
+func (g *fakeNGGuard) Screen(_ context.Context, _ int64, _ *int64, _ model.NGWordSource, texts ...string) error {
+	g.screened++
+	for _, t := range texts {
+		if strings.Contains(t, g.contains) {
+			return apperr.InvalidInput("blocked")
+		}
+	}
+	return nil
+}
+
+func TestSendMessage_NGWordBlocksOnlyInCourseRooms(t *testing.T) {
+	h := newHarness()
+	guard := &fakeNGGuard{contains: "NG"}
+	h.commandDeps.NGWords = guard
+	h.rebuild()
+
+	_, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (授業内チャットはNGワードで止める)", err)
+	}
+	if h.sendMessage.calls != 0 {
+		t.Error("a blocked message must not be saved")
+	}
+
+	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("community room: err = %v, want nil (対象は授業内チャットだけ)", err)
+	}
+	if _, err := h.commands.SendMessage(ctxAsAdmin(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("admin: err = %v, want nil (管理者の投稿は止めない)", err)
+	}
+}
 
 func TestSendMessage_MentionsAreDroppedInCourseRoom(t *testing.T) {
 	h := newHarness()
@@ -1077,5 +1120,63 @@ func TestMarkAsRead_PassesTheClientsReadPositionThrough(t *testing.T) {
 	}
 	if h.markCourse.messageID == nil || *h.markCourse.messageID != position {
 		t.Fatalf("read position handed to the course use case = %v, want %d", h.markCourse.messageID, position)
+	}
+}
+
+// --- スタンプだけのメッセージ -------------------------------------------------
+
+func TestSendMessage_StampIsPassedToTheStore(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+
+	msg, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, StampID: &stamp})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.sendMessage.savedStampID == nil || *h.sendMessage.savedStampID != stamp {
+		t.Errorf("stamp passed to the store = %v, want %q", h.sendMessage.savedStampID, stamp)
+	}
+	if msg.StampID == nil || *msg.StampID != stamp {
+		t.Errorf("returned message = %+v, want the stamp", msg)
+	}
+}
+
+func TestSendMessage_StampCannotBeCombinedWithMentions(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+
+	_, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{
+		RoomID: communityRoomID, StampID: &stamp, MentionUserIDs: []int64{11},
+	})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (スタンプとメンションは一緒に送れない。黙って捨てない)", err)
+	}
+	if h.sendMessage.savedStampID != nil {
+		t.Error("nothing may be saved when the combination is rejected")
+	}
+}
+
+func TestUpdateMessage_RejectsAStampMessage(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: communityRoomID, UserID: 10, StampID: &stamp}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: communityRoomID, MessageID: 5, Content: "x"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (スタンプは編集できない)", err)
+	}
+	if h.updateMessage.called {
+		t.Error("a stamp message must not be updated")
+	}
+}
+
+func TestDeleteMessage_AllowsDeletingAStampMessage(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: communityRoomID, UserID: 10, StampID: &stamp}
+
+	deleted, err := h.commands.DeleteMessage(ctxAsUser(10), DeleteMessageInput{RoomID: communityRoomID, MessageID: 5})
+	if err != nil || !deleted {
+		t.Fatalf("deleted = %v, err = %v, want the stamp message to be deletable", deleted, err)
 	}
 }

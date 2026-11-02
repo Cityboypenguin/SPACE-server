@@ -40,6 +40,16 @@ type GetRepliesByPostIDsIncludeDeletedUseCase interface {
 type GetMessagesByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
 }
+
+// ListAddendaUseCase は複数の質問（または回答）の追記をまとめて引く（Question.addenda /
+// Answer.addenda 用）。追記が無いものは map に入らない。
+type ListAddendaUseCase interface {
+	Execute(ctx context.Context, ids []int64) (map[int64][]*model.Addendum, error)
+}
+
+type ListMessageReactionsByMessageIDsUseCase interface {
+	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.MessageReaction, error)
+}
 type GetFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error)
 }
@@ -133,6 +143,16 @@ type Loaders struct {
 	FavoritedByMeLoader *dataloadgen.Loader[FavoritedByKey, bool]
 	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
 	MessageLoader *dataloadgen.Loader[int64, *model.Message]
+	// ReactionLoader は Message.reactions 用。閲覧者ごとの値（reactedByMe）を含む。
+	// 購読（WebSocket）の ctx は接続の間ずっと同じローダーを使い回すため、
+	// Message.reactions のリゾルバは Load の前に Clear して古い集計を返さないようにしている
+	// （graph/chat.resolvers.go 参照）。
+	ReactionLoader *dataloadgen.Loader[int64, []*model.MessageReaction]
+	// QuestionAddendaLoader / AnswerAddendaLoader は Question.addenda / Answer.addenda 用。
+	// 追記は足されるたびに変わるので、購読（接続の間ローダーを使い回す）ではリゾルバが
+	// Load の前に Clear する。
+	QuestionAddendaLoader *dataloadgen.Loader[int64, []*model.Addendum]
+	AnswerAddendaLoader   *dataloadgen.Loader[int64, []*model.Addendum]
 	// PostMentionLoader / MessageMentionLoader は本文中のメンション用。
 	// 一覧表示で1件ずつ引くと N+1 になるためまとめて解決する。
 	PostMentionLoader    *dataloadgen.Loader[int64, []*model.Mention]
@@ -382,6 +402,9 @@ type UseCases struct {
 	ListPostIDsFavoritedBy         ListPostIDsFavoritedByUseCase
 	CountAnswersByQuestionIDs      CountAnswersByQuestionIDsUseCase
 	GetMessagesByIDs               GetMessagesByIDsUseCase
+	ListMessageReactions           ListMessageReactionsByMessageIDsUseCase
+	ListQuestionAddenda            ListAddendaUseCase
+	ListAnswerAddenda              ListAddendaUseCase
 	ListMentionsByPostIDs          ListMentionsByPostIDsUseCase
 	ListMentionsByMessageIDs       ListMentionsByMessageIDsUseCase
 	GetRoomsByIDs                  GetRoomsByIDsUseCase
@@ -442,6 +465,10 @@ func New(uc UseCases) *Loaders {
 		FavoriteCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountFavoritesByPostIDs.Execute), loaderOptions...),
 		FavoritedByMeLoader: dataloadgen.NewLoader(batchFavoritedBy(uc.ListPostIDsFavoritedBy.Execute), loaderOptions...),
 		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),
+		ReactionLoader:      dataloadgen.NewLoader(batchFromMap(uc.ListMessageReactions.Execute), loaderOptions...),
+
+		QuestionAddendaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListQuestionAddenda.Execute), loaderOptions...),
+		AnswerAddendaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListAnswerAddenda.Execute), loaderOptions...),
 
 		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
 		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), loaderOptions...),

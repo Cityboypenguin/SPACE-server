@@ -11,6 +11,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 )
 
 const MaxMediaCount = 4
@@ -29,6 +30,7 @@ type AnswerQuestionInteractor struct {
 	mediaRepo       mediaAttachRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
+	ng              ngword.Guard
 }
 
 func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Acceptor,
@@ -37,6 +39,7 @@ func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	opts ...Option,
 ) AnswerQuestionUseCase {
 	return &AnswerQuestionInteractor{
 		events:          orNoop(events),
@@ -46,6 +49,7 @@ func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
+		ng:              buildOptions(opts).ng,
 	}
 }
 
@@ -77,6 +81,10 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 		return nil, apperr.NotFound("質問が見つかりません")
 	}
 	if _, err := uc.requireWritable.Execute(ctx, q.RoomID); err != nil {
+		return nil, err
+	}
+	roomID := q.RoomID
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourceAnswer, body); err != nil {
 		return nil, err
 	}
 

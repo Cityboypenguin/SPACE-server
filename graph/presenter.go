@@ -390,6 +390,7 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		RoomID:    encodeGraphID("room", msg.RoomID),
 		UserID:    encodeGraphID("user", msg.UserID),
 		Content:   msg.Content,
+		StampID:   msg.StampID,
 		CreatedAt: msg.CreatedAt.Format(timeFormat),
 		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
 	}
@@ -447,6 +448,9 @@ func toGraphPost(post *model.Post) *gqlmodel.Post {
 
 const notificationTargetTypePost = "post"
 const notificationTargetTypeMessage = "message"
+
+// notificationTargetTypeQuestion は追記の通知の遷移先（質問）。
+const notificationTargetTypeQuestion = "question"
 
 func toGraphNotification(n *model.Notification, h notificationHydration) *gqlmodel.Notification {
 	if n == nil {
@@ -702,4 +706,36 @@ func toGraphCommunityStatItem(c *model.CommunityStatItem) *gqlmodel.CommunitySta
 		MemberCount:  int32(c.MemberCount),
 		MessageCount: int32(c.MessageCount),
 	}
+}
+
+func toGraphNGWord(w *model.NGWord) *gqlmodel.NGWord {
+	matchType := gqlmodel.NGWordMatchTypeWord
+	if w.MatchType == model.NGWordMatchRegex {
+		matchType = gqlmodel.NGWordMatchTypeRegex
+	}
+	return &gqlmodel.NGWord{
+		ID:        encodeGraphID("ng_word", w.ID),
+		Pattern:   w.Pattern,
+		MatchType: matchType,
+		CreatedAt: w.CreatedAt.Format(timeFormat),
+	}
+}
+
+func fromGraphNGWordMatchType(t gqlmodel.NGWordMatchType) model.NGWordMatchType {
+	if t == gqlmodel.NGWordMatchTypeRegex {
+		return model.NGWordMatchRegex
+	}
+	return model.NGWordMatchWord
+}
+
+func toGraphAddenda(kind string, list []*model.Addendum) []*gqlmodel.Addendum {
+	out := make([]*gqlmodel.Addendum, 0, len(list))
+	for _, a := range list {
+		out = append(out, &gqlmodel.Addendum{
+			ID:        encodeGraphID(kind, a.ID),
+			Body:      a.Body,
+			CreatedAt: a.CreatedAt.Format(timeFormat),
+		})
+	}
+	return out
 }

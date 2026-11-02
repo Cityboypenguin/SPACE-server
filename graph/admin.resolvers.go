@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
@@ -898,4 +899,140 @@ func (r *queryResolver) AdminCourseSyncReviews(ctx context.Context, year *int32,
 		items = append(items, toGraphCourseSyncReview(rv))
 	}
 	return &gqlmodel.CourseSyncReviewPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCreateNGWord is the resolver for the adminCreateNGWord field.
+func (r *mutationResolver) AdminCreateNGWord(ctx context.Context, pattern string, matchType gqlmodel.NGWordMatchType) (*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	w, err := r.NGWordAdmin.Create(ctx, pattern, fromGraphNGWordMatchType(matchType))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphNGWord(w), nil
+}
+
+// AdminDeleteNGWord is the resolver for the adminDeleteNGWord field.
+func (r *mutationResolver) AdminDeleteNGWord(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "ng_word", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid ng word id")
+	}
+	return r.NGWordAdmin.Delete(ctx, numericID)
+}
+
+// AdminNGWords is the resolver for the adminNGWords field.
+func (r *queryResolver) AdminNGWords(ctx context.Context) ([]*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	words, err := r.NGWordAdmin.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.NGWord, 0, len(words))
+	for _, w := range words {
+		out = append(out, toGraphNGWord(w))
+	}
+	return out, nil
+}
+
+// AdminNGWordStats is the resolver for the adminNGWordStats field.
+func (r *queryResolver) AdminNGWordStats(ctx context.Context) (*gqlmodel.NGWordStats, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	stats, err := r.NGWordAdmin.Stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.NGWordStats{
+		Total:  int32(stats.Total),
+		ByWord: make([]*gqlmodel.NGWordCount, 0, len(stats.ByWord)),
+		ByUser: make([]*gqlmodel.NGWordUserCount, 0, len(stats.ByUser)),
+	}
+	for _, c := range stats.ByWord {
+		out.ByWord = append(out.ByWord, &gqlmodel.NGWordCount{Pattern: c.Pattern, Count: int32(c.Count)})
+	}
+	for _, c := range stats.ByUser {
+		out.ByUser = append(out.ByUser, &gqlmodel.NGWordUserCount{
+			UserID:    encodeGraphID("user", c.UserID),
+			Name:      c.Name,
+			AccountID: c.AccountID,
+			Count:     int32(c.Count),
+		})
+	}
+	return out, nil
+}
+
+// AdminDeleteCourseChatImage is the resolver for the adminDeleteCourseChatImage field.
+func (r *mutationResolver) AdminDeleteCourseChatImage(ctx context.Context, mediaID string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "media", mediaID)
+	if err != nil {
+		return false, fmt.Errorf("invalid media id")
+	}
+	if err := r.CourseImages.Delete(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// AdminListCourseChatImages is the resolver for the adminListCourseChatImages field.
+func (r *queryResolver) AdminListCourseChatImages(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource, limit *int32, offset *int32) (*gqlmodel.AdminCourseChatImagePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	filter := repository.CourseChatImageFilter{}
+	if roomID != nil {
+		id, err := decodeGraphID(ctx, "room", *roomID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid room id")
+		}
+		filter.RoomID = &id
+	}
+	if source != nil {
+		src := model.CourseChatImageSource(strings.ToLower(string(*source)))
+		filter.Source = &src
+	}
+	pq := resolvePageQuery(ctx, limit, offset, 24)
+	items, total, err := r.CourseImages.List(ctx, filter, pq.Limit, pq.Offset)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.AdminCourseChatImagePage{Total: int32(total), Items: make([]*gqlmodel.AdminCourseChatImage, 0, len(items))}
+	for _, img := range items {
+		url := r.StorageRepository.PublicURL(img.Media.StorageKey)
+		if img.Source == model.CourseChatImageSourceMessage {
+			url = r.messageMediaURL(img.Media.StorageKey)
+		}
+		g := &gqlmodel.AdminCourseChatImage{
+			ID:                encodeGraphID("media", img.Media.ID),
+			Source:            gqlmodel.CourseChatImageSource(strings.ToUpper(string(img.Source))),
+			URL:               url,
+			RoomID:            encodeGraphID("room", img.RoomID),
+			CourseName:        img.CourseName,
+			UploaderID:        encodeGraphID("user", img.Uploader.ID),
+			UploaderName:      img.Uploader.Name,
+			UploaderAccountID: img.Uploader.AccountID,
+			TargetDeleted:     img.TargetDeleted,
+			CreatedAt:         img.Media.CreatedAt.Format(timeFormat),
+		}
+		if img.Media.Width != nil {
+			w := int32(*img.Media.Width)
+			g.Width = &w
+		}
+		if img.Media.Height != nil {
+			h := int32(*img.Media.Height)
+			g.Height = &h
+		}
+		out.Items = append(out.Items, g)
+	}
+	return out, nil
 }

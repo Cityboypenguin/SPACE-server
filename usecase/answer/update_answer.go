@@ -2,12 +2,14 @@ package answer
 
 import (
 	"context"
+	"github.com/Cityboypenguin/SPACE-server/model"
 	"strings"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 )
 
 type UpdateAnswerUseCase interface {
@@ -23,6 +25,7 @@ type UpdateAnswerInteractor struct {
 	mediaRepo       mediaReplaceRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
+	ng              ngword.Guard
 }
 
 func NewUpdateAnswerUseCase(events EventPublisher,
@@ -31,6 +34,7 @@ func NewUpdateAnswerUseCase(events EventPublisher,
 	mediaRepo mediaReplaceRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	opts ...Option,
 ) UpdateAnswerUseCase {
 	return &UpdateAnswerInteractor{
 		events:          orNoop(events),
@@ -39,6 +43,7 @@ func NewUpdateAnswerUseCase(events EventPublisher,
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
+		ng:              buildOptions(opts).ng,
 	}
 }
 
@@ -79,6 +84,10 @@ func (uc *UpdateAnswerInteractor) Execute(ctx context.Context, answerID int64, b
 	}
 	if q.BestAnswerID != nil && *q.BestAnswerID == answerID {
 		return nil, apperr.InvalidInput("ベストアンサーに選ばれている回答は編集できません")
+	}
+	roomID := q.RoomID
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourceAnswer, body); err != nil {
+		return nil, err
 	}
 
 	mediaByAnswer, err := uc.mediaRepo.ListByAnswerIDs(ctx, []int64{answerID})

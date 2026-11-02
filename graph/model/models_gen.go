@@ -14,6 +14,12 @@ type AddUserToRoomInput struct {
 	UserID string `json:"userID"`
 }
 
+type Addendum struct {
+	ID        string `json:"ID"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type AdminCommunity struct {
 	Community *Community `json:"community"`
 	Owner     *User      `json:"owner,omitempty"`
@@ -22,6 +28,26 @@ type AdminCommunity struct {
 type AdminCommunityPage struct {
 	Items []*AdminCommunity `json:"items"`
 	Total int32             `json:"total"`
+}
+
+type AdminCourseChatImage struct {
+	ID                string                `json:"ID"`
+	Source            CourseChatImageSource `json:"source"`
+	URL               string                `json:"url"`
+	Width             *int32                `json:"width,omitempty"`
+	Height            *int32                `json:"height,omitempty"`
+	RoomID            string                `json:"roomID"`
+	CourseName        string                `json:"courseName"`
+	UploaderID        string                `json:"uploaderID"`
+	UploaderName      string                `json:"uploaderName"`
+	UploaderAccountID string                `json:"uploaderAccountID"`
+	TargetDeleted     bool                  `json:"targetDeleted"`
+	CreatedAt         string                `json:"createdAt"`
+}
+
+type AdminCourseChatImagePage struct {
+	Items []*AdminCourseChatImage `json:"items"`
+	Total int32                   `json:"total"`
 }
 
 type AdminCreateCourseInput struct {
@@ -123,16 +149,17 @@ type AnnouncementPage struct {
 }
 
 type Answer struct {
-	ID         string   `json:"ID"`
-	QuestionID string   `json:"questionID"`
-	User       *User    `json:"user"`
-	Body       string   `json:"body"`
-	Media      []*Media `json:"media"`
-	CreatedAt  string   `json:"createdAt"`
-	UpdatedAt  string   `json:"updatedAt"`
-	IsMine     bool     `json:"isMine"`
-	LikeCount  int32    `json:"likeCount"`
-	LikedByMe  bool     `json:"likedByMe"`
+	ID         string      `json:"ID"`
+	QuestionID string      `json:"questionID"`
+	User       *User       `json:"user"`
+	Body       string      `json:"body"`
+	Media      []*Media    `json:"media"`
+	Addenda    []*Addendum `json:"addenda"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+	IsMine     bool        `json:"isMine"`
+	LikeCount  int32       `json:"likeCount"`
+	LikedByMe  bool        `json:"likedByMe"`
 }
 
 type AnswerPage struct {
@@ -455,20 +482,22 @@ type Mention struct {
 }
 
 type Message struct {
-	Thread    *ChatThread `json:"thread,omitempty"`
-	ID        string      `json:"ID"`
-	RoomID    string      `json:"roomID"`
-	Room      *Room       `json:"room"`
-	UserID    string      `json:"userID"`
-	User      *User       `json:"user"`
-	Content   string      `json:"content"`
-	Media     []*Media    `json:"media"`
-	CreatedAt string      `json:"createdAt"`
-	UpdatedAt string      `json:"updatedAt"`
-	IsMine    bool        `json:"isMine"`
-	ReplyToID *string     `json:"replyToID,omitempty"`
-	ReplyTo   *Message    `json:"replyTo,omitempty"`
-	Mentions  []*Mention  `json:"mentions"`
+	Thread    *ChatThread        `json:"thread,omitempty"`
+	ID        string             `json:"ID"`
+	RoomID    string             `json:"roomID"`
+	Room      *Room              `json:"room"`
+	UserID    string             `json:"userID"`
+	User      *User              `json:"user"`
+	Content   string             `json:"content"`
+	StampID   *string            `json:"stampID,omitempty"`
+	Media     []*Media           `json:"media"`
+	CreatedAt string             `json:"createdAt"`
+	UpdatedAt string             `json:"updatedAt"`
+	IsMine    bool               `json:"isMine"`
+	ReplyToID *string            `json:"replyToID,omitempty"`
+	ReplyTo   *Message           `json:"replyTo,omitempty"`
+	Mentions  []*Mention         `json:"mentions"`
+	Reactions []*MessageReaction `json:"reactions"`
 }
 
 type MessagePage struct {
@@ -477,20 +506,52 @@ type MessagePage struct {
 	HasMoreAfter  bool       `json:"hasMoreAfter"`
 }
 
+type MessageReaction struct {
+	Emoji       string `json:"emoji"`
+	Count       int32  `json:"count"`
+	ReactedByMe bool   `json:"reactedByMe"`
+}
+
 type Mutation struct {
 }
 
+type NGWord struct {
+	ID        string          `json:"ID"`
+	Pattern   string          `json:"pattern"`
+	MatchType NGWordMatchType `json:"matchType"`
+	CreatedAt string          `json:"createdAt"`
+}
+
+type NGWordCount struct {
+	Pattern string `json:"pattern"`
+	Count   int32  `json:"count"`
+}
+
+type NGWordStats struct {
+	Total  int32              `json:"total"`
+	ByWord []*NGWordCount     `json:"byWord"`
+	ByUser []*NGWordUserCount `json:"byUser"`
+}
+
+type NGWordUserCount struct {
+	UserID    string `json:"userID"`
+	Name      string `json:"name"`
+	AccountID string `json:"accountID"`
+	Count     int32  `json:"count"`
+}
+
 type Notification struct {
-	ID            string   `json:"ID"`
-	Type          string   `json:"type"`
-	Actor         *User    `json:"actor,omitempty"`
-	TargetType    *string  `json:"targetType,omitempty"`
-	TargetID      *string  `json:"targetID,omitempty"`
-	TargetPost    *Post    `json:"targetPost,omitempty"`
-	TargetMessage *Message `json:"targetMessage,omitempty"`
-	Message       string   `json:"message"`
-	IsRead        bool     `json:"isRead"`
-	CreatedAt     string   `json:"createdAt"`
+	ID             string    `json:"ID"`
+	Type           string    `json:"type"`
+	Actor          *User     `json:"actor,omitempty"`
+	TargetType     *string   `json:"targetType,omitempty"`
+	TargetID       *string   `json:"targetID,omitempty"`
+	TargetPost     *Post     `json:"targetPost,omitempty"`
+	TargetMessage  *Message  `json:"targetMessage,omitempty"`
+	TargetQuestion *Question `json:"targetQuestion,omitempty"`
+	Message        string    `json:"message"`
+	IsRead         bool      `json:"isRead"`
+	CreatedAt      string    `json:"createdAt"`
 }
 
 type NotificationGroup struct {
@@ -608,6 +669,7 @@ type Question struct {
 	Answers     *AnswerPage `json:"answers"`
 	AnswerCount int32       `json:"answerCount"`
 	Media       []*Media    `json:"media"`
+	Addenda     []*Addendum `json:"addenda"`
 	CreatedAt   string      `json:"createdAt"`
 	UpdatedAt   string      `json:"updatedAt"`
 	IsMine      bool        `json:"isMine"`
@@ -654,6 +716,8 @@ type ReportedContent struct {
 	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
 	Content         string   `json:"content"`
 	Media           []*Media `json:"media"`
+	StampID         *string  `json:"stampID,omitempty"`
+	Addenda         []string `json:"addenda"`
 	ParentBody      *string  `json:"parentBody,omitempty"`
 	PollOptions     []string `json:"pollOptions"`
 	CreatedAt       string   `json:"createdAt"`
@@ -1010,6 +1074,63 @@ func (e *CommunityMemberAction) UnmarshalJSON(b []byte) error {
 }
 
 func (e CommunityMemberAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CourseChatImageSource string
+
+const (
+	CourseChatImageSourceMessage  CourseChatImageSource = "MESSAGE"
+	CourseChatImageSourceQuestion CourseChatImageSource = "QUESTION"
+	CourseChatImageSourceAnswer   CourseChatImageSource = "ANSWER"
+)
+
+var AllCourseChatImageSource = []CourseChatImageSource{
+	CourseChatImageSourceMessage,
+	CourseChatImageSourceQuestion,
+	CourseChatImageSourceAnswer,
+}
+
+func (e CourseChatImageSource) IsValid() bool {
+	switch e {
+	case CourseChatImageSourceMessage, CourseChatImageSourceQuestion, CourseChatImageSourceAnswer:
+		return true
+	}
+	return false
+}
+
+func (e CourseChatImageSource) String() string {
+	return string(e)
+}
+
+func (e *CourseChatImageSource) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CourseChatImageSource(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CourseChatImageSource", str)
+	}
+	return nil
+}
+
+func (e CourseChatImageSource) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CourseChatImageSource) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CourseChatImageSource) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -1427,6 +1548,61 @@ func (e *InquiryStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e InquiryStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type NGWordMatchType string
+
+const (
+	NGWordMatchTypeWord  NGWordMatchType = "WORD"
+	NGWordMatchTypeRegex NGWordMatchType = "REGEX"
+)
+
+var AllNGWordMatchType = []NGWordMatchType{
+	NGWordMatchTypeWord,
+	NGWordMatchTypeRegex,
+}
+
+func (e NGWordMatchType) IsValid() bool {
+	switch e {
+	case NGWordMatchTypeWord, NGWordMatchTypeRegex:
+		return true
+	}
+	return false
+}
+
+func (e NGWordMatchType) String() string {
+	return string(e)
+}
+
+func (e *NGWordMatchType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = NGWordMatchType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid NGWordMatchType", str)
+	}
+	return nil
+}
+
+func (e NGWordMatchType) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *NGWordMatchType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e NGWordMatchType) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

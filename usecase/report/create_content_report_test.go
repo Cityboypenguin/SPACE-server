@@ -62,6 +62,16 @@ type fakeMediaReader struct {
 	answers   map[int64][]*model.Media
 }
 
+type fakeAddendumReader struct{}
+
+func (fakeAddendumReader) ListQuestionAddenda(_ context.Context, ids []int64) (map[int64][]*model.Addendum, error) {
+	return map[int64][]*model.Addendum{ids[0]: {{Body: "質問への追記"}}}, nil
+}
+
+func (fakeAddendumReader) ListAnswerAddenda(_ context.Context, ids []int64) (map[int64][]*model.Addendum, error) {
+	return map[int64][]*model.Addendum{ids[0]: {{Body: "回答への追記"}}}, nil
+}
+
 func (f *fakeMediaReader) ListByMessageIDs(context.Context, []int64) (map[int64][]*model.Media, error) {
 	return f.messages, nil
 }
@@ -110,6 +120,7 @@ func newContentReportFixture(roomType string) *contentReportFixture {
 					{Option: &model.PollOption{Label: "選択肢B"}},
 				},
 			},
+			Addenda: fakeAddendumReader{},
 			Media: &fakeMediaReader{
 				messages:  media("media/message.png"),
 				questions: media("media/question.png"),
@@ -127,6 +138,33 @@ func (f *contentReportFixture) execute(target model.ReportTargetType) (*model.Re
 		TargetID:   9,
 		Reason:     "SPAM",
 	})
+}
+
+func TestCreateContentReport_CopiesAddenda(t *testing.T) {
+	for target, want := range map[model.ReportTargetType]string{
+		model.TargetQuestion: "質問への追記",
+		model.TargetAnswer:   "回答への追記",
+	} {
+		f := newContentReportFixture(model.RoomTypeCourse)
+		if _, err := f.execute(target); err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+		if got := f.repo.saved.ReportedContent.Addenda; len(got) != 1 || got[0] != want {
+			t.Errorf("%s: addenda = %v, want [%s]", target, got, want)
+		}
+	}
+}
+
+func TestCreateContentReport_CopiesTheStampOfAStampMessage(t *testing.T) {
+	stamp := "stamp:ryokai"
+	f := newContentReportFixture(model.RoomTypeCourse)
+	f.deps.Messages = &fakeMessageReader{msg: &model.Message{ID: 9, RoomID: 5, UserID: 2, StampID: &stamp}}
+	if _, err := f.execute(model.TargetMessage); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.repo.saved.ReportedContent.StampID; got == nil || *got != stamp {
+		t.Errorf("stamp = %v, want %s", got, stamp)
+	}
 }
 
 func TestCreateContentReport_SavesSnapshot(t *testing.T) {

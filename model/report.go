@@ -60,6 +60,10 @@ type ReportedContent struct {
 	// Content はメッセージ・質問・回答の本文、または投票の設問。
 	Content string                 `json:"content"`
 	Media   []ReportedContentMedia `json:"media"`
+	// StampID はスタンプだけのメッセージのスタンプのID。Content は空になる。
+	StampID *string `json:"stampId,omitempty"`
+	// Addenda は質問・回答への追記（古い順）。通報の時点までに足されたもの。
+	Addenda []string `json:"addenda,omitempty"`
 	// ParentBody は回答が答えている質問の本文。回答だけでは読み取れない文脈を残す。
 	ParentBody *string `json:"parentBody,omitempty"`
 	// PollOptions は投票の選択肢。誰がどれに投票したかは持たない。

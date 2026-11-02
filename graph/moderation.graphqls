@@ -114,6 +114,10 @@ type ReportedContent {
   # メッセージ・質問・回答の本文、または投票の設問。
   content: String!
   media: [Media!]!
+  # スタンプだけのメッセージのスタンプのID。このとき content は空。
+  stampID: String
+  # 質問・回答への追記（古い順）。
+  addenda: [String!]!
   # 回答が答えている質問の本文。回答の通報だけで入る。
   parentBody: String
   # 投票の選択肢。投票の通報だけで入り、投票した人は含まない。

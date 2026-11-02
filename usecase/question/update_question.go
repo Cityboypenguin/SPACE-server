@@ -2,6 +2,7 @@ package question
 
 import (
 	"context"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	"strings"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
@@ -23,6 +24,7 @@ type UpdateQuestionInteractor struct {
 	mediaRepo       mediaReplaceRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
+	ng              ngword.Guard
 }
 
 func NewUpdateQuestionUseCase(events EventPublisher,
@@ -30,6 +32,7 @@ func NewUpdateQuestionUseCase(events EventPublisher,
 	mediaRepo mediaReplaceRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	opts ...Option,
 ) UpdateQuestionUseCase {
 	return &UpdateQuestionInteractor{
 		events:          orNoop(events),
@@ -37,6 +40,7 @@ func NewUpdateQuestionUseCase(events EventPublisher,
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
+		ng:              buildOptions(opts).ng,
 	}
 }
 
@@ -65,6 +69,10 @@ func (uc *UpdateQuestionInteractor) Execute(ctx context.Context, questionID int6
 		return nil, apperr.Forbidden("自分の質問のみ編集できます")
 	}
 	if _, err := uc.requireWritable.Execute(ctx, q.RoomID); err != nil {
+		return nil, err
+	}
+	roomID := q.RoomID
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourceQuestion, body); err != nil {
 		return nil, err
 	}
 

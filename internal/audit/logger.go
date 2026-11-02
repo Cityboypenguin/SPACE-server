@@ -34,6 +34,17 @@ func LogMessageDeleted(ctx context.Context, roomID int64, messageID int64) {
 		Int64("message_id", messageID), ctx).Send()
 }
 
+// LogCourseChatImageDeleted records an administrator deleting an image from the course chat
+// (message / question / answer attachment): who (via WithActor), which media, and where it was attached.
+func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string, targetID int64, uploaderID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "course_chat_image_deleted").
+		Int64("media_id", mediaID).
+		Str("source", source).
+		Int64("target_id", targetID).
+		Int64("uploader_id", uploaderID), ctx).Send()
+}
+
 func LogProbe(ctx context.Context, action string, target string, suppliedID string, reason string) {
 	WithActor(logger.Log.Warn().
 		Str("event", "audit_probe").

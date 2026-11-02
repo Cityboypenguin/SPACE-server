@@ -9,6 +9,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 )
 
 type CreatePollUseCase interface {
@@ -21,13 +22,16 @@ type CreatePollInteractor struct {
 	events          EventPublisher
 	pollRepo        repository.PollRepository
 	requireWritable course.RequireWritableCourseRoomUseCase
+	ng              ngword.Guard
 }
 
+// NewCreatePollUseCase の ng は設問と選択肢を保存の前に検査する。nil なら検査しない。
 func NewCreatePollUseCase(events EventPublisher,
 	pollRepo repository.PollRepository,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	ng ngword.Guard,
 ) CreatePollUseCase {
-	return &CreatePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable}
+	return &CreatePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable, ng: ng}
 }
 
 func (uc *CreatePollInteractor) Execute(ctx context.Context, roomID int64, question string, optionLabels []string, allowMultipleChoice bool, deadline *time.Time) (*model.Poll, error) {
@@ -42,6 +46,10 @@ func (uc *CreatePollInteractor) Execute(ctx context.Context, roomID int64, quest
 		return nil, apperr.InvalidInput("回答期限は未来の日時を指定してください")
 	}
 	if _, err := uc.requireWritable.Execute(ctx, roomID); err != nil {
+		return nil, err
+	}
+	texts := append([]string{question}, optionLabels...)
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourcePoll, texts...); err != nil {
 		return nil, err
 	}
 

@@ -3,9 +3,11 @@ package chat
 import (
 	"context"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	"strings"
 	"time"
@@ -21,6 +23,8 @@ type ThreadService struct {
 	Writers  MessageWriters
 	Role     roomusecase.GetRoomUserRoleUseCase
 	Events   EventPublisher
+	// NGWords は授業のスレッドの題名を検査する。nil なら検査しない。
+	NGWords ngword.Guard
 }
 
 func threadTitle(title string) (string, error) {
@@ -30,6 +34,16 @@ func threadTitle(title string) (string, error) {
 	}
 	return title, nil
 }
+
+// screenTitle はスレッドの題名にNGワードの検査をかける。メッセージと同じく授業のルームだけが対象。
+func (s *ThreadService) screenTitle(ctx context.Context, claims *auth.Claims, room *model.Room, title string) error {
+	if room.Type != model.RoomTypeCourse {
+		return nil
+	}
+	roomID := room.PolicyRoomID()
+	return ngword.ScreenFor(ctx, s.NGWords, claims, &roomID, model.NGWordSourceThread, title)
+}
+
 func (s *ThreadService) Create(ctx context.Context, parentID int64, title string) (*model.ChatThread, error) {
 	title, err := threadTitle(title)
 	if err != nil {
@@ -46,6 +60,9 @@ func (s *ThreadService) Create(ctx context.Context, parentID int64, title string
 	parent := access.Room
 	if parent.ParentRoomID != nil || (parent.Type != model.RoomTypeCommunity && parent.Type != model.RoomTypeCourse) {
 		return nil, apperr.InvalidInput("このルームにはスレッドを作成できません")
+	}
+	if err := s.screenTitle(ctx, claims, parent, title); err != nil {
+		return nil, err
 	}
 	now := time.Now()
 	room := &model.Room{Name: title, Type: parent.Type, ParentRoomID: &parentID, ThreadCreatorID: &claims.ID, CreatedAt: now, UpdatedAt: now}
@@ -146,6 +163,13 @@ func (s *ThreadService) Update(ctx context.Context, id int64, title *string, clo
 	if title != nil {
 		name, err = threadTitle(*title)
 		if err != nil {
+			return nil, err
+		}
+		claims, err := authz.RequireAuth(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.screenTitle(ctx, claims, room, name); err != nil {
 			return nil, err
 		}
 	}

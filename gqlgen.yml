@@ -173,6 +173,10 @@ models:
         resolver: true
       mentions:
         resolver: true
+      # 閲覧者ごとに変わる値(reactedByMe)を含み、購読でも古いキャッシュを返さないよう
+      # リゾルバ側で DataLoader を扱う。struct のフィールドに束ねさせないこと。
+      reactions:
+        resolver: true
       userID:
         resolver: true
       user:
@@ -197,6 +201,8 @@ models:
         resolver: true
       targetMessage:
         resolver: true
+      targetQuestion:
+        resolver: true
   NotificationGroup:
     fields:
       targetMessage:
@@ -213,6 +219,8 @@ models:
         resolver: true
       media:
         resolver: true
+      addenda:
+        resolver: true
       isMine:
         resolver: true
   Answer:
@@ -220,6 +228,8 @@ models:
       user:
         resolver: true
       media:
+        resolver: true
+      addenda:
         resolver: true
       isMine:
         resolver: true

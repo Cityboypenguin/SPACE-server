@@ -7,6 +7,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -15,11 +16,13 @@ import (
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	favoriteuser "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -169,6 +172,15 @@ type Resolver struct {
 	// 唯一の入口。起動時（cmd/server/main.go）も同じインスタンスを使う。
 	TermsBroadcastScheduler *termsusecase.BroadcastScheduler
 
+	// CourseImages は授業内チャットの画像の一元管理（管理画面）。
+	CourseImages *courseimageusecase.Service
+
+	// Addenda は質問・回答への追記。
+	Addenda *addendumusecase.Service
+
+	// NGWordAdmin は管理画面でのNGワードの登録・削除・集計。
+	NGWordAdmin *ngwordusecase.AdminService
+
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
 	ManageUserSettingUsecase   usersettingsusecase.ManageUserSettingUsecase
 
@@ -283,6 +295,8 @@ type ChatUseCases struct {
 	ChatCommands chatusecase.MessageCommandService
 	ChatQueries  chatusecase.MessageQueryService
 	ChatReads    chatusecase.ReadReceiptService
+	// ChatReactions はメッセージへのリアクションの付け外し。
+	ChatReactions chatusecase.MessageReactionService
 }
 
 type CommunityUseCases struct {

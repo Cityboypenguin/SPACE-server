@@ -53,6 +53,16 @@ extend type Query {
     limit: Int = 20
     offset: Int = 0
   ): PostPage!
+  # 授業内チャットのNGワードの一覧と、止めた回数の集計。
+  adminNGWords: [NGWord!]!
+  adminNGWordStats: NGWordStats!
+  # 授業内チャットに上がった画像（メッセージ・質問・回答）の一覧。新しい順。
+  adminListCourseChatImages(
+    roomID: ID
+    source: CourseChatImageSource
+    limit: Int = 24
+    offset: Int = 0
+  ): AdminCourseChatImagePage!
   adminListCourses(
     year: Int
     semester: String
@@ -84,6 +94,11 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
+  # 授業内チャットの画像を消す（ファイルも消える。取り消せない）。
+  adminDeleteCourseChatImage(mediaID: ID!): Boolean!
+  # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答・追記・投票・スレッドの題名）。
+  adminCreateNGWord(pattern: String!, matchType: NGWordMatchType!): NGWord!
+  adminDeleteNGWord(id: ID!): Boolean!
   # シラバスを取り込み、DB の授業を大学に今登録されている内容に合わせる。
   # dryRun が true なら DB の授業は書き換えず、何が変わるかの結果だけを残す。
   adminTriggerCourseImport(year: Int!, dryRun: Boolean = false): CourseImportStatus!
@@ -289,4 +304,65 @@ enum AdminPostStatus {
   ALL
   ACTIVE
   DELETED
+}
+
+enum NGWordMatchType {
+  # 含む。大小・全半角は区別しない。
+  WORD
+  # 正規表現（RE2）。例: 9桁の数字 (^|\D)\d{9}($|\D)
+  REGEX
+}
+
+type NGWord {
+  ID: ID!
+  pattern: String!
+  matchType: NGWordMatchType!
+  createdAt: String!
+}
+
+# 止めた回数。本文は残さない。
+type NGWordStats {
+  total: Int!
+  byWord: [NGWordCount!]!
+  byUser: [NGWordUserCount!]!
+}
+
+type NGWordCount {
+  pattern: String!
+  count: Int!
+}
+
+type NGWordUserCount {
+  userID: ID!
+  name: String!
+  accountID: String!
+  count: Int!
+}
+
+enum CourseChatImageSource {
+  MESSAGE
+  QUESTION
+  ANSWER
+}
+
+type AdminCourseChatImage {
+  # 画像(media)のID。adminDeleteCourseChatImage に渡す。
+  ID: ID!
+  source: CourseChatImageSource!
+  url: String!
+  width: Int
+  height: Int
+  roomID: ID!
+  courseName: String!
+  uploaderID: ID!
+  uploaderName: String!
+  uploaderAccountID: String!
+  # 添付先のメッセージが削除済み（画面には出ないが、ファイルは残っている）。
+  targetDeleted: Boolean!
+  createdAt: String!
+}
+
+type AdminCourseChatImagePage {
+  items: [AdminCourseChatImage!]!
+  total: Int!
 }

@@ -15,6 +15,7 @@ import (
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	ngword "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
@@ -102,19 +103,21 @@ func NewQuestionUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
+	// 投稿・編集の前にNGワードで検査する。
+	ng ngword.Guard,
 ) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, questionusecase.WithNGWordGuard(ng)),
+		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable, questionusecase.WithNGWordGuard(ng)),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
 		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, answerusecase.WithNGWordGuard(ng)),
+		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, answerusecase.WithNGWordGuard(ng)),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
@@ -129,10 +132,12 @@ func NewPollUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
+	// 投票の作成の前にNGワードで検査する。
+	ng ngword.Guard,
 ) graph.PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.PollUseCases{
-		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable),
+		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable, ng),
 		VotePollUseCase:    pollusecase.NewVotePollUseCase(events, pollRepo, requireWritable),
 		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(events, pollRepo, requireWritable),
 		ListPollsUseCase:   pollusecase.NewListPollsUseCase(pollRepo),

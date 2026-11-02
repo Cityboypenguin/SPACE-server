@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"strings"
@@ -230,5 +231,25 @@ func TestThreadUnreadRequiresParentReadAccess(t *testing.T) {
 	unread, err := s.HasUnread(ctxAsUser(10), communityRoomID)
 	if err != nil || !unread || !store.unreadCalled {
 		t.Fatal("parent member cannot see thread unread state", err)
+	}
+}
+
+func TestThreadTitleIsScreenedOnlyInCourseRooms(t *testing.T) {
+	s, _, _, _, _ := threadHarness()
+	s.NGWords = &fakeNGGuard{contains: "NG"}
+
+	if _, err := s.Create(ctxAsUser(10), courseRoomID, "NG の相談"); err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("course room: err = %v, want InvalidInput", err)
+	}
+	if _, err := s.Create(ctxAsUser(10), communityRoomID, "NG の相談"); err != nil {
+		t.Errorf("community room: err = %v, want nil", err)
+	}
+	created, err := s.Create(ctxAsUser(10), courseRoomID, "課題の相談")
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := "NG に変更"
+	if _, err := s.Update(ctxAsUser(10), created.Room.ID, &renamed, nil); err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Errorf("rename: err = %v, want InvalidInput", err)
 	}
 }

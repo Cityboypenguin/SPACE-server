@@ -33,6 +33,12 @@ type PollReader interface {
 	ListOptionsWithResults(ctx context.Context, pollID, viewerUserID int64) ([]*repository.PollOptionResult, error)
 }
 
+// AddendumReader は通報する質問・回答への追記を引く口。
+type AddendumReader interface {
+	ListQuestionAddenda(ctx context.Context, questionIDs []int64) (map[int64][]*model.Addendum, error)
+	ListAnswerAddenda(ctx context.Context, answerIDs []int64) (map[int64][]*model.Addendum, error)
+}
+
 // CreateContentReportDeps は通報時点の内容を写すのに要るものだけ。
 type CreateContentReportDeps struct {
 	Reports *CreateReportUsecase
@@ -42,6 +48,7 @@ type CreateContentReportDeps struct {
 	Questions QuestionReader
 	Answers   AnswerReader
 	Polls     PollReader
+	Addenda   AddendumReader
 	Media     repository.MediaReader
 	Users     userusecase.GetUserByIDUseCase
 }
@@ -69,6 +76,7 @@ type reportTarget struct {
 	roomID     int64
 	authorID   int64
 	content    string
+	stampID    *string
 	parentBody *string
 	createdAt  time.Time
 	updatedAt  time.Time
@@ -121,6 +129,7 @@ func (u *CreateContentReportUsecase) loadTarget(ctx context.Context, input Creat
 			roomID:     msg.RoomID,
 			authorID:   msg.UserID,
 			content:    msg.Content,
+			stampID:    msg.StampID,
 			createdAt:  msg.CreatedAt,
 			updatedAt:  msg.UpdatedAt,
 			loadExtras: u.attachMedia(input.TargetID, u.deps.Media.ListByMessageIDs),
@@ -136,7 +145,7 @@ func (u *CreateContentReportUsecase) loadTarget(ctx context.Context, input Creat
 			content:    question.Body,
 			createdAt:  question.CreatedAt,
 			updatedAt:  question.UpdatedAt,
-			loadExtras: u.attachMedia(input.TargetID, u.deps.Media.ListByQuestionIDs),
+			loadExtras: u.attachMediaAndAddenda(input.TargetID, u.deps.Media.ListByQuestionIDs, u.deps.Addenda.ListQuestionAddenda),
 		}, nil
 	case model.TargetAnswer:
 		answer, err := u.deps.Answers.GetAnswerByID(ctx, input.TargetID)
@@ -155,7 +164,7 @@ func (u *CreateContentReportUsecase) loadTarget(ctx context.Context, input Creat
 			parentBody: &question.Body,
 			createdAt:  answer.CreatedAt,
 			updatedAt:  answer.UpdatedAt,
-			loadExtras: u.attachMedia(input.TargetID, u.deps.Media.ListByAnswerIDs),
+			loadExtras: u.attachMediaAndAddenda(input.TargetID, u.deps.Media.ListByAnswerIDs, u.deps.Addenda.ListAnswerAddenda),
 		}, nil
 	case model.TargetPoll:
 		poll, err := u.deps.Polls.GetPollByID(ctx, input.TargetID)
@@ -207,6 +216,29 @@ func (u *CreateContentReportUsecase) attachMedia(
 	}
 }
 
+// attachMediaAndAddenda は質問・回答の添付と追記を写す。追記に問題があって通報されることもあるので、
+// 本文だけでは通報の理由が読み取れなくならないよう一緒に残す。
+func (u *CreateContentReportUsecase) attachMediaAndAddenda(
+	id int64,
+	listMedia func(context.Context, []int64) (map[int64][]*model.Media, error),
+	listAddenda func(context.Context, []int64) (map[int64][]*model.Addendum, error),
+) func(context.Context, *model.ReportedContent) error {
+	attachMedia := u.attachMedia(id, listMedia)
+	return func(ctx context.Context, snapshot *model.ReportedContent) error {
+		if err := attachMedia(ctx, snapshot); err != nil {
+			return err
+		}
+		addenda, err := listAddenda(ctx, []int64{id})
+		if err != nil {
+			return err
+		}
+		for _, a := range addenda[id] {
+			snapshot.Addenda = append(snapshot.Addenda, a.Body)
+		}
+		return nil
+	}
+}
+
 // buildSnapshot は通報された1件だけを写す。メッセージの前後の発言や返信先は写さない
 // （DM は管理者でも読めない決まりなので、通報された発言以外を持ち出さないため）。
 func (u *CreateContentReportUsecase) buildSnapshot(ctx context.Context, id int64, target *reportTarget, room *model.Room) (*model.ReportedContent, error) {
@@ -218,6 +250,7 @@ func (u *CreateContentReportUsecase) buildSnapshot(ctx context.Context, id int64
 		RoomName:   room.Name,
 		AuthorID:   &authorID,
 		Content:    target.content,
+		StampID:    target.stampID,
 		Media:      []model.ReportedContentMedia{},
 		ParentBody: target.parentBody,
 		CreatedAt:  target.createdAt,

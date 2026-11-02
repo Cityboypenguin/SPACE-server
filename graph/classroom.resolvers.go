@@ -626,3 +626,61 @@ type (
 	pollResolver     struct{ *Resolver }
 	questionResolver struct{ *Resolver }
 )
+
+// AddQuestionAddendum is the resolver for the addQuestionAddendum field.
+func (r *mutationResolver) AddQuestionAddendum(ctx context.Context, questionID string, body string) (*gqlmodel.Question, error) {
+	qid, err := decodeGraphID(ctx, "question", questionID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid question id")
+	}
+	q, err := r.Addenda.AddToQuestion(ctx, qid, body)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphQuestion(q), nil
+}
+
+// AddAnswerAddendum is the resolver for the addAnswerAddendum field.
+func (r *mutationResolver) AddAnswerAddendum(ctx context.Context, answerID string, body string) (*gqlmodel.Answer, error) {
+	aid, err := decodeGraphID(ctx, "answer", answerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid answer id")
+	}
+	aw, err := r.Addenda.AddToAnswer(ctx, aid, body)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnswerWithLikes(aw), nil
+}
+
+// Addenda is the resolver for the addenda field.
+func (r *questionResolver) Addenda(ctx context.Context, obj *gqlmodel.Question) ([]*gqlmodel.Addendum, error) {
+	numericID, err := decodeGraphID(ctx, "question", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	// 購読の ctx はローダーを使い回すので、読む前にこのキーのキャッシュを捨てる
+	// （Message.reactions と同じ理由。graph/chat.resolvers.go 参照）。
+	loader := dataloader.For(ctx).QuestionAddendaLoader
+	loader.Clear(numericID)
+	list, err := loader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAddenda("question_addendum", list), nil
+}
+
+// Addenda is the resolver for the addenda field.
+func (r *answerResolver) Addenda(ctx context.Context, obj *gqlmodel.Answer) ([]*gqlmodel.Addendum, error) {
+	numericID, err := decodeGraphID(ctx, "answer", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	loader := dataloader.For(ctx).AnswerAddendaLoader
+	loader.Clear(numericID)
+	list, err := loader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAddenda("answer_addendum", list), nil
+}

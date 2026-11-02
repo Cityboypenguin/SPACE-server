@@ -43,6 +43,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -50,11 +51,13 @@ import (
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -556,7 +559,12 @@ func main() {
 		CheckBlockRelation: checkBlockRelationUseCase,
 		GetUser:            getUserByIDUseCase,
 	})
+	// NGワード。授業内チャットのメッセージ・質問・回答を、投稿の前に検査する。
+	ngWordRepository := mysql.NewMySQLNGWordRepository(database)
+	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
+	ngWordAdmin := ngwordusecase.NewAdminService(ngWordRepository, ngWordGuard)
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
+		NGWords:          ngWordGuard,
 		Access:           chatAccessPolicy,
 		GetRoom:          getRoomUseCase,
 		GetRoomUserRole:  getRoomUserRoleUseCase,
@@ -566,6 +574,33 @@ func main() {
 		ListMentions:     listMessageMentionsUseCase,
 		ListMessageMedia: listMediaByMessageIDsUseCase,
 		Events:           chatEventPublisher,
+	})
+	messageReactionRepository := mysql.NewMySQLMessageReactionRepository(database)
+	chatReactionService := chatusecase.NewMessageReactionService(chatusecase.MessageReactionDeps{
+		Access:     chatAccessPolicy,
+		GetRoom:    getRoomUseCase,
+		GetMessage: getMessageByIDUseCase,
+		Reactions:  messageReactionRepository,
+		Events:     chatEventPublisher,
+	})
+	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
+	// 授業内チャットの画像の一元管理。
+	courseChatImageRepository := mysql.NewMySQLCourseChatImageRepository(database)
+	courseImageService := courseimageusecase.NewService(courseChatImageRepository, storageRepository, messageStorageRepository)
+	// 質問・回答への追記。
+	addendumRepository, err := mysql.NewMySQLAddendumRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize addendum repository")
+	}
+	addendumService := addendumusecase.NewService(addendumusecase.Deps{
+		Questions:       questionRepository,
+		Answers:         answerRepository,
+		Addenda:         addendumRepository,
+		RequireWritable: courseusecase.NewRequireWritableCourseRoomUseCase(courseRepository, systemSettingRepository, timetableRepository),
+		NGWords:         ngWordGuard,
+		QuestionEvents:  classroomEvents,
+		AnswerEvents:    classroomEvents,
+		Notifier:        graph.NewAddendumNotifier(notificationPublisher, getRoomUseCase),
 	})
 	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
 		Access:             chatAccessPolicy,
@@ -586,7 +621,7 @@ func main() {
 	threadService := &chatusecase.ThreadService{
 		Access: chatAccessPolicy, Messages: messageRepository, Rooms: roomRepository, Threads: &mysql.MySQLChatThreadRepository{DB: database},
 		Tx: txManager, Writers: chatMessageWriters, Role: getRoomUserRoleUseCase,
-		Events: chatEventPublisher,
+		Events: chatEventPublisher, NGWords: ngWordGuard,
 	}
 	resolver := &graph.Resolver{
 		StorageRepository:        storageRepository,
@@ -696,8 +731,8 @@ func main() {
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
 		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, userSettingRepository, roomRepository, blockRepository, messageRepository, courseSyncRepository, txManager, notificationPublisher),
-		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository),
-		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository),
+		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, ngWordGuard),
+		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, ngWordGuard),
 
 		CreateReportUsecase: *createReportUseCase,
 		CreateContentReportUsecase: reportusecase.NewCreateContentReportUsecase(reportusecase.CreateContentReportDeps{
@@ -707,10 +742,14 @@ func main() {
 			Questions: questionRepository,
 			Answers:   answerRepository,
 			Polls:     pollRepository,
+			Addenda:   addendumRepository,
 			Media:     mediaRepository,
 			Users:     getUserByIDUseCase,
 		}),
 		ManageReportUsecase:                *manageReportUseCase,
+		CourseImages:                       courseImageService,
+		Addenda:                            addendumService,
+		NGWordAdmin:                        ngWordAdmin,
 		ManageNotificationRecipientUsecase: reportusecase.NewManageNotificationRecipientUsecase(reportNotificationRecipientRepository),
 		ManageSystemSettingUsecase:         *manageSystemSettingUseCase,
 		ManageUserSettingUsecase:           *manageUserSettingUseCase,
@@ -777,6 +816,7 @@ func main() {
 			ThreadService: threadService,
 			ChatAccess:    chatAccessPolicy,
 			ChatCommands:  chatCommandService,
+			ChatReactions: chatReactionService,
 			ChatQueries:   chatQueryService,
 			ChatReads:     chatReadService,
 		},
@@ -831,6 +871,9 @@ func main() {
 		CountFavoritesByPostIDs:        countFavoritesByPostIDsUseCase,
 		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
 		GetMessagesByIDs:               getMessagesByIDsUseCase,
+		ListMessageReactions:           listMessageReactionsUseCase,
+		ListQuestionAddenda:            addendumusecase.NewListQuestionAddendaUseCase(addendumRepository),
+		ListAnswerAddenda:              addendumusecase.NewListAnswerAddendaUseCase(addendumRepository),
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
 		GetRoomsByIDs:                  getRoomsByIDsUseCase,

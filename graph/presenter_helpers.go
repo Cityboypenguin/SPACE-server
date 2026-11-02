@@ -202,6 +202,8 @@ func (r *Resolver) toGraphReportedContent(m *model.ReportedContent) *gqlmodel.Re
 		Media:       media,
 		ParentBody:  m.ParentBody,
 		PollOptions: append([]string{}, m.PollOptions...),
+		StampID:     m.StampID,
+		Addenda:     append([]string{}, m.Addenda...),
 		CreatedAt:   m.CreatedAt.Format(timeFormat),
 		UpdatedAt:   m.UpdatedAt.Format(timeFormat),
 	}
@@ -349,6 +351,25 @@ func (r *Resolver) notificationTargetMessage(ctx context.Context, targetType *st
 		return nil, nil
 	}
 	return toGraphMessage(msg), nil
+}
+
+// notificationTargetQuestion は追記の通知の遷移先の質問を引く。削除済み・読めない授業は nil。
+func (r *Resolver) notificationTargetQuestion(ctx context.Context, targetType *string, targetID *string) (*gqlmodel.Question, error) {
+	if targetType == nil || *targetType != notificationTargetTypeQuestion || targetID == nil {
+		return nil, nil
+	}
+	numericID, err := decodeGraphID(ctx, "question", *targetID)
+	if err != nil {
+		return nil, nil
+	}
+	q, err := r.GetQuestionByIDUseCase.Execute(ctx, numericID)
+	if err != nil || q == nil {
+		return nil, nil
+	}
+	if _, err := r.requireRoomReadAccess(ctx, q.RoomID); err != nil {
+		return nil, nil
+	}
+	return toGraphQuestion(q), nil
 }
 
 // resolveMentions は本文中のメンション（保存済み）を GraphQL の Mention に変換する。

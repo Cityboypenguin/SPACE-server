@@ -8,10 +8,12 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
@@ -50,6 +52,9 @@ type MessageCommandDeps struct {
 	// メッセージを作らせない）を守れるのは添付を引けるこの層だけ。
 	ListMessageMedia mediausecase.ListMediaByMessageIDsUseCase
 
+	// NGWords は授業内チャットの投稿の前に、NGワードを検査する。nil なら検査しない。
+	NGWords ngword.Guard
+
 	// Events は配信・通知の出口。nil を渡すと何もしない実装が入る。
 	Events EventPublisher
 }
@@ -63,6 +68,9 @@ type messageCommandService struct {
 func NewMessageCommandService(deps MessageCommandDeps) MessageCommandService {
 	if deps.Events == nil {
 		deps.Events = NoopEventPublisher{}
+	}
+	if deps.NGWords == nil {
+		deps.NGWords = ngword.NoopGuard{}
 	}
 	return &messageCommandService{deps: deps}
 }
@@ -78,6 +86,8 @@ type SendMessageInput struct {
 	// （message.MentionsSupported: コミュニティのみ）から判定させる。
 	MentionUserIDs []int64
 	ReplyToID      *int64
+	// StampID を渡すと、スタンプだけのメッセージを送る（本文・添付・メンションは付けられない）。
+	StampID *string
 }
 
 type UpdateMessageInput struct {
@@ -103,15 +113,25 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		return nil, err
 	}
 
+	// NGワードは授業内チャットだけが対象（スタンプには文面が無い）。管理者の投稿は止めない。
+	if err := s.screenNGWords(ctx, claims, access.Room, in.Content); err != nil {
+		return nil, err
+	}
+
 	// メンションが成立するルームか（コミュニティのみ）の判定は ResolveMentions 側に
 	// あり、ここは検証済みの結果だけを保存に渡す。リゾルバから ResolveMentions を
 	// 直接呼ぶ経路は無くしてあるので、別経路から実名メンションを通す余地は無い。
+	// スタンプには本文が無いのでメンションは成立しない。黙って捨てずに、組み合わせが誤りだと返す
+	// （クライアントの送信ミスに気づけるように）。本文・添付との併用の拒否は保存側（messagestore）が持つ。
+	if in.StampID != nil && len(in.MentionUserIDs) > 0 {
+		return nil, apperr.InvalidInput("スタンプはメンションと一緒に送れません")
+	}
 	mentions, err := s.deps.ResolveMentions.Execute(ctx, access.Room.PolicyRoomID(), claims.ID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, mentions)
+	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, in.StampID, mentions)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +172,15 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	if !existing.CanBeEditedBy(claims.ID, isAdmin) {
 		audit.LogDenied(ctx, "update_message", "message", in.MessageID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")
+	}
+	// スタンプのメッセージには、直す本文が無い（削除はできる）。
+	if existing.StampID != nil {
+		return nil, apperr.InvalidInput("スタンプは編集できません")
+	}
+
+	// 編集後の本文も、投稿と同じくNGワードを検査する（直して通す抜け道を作らない）。
+	if err := s.screenNGWords(ctx, claims, room, in.Content); err != nil {
+		return nil, err
 	}
 
 	// 本文を空にする編集は、添付が1枚も無いときだけ弾く
@@ -278,6 +307,15 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 	return deleted, nil
 }
 
+// screenNGWords は授業ルームの投稿だけにNGワードの検査をかける（管理者は除く）。
+func (s *messageCommandService) screenNGWords(ctx context.Context, claims *auth.Claims, room *model.Room, content string) error {
+	if room == nil || room.Type != model.RoomTypeCourse {
+		return nil
+	}
+	roomID := room.ID
+	return ngword.ScreenFor(ctx, s.deps.NGWords, claims, &roomID, model.NGWordSourceMessage, content)
+}
+
 // ensureMessageNotEmptied は「本文も添付も無いメッセージは存在しない」という
 // Message の不変条件を、編集経路でも守る。
 //
@@ -323,7 +361,13 @@ func (s *messageCommandService) ensureMessageNotEmptied(ctx context.Context, exi
 // メッセージIDが実在するかどうかを外から測れてしまうので、どちらも
 // "message not found" に寄せている。
 func (s *messageCommandService) loadMessageInRoom(ctx context.Context, roomID, messageID int64) (*model.Message, error) {
-	msg, err := s.deps.GetMessage.Execute(ctx, messageID)
+	return loadMessageInRoom(ctx, s.deps.GetMessage, roomID, messageID)
+}
+
+// loadMessageInRoom は上のメソッドの本体。リアクション（reaction.go）など、
+// 同じ照合が要る別サービスからも使うため、サービスに依存しない形で切り出してある。
+func loadMessageInRoom(ctx context.Context, getMessage messageusecase.GetMessageByIDUseCase, roomID, messageID int64) (*model.Message, error) {
+	msg, err := getMessage.Execute(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message")
 	}

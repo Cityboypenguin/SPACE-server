@@ -194,7 +194,8 @@ func TestNotify_FlushSendsWhatIsPendingOnce(t *testing.T) {
 		t.Fatalf("Wait: %v", err)
 	}
 	got := mailer.sentSubjects()
-	if len(got) != 2 || !strings.Contains(got[1], "2件") {
+	// 送信は非同期なので、届いた順は決まらない。
+	if len(got) != 2 || !strings.Contains(strings.Join(got, " "), "2件") {
 		t.Fatalf("mails = %v, want the first report and one summary of 2", got)
 	}
 }
