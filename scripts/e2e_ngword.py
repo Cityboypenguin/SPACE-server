@@ -73,7 +73,7 @@ ok(gql(S, {"r": room, "c": "10桁なら 1234567890 です"}, users["a"]))
 print("   - 8桁・10桁は通る OK")
 
 E = "mutation($r:ID!,$i:ID!,$c:String!){updateMessage(roomID:$r,id:$i,content:$c){ID content}}"
-print("6. 編集で NGワードに書き換えるのも止まる:", err(gql(E, {"r": room, "i": m["ID"], "c": f"{word} に変更"}, users["a"])))
+print("6. 授業チャットは編集できない:", err(gql(E, {"r": room, "i": m["ID"], "c": f"{word} に変更"}, users["a"])))
 
 QC = "mutation($r:ID!,$b:String!){createQuestion(roomID:$r,body:$b){ID}}"
 q = ok(gql(QC, {"r": room, "b": "ふつうの質問です"}, users["a"]))["createQuestion"]
@@ -87,10 +87,10 @@ print("   - 回答の編集:", err(gql("mutation($i:ID!,$b:String!){updateAnswer
 ST = "query{adminNGWordStats{total byWord{pattern count} byUser{name accountID count}}}"
 st = ok(gql(ST, token=adm))["adminNGWordStats"]
 cnt = {u["accountID"]: u["count"] for u in st["byUser"]}
-assert cnt.get(f"ngw{run}a") == 6, st   # メッセージ3(単語・全角・数字) + 編集1 + 質問2(投稿・編集)
-assert cnt.get(f"ngw{run}b") == 2, st   # 回答2(投稿・編集)
+assert cnt.get(f"ngw{run}a") == 4, st   # メッセージ3(単語・全角・数字) + 質問1
+assert cnt.get(f"ngw{run}b") == 1, st   # 回答1
 words = {w["pattern"]: w["count"] for w in st["byWord"]}
-assert words.get(word.upper()) == 5 + 0 + 2, st   # 単語で止まったのは 6-1(数字) + 2 = 7
+assert words.get(word.upper()) == 3 + 1, st   # 単語で止まったのは a の 4-1(数字) + b の 1 = 4
 print(f"8. 止めた回数の集計: a={cnt[f'ngw{run}a']}回 b={cnt[f'ngw{run}b']}回、合計 {st['total']} 回 OK")
 
 # 管理者は止められない(教員の注意喚起などで使う語を書けるように)。
@@ -105,7 +105,7 @@ ok(gql(S, {"r": room, "c": f"これは {word} です"}, users["a"]))
 print("10. NGワードを削除すると、同じ文面が通るようになる OK")
 st2 = ok(gql(ST, token=adm))["adminNGWordStats"]
 assert st2["total"] == st["total"], (st, st2)
-assert {u["accountID"]: u["count"] for u in st2["byUser"]}.get(f"ngw{run}a") == 6
+assert {u["accountID"]: u["count"] for u in st2["byUser"]}.get(f"ngw{run}a") == 4
 print("11. 削除しても、止めた回数の記録は残る OK")
 if digits_created:
     ok(gql("mutation($i:ID!){adminDeleteNGWord(id:$i)}", {"i": digits["ID"]}, adm))

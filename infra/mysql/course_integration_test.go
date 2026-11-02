@@ -14,13 +14,6 @@ func TestCourseSearchAndAdminCountsWithSyncColumns(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	repo := NewMySQLCourseRepository(db)
-	for _, stmt := range []string{
-		`CREATE TABLE messages(id BIGINT PRIMARY KEY,room_id BIGINT)`,
-	} {
-		if _, err := db.Exec(stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
 	first, err := repo.SaveCourseWithRoom(ctx, repository.SaveCourseParam{DayOfWeek: "月", Period: 1, TeacherName: "先生", CourseName: "授業A", Year: 2026, Semester: "前期", DedupKey: "a", Source: model.CourseSourceSenshu, SourceRef: "ref-a", SourceName: "元の授業名"})
 	if err != nil {
 		t.Fatal(err)
