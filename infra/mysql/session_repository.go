@@ -22,9 +22,13 @@ func NewMySQLSessionRepository(db *sql.DB) *MySQLSessionRepository {
 // セッションが増えてしまう。
 const sessionGapSeconds = 30 * 60
 
+// appJST は利用者にとっての「日」を区切るタイムゾーン（利用者はみな日本にいる）。
+var appJST = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 func (r *MySQLSessionRepository) RecordSession(ctx context.Context, userID int64, durationSeconds int, pageViews []repository.PageViewInput) error {
 	now := time.Now()
-	date := now.Format("2006-01-02")
+	// 日付は日本時間で区切る。UTC のままだと、日本時間の 0〜9 時の利用が前の日に入る。
+	date := now.In(appJST).Format("2006-01-02")
 	nowUnix := now.Unix()
 
 	tx, err := r.DB.BeginTx(ctx, nil)

@@ -176,3 +176,30 @@ func TestAuthenticate_RejectsLegacyQueryToken(t *testing.T) {
 		t.Fatalf("expected 401, got %d", code)
 	}
 }
+
+// 再接続の「最後に受け取った ID」は、ブラウザ自身の再接続ならヘッダー、
+// 張り直した EventSource ならクエリで届く。どちらも読めること。
+func TestLastEventIDFrom(t *testing.T) {
+	cases := []struct {
+		name, query, header string
+		want                int
+	}{
+		{"初回接続", "ticket=x", "", -1},
+		{"ヘッダー", "ticket=x", "57", 57},
+		{"クエリ", "ticket=x&lastEventId=12", "", 12},
+		{"ヘッダーを優先", "ticket=x&lastEventId=12", "57", 57},
+		{"数字でない", "ticket=x&lastEventId=abc", "", -1},
+		{"負の数", "ticket=x&lastEventId=-3", "", -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/events?"+tc.query, nil)
+			if tc.header != "" {
+				req.Header.Set("Last-Event-ID", tc.header)
+			}
+			if got := lastEventIDFrom(req); got != tc.want {
+				t.Fatalf("got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

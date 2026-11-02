@@ -46,7 +46,7 @@ extend type Mutation {
   updateUser(input: UpdateUserInput!): UserAccount!
   loginUser(input: LoginInput!): UserAuthPayload!
   refreshUserToken(refreshToken: String!): UserAuthPayload!
-  logoutUser(token: String!): Boolean!
+  logoutUser(token: String!, refreshToken: String): Boolean!
   requestPasswordReset(email: String!): Boolean!
   verifyPasswordResetOTP(email: String!, otp: String!): String!
   resetPassword(resetToken: String!, newPassword: String!): Boolean!

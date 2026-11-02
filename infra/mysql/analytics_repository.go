@@ -243,9 +243,11 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 }
 
 func (r *MySQLAnalyticsRepository) GetAnalyticsSummary(ctx context.Context, fields repository.FieldSet) (*model.AnalyticsSummary, error) {
-	now := time.Now()
+	// 「本日」は日本時間の 0 時から。コンテナは UTC で動くので、now.Location() の
+	// ままだと日本時間の 9 時が日付の境目になっていた（時系列のグラフは JST だった）。
+	now := time.Now().In(appJST)
 	w := summaryWindows{
-		todayStart:  time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix(),
+		todayStart:  time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, appJST).Unix(),
 		weekStart:   now.AddDate(0, 0, -7).Unix(),
 		monthStart:  now.AddDate(0, -1, 0).Unix(),
 		days30Start: now.AddDate(0, 0, -30).Unix(),

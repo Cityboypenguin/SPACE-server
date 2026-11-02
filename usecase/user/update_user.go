@@ -33,6 +33,18 @@ func (uc *UpdateUserInteractor) Execute(ctx context.Context, id int64, param mod
 	} else if _, err := authz.RequireAdmin(ctx); err != nil {
 		return nil, err
 	}
+	// 本人によるメールアドレスの変更は受け付けない。ここで変えられると、学籍番号の
+	// 形式も認証コードも確かめずに、学外のアドレスや他人のアドレスへ移せてしまう。
+	// 画面にも変更の口は無い。直す必要があれば管理者（adminUpdateUser）が変える。
+	if requireCurrentPassword && param.Email != nil {
+		return nil, fmt.Errorf("メールアドレスは変更できません")
+	}
+	// 新規登録と同じ長さの決まりを、変更のときにも守らせる（以前は画面だけが確かめていた）。
+	if param.Password != nil {
+		if err := model.ValidateUserPassword(*param.Password); err != nil {
+			return nil, err
+		}
+	}
 	// このユースケースはパスワードを変えられる（param.Password）ので、
 	// 現在パスワードの照合と保存の両方でハッシュが要る。
 	user, err := uc.userRepo.GetCredentialsByID(ctx, id)
