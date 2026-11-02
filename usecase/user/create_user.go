@@ -100,6 +100,11 @@ func (uc *CreateUserInteractor) checkOTP(ctx context.Context, email, code string
 	if err != nil {
 		return err
 	}
+	if record != nil && record.Code != code {
+		if err := uc.otpRepo.RecordFailure(ctx, email); err != nil {
+			return err
+		}
+	}
 	if record == nil || record.Code != code {
 		return fmt.Errorf("認証コードが無効または期限切れです")
 	}

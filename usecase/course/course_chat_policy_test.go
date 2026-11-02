@@ -35,3 +35,26 @@ func TestEnsureCourseChatEnabled(t *testing.T) {
 		t.Errorf("admin while stopped: %v", err)
 	}
 }
+
+type countingUnreadCounter struct {
+	repository.MessageUnreadCounter
+	calls int
+}
+
+func (c *countingUnreadCounter) CountUnreadByCourseRooms(context.Context, int64, int, string) ([]*repository.CourseRoomUnread, error) {
+	c.calls++
+	return []*repository.CourseRoomUnread{{RoomID: 1, UnreadCount: 3}}, nil
+}
+
+// 一括停止中は授業チャットを開けないので、未読の印も出さない。
+func TestListCourseRoomUnreadCounts_EmptyWhileStopped(t *testing.T) {
+	user := auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "user"})
+	counter := &countingUnreadCounter{}
+	got, err := NewListCourseRoomUnreadCountsUseCase(counter, courseChatSetting{value: "false"}).Execute(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 || counter.calls != 0 {
+		t.Fatalf("got %d counts, %d queries; want none", len(got), counter.calls)
+	}
+}

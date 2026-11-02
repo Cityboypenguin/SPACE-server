@@ -55,12 +55,6 @@ type MediaReader interface {
 // MediaDeleter は紐づけとメディア本体の削除。
 type MediaDeleter interface {
 	DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error
-	// DeleteQuestionMedia は questionID に添付されている mediaID を削除する（紐付けは
-	// ON DELETE CASCADE で消える）。他の質問・投稿のメディアは対象にしない。
-	DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error
-	// DeleteAnswerMedia は answerID に添付されている mediaID を削除する（紐付けは
-	// ON DELETE CASCADE で消える）。他の回答・投稿のメディアは対象にしない。
-	DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error
 }
 
 // MediaDimensionRepository は画像の縦横を後から埋める補修用（バッチが使う）。

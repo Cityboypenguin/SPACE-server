@@ -73,13 +73,17 @@ func insertPageViews(ctx context.Context, db dbtx, userID int64, date string, no
 	return inChunks(pageViews, pageViewStatColumns, func(chunk []repository.PageViewInput) error {
 		args := make([]any, 0, len(chunk)*pageViewStatColumns)
 		for _, pv := range chunk {
-			args = append(args, userID, date, pv.Path, 1, pv.DurationSeconds, pv.MaxScrollDepth, nowUnix, nowUnix)
+			views, scroll := 1, pv.MaxScrollDepth
+			if pv.Resumed {
+				views, scroll = 0, 0
+			}
+			args = append(args, userID, date, pv.Path, views, pv.DurationSeconds, scroll, nowUnix, nowUnix)
 		}
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO page_view_stats (user_id, date, page_path, view_count, total_duration_seconds, total_max_scroll_depth, created_at, updated_at)
 			VALUES `+valuesPlaceholders(len(chunk), pageViewStatColumns)+`
 			ON DUPLICATE KEY UPDATE
-				view_count = view_count + 1,
+				view_count = view_count + VALUES(view_count),
 				total_duration_seconds = total_duration_seconds + VALUES(total_duration_seconds),
 				total_max_scroll_depth = total_max_scroll_depth + VALUES(total_max_scroll_depth),
 				updated_at = VALUES(updated_at)`,

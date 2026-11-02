@@ -36964,7 +36964,11 @@ func (ec *executionContext) unmarshalInputPageViewInput(ctx context.Context, obj
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"path", "durationSeconds", "maxScrollDepth"}
+	if _, present := asMap["resumed"]; !present {
+		asMap["resumed"] = false
+	}
+
+	fieldsInOrder := [...]string{"path", "durationSeconds", "maxScrollDepth", "resumed"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -36992,6 +36996,13 @@ func (ec *executionContext) unmarshalInputPageViewInput(ctx context.Context, obj
 				return it, err
 			}
 			it.MaxScrollDepth = data
+		case "resumed":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resumed"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Resumed = data
 		}
 	}
 	return it, nil

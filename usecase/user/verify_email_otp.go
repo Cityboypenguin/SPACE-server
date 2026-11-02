@@ -37,6 +37,11 @@ func (uc *VerifyEmailOTPInteractor) Execute(ctx context.Context, email, otp stri
 	if err != nil {
 		return err
 	}
+	if record != nil && record.Code != otp {
+		if err := uc.otpRepo.RecordFailure(ctx, email); err != nil {
+			return err
+		}
+	}
 	if record == nil || record.Code != otp {
 		return fmt.Errorf("認証コードが無効または期限切れです")
 	}

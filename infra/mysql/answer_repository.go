@@ -149,25 +149,6 @@ func (r *MySQLAnswerRepository) CountAnswersByQuestionID(ctx context.Context, qu
 	return total, nil
 }
 
-func (r *MySQLAnswerRepository) UpdateAnswerBody(ctx context.Context, answerID, authorUserID int64, body string) (bool, error) {
-	encrypted, err := r.cipher.Encrypt(body)
-	if err != nil {
-		return false, fmt.Errorf("encrypt answer body: %w", err)
-	}
-	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
-		`UPDATE answers SET body = ?, updated_at = ? WHERE id = ? AND author_user_id = ?`,
-		encrypted, time.Now().Unix(), answerID, authorUserID,
-	)
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 func (r *MySQLAnswerRepository) DeleteAnswer(ctx context.Context, answerID, authorUserID int64) (bool, error) {
 	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		`DELETE FROM answers WHERE id = ? AND author_user_id = ?`,
