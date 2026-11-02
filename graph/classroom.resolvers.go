@@ -659,11 +659,7 @@ func (r *questionResolver) Addenda(ctx context.Context, obj *gqlmodel.Question) 
 	if err != nil {
 		return nil, nil
 	}
-	// 購読の ctx はローダーを使い回すので、読む前にこのキーのキャッシュを捨てる
-	// （Message.reactions と同じ理由。graph/chat.resolvers.go 参照）。
-	loader := dataloader.For(ctx).QuestionAddendaLoader
-	loader.Clear(numericID)
-	list, err := loader.Load(ctx, numericID)
+	list, err := dataloader.For(ctx).QuestionAddendaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}
@@ -676,9 +672,7 @@ func (r *answerResolver) Addenda(ctx context.Context, obj *gqlmodel.Answer) ([]*
 	if err != nil {
 		return nil, nil
 	}
-	loader := dataloader.For(ctx).AnswerAddendaLoader
-	loader.Clear(numericID)
-	list, err := loader.Load(ctx, numericID)
+	list, err := dataloader.For(ctx).AnswerAddendaLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}

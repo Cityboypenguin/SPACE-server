@@ -151,8 +151,12 @@ func TestReportRepository_RepointReportedMedia(t *testing.T) {
 	if err := repo.RepointReportedMedia(ctx, model.TargetQuestion, "9", "media/a.png", "media/new.png"); err != nil {
 		t.Fatalf("RepointReportedMedia: %v", err)
 	}
-	if has("media/a.png") || !has("media/new.png") || !has("media/b.png") {
-		t.Fatal("only the old key should have moved")
+	same1, err := repo.FindByID(ctx, "same1")
+	if err != nil {
+		t.Fatalf("FindByID same1: %v", err)
+	}
+	if same1.ReportedContent.Media[1].StorageKey != "media/b.png" {
+		t.Errorf("only the old key should have moved: %+v", same1.ReportedContent.Media)
 	}
 	for id, want := range map[string]string{"same1": "media/new.png", "same2": "media/new.png", "otherTarget": "media/a.png"} {
 		got, err := repo.FindByID(ctx, id)

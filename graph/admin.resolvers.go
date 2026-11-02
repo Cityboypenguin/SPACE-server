@@ -18,6 +18,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 )
 
 // CreateAdministrator is the resolver for the createAdministrator field.
@@ -1008,22 +1009,67 @@ func (r *mutationResolver) AdminDeleteCourseChatImage(ctx context.Context, media
 	return true, nil
 }
 
+// AdminRestoreCourseChatImage is the resolver for the adminRestoreCourseChatImage field.
+func (r *mutationResolver) AdminRestoreCourseChatImage(ctx context.Context, mediaID string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "media", mediaID)
+	if err != nil {
+		return false, fmt.Errorf("invalid media id")
+	}
+	if err := r.CourseImages.Restore(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// AdminListRemovedCourseChatImages is the resolver for the adminListRemovedCourseChatImages field.
+func (r *queryResolver) AdminListRemovedCourseChatImages(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource, limit *int32, offset *int32) (*gqlmodel.AdminRemovedCourseChatImagePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	filter, err := courseChatImageFilter(ctx, roomID, source)
+	if err != nil {
+		return nil, err
+	}
+	pq := resolvePageQuery(ctx, limit, offset, 24)
+	items, total, err := r.CourseImages.ListRemoved(ctx, filter, pq.Limit, pq.Offset)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.AdminRemovedCourseChatImagePage{Total: int32(total), Items: make([]*gqlmodel.AdminRemovedCourseChatImage, 0, len(items))}
+	for _, img := range items {
+		g := &gqlmodel.AdminRemovedCourseChatImage{
+			ID:                encodeGraphID("media", img.MediaID),
+			Source:            gqlmodel.CourseChatImageSource(strings.ToUpper(string(img.Source))),
+			URL:               r.messageMediaURL(img.RemovedKey),
+			RoomID:            encodeGraphID("room", img.RoomID),
+			CourseName:        img.CourseName,
+			UploaderID:        encodeGraphID("user", img.Uploader.ID),
+			UploaderName:      img.Uploader.Name,
+			UploaderAccountID: img.Uploader.AccountID,
+			CreatedAt:         img.CreatedAt.Format(timeFormat),
+			RemovedAt:         img.RemovedAt.Format(timeFormat),
+			Reported:          img.Reported,
+		}
+		if !img.Reported {
+			expiresAt := img.RemovedAt.Add(courseimageusecase.RemovedRetention).Format(timeFormat)
+			g.ExpiresAt = &expiresAt
+		}
+		out.Items = append(out.Items, g)
+	}
+	return out, nil
+}
+
 // AdminListCourseChatImages is the resolver for the adminListCourseChatImages field.
 func (r *queryResolver) AdminListCourseChatImages(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource, limit *int32, offset *int32) (*gqlmodel.AdminCourseChatImagePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
-	filter := repository.CourseChatImageFilter{}
-	if roomID != nil {
-		id, err := decodeGraphID(ctx, "room", *roomID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid room id")
-		}
-		filter.RoomID = &id
-	}
-	if source != nil {
-		src := model.CourseChatImageSource(strings.ToLower(string(*source)))
-		filter.Source = &src
+	filter, err := courseChatImageFilter(ctx, roomID, source)
+	if err != nil {
+		return nil, err
 	}
 	pq := resolvePageQuery(ctx, limit, offset, 24)
 	items, total, err := r.CourseImages.List(ctx, filter, pq.Limit, pq.Offset)

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -17,56 +19,102 @@ type fakeImages struct {
 	img     *model.CourseChatImage
 	deleted []int64
 	order   *[]string
+
+	removed         *model.RemovedCourseChatImage
+	expired         []*model.RemovedCourseChatImage
+	purged          []int64
+	before          time.Time
+	restoreCheckErr error
+	restoreErr      error
 }
 
 func (f *fakeImages) GetCourseChatImage(context.Context, int64) (*model.CourseChatImage, error) {
 	return f.img, nil
 }
-func (f *fakeImages) DeleteCourseChatImage(_ context.Context, id int64) error {
+func (f *fakeImages) RemoveCourseChatImage(_ context.Context, removed *model.RemovedCourseChatImage) error {
 	*f.order = append(*f.order, "db")
-	f.deleted = append(f.deleted, id)
+	f.deleted = append(f.deleted, removed.MediaID)
+	f.removed = removed
+	return nil
+}
+func (f *fakeImages) GetRemovedCourseChatImage(context.Context, int64) (*model.RemovedCourseChatImage, error) {
+	return f.removed, nil
+}
+func (f *fakeImages) ListRemovedCourseChatImagesBefore(_ context.Context, before time.Time, after int64, _ int) ([]*model.RemovedCourseChatImage, error) {
+	f.before = before
+	var out []*model.RemovedCourseChatImage
+	for _, img := range f.expired {
+		if img.MediaID > after {
+			out = append(out, img)
+		}
+	}
+	return out, nil
+}
+func (f *fakeImages) CheckRestorable(context.Context, *model.RemovedCourseChatImage) error {
+	return f.restoreCheckErr
+}
+func (f *fakeImages) RestoreCourseChatImage(context.Context, *model.RemovedCourseChatImage) error {
+	*f.order = append(*f.order, "restore")
+	return f.restoreErr
+}
+func (f *fakeImages) DeleteRemovedCourseChatImage(_ context.Context, id int64) error {
+	f.purged = append(f.purged, id)
 	return nil
 }
 
 type fakeStorage struct {
 	repository.StorageRepository
 	err     error
-	copyErr error
+	putErr  error
+	statErr error
 	order   *[]string
 	deleted []string
-	copied  [][2]string
+	put     map[string]string
 }
 
 func (f *fakeStorage) StatObject(context.Context, string) (repository.ObjectInfo, error) {
-	return repository.ObjectInfo{ETag: "etag"}, nil
+	return repository.ObjectInfo{Size: 3}, f.statErr
 }
 
-func (f *fakeStorage) CopyObject(_ context.Context, src, dst, etag, _ string) error {
-	*f.order = append(*f.order, "copy")
-	if etag != "etag" {
-		return errors.New("unexpected etag")
+func (f *fakeStorage) ObjectHead(_ context.Context, _ string, limit int64) ([]byte, string, error) {
+	if limit != 3 {
+		return nil, "", errors.New("must read the whole object")
 	}
-	f.copied = append(f.copied, [2]string{src, dst})
-	return f.copyErr
+	return []byte("png"), "etag", nil
+}
+
+func (f *fakeStorage) PutObject(_ context.Context, key, _ string, body []byte) error {
+	*f.order = append(*f.order, "put")
+	if f.put == nil {
+		f.put = map[string]string{}
+	}
+	f.put[key] = string(body)
+	return f.putErr
+}
+
+func (f *fakeStorage) DeleteObject(_ context.Context, key string) error {
+	*f.order = append(*f.order, "storage")
+	f.deleted = append(f.deleted, key)
+	return f.err
 }
 
 type fakeReports struct {
 	repository.ReportedMediaRepository
-	referenced bool
 	repointErr error
 	order      *[]string
 	repointed  [][2]string
 	targetType model.ReportTargetType
 	targetID   string
+	reported   map[string]bool
 }
 
-func (f *fakeReports) HasReportedMedia(_ context.Context, targetType model.ReportTargetType, targetID, _ string) (bool, error) {
-	f.targetType, f.targetID = targetType, targetID
-	return f.referenced, nil
+func (f *fakeReports) HasReportedMedia(_ context.Context, _ model.ReportTargetType, _, key string) (bool, error) {
+	return f.reported[key], nil
 }
 
-func (f *fakeReports) RepointReportedMedia(_ context.Context, _ model.ReportTargetType, _, oldKey, newKey string) error {
+func (f *fakeReports) RepointReportedMedia(_ context.Context, targetType model.ReportTargetType, targetID, oldKey, newKey string) error {
 	*f.order = append(*f.order, "repoint")
+	f.targetType, f.targetID = targetType, targetID
 	if f.repointErr != nil {
 		return f.repointErr
 	}
@@ -117,12 +165,6 @@ func newService(fi *fakeImages, reports *fakeReports, public, messages *fakeStor
 	})
 }
 
-func (f *fakeStorage) DeleteObject(_ context.Context, key string) error {
-	*f.order = append(*f.order, "storage")
-	f.deleted = append(f.deleted, key)
-	return f.err
-}
-
 func ctxAs(role string) context.Context {
 	return auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: role})
 }
@@ -138,13 +180,39 @@ func sample() *model.CourseChatImage {
 	return &model.CourseChatImage{Media: model.Media{ID: 5, StorageKey: "media/k.png"}, Source: model.CourseChatImageSourceQuestion, TargetID: 9}
 }
 
-func TestDelete_RemovesTheFileBeforeTheRecord(t *testing.T) {
-	svc, fi, order := setup(nil, sample())
+func TestDelete_MovesTheFileOutOfReachBeforeTheRecord(t *testing.T) {
+	order := &[]string{}
+	fi := &fakeImages{img: sample(), order: order}
+	public, messages := &fakeStorage{order: order}, &fakeStorage{order: order}
+	reports := &fakeReports{order: order}
+	svc := newService(fi, reports, public, messages, &fakeParents{})
 	if err := svc.Delete(ctxAs("administrator"), 5); err != nil {
 		t.Fatal(err)
 	}
-	if len(*order) != 2 || (*order)[0] != "storage" || (*order)[1] != "db" || fi.deleted[0] != 5 {
-		t.Errorf("order = %v", *order)
+	if got := strings.Join(*order, ","); got != "put,repoint,storage,db,repoint" {
+		t.Errorf("order = %s", got)
+	}
+	if len(public.put) != 0 || len(messages.put) != 1 {
+		t.Fatalf("must go to the private store: public=%v messages=%v", public.put, messages.put)
+	}
+	var removedKey string
+	for key, body := range messages.put {
+		removedKey = key
+		if key != "removed/5.png" || body != "png" {
+			t.Errorf("put %q = %q", key, body)
+		}
+	}
+	if reports.targetType != model.TargetQuestion || reports.targetID != "9" {
+		t.Errorf("target = %s %s", reports.targetType, reports.targetID)
+	}
+	if reports.repointed[0] != [2]string{"media/k.png", removedKey} {
+		t.Errorf("repointed = %v", reports.repointed)
+	}
+	if len(public.deleted) != 1 || public.deleted[0] != "media/k.png" || fi.deleted[0] != 5 {
+		t.Errorf("deleted file=%v record=%v", public.deleted, fi.deleted)
+	}
+	if fi.removed.RemovedKey != removedKey || fi.removed.OriginalKey != "media/k.png" || fi.removed.RemovedBy != 1 {
+		t.Errorf("removed = %+v", fi.removed)
 	}
 }
 
@@ -201,55 +269,37 @@ func TestDelete_RemovesTheFileFromTheStoreThatHoldsIt(t *testing.T) {
 	}
 }
 
-func TestDelete_RetainsAReportedImageUnderANewKeyBeforeDeletingIt(t *testing.T) {
-	order := &[]string{}
-	fi := &fakeImages{img: sample(), order: order}
-	store := &fakeStorage{order: order}
-	reports := &fakeReports{referenced: true, order: order}
-	svc := newService(fi, reports, store, store, &fakeParents{})
-	if err := svc.Delete(ctxAs("administrator"), 5); err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.Join(*order, ","); got != "copy,repoint,storage,db" {
-		t.Errorf("order = %s", got)
-	}
-	if reports.targetType != model.TargetQuestion || reports.targetID != "9" {
-		t.Errorf("target = %s %s", reports.targetType, reports.targetID)
-	}
-	retained := store.copied[0][1]
-	if retained == "media/k.png" || !strings.HasPrefix(retained, "media/") || !strings.HasSuffix(retained, ".png") {
-		t.Errorf("retained key = %s", retained)
-	}
-	if reports.repointed[0] != [2]string{"media/k.png", retained} {
-		t.Errorf("repointed = %v", reports.repointed)
-	}
-	if len(store.deleted) != 1 || store.deleted[0] != "media/k.png" {
-		t.Errorf("deleted = %v", store.deleted)
-	}
-}
-
-func TestDelete_KeepsTheImageWhenItCannotBeRetained(t *testing.T) {
-	for name, tweak := range map[string]func(*fakeStorage, *fakeReports){
-		"copy":    func(s *fakeStorage, _ *fakeReports) { s.copyErr = errors.New("down") },
-		"repoint": func(_ *fakeStorage, r *fakeReports) { r.repointErr = errors.New("down") },
+func TestDelete_KeepsTheOriginalWhenItCannotBeMoved(t *testing.T) {
+	for name, tweak := range map[string]func(*fakeStorage, *fakeStorage, *fakeReports){
+		"stat":    func(p, _ *fakeStorage, _ *fakeReports) { p.statErr = errors.New("down") },
+		"put":     func(_, m *fakeStorage, _ *fakeReports) { m.putErr = errors.New("down") },
+		"repoint": func(_, _ *fakeStorage, r *fakeReports) { r.repointErr = errors.New("down") },
 	} {
 		order := &[]string{}
 		fi := &fakeImages{img: sample(), order: order}
-		store := &fakeStorage{order: order}
-		reports := &fakeReports{referenced: true, order: order}
-		tweak(store, reports)
-		svc := newService(fi, reports, store, store, &fakeParents{})
+		public, messages := &fakeStorage{order: order}, &fakeStorage{order: order}
+		reports := &fakeReports{order: order}
+		tweak(public, messages, reports)
+		svc := newService(fi, reports, public, messages, &fakeParents{})
 		if err := svc.Delete(ctxAs("administrator"), 5); err == nil {
 			t.Fatalf("%s: want an error", name)
 		}
-		for _, key := range store.deleted {
-			if key == "media/k.png" {
-				t.Errorf("%s: the original must stay", name)
-			}
+		if len(public.deleted) != 0 || len(fi.deleted) != 0 {
+			t.Errorf("%s: the original and the record must stay", name)
 		}
-		if len(fi.deleted) != 0 {
-			t.Errorf("%s: the record must stay", name)
-		}
+	}
+}
+
+func TestDelete_RetriesWhenTheFileIsAlreadyGone(t *testing.T) {
+	order := &[]string{}
+	fi := &fakeImages{img: sample(), order: order}
+	public, messages := &fakeStorage{order: order, statErr: repository.ErrObjectNotFound}, &fakeStorage{order: order}
+	svc := newService(fi, &fakeReports{order: order}, public, messages, &fakeParents{})
+	if err := svc.Delete(ctxAs("administrator"), 5); err != nil {
+		t.Fatal(err)
+	}
+	if len(messages.put) != 0 || len(fi.deleted) != 1 {
+		t.Errorf("put=%v record=%v", messages.put, fi.deleted)
 	}
 }
 
@@ -289,5 +339,106 @@ func TestDelete_SucceedsEvenIfTheParentCannotBeLoaded(t *testing.T) {
 	}
 	if len(fi.deleted) != 1 {
 		t.Error("the record should be deleted")
+	}
+}
+
+func removedSample() *model.RemovedCourseChatImage {
+	return &model.RemovedCourseChatImage{
+		MediaID: 5, Source: model.CourseChatImageSourceQuestion, TargetID: 9,
+		RemovedKey: "removed/5.png", OriginalKey: "media/k.png", ContentType: "image/png",
+	}
+}
+
+func TestRestore_PutsTheFileBackThenDropsTheRemovedCopy(t *testing.T) {
+	order := &[]string{}
+	fi := &fakeImages{img: sample(), order: order, removed: removedSample()}
+	public, messages := &fakeStorage{order: order}, &fakeStorage{order: order}
+	reports := &fakeReports{order: order}
+	parents := &fakeParents{}
+	svc := newService(fi, reports, public, messages, parents)
+	if err := svc.Restore(ctxAs("administrator"), 5); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(*order, ","); got != "put,restore,repoint,storage" {
+		t.Errorf("order = %s", got)
+	}
+	if public.put["media/k.png"] != "png" {
+		t.Errorf("must go back to the original store: %v", public.put)
+	}
+	if reports.repointed[0] != [2]string{"removed/5.png", "media/k.png"} {
+		t.Errorf("repointed = %v", reports.repointed)
+	}
+	if len(messages.deleted) != 1 || messages.deleted[0] != "removed/5.png" {
+		t.Errorf("deleted = %v", messages.deleted)
+	}
+	if parents.questionID != 9 {
+		t.Error("the parent should be broadcast")
+	}
+}
+
+func TestRestore_RejectedWhenThePostOrUploaderIsGone(t *testing.T) {
+	for _, cause := range []error{repository.ErrRestoreTargetGone, repository.ErrRestoreUploaderGone} {
+		order := &[]string{}
+		fi := &fakeImages{order: order, removed: removedSample(), restoreCheckErr: cause}
+		store := &fakeStorage{order: order}
+		svc := newService(fi, &fakeReports{order: order}, store, store, &fakeParents{})
+		err := svc.Restore(ctxAs("administrator"), 5)
+		if apperr.CodeOf(err) != apperr.CodeConflict {
+			t.Errorf("%v: err = %v", cause, err)
+		}
+		if len(*order) != 0 {
+			t.Errorf("%v: nothing should be touched: %v", cause, *order)
+		}
+	}
+}
+
+func TestRestore_RemovesThePutBackFileWhenTheRecordCannotBeRestored(t *testing.T) {
+	order := &[]string{}
+	fi := &fakeImages{order: order, removed: removedSample(), restoreErr: errors.New("down")}
+	public, messages := &fakeStorage{order: order}, &fakeStorage{order: order}
+	svc := newService(fi, &fakeReports{order: order}, public, messages, &fakeParents{})
+	if err := svc.Restore(ctxAs("administrator"), 5); err == nil {
+		t.Fatal("want an error")
+	}
+	if len(public.deleted) != 1 || public.deleted[0] != "media/k.png" || len(messages.deleted) != 0 {
+		t.Errorf("public=%v messages=%v", public.deleted, messages.deleted)
+	}
+}
+
+func TestRestore_RequiresAdmin(t *testing.T) {
+	svc, _, _ := setup(nil, sample())
+	if err := svc.Restore(ctxAs("user"), 5); err == nil {
+		t.Fatal("want an error")
+	}
+}
+
+func TestPurgeExpired_SkipsReportedImages(t *testing.T) {
+	order := &[]string{}
+	unreported, reported := removedSample(), removedSample()
+	reported.MediaID, reported.RemovedKey = 6, "removed/6.png"
+	fi := &fakeImages{order: order, expired: []*model.RemovedCourseChatImage{unreported, reported}}
+	store := &fakeStorage{order: order}
+	svc := newService(fi, &fakeReports{order: order, reported: map[string]bool{"removed/6.png": true}}, store, store, &fakeParents{})
+	now := time.Unix(1800000000, 0)
+	purged, err := svc.PurgeExpired(context.Background(), now)
+	if err != nil || purged != 1 {
+		t.Fatalf("purged=%d err=%v", purged, err)
+	}
+	if !fi.before.Equal(now.Add(-30 * 24 * time.Hour)) {
+		t.Errorf("before = %v", fi.before)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != "removed/5.png" || len(fi.purged) != 1 || fi.purged[0] != 5 {
+		t.Errorf("files=%v records=%v", store.deleted, fi.purged)
+	}
+}
+
+func TestPurgeExpired_KeepsTheRecordWhenTheFileCannotBeDeleted(t *testing.T) {
+	order := &[]string{}
+	fi := &fakeImages{order: order, expired: []*model.RemovedCourseChatImage{removedSample()}}
+	store := &fakeStorage{order: order, err: errors.New("down")}
+	svc := newService(fi, &fakeReports{order: order}, store, store, &fakeParents{})
+	purged, err := svc.PurgeExpired(context.Background(), time.Unix(1800000000, 0))
+	if err == nil || purged != 0 || len(fi.purged) != 0 {
+		t.Errorf("purged=%d err=%v records=%v", purged, err, fi.purged)
 	}
 }

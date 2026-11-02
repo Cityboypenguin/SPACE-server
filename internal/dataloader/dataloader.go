@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vikstrous/dataloadgen"
 )
 
@@ -498,6 +500,21 @@ func For(ctx context.Context) *Loaders {
 		panic("dataloaders not found in context. Check if middleware is applied.")
 	}
 	return loaders
+}
+
+// FreshLoadersForSubscriptions は購読の配信1回ごとに新しいローダーを使わせる。
+//
+// ローダーは HTTP リクエストごとに作るが、WebSocket の接続は1つのリクエストなので、そのままだと
+// 接続の間ずっと同じローダー（＝同じキャッシュ）を使い回す。すると同じ投稿の2回目以降の配信が、
+// 1回目に読んだ古い添付や集計を返してしまう。
+func FreshLoadersForSubscriptions(newLoaders func() *Loaders) graphql.ResponseMiddleware {
+	return func(ctx context.Context, next graphql.ResponseHandler) *graphql.Response {
+		if graphql.HasOperationContext(ctx) && graphql.GetOperationContext(ctx).Operation != nil &&
+			graphql.GetOperationContext(ctx).Operation.Operation == ast.Subscription {
+			ctx = WithLoaders(ctx, newLoaders())
+		}
+		return next(ctx)
+	}
 }
 
 // WithLoaders は ctx にローダーを差し込む。テストから For(ctx) を使うリゾルバを

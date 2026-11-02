@@ -559,6 +559,19 @@ func publicSASExpiry(now time.Time) time.Time {
 	return now.UTC().Truncate(azurePublicSASWindow).Add(azurePublicSASWindow + azurePublicSASTTL)
 }
 
+func (r *AzureBlobStorageRepository) PutObject(ctx context.Context, objectKey, contentType string, body []byte) error {
+	disposition := repository.ServedContentDisposition
+	cacheControl := repository.ServedCacheControl
+	_, err := r.client.UploadBuffer(ctx, r.containerName, objectKey, body, &azblob.UploadBufferOptions{
+		HTTPHeaders: &blob.HTTPHeaders{
+			BlobContentType:        &contentType,
+			BlobContentDisposition: &disposition,
+			BlobCacheControl:       &cacheControl,
+		},
+	})
+	return err
+}
+
 func (r *AzureBlobStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := r.client.DeleteBlob(ctx, r.containerName, objectKey, nil)
 	// 無いものを消そうとしたのは成功と同じ（MinIO の RemoveObject と同じ扱い。

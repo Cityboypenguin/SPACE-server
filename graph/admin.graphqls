@@ -63,6 +63,13 @@ extend type Query {
     limit: Int = 24
     offset: Int = 0
   ): AdminCourseChatImagePage!
+  # 管理者が利用者の目から外した画像。外した順の新しいものから。
+  adminListRemovedCourseChatImages(
+    roomID: ID
+    source: CourseChatImageSource
+    limit: Int = 24
+    offset: Int = 0
+  ): AdminRemovedCourseChatImagePage!
   adminListCourses(
     year: Int
     semester: String
@@ -99,6 +106,8 @@ extend type Mutation {
   adminDeleteAnswerAddendum(id: ID!): Boolean!
   # 授業内チャットの画像を消す（ファイルも消える。取り消せない）。
   adminDeleteCourseChatImage(mediaID: ID!): Boolean!
+  # 外した画像を元の投稿へ戻す。投稿か投稿者がもう無ければエラー。
+  adminRestoreCourseChatImage(mediaID: ID!): Boolean!
   # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答・追記・投票・スレッドの題名）。
   adminCreateNGWord(pattern: String!, matchType: NGWordMatchType!): NGWord!
   adminDeleteNGWord(id: ID!): Boolean!
@@ -363,6 +372,29 @@ type AdminCourseChatImage {
   # 添付先のメッセージが削除済み（画面には出ないが、ファイルは残っている）。
   targetDeleted: Boolean!
   createdAt: String!
+}
+
+type AdminRemovedCourseChatImage {
+  # 画像(media)のID。adminRestoreCourseChatImage に渡す。
+  ID: ID!
+  source: CourseChatImageSource!
+  url: String!
+  roomID: ID!
+  courseName: String!
+  uploaderID: ID!
+  uploaderName: String!
+  uploaderAccountID: String!
+  createdAt: String!
+  removedAt: String!
+  # 通報の写しが指している。通報が残る間は自動で消えない。
+  reported: Boolean!
+  # 完全に消える日時。通報があれば null。
+  expiresAt: String
+}
+
+type AdminRemovedCourseChatImagePage {
+  items: [AdminRemovedCourseChatImage!]!
+  total: Int!
 }
 
 type AdminCourseChatImagePage {

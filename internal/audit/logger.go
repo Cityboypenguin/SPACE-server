@@ -36,13 +36,23 @@ func LogMessageDeleted(ctx context.Context, roomID int64, messageID int64) {
 
 // LogCourseChatImageDeleted records an administrator deleting an image from the course chat
 // (message / question / answer attachment): who (via WithActor), which media, and where it was attached.
-func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string, targetID int64, uploaderID int64) {
+func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string, targetID int64, uploaderID int64, removedKey string) {
 	WithActor(logger.Log.Info().
 		Str("event", "course_chat_image_deleted").
 		Int64("media_id", mediaID).
 		Str("source", source).
 		Int64("target_id", targetID).
-		Int64("uploader_id", uploaderID), ctx).Send()
+		Int64("uploader_id", uploaderID).
+		Str("removed_key", removedKey), ctx).Send()
+}
+
+// LogCourseChatImageRestored records an administrator putting a removed image back.
+func LogCourseChatImageRestored(ctx context.Context, mediaID int64, source string, targetID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "course_chat_image_restored").
+		Int64("media_id", mediaID).
+		Str("source", source).
+		Int64("target_id", targetID), ctx).Send()
 }
 
 // LogAddendumDeleted records an administrator deleting one addendum of a question or an answer.

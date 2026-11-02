@@ -100,12 +100,10 @@ type reportedMediaRow struct {
 	content *model.ReportedContent
 }
 
-func (r *MySQLReportRepository) reportedContentsOf(ctx context.Context, q interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, suffix string, targetType model.ReportTargetType, targetID string) ([]reportedMediaRow, error) {
-	rows, err := q.QueryContext(ctx, `
+func (r *MySQLReportRepository) lockReportedContents(ctx context.Context, tx *sql.Tx, targetType model.ReportTargetType, targetID string) ([]reportedMediaRow, error) {
+	rows, err := tx.QueryContext(ctx, `
 		SELECT id, message_snapshot FROM user_reports
-		WHERE target_type = ? AND target_id = ? AND message_snapshot IS NOT NULL`+suffix,
+		WHERE target_type = ? AND target_id = ? AND message_snapshot IS NOT NULL FOR UPDATE`,
 		string(targetType), targetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query reported contents: %w", err)
@@ -127,18 +125,30 @@ func (r *MySQLReportRepository) reportedContentsOf(ctx context.Context, q interf
 }
 
 func (r *MySQLReportRepository) HasReportedMedia(ctx context.Context, targetType model.ReportTargetType, targetID, storageKey string) (bool, error) {
-	rows, err := r.reportedContentsOf(ctx, r.DB, "", targetType, targetID)
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT message_snapshot FROM user_reports
+		WHERE target_type = ? AND target_id = ? AND message_snapshot IS NOT NULL`,
+		string(targetType), targetID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to query reported contents: %w", err)
 	}
-	for _, row := range rows {
-		for _, m := range row.content.Media {
+	defer rows.Close()
+	for rows.Next() {
+		var snapshot sql.NullString
+		if err := rows.Scan(&snapshot); err != nil {
+			return false, fmt.Errorf("failed to scan reported content: %w", err)
+		}
+		content, err := r.decodeReportedContent(snapshot)
+		if err != nil {
+			return false, err
+		}
+		for _, m := range content.Media {
 			if m.StorageKey == storageKey {
 				return true, nil
 			}
 		}
 	}
-	return false, nil
+	return false, rows.Err()
 }
 
 func (r *MySQLReportRepository) RepointReportedMedia(ctx context.Context, targetType model.ReportTargetType, targetID, oldKey, newKey string) error {
@@ -148,7 +158,7 @@ func (r *MySQLReportRepository) RepointReportedMedia(ctx context.Context, target
 	}
 	defer tx.Rollback()
 
-	rows, err := r.reportedContentsOf(ctx, tx, " FOR UPDATE", targetType, targetID)
+	rows, err := r.lockReportedContents(ctx, tx, targetType, targetID)
 	if err != nil {
 		return err
 	}

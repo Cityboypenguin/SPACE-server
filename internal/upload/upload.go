@@ -285,15 +285,20 @@ func acceptedKeyFor(stagingKey string) (string, error) {
 	return rest[:slash+1] + uuid.NewString() + rest[dot:], nil
 }
 
-// RetainedKeyFor は保存済みのオブジェクトを残しておくときの写し先を作る。区切りと拡張子は
-// 元のキーから引き継ぎ（種別の判定がそのまま効く）、名前（UUID）だけを引き直す。
-func RetainedKeyFor(objectKey string) (string, error) {
+// RemovedPrefix は管理者が利用者の目から外した添付の置き場。非公開の置き場にだけ作る。
+// どの種別にも当たらないので、署名付きURLの発行や受け入れの対象にならない。
+const RemovedPrefix = "removed"
+
+// RemovedKeyFor は外した添付の新しいキーを作る。mediaID から決まるので、途中で失敗して
+// やり直しても同じ場所を指す。元のキーからは拡張子だけ引き継ぐ。
+func RemovedKeyFor(mediaID int64, objectKey string) string {
 	slash := strings.LastIndex(objectKey, "/")
 	dot := strings.LastIndex(objectKey, ".")
-	if slash < 0 || dot < slash {
-		return "", errInvalidKey
+	ext := ""
+	if dot > slash {
+		ext = objectKey[dot:]
 	}
-	return objectKey[:slash+1] + uuid.NewString() + objectKey[dot:], nil
+	return fmt.Sprintf("%s/%d%s", RemovedPrefix, mediaID, ext)
 }
 
 // ObjectStore は Accept が要るぶんだけの StorageRepository。

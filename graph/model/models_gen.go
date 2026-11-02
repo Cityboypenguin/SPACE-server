@@ -59,6 +59,26 @@ type AdminCreateCourseInput struct {
 	Semester    string `json:"semester"`
 }
 
+type AdminRemovedCourseChatImage struct {
+	ID                string                `json:"ID"`
+	Source            CourseChatImageSource `json:"source"`
+	URL               string                `json:"url"`
+	RoomID            string                `json:"roomID"`
+	CourseName        string                `json:"courseName"`
+	UploaderID        string                `json:"uploaderID"`
+	UploaderName      string                `json:"uploaderName"`
+	UploaderAccountID string                `json:"uploaderAccountID"`
+	CreatedAt         string                `json:"createdAt"`
+	RemovedAt         string                `json:"removedAt"`
+	Reported          bool                  `json:"reported"`
+	ExpiresAt         *string               `json:"expiresAt,omitempty"`
+}
+
+type AdminRemovedCourseChatImagePage struct {
+	Items []*AdminRemovedCourseChatImage `json:"items"`
+	Total int32                          `json:"total"`
+}
+
 type Administrator struct {
 	ID        string `json:"ID"`
 	Name      string `json:"name"`

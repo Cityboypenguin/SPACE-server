@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
@@ -26,7 +27,8 @@ type Deps struct {
 	Images repository.CourseChatImageRepository
 	// Reports は通報時点の写しが指している添付を付け替えるために使う。
 	Reports repository.ReportedMediaRepository
-	// Public は質問・回答の添付、MessageStore はメッセージの添付の置き場。
+	// Public は質問・回答の添付、MessageStore はメッセージの添付の置き場（非公開）。
+	// 外した画像も MessageStore へ移す。
 	Public       repository.StorageRepository
 	MessageStore repository.StorageRepository
 
@@ -57,21 +59,25 @@ type MessageUpdatePublisher interface {
 	MessageUpdated(ctx context.Context, ev chatusecase.MessageUpdatedEvent)
 }
 
+// RemovedRetention は外した画像のうち、通報のないものを残しておく期間。
+const RemovedRetention = 30 * 24 * time.Hour
+
 type Service struct {
-	d Deps
+	d   Deps
+	now func() time.Time
 }
 
 func NewService(d Deps) *Service {
-	return &Service{d: d}
+	return &Service{d: d, now: time.Now}
 }
 
 // storeFor は画像の実体がある置き場を返す。メッセージの添付は非公開の置き場にあり、分離前の
 // 添付だけが公開側に残っている（graph の messageMediaURL と同じ見分け方）。
-func (s *Service) storeFor(img *model.CourseChatImage) repository.StorageRepository {
-	if img.Source != model.CourseChatImageSourceMessage {
+func (s *Service) storeFor(source model.CourseChatImageSource, key string) repository.StorageRepository {
+	if source != model.CourseChatImageSourceMessage {
 		return s.d.Public
 	}
-	if kind, ok := upload.KindForObjectKey(img.Media.StorageKey); ok && !kind.Private {
+	if kind, ok := upload.KindForObjectKey(key); ok && !kind.Private {
 		return s.d.Public
 	}
 	return s.d.MessageStore
@@ -84,15 +90,18 @@ func (s *Service) List(ctx context.Context, filter repository.CourseChatImageFil
 	return s.d.Images.ListCourseChatImages(ctx, filter, limit, offset)
 }
 
-// Delete は授業内チャットの画像を消す。ファイルを先に消し、
-// そのあとで記録（media 行と添付の紐付け）を消す。ファイルの削除に失敗したらエラーで返し、
-// 記録は残すので、やり直せる（逆順だと、記録だけ消えてファイルが公開されたまま残る）。
-// 授業内チャットの画像でないメディア（アイコンなど）は、この経路では消せない。
+// Delete は授業内チャットの画像を利用者の目から外す。
 //
-// 通報の写しが指している画像は、対応する側が通報された時点の内容を確認できるよう、
-// 利用者の知らない別のキーへ写してから元を消す（retainForReports 参照）。
+// ファイルは消さず、利用者の届かない非公開の置き場へ移す。公開の置き場に残すと元のURLで開けて
+// しまうので、その場に残すだけにはしない。通報の写しは移した先を指すように付け替えるので、
+// 通報の詳細では見られる。通報のない画像は RemovedRetention のあと PurgeExpired が消す。
+//
+// 手順は移す→付け替え→元のファイルを消す→記録を移す。途中で失敗したらエラーで返し、やり直せる
+// （記録を先に移すと、元のファイルが公開されたまま残る）。
+// 授業内チャットの画像でないメディア（アイコンなど）は、この経路では消せない。
 func (s *Service) Delete(ctx context.Context, mediaID int64) error {
-	if _, err := authz.RequireAdmin(ctx); err != nil {
+	claims, err := authz.RequireAdmin(ctx)
+	if err != nil {
 		return err
 	}
 	img, err := s.d.Images.GetCourseChatImage(ctx, mediaID)
@@ -102,95 +111,218 @@ func (s *Service) Delete(ctx context.Context, mediaID int64) error {
 	if img == nil {
 		return apperr.NotFound("画像が見つかりません")
 	}
-	if err := s.retainForReports(ctx, img); err != nil {
-		logger.Log.Error().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to retain the image for reports")
+	removedKey := upload.RemovedKeyFor(mediaID, img.Media.StorageKey)
+	if err := s.moveToRemoved(ctx, img, removedKey); err != nil {
+		logger.Log.Error().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to move the image out of reach")
 		return err
 	}
-	if err := s.storeFor(img).DeleteObject(ctx, img.Media.StorageKey); err != nil {
+	if err := s.storeFor(img.Source, img.Media.StorageKey).DeleteObject(ctx, img.Media.StorageKey); err != nil {
 		logger.Log.Error().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to delete the stored object")
 		return err
 	}
-	if err := s.d.Images.DeleteCourseChatImage(ctx, mediaID); err != nil {
+	if err := s.d.Images.RemoveCourseChatImage(ctx, &model.RemovedCourseChatImage{
+		MediaID: mediaID, Source: img.Source, TargetID: img.TargetID, Position: img.Position,
+		RoomID: img.RoomID, CourseName: img.CourseName, Uploader: img.Uploader,
+		RemovedKey: removedKey, OriginalKey: img.Media.StorageKey, ContentType: img.Media.ContentType,
+		Width: img.Media.Width, Height: img.Media.Height, CreatedAt: img.Media.CreatedAt,
+		RemovedAt: s.now(), RemovedBy: claims.ID,
+	}); err != nil {
 		return err
 	}
-	audit.LogCourseChatImageDeleted(ctx, mediaID, string(img.Source), img.TargetID, img.Uploader.ID)
-	s.broadcast(ctx, img)
+	audit.LogCourseChatImageDeleted(ctx, mediaID, string(img.Source), img.TargetID, img.Uploader.ID, removedKey)
+
+	// 移している間に作られた通報の写しは元のキーを指しているので、記録を移したあとで付け替え直す。
+	// ここから先の失敗で削除を失敗にはしない（画像はもう利用者から見えない）。
+	targetType, targetID := reportTarget(img.Source, img.TargetID)
+	if err := s.d.Reports.RepointReportedMedia(ctx, targetType, targetID, img.Media.StorageKey, removedKey); err != nil {
+		logger.Log.Warn().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to repoint reports created during the deletion")
+	}
+	s.broadcast(ctx, img.Source, img.TargetID)
 	return nil
 }
 
-// retainForReports は、通報の写しが指している画像を新しいキーへ写し、写しの参照を付け替える。
-//
-// 新しいキーは写しの中（暗号化済み）にしか現れないので、元のURLを知っている利用者からは
-// 見えなくなり、通報の詳細からだけ見える。写し先を引き直すだけなので置き場も種別も変わらず、
-// URL の組み立ては今までのまま使える。
-//
-// 途中で失敗したらエラーで返し、元の画像も消さない。付け替えのあとで元のファイルの削除に
-// 失敗しても、やり直しでは参照が残っていないのでここは素通りする。
-func (s *Service) retainForReports(ctx context.Context, img *model.CourseChatImage) error {
-	targetType, targetID := reportTargetOf(img)
+// moveToRemoved は画像を非公開の置き場へ写し、通報の写しをそちらへ付け替える。
+// 実体がもう無ければ（元のファイルを消したあとのやり直しなど）写さない。
+func (s *Service) moveToRemoved(ctx context.Context, img *model.CourseChatImage, removedKey string) error {
 	key := img.Media.StorageKey
-	referenced, err := s.d.Reports.HasReportedMedia(ctx, targetType, targetID, key)
-	if err != nil || !referenced {
-		return err
-	}
-	store := s.storeFor(img)
-	info, err := store.StatObject(ctx, key)
+	err := copyObject(ctx, s.storeFor(img.Source, key), key, s.d.MessageStore, removedKey, img.Media.ContentType)
 	if errors.Is(err, repository.ErrObjectNotFound) {
-		// 実体がもう無ければ写せない。残っている記録を消せるように先へ進める。
-		logger.Log.Warn().Str("component", "course_chat_image").Int64("media_id", img.Media.ID).Msg("the reported image has no stored object")
+		logger.Log.Warn().Str("component", "course_chat_image").Int64("media_id", img.Media.ID).Msg("the image has no stored object")
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	retainedKey, err := upload.RetainedKeyFor(key)
+	targetType, targetID := reportTarget(img.Source, img.TargetID)
+	return s.d.Reports.RepointReportedMedia(ctx, targetType, targetID, key, removedKey)
+}
+
+// copyObject は置き場をまたいで写す。添付は上限が小さいのでメモリに載せて写す。
+// 元が無ければ repository.ErrObjectNotFound を返す。
+func copyObject(ctx context.Context, from repository.StorageRepository, fromKey string, to repository.StorageRepository, toKey, contentType string) error {
+	info, err := from.StatObject(ctx, fromKey)
 	if err != nil {
 		return err
 	}
-	if err := store.CopyObject(ctx, key, retainedKey, info.ETag, img.Media.ContentType); err != nil {
+	body, _, err := from.ObjectHead(ctx, fromKey, max(info.Size, 1))
+	if err != nil {
 		return err
 	}
-	if err := s.d.Reports.RepointReportedMedia(ctx, targetType, targetID, key, retainedKey); err != nil {
-		// 写しはどこからも指されない。消せなくても害は無いので、元のエラーを返す。
-		if delErr := store.DeleteObject(ctx, retainedKey); delErr != nil {
-			logger.Log.Warn().Err(delErr).Str("component", "course_chat_image").Int64("media_id", img.Media.ID).Msg("failed to clean up the unused copy")
+	return to.PutObject(ctx, toKey, contentType, body)
+}
+
+// ListRemoved は外した画像の一覧。通報の写しが指しているかも入れる。
+func (s *Service) ListRemoved(ctx context.Context, filter repository.CourseChatImageFilter, limit, offset int) ([]*model.RemovedCourseChatImage, int, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return nil, 0, err
+	}
+	items, total, err := s.d.Images.ListRemovedCourseChatImages(ctx, filter, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, img := range items {
+		if img.Reported, err = s.isReported(ctx, img); err != nil {
+			return nil, 0, err
+		}
+	}
+	return items, total, nil
+}
+
+func (s *Service) isReported(ctx context.Context, img *model.RemovedCourseChatImage) (bool, error) {
+	targetType, targetID := reportTarget(img.Source, img.TargetID)
+	return s.d.Reports.HasReportedMedia(ctx, targetType, targetID, img.RemovedKey)
+}
+
+// Restore は外した画像を元の投稿へ戻す。投稿か投稿者がもう無ければ戻せない。
+//
+// 手順はファイルを戻す→記録を戻す→通報の写しを付け替える→残したファイルを消す。記録を戻せな
+// ければ戻したファイルを消す。写しを付け替えられなければ、残したファイルは写しのために消さない。
+func (s *Service) Restore(ctx context.Context, mediaID int64) error {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return err
+	}
+	img, err := s.d.Images.GetRemovedCourseChatImage(ctx, mediaID)
+	if err != nil {
+		return err
+	}
+	if img == nil {
+		return apperr.NotFound("画像が見つかりません")
+	}
+	if err := s.d.Images.CheckRestorable(ctx, img); err != nil {
+		return translateRestoreError(err)
+	}
+	store := s.storeFor(img.Source, img.OriginalKey)
+	if err := copyObject(ctx, s.d.MessageStore, img.RemovedKey, store, img.OriginalKey, img.ContentType); err != nil {
+		if errors.Is(err, repository.ErrObjectNotFound) {
+			return apperr.NotFound("画像のファイルが見つかりません")
 		}
 		return err
 	}
+	if err := s.d.Images.RestoreCourseChatImage(ctx, img); err != nil {
+		if delErr := store.DeleteObject(ctx, img.OriginalKey); delErr != nil {
+			logger.Log.Warn().Err(delErr).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to clean up the restored copy")
+		}
+		return translateRestoreError(err)
+	}
+	audit.LogCourseChatImageRestored(ctx, mediaID, string(img.Source), img.TargetID)
+
+	targetType, targetID := reportTarget(img.Source, img.TargetID)
+	if err := s.d.Reports.RepointReportedMedia(ctx, targetType, targetID, img.RemovedKey, img.OriginalKey); err != nil {
+		logger.Log.Warn().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to repoint reports; keeping the removed copy")
+	} else if err := s.d.MessageStore.DeleteObject(ctx, img.RemovedKey); err != nil {
+		logger.Log.Warn().Err(err).Str("component", "course_chat_image").Int64("media_id", mediaID).Msg("failed to delete the removed copy")
+	}
+	s.broadcast(ctx, img.Source, img.TargetID)
 	return nil
 }
 
-func reportTargetOf(img *model.CourseChatImage) (model.ReportTargetType, string) {
+func translateRestoreError(err error) error {
+	switch {
+	case errors.Is(err, repository.ErrRestoreTargetGone):
+		return apperr.Conflict("投稿が削除されているため、元に戻せません")
+	case errors.Is(err, repository.ErrRestoreUploaderGone):
+		return apperr.Conflict("投稿者が退会しているため、元に戻せません")
+	}
+	return err
+}
+
+// purgeBatchSize は期限切れの画像を1度に読む件数。
+const purgeBatchSize = 100
+
+// PurgeExpired は保持期間を過ぎた、通報のない画像を完全に消す。消した件数を返す。
+// 通報の写しが指している画像は、通報が残る間は残す。
+// 1件の失敗で止めず、残りを処理してからエラーを返す（次の実行でやり直す）。
+func (s *Service) PurgeExpired(ctx context.Context, now time.Time) (int, error) {
+	before := now.Add(-RemovedRetention)
+	purged := 0
+	var firstErr error
+	var after int64
+	for {
+		items, err := s.d.Images.ListRemovedCourseChatImagesBefore(ctx, before, after, purgeBatchSize)
+		if err != nil {
+			return purged, err
+		}
+		for _, img := range items {
+			after = img.MediaID
+			done, err := s.purgeOne(ctx, img)
+			if err != nil {
+				logger.Log.Error().Err(err).Str("component", "course_chat_image").Int64("media_id", img.MediaID).Msg("failed to purge the removed image")
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else if done {
+				purged++
+			}
+		}
+		if len(items) < purgeBatchSize {
+			return purged, firstErr
+		}
+	}
+}
+
+func (s *Service) purgeOne(ctx context.Context, img *model.RemovedCourseChatImage) (bool, error) {
+	reported, err := s.isReported(ctx, img)
+	if err != nil || reported {
+		return false, err
+	}
+	// ファイルを先に消す（逆順だと、記録だけ消えてファイルを見つけられなくなる）。
+	if err := s.d.MessageStore.DeleteObject(ctx, img.RemovedKey); err != nil {
+		return false, err
+	}
+	return true, s.d.Images.DeleteRemovedCourseChatImage(ctx, img.MediaID)
+}
+
+func reportTarget(source model.CourseChatImageSource, id int64) (model.ReportTargetType, string) {
 	targetType := model.TargetMessage
-	switch img.Source {
+	switch source {
 	case model.CourseChatImageSourceQuestion:
 		targetType = model.TargetQuestion
 	case model.CourseChatImageSourceAnswer:
 		targetType = model.TargetAnswer
 	}
-	return targetType, strconv.FormatInt(img.TargetID, 10)
+	return targetType, strconv.FormatInt(id, 10)
 }
 
-// broadcast は開いている画面から画像を消すために、親の更新を配信する。
-// 画像はもう消えたので、親を引けなくても削除は成功のまま返す（親ごと消された場合など）。
-func (s *Service) broadcast(ctx context.Context, img *model.CourseChatImage) {
+// broadcast は開いている画面へ画像の増減を伝えるために、親の更新を配信する。
+// 画像の操作はもう終わったので、親を引けなくても成功のまま返す（親ごと消された場合など）。
+func (s *Service) broadcast(ctx context.Context, source model.CourseChatImageSource, targetID int64) {
 	var err error
-	switch img.Source {
+	switch source {
 	case model.CourseChatImageSourceMessage:
-		err = s.broadcastMessage(ctx, img.TargetID)
+		err = s.broadcastMessage(ctx, targetID)
 	case model.CourseChatImageSourceQuestion:
 		var q *model.Question
-		if q, err = s.d.Questions.GetQuestionByID(ctx, img.TargetID); err == nil && q != nil {
+		if q, err = s.d.Questions.GetQuestionByID(ctx, targetID); err == nil && q != nil {
 			s.d.QuestionEvents.QuestionUpdated(ctx, q)
 		}
 	case model.CourseChatImageSourceAnswer:
 		var a *model.Answer
-		if a, err = s.d.Answers.GetAnswerByID(ctx, img.TargetID); err == nil && a != nil {
+		if a, err = s.d.Answers.GetAnswerByID(ctx, targetID); err == nil && a != nil {
 			s.d.AnswerEvents.AnswerUpdated(ctx, a)
 		}
 	}
 	if err != nil {
-		logger.Log.Warn().Err(err).Str("component", "course_chat_image").Int64("target_id", img.TargetID).Msg("failed to broadcast the image deletion")
+		logger.Log.Warn().Err(err).Str("component", "course_chat_image").Int64("target_id", targetID).Msg("failed to broadcast the image change")
 	}
 }
 
