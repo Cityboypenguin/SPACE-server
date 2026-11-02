@@ -13,10 +13,12 @@
 
 type Query {
   maintenanceMode: Boolean!
+  courseChatEnabled: Boolean!
 }
 
 type Mutation {
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
+  toggleCourseChat(enabled: Boolean!): Boolean!
 }
 
 type Subscription {
