@@ -253,8 +253,10 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 		return nil, 0, err
 	}
 
+	// scanCoursesWithMessageCount は最後の列に message_count を読む。列が足りないと
+	// 「expected 12 destination arguments」で検索そのものが壊れる（ac2fe52 以降の不具合）。
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT `+courseColumns+` FROM courses c
+		`SELECT `+courseColumns+`, (SELECT COUNT(*) FROM messages m WHERE m.room_id = c.room_id) AS message_count FROM courses c
 		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND c.discontinued_at IS NULL AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
 		 ORDER BY c.course_name, c.id
 		 LIMIT ? OFFSET ?`,
@@ -265,7 +267,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 	}
 	defer rows.Close()
 
-	items, err := scanCourses(rows)
+	items, err := scanCoursesWithMessageCount(rows)
 	if err != nil {
 		return nil, 0, err
 	}
