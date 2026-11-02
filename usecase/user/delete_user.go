@@ -32,6 +32,12 @@ import (
 // media 行は CASCADE で消えるが、ストレージ上の実体は消えないので先に引いておく。
 type uploadedMediaLister interface {
 	ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error)
+	ListReportableMediaByUploader(ctx context.Context, userID int64) ([]repository.ReportableMedia, error)
+}
+
+// reportedMediaRetainer は、通報の写しが指している添付を退会のあとも残す口。
+type reportedMediaRetainer interface {
+	Retain(ctx context.Context, media []repository.ReportableMedia) error
 }
 
 // objectDiscarder はストレージ上の実体を消す口。キーから公開・非公開の置き場を
@@ -61,6 +67,7 @@ type accountDeletion struct {
 	notifier    notificationBatchPublisher
 	media       uploadedMediaLister
 	objects     objectDiscarder
+	reported    reportedMediaRetainer
 	txManager   repository.TxManager
 	now         func() time.Time
 }
@@ -76,7 +83,9 @@ type AccountDeletionDeps struct {
 	Notifier    notificationBatchPublisher
 	Media       uploadedMediaLister
 	Objects     objectDiscarder
-	TxManager   repository.TxManager
+	// ReportedMedia は通報の写しが指している添付を残す。
+	ReportedMedia reportedMediaRetainer
+	TxManager     repository.TxManager
 	// Now は現在時刻。nil なら time.Now（テストから差し替えるための口）。
 	Now func() time.Time
 }
@@ -95,6 +104,7 @@ func newAccountDeletion(deps AccountDeletionDeps) *accountDeletion {
 		notifier:    deps.Notifier,
 		media:       deps.Media,
 		objects:     deps.Objects,
+		reported:    deps.ReportedMedia,
 		txManager:   deps.TxManager,
 		now:         now,
 	}
@@ -255,6 +265,16 @@ func (d *accountDeletion) purge(ctx context.Context, userID int64, allow func(*m
 			return err
 		}
 		if keys, err = d.media.ListStorageKeysByUploader(ctx, userID); err != nil {
+			return err
+		}
+		// 通報の写しが指している添付は、元のファイルを消す前に残す。失敗したら退会の処理ごと
+		// やり直す（先へ進むと通報の時点の内容が失われる）。写しの付け替えはこのトランザクションの
+		// 外で確定するが、ロールバックしても写しは残した先を指したまま読めるので害は無い。
+		reportable, err := d.media.ListReportableMediaByUploader(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if err := d.reported.Retain(ctx, reportable); err != nil {
 			return err
 		}
 		if purged, err = d.users.PurgeUser(ctx, userID, d.now()); err != nil || !purged {

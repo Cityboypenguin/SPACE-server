@@ -47,6 +47,9 @@ type MediaReader interface {
 	// 退会者の個人情報を消すとき、media 行は CASCADE で消えるがストレージ上の実体は
 	// 消えないので、行が消える前にキーを控えておくために使う。
 	ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error)
+	// ListReportableMediaByUploader はその利用者の添付のうち、通報の対象（メッセージ・質問・回答）に
+	// 付いているものを、添付先と一緒に返す。
+	ListReportableMediaByUploader(ctx context.Context, userID int64) ([]ReportableMedia, error)
 }
 
 // MediaDeleter は紐づけとメディア本体の削除。
@@ -76,4 +79,13 @@ type MediaRepository interface {
 	MediaReader
 	MediaDeleter
 	MediaDimensionRepository
+}
+
+// ReportableMedia は通報の対象に付いている添付1件。
+type ReportableMedia struct {
+	MediaID     int64
+	StorageKey  string
+	ContentType string
+	TargetType  model.ReportTargetType
+	TargetID    int64
 }

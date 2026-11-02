@@ -124,6 +124,33 @@ func (r *MySQLMediaRepository) ListStorageKeysByUploader(ctx context.Context, us
 	return keys, rows.Err()
 }
 
+// ListReportableMediaByUploader はトランザクションの中でも使えるよう extractDB を通す。
+func (r *MySQLMediaRepository) ListReportableMediaByUploader(ctx context.Context, userID int64) ([]repository.ReportableMedia, error) {
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, `
+		SELECT m.id, m.storage_key, m.content_type, ?, l.message_id FROM media m JOIN message_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?
+		UNION ALL
+		SELECT m.id, m.storage_key, m.content_type, ?, l.question_id FROM media m JOIN question_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?
+		UNION ALL
+		SELECT m.id, m.storage_key, m.content_type, ?, l.answer_id FROM media m JOIN answer_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?`,
+		string(model.TargetMessage), userID, string(model.TargetQuestion), userID, string(model.TargetAnswer), userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []repository.ReportableMedia
+	for rows.Next() {
+		var item repository.ReportableMedia
+		var targetType string
+		if err := rows.Scan(&item.MediaID, &item.StorageKey, &item.ContentType, &targetType, &item.TargetID); err != nil {
+			return nil, err
+		}
+		item.TargetType = model.ReportTargetType(targetType)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {
 	query := `
 		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.width, m.height, m.created_at
