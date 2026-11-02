@@ -61,12 +61,21 @@ SQL
     [[ "$(version)" == $'73\t0' ]] || exit 1
     start=$SECONDS
     "${compose[@]}" up -d app
+    # app は migration を終えてから HTTP を受け付ける。到達点は image に入っている最新の migration。
     for i in {1..120}; do
-      if [[ "$(version)" == $'108\t0' ]]; then
-        echo "Migrated 73 -> 108 in $((SECONDS-start)) seconds"
+      status=$(curl --silent --max-time 3 -o /tmp/space-migrate-health.$$ -w '%{http_code}' http://127.0.0.1:8080/ || true)
+      if [[ "$status" == 200 ]] || { [[ "$status" == 503 ]] && grep -q '"message":"server_maintenance"' /tmp/space-migrate-health.$$; }; then
+        rm -f /tmp/space-migrate-health.$$
+        read -r reached dirty <<< "$(version)"
         "${compose[@]}" stop app
-        exit 0
+        if [[ "$dirty" == 0 && "$reached" =~ ^[0-9]+$ && "$reached" -gt 73 ]]; then
+          echo "Migrated 73 -> $reached in $((SECONDS-start)) seconds"
+          exit 0
+        fi
+        echo 'Unexpected migration state; do not force migration version' >&2
+        exit 1
       fi
+      rm -f /tmp/space-migrate-health.$$
       sleep 2
     done
     "${compose[@]}" stop app

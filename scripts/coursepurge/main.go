@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+
+	spacedb "github.com/Cityboypenguin/SPACE-server/db"
 )
 
 type object struct {
@@ -26,6 +28,7 @@ type manifest struct {
 	Database string           `json:"database"`
 	Account  string           `json:"account"`
 	Objects  []object         `json:"objects"`
+	Schema   uint             `json:"schema"`
 }
 
 var tables = []string{"messages", "questions", "answers", "polls"}
@@ -79,10 +82,13 @@ func main() {
 	check(err)
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if scalar(db, "SELECT COUNT(*) FROM schema_migrations WHERE version=108 AND dirty=0") != 1 {
-		panic("expected clean version 108")
+	// Build this tool from the same commit as the app image: both then agree on the latest migration.
+	latest, err := spacedb.LatestVersion()
+	check(err)
+	if scalar(db, "SELECT COUNT(*) FROM schema_migrations WHERE version=? AND dirty=0", latest) != 1 {
+		panic("expected clean latest version")
 	}
-	m := manifest{Objects: []object{}, Target: cfg.Addr, Counts: map[string]int64{}, Database: cfg.DBName, Account: os.Getenv("AZURE_STORAGE_ACCOUNT_NAME")}
+	m := manifest{Objects: []object{}, Target: cfg.Addr, Counts: map[string]int64{}, Database: cfg.DBName, Account: os.Getenv("AZURE_STORAGE_ACCOUNT_NAME"), Schema: latest}
 	if *resume {
 		b, e := os.ReadFile(*path)
 		check(e)

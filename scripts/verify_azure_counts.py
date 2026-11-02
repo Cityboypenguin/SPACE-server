@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a frozen v73 baseline to v108 after course purge; no DB writes."""
+"""Compare a frozen v73 baseline to the purged latest schema; no DB writes."""
 import argparse
 import json
 from pathlib import Path
@@ -16,8 +16,11 @@ def load(path):
 
 
 def verify(before, after, journal):
-    if before.get('schema') != [73, 0] or after.get('schema') != [108, 0]:
-        raise ValueError('expected clean 73 -> 108')
+    # coursepurge records the latest migration of the commit it was built from.
+    latest = journal.get('schema')
+    if (before.get('schema') != [73, 0] or type(latest) is not int or latest <= 73
+            or after.get('schema') != [latest, 0]):
+        raise ValueError('expected clean 73 -> version recorded by course purge')
     for table in ('users', 'messages', 'questions', 'answers', 'polls', 'media',
                   'notifications', 'user_reports', 'archives', 'timetables', 'courses', 'rooms'):
         removed = journal['counts'].get(table, 0)

@@ -11,7 +11,8 @@
 - サーバーは `origin/Develop` → `origin/feature/azure-vm-go-live`（Azure を含む）→ `origin/dev_new`、
   クライアントは `origin/Develop` → `origin/Azure` → `origin/dev_new` の順に
   `integration/azure-go-live` へ統合し、`Develop` 向け PR を人間がマージする。
-- 統合後の最新マイグレーションは v108。移行・削除・件数照合は clean v108 を前提にする。
+- 移行の到達点は、VM に置く image と同じコミットの最新マイグレーション（2026-11-03 時点の `Develop` は v126）。
+  移行・削除・件数照合はツールがコミットから到達点を求めるので、番号を書き換えない。
 - `main` へのマージ・push、VM デプロイ、本番変更はこの統合作業では実行しない。
   切り替え当日の操作は人間が行う。移行後の `main` push による自動デプロイは手順書を参照。
 
@@ -71,7 +72,7 @@ VM の `/etc/nginx/conf.d/space.conf` は certbot が更新済みで、リポジ
 
 1. AWS で `mysqldump --single-transaction --default-character-set=utf8mb4` を実行する。
 2. VM の app を止め、DB を作り直してダンプを入れる。この時点のバージョンは 73。
-3. VM の app を起動し、バージョン 108 まで進んだことを確認する。
+3. VM の app を起動し、最新のマイグレーションまで進んだことを確認する。
 4. タスク 3 のスクリプトで投稿を削除する。
 5. 画像の差分を移す。
 6. `scripts/migrate_message_media.sh` を実行する。
@@ -106,7 +107,7 @@ AWS の Redis を移さない場合に失効トークンが有効に戻るか、
 
 本番切り替えの前に、本番 DB のコピーで次を確認して結果を報告する。
 
-- 73 から 108 までのマイグレーションの成否と所要時間。
+- 73 から最新までのマイグレーションの成否と所要時間。
 - 削除スクリプトの件数と結果。
 - ログイン、投稿、画像、アップロード、DM と添付の復号、SSE、WebSocket。
 
