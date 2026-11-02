@@ -53,6 +53,8 @@ type guard struct {
 	mu       sync.Mutex
 	matcher  *model.NGWordMatcher
 	loadedAt time.Time
+	// version は Invalidate のたびに増える。読み込みの間に登録が変わったら、その結果を覚えない。
+	version uint64
 }
 
 // Invalidator は登録内容が変わったことを知らせる口（AdminService が使う）。
@@ -73,21 +75,39 @@ func (g *guard) Invalidate() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.matcher = nil
+	g.version++
 }
 
+// current は照合器を返す。DB を読む間はロックを持たない（DB が遅いときに、授業内チャットの
+// 投稿が検査の順番待ちで止まらないようにするため）。期限切れの瞬間に同時に来た投稿は
+// それぞれ読むが、数秒に一度のことなので許容する。
 func (g *guard) current(ctx context.Context) (*model.NGWordMatcher, error) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	if g.matcher != nil && g.now().Sub(g.loadedAt) < cacheTTL {
+		defer g.mu.Unlock()
 		return g.matcher, nil
 	}
+	version := g.version
+	g.mu.Unlock()
+
 	words, err := g.repo.ListNGWords(ctx)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if err != nil {
+		// 期限が切れた内容でも、検査しないよりは良いので、残っていれば使う。
+		if g.matcher != nil {
+			logger.Log.Error().Err(err).Str("component", "ngword").Msg("failed to reload ng words; using the previous list")
+			return g.matcher, nil
+		}
 		return nil, err
 	}
-	g.matcher = model.NewNGWordMatcher(words)
-	g.loadedAt = g.now()
-	return g.matcher, nil
+	matcher := model.NewNGWordMatcher(words)
+	if version == g.version {
+		g.matcher = matcher
+		g.loadedAt = g.now()
+	}
+	return matcher, nil
 }
 
 func (g *guard) Screen(ctx context.Context, userID int64, roomID *int64, source model.NGWordSource, texts ...string) error {

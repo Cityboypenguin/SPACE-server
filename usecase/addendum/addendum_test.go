@@ -35,6 +35,8 @@ type fakeAddenda struct {
 	created   []*model.Addendum
 	limitHit  bool
 	answerers []int64
+	deleted   []int64
+	missing   bool
 }
 
 func (f *fakeAddenda) CreateQuestionAddendum(_ context.Context, a *model.Addendum, _ int) error {
@@ -46,6 +48,14 @@ func (f *fakeAddenda) CreateQuestionAddendum(_ context.Context, a *model.Addendu
 }
 func (f *fakeAddenda) CreateAnswerAddendum(ctx context.Context, a *model.Addendum, max int) error {
 	return f.CreateQuestionAddendum(ctx, a, max)
+}
+func (f *fakeAddenda) DeleteQuestionAddendum(_ context.Context, id int64) (int64, bool, error) {
+	f.deleted = append(f.deleted, id)
+	return 1, !f.missing, nil
+}
+func (f *fakeAddenda) DeleteAnswerAddendum(_ context.Context, id int64) (int64, bool, error) {
+	f.deleted = append(f.deleted, id)
+	return 2, !f.missing, nil
 }
 func (f *fakeAddenda) ListAnswererIDs(context.Context, int64) ([]int64, error) {
 	return f.answerers, nil
@@ -186,5 +196,46 @@ func TestAddToAnswer_OnlyTheAnswererCanAddAndTheAskerIsNotified(t *testing.T) {
 	}
 	if f.events.answerUpdated != 1 {
 		t.Errorf("answerUpdated = %d, want 1", f.events.answerUpdated)
+	}
+}
+
+func ctxAsAdmin() context.Context {
+	return auth.WithClaims(context.Background(), &auth.Claims{ID: 1, Role: "administrator"})
+}
+
+func TestDeleteAddendum_OnlyAdminsCanDelete(t *testing.T) {
+	f := newFixture(nil)
+	if _, err := f.svc.DeleteFromQuestion(ctxAs(asker), 3); err == nil {
+		t.Error("the asker must not be able to delete their own addendum")
+	}
+	if _, err := f.svc.DeleteFromAnswer(ctxAs(answerer), 3); err == nil {
+		t.Error("the answerer must not be able to delete their own addendum")
+	}
+	if len(f.addenda.deleted) != 0 || f.events.questionUpdated+f.events.answerUpdated != 0 {
+		t.Error("a rejected delete must not touch anything")
+	}
+}
+
+func TestDeleteAddendum_DeletesAndBroadcasts(t *testing.T) {
+	f := newFixture(nil)
+	if ok, err := f.svc.DeleteFromQuestion(ctxAsAdmin(), 3); err != nil || !ok {
+		t.Fatalf("question: ok = %v, err = %v", ok, err)
+	}
+	if ok, err := f.svc.DeleteFromAnswer(ctxAsAdmin(), 4); err != nil || !ok {
+		t.Fatalf("answer: ok = %v, err = %v", ok, err)
+	}
+	if len(f.addenda.deleted) != 2 || f.events.questionUpdated != 1 || f.events.answerUpdated != 1 {
+		t.Errorf("deleted = %v, questionUpdated = %d, answerUpdated = %d", f.addenda.deleted, f.events.questionUpdated, f.events.answerUpdated)
+	}
+}
+
+func TestDeleteAddendum_MissingIsNotBroadcast(t *testing.T) {
+	f := newFixture(nil)
+	f.addenda.missing = true
+	if ok, err := f.svc.DeleteFromQuestion(ctxAsAdmin(), 3); err != nil || ok {
+		t.Errorf("ok = %v, err = %v; want false", ok, err)
+	}
+	if f.events.questionUpdated != 0 {
+		t.Error("nothing was deleted, so nothing must be broadcast")
 	}
 }

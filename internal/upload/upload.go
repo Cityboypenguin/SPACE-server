@@ -285,6 +285,17 @@ func acceptedKeyFor(stagingKey string) (string, error) {
 	return rest[:slash+1] + uuid.NewString() + rest[dot:], nil
 }
 
+// RetainedKeyFor は保存済みのオブジェクトを残しておくときの写し先を作る。区切りと拡張子は
+// 元のキーから引き継ぎ（種別の判定がそのまま効く）、名前（UUID）だけを引き直す。
+func RetainedKeyFor(objectKey string) (string, error) {
+	slash := strings.LastIndex(objectKey, "/")
+	dot := strings.LastIndex(objectKey, ".")
+	if slash < 0 || dot < slash {
+		return "", errInvalidKey
+	}
+	return objectKey[:slash+1] + uuid.NewString() + objectKey[dot:], nil
+}
+
 // ObjectStore は Accept が要るぶんだけの StorageRepository。
 // repository.StorageRepository がそのまま満たす。
 type ObjectStore interface {

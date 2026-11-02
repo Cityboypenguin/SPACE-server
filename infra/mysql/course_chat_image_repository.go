@@ -26,13 +26,21 @@ func NewMySQLCourseChatImageRepository(db *sql.DB) repository.CourseChatImageRep
 // 画像だけを対象にする（content_type が image/）。スレッドは親の授業の画像として扱う。
 const courseChatImageColumns = `
 	md.id, md.storage_key, md.content_type, md.width, md.height, md.created_at,
-	md.uploader_user_id, COALESCE(u.name, '退会済みの利用者'), COALESCE(u.account_id, ''),
+	md.uploader_user_id, COALESCE(u.name, '退会済みの利用者') AS uploader_name, COALESCE(u.account_id, '') AS uploader_account_id,
 	COALESCE(pr.id, r.id) AS room_id, COALESCE(pr.name, r.name) AS course_name`
 
-const courseChatImageJoinsTail = `
+// courseChatImageOutputColumns は副問い合わせから読む列。scanCourseChatImage と対になっている。
+const courseChatImageOutputColumns = `source, target_id, target_deleted,
+	id, storage_key, content_type, width, height, created_at,
+	uploader_user_id, uploader_name, uploader_account_id, room_id, course_name`
+
+// courseChatImageJoins は添付の紐付け表（別名 link）から先の結合。
+func courseChatImageJoins(link string) string {
+	return `
 	LEFT JOIN rooms pr ON pr.id = r.parent_room_id
-	JOIN media md ON md.id = %s.media_id AND md.content_type LIKE 'image/%'
+	JOIN media md ON md.id = ` + link + `.media_id AND md.content_type LIKE 'image/%'
 	LEFT JOIN user_accounts u ON u.user_id = md.uploader_user_id`
+}
 
 var courseChatImageSelects = map[model.CourseChatImageSource]string{
 	model.CourseChatImageSourceMessage: `
@@ -40,24 +48,25 @@ var courseChatImageSelects = map[model.CourseChatImageSource]string{
 		FROM message_media mm
 		JOIN messages m ON m.id = mm.message_id
 		JOIN rooms r ON r.id = m.room_id AND r.type = 'course'
-		` + strings.Replace(courseChatImageJoinsTail, "%s", "mm", 1),
+		` + courseChatImageJoins("mm"),
 	model.CourseChatImageSourceQuestion: `
 		SELECT 'question' AS source, qm.question_id AS target_id, FALSE AS target_deleted, ` + courseChatImageColumns + `
 		FROM question_media qm
 		JOIN questions q ON q.id = qm.question_id
 		JOIN rooms r ON r.id = q.room_id AND r.type = 'course'
-		` + strings.Replace(courseChatImageJoinsTail, "%s", "qm", 1),
+		` + courseChatImageJoins("qm"),
 	model.CourseChatImageSourceAnswer: `
 		SELECT 'answer' AS source, am.answer_id AS target_id, FALSE AS target_deleted, ` + courseChatImageColumns + `
 		FROM answer_media am
 		JOIN answers a ON a.id = am.answer_id
 		JOIN questions q ON q.id = a.question_id
 		JOIN rooms r ON r.id = q.room_id AND r.type = 'course'
-		` + strings.Replace(courseChatImageJoinsTail, "%s", "am", 1),
+		` + courseChatImageJoins("am"),
 }
 
 // unionFor は filter に合う添付先だけを UNION ALL で束ねた副問い合わせと、その引数を返す。
-func unionFor(filter repository.CourseChatImageFilter) (string, []any) {
+// mediaID を渡すと、その1件だけに絞る（UNION の外で絞ると全画像を集めてからになるので、中で絞る）。
+func unionFor(filter repository.CourseChatImageFilter, mediaID *int64) (string, []any) {
 	order := []model.CourseChatImageSource{
 		model.CourseChatImageSourceMessage, model.CourseChatImageSourceQuestion, model.CourseChatImageSourceAnswer,
 	}
@@ -68,9 +77,17 @@ func unionFor(filter repository.CourseChatImageFilter) (string, []any) {
 			continue
 		}
 		sel := courseChatImageSelects[src]
+		var conds []string
 		if filter.RoomID != nil {
-			sel += ` WHERE COALESCE(pr.id, r.id) = ?`
+			conds = append(conds, `COALESCE(pr.id, r.id) = ?`)
 			args = append(args, *filter.RoomID)
+		}
+		if mediaID != nil {
+			conds = append(conds, `md.id = ?`)
+			args = append(args, *mediaID)
+		}
+		if len(conds) > 0 {
+			sel += ` WHERE ` + strings.Join(conds, ` AND `)
 		}
 		parts = append(parts, sel)
 	}
@@ -107,7 +124,7 @@ func scanCourseChatImage(sc interface{ Scan(...any) error }) (*model.CourseChatI
 }
 
 func (r *MySQLCourseChatImageRepository) ListCourseChatImages(ctx context.Context, filter repository.CourseChatImageFilter, limit, offset int) ([]*model.CourseChatImage, int, error) {
-	union, args := unionFor(filter)
+	union, args := unionFor(filter, nil)
 	if union == "" {
 		return nil, 0, nil
 	}
@@ -116,7 +133,7 @@ func (r *MySQLCourseChatImageRepository) ListCourseChatImages(ctx context.Contex
 		return nil, 0, err
 	}
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT * FROM (`+union+`) t ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+		`SELECT `+courseChatImageOutputColumns+` FROM (`+union+`) t ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		append(append([]any{}, args...), limit, offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -134,9 +151,9 @@ func (r *MySQLCourseChatImageRepository) ListCourseChatImages(ctx context.Contex
 }
 
 func (r *MySQLCourseChatImageRepository) GetCourseChatImage(ctx context.Context, mediaID int64) (*model.CourseChatImage, error) {
-	union, args := unionFor(repository.CourseChatImageFilter{})
+	union, args := unionFor(repository.CourseChatImageFilter{}, &mediaID)
 	img, err := scanCourseChatImage(r.DB.QueryRowContext(ctx,
-		`SELECT * FROM (`+union+`) t WHERE id = ? LIMIT 1`, append(append([]any{}, args...), mediaID)...))
+		`SELECT `+courseChatImageOutputColumns+` FROM (`+union+`) t LIMIT 1`, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

@@ -205,6 +205,7 @@ func TestAccountSplitMigration(t *testing.T) {
 		kept := []string{
 			"messages.user_id", "questions.asker_user_id", "answers.author_user_id",
 			"polls.author_user_id", "poll_votes.user_id", "answer_likes.user_id",
+			"message_reactions.user_id", "question_addenda.user_id", "answer_addenda.user_id",
 		}
 		for _, col := range kept {
 			if got := fks[col]; got != (fkRule{"users", "RESTRICT"}) {
@@ -234,8 +235,8 @@ func TestAccountSplitMigration(t *testing.T) {
 		if len(stray) > 0 {
 			t.Errorf("want user_accounts CASCADE, got:\n%s", strings.Join(stray, "\n"))
 		}
-		if len(fks) != 18 {
-			t.Errorf("account-bound foreign keys = %d, want 18", len(fks))
+		if len(fks) != 19 {
+			t.Errorf("account-bound foreign keys = %d, want 19", len(fks))
 		}
 	})
 

@@ -25,10 +25,10 @@ type CreatePollInteractor struct {
 	ng              ngword.Guard
 }
 
-// NewCreatePollUseCase の ng は設問と選択肢を保存の前に検査する。nil なら検査しない。
 func NewCreatePollUseCase(events EventPublisher,
 	pollRepo repository.PollRepository,
 	requireWritable course.RequireWritableCourseRoomUseCase,
+	// ng は設問と選択肢を保存の前に検査する。nil なら検査しない。
 	ng ngword.Guard,
 ) CreatePollUseCase {
 	return &CreatePollInteractor{events: orNoop(events), pollRepo: pollRepo, requireWritable: requireWritable, ng: ng}

@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
@@ -85,20 +87,23 @@ func (s *Service) AddToQuestion(ctx context.Context, questionID int64, body stri
 		return nil, err
 	}
 	if err := s.d.Addenda.CreateQuestionAddendum(ctx, a, model.MaxAddendaPerTarget); err != nil {
-		return nil, translateLimit(err)
+		return nil, translateCreateError(err)
 	}
 
 	s.d.QuestionEvents.QuestionUpdated(ctx, q)
 	// 通知は回答している人へ（質問者本人は除く）。宛先が引けなくても追記自体は成功している。
-	if ids, err := s.d.Addenda.ListAnswererIDs(ctx, q.ID); err == nil {
-		others := ids[:0:0]
-		for _, id := range ids {
-			if id != claims.ID {
-				others = append(others, id)
-			}
-		}
-		s.d.Notifier.QuestionAddendumAdded(ctx, q, others)
+	ids, err := s.d.Addenda.ListAnswererIDs(ctx, q.ID)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("component", "addendum").Int64("question_id", q.ID).Msg("failed to list answerers to notify")
+		return q, nil
 	}
+	others := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id != claims.ID {
+			others = append(others, id)
+		}
+	}
+	s.d.Notifier.QuestionAddendumAdded(ctx, q, others)
 	return q, nil
 }
 
@@ -137,7 +142,7 @@ func (s *Service) AddToAnswer(ctx context.Context, answerID int64, body string) 
 		return nil, err
 	}
 	if err := s.d.Addenda.CreateAnswerAddendum(ctx, a, model.MaxAddendaPerTarget); err != nil {
-		return nil, translateLimit(err)
+		return nil, translateCreateError(err)
 	}
 
 	s.d.AnswerEvents.AnswerUpdated(ctx, ans)
@@ -148,9 +153,48 @@ func (s *Service) AddToAnswer(ctx context.Context, answerID int64, body string) 
 	return s.d.Answers.GetAnswerWithLikesByID(ctx, ans.ID, claims.ID)
 }
 
-func translateLimit(err error) error {
+// DeleteFromQuestion は質問への追記を1件消す。消せるのは管理者だけ（本人は消せない。
+// 一度出した内容をしれっと変えられないようにするため）。無ければ false。
+func (s *Service) DeleteFromQuestion(ctx context.Context, addendumID int64) (bool, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return false, err
+	}
+	questionID, found, err := s.d.Addenda.DeleteQuestionAddendum(ctx, addendumID)
+	if err != nil || !found {
+		return false, err
+	}
+	audit.LogAddendumDeleted(ctx, "question", addendumID, questionID)
+
+	// 追記はもう消えたので、配信先を引けなくても削除は成功として返す（質問ごと消された場合など）。
+	if q, err := s.d.Questions.GetQuestionByID(ctx, questionID); err == nil && q != nil {
+		s.d.QuestionEvents.QuestionUpdated(ctx, q)
+	}
+	return true, nil
+}
+
+// DeleteFromAnswer は回答への追記を1件消す。消せるのは管理者だけ。無ければ false。
+func (s *Service) DeleteFromAnswer(ctx context.Context, addendumID int64) (bool, error) {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return false, err
+	}
+	answerID, found, err := s.d.Addenda.DeleteAnswerAddendum(ctx, addendumID)
+	if err != nil || !found {
+		return false, err
+	}
+	audit.LogAddendumDeleted(ctx, "answer", addendumID, answerID)
+
+	if ans, err := s.d.Answers.GetAnswerByID(ctx, answerID); err == nil && ans != nil {
+		s.d.AnswerEvents.AnswerUpdated(ctx, ans)
+	}
+	return true, nil
+}
+
+func translateCreateError(err error) error {
 	if errors.Is(err, repository.ErrAddendumLimit) {
 		return apperr.InvalidInput("追記できる数の上限に達しています")
+	}
+	if errors.Is(err, repository.ErrAddendumTargetNotFound) {
+		return apperr.NotFound("追記先の質問・回答が見つかりません")
 	}
 	return err
 }

@@ -94,6 +94,9 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
+  # 質問・回答への追記を1件消す（質問・回答そのものは残る）。
+  adminDeleteQuestionAddendum(id: ID!): Boolean!
+  adminDeleteAnswerAddendum(id: ID!): Boolean!
   # 授業内チャットの画像を消す（ファイルも消える。取り消せない）。
   adminDeleteCourseChatImage(mediaID: ID!): Boolean!
   # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答・追記・投票・スレッドの題名）。

@@ -494,11 +494,14 @@ func (p *chatEventPublisher) publishMentionNotifications(ctx context.Context, ro
 	}
 }
 
+// stampMessageSummary はスタンプだけのメッセージの一覧プレビュー・通知文言。
+const stampMessageSummary = "[スタンプを送信しました]"
+
 // messageSummary はメッセージ1件の一覧プレビュー・通知文言。スタンプだけのメッセージは本文が空なので、
 // 「新しいメッセージが届きました」ではなく「スタンプ」と分かる文言にする。
 func messageSummary(m *model.Message, hasMedia bool) string {
 	if m.StampID != nil {
-		return "[スタンプを送信しました]"
+		return stampMessageSummary
 	}
 	return messagePreview(m.Content, hasMedia)
 }

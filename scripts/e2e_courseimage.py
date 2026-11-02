@@ -11,35 +11,13 @@
 (画像のアップロードに、ローカルの MinIO が要る)
 
 注意:
-- ローカル開発用DBにテスト用ユーザー(@example.test)・メッセージ・リアクションが残る。
+- ローカル開発用DBにテスト用ユーザー(@example.test)と投稿が残る。
   確認が終わったら消してよい(DELETE FROM messages/users WHERE ... @example.test)。
 - 管理者の認証情報は .env（SPACE_ENV_FILE で変更可）の INIT_ADMIN_* を読む(授業一覧の取得だけに使う)。
-- 購読の確認に websocket-client(pip install websocket-client)が要る。
 """
-import json, os, secrets, sys, time, urllib.error, urllib.request
+import secrets, urllib.error, urllib.request
 
-URL = "http://localhost:8080/query"
-
-def gql(query, variables=None, token=None):
-    req = urllib.request.Request(URL, data=json.dumps({"query": query, "variables": variables or {}}).encode(),
-                                 headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {})})
-    # サーバーのレート制限(429)に当たったら、少し待って最大5回やり直す。
-    for attempt in range(6):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                return json.load(r)
-        except urllib.error.HTTPError as e:
-            if e.code != 429 or attempt == 5:
-                raise
-            time.sleep(2 + attempt * 2)
-
-def ok(d):
-    assert "errors" not in d, d["errors"]
-    return d["data"]
-
-def err(d):
-    assert "errors" in d, f"expected an error, got {d}"
-    return d["errors"][0]["message"]
+from e2e_common import err, gql, ok, read_env
 
 import base64
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
@@ -65,7 +43,7 @@ acct = f"img{run}a"
 ok(gql("mutation($i:CreateUserInput!){createUser(input:$i){ID}}",
        {"i": {"accountID": acct, "name": "画像試験a", "email": f"{acct}@example.test", "password": pw, "otp": "000000"}}))
 ta = ok(gql("mutation($i:LoginInput!){loginUser(input:$i){token}}", {"i": {"email": f"{acct}@example.test", "password": pw}}))["loginUser"]["token"]
-env = dict(l.strip().split("=", 1) for l in open(os.environ.get("SPACE_ENV_FILE", ".env"), encoding="utf-8") if "=" in l and not l.lstrip().startswith("#"))
+env = read_env()
 adm = ok(gql("mutation($i:LoginInput!){loginAdministrator(input:$i){token}}",
              {"i": {"email": env["INIT_ADMIN_EMAIL"], "password": env["INIT_ADMIN_PASSWORD"]}}))["loginAdministrator"]["token"]
 cur = ok(gql("query{currentSemester{year semester}}", token=adm))["currentSemester"]

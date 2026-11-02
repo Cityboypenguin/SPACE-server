@@ -969,6 +969,30 @@ func (r *queryResolver) AdminNGWordStats(ctx context.Context) (*gqlmodel.NGWordS
 	return out, nil
 }
 
+// AdminDeleteQuestionAddendum is the resolver for the adminDeleteQuestionAddendum field.
+func (r *mutationResolver) AdminDeleteQuestionAddendum(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "question_addendum", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid addendum id")
+	}
+	return r.Addenda.DeleteFromQuestion(ctx, numericID)
+}
+
+// AdminDeleteAnswerAddendum is the resolver for the adminDeleteAnswerAddendum field.
+func (r *mutationResolver) AdminDeleteAnswerAddendum(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "answer_addendum", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid addendum id")
+	}
+	return r.Addenda.DeleteFromAnswer(ctx, numericID)
+}
+
 // AdminDeleteCourseChatImage is the resolver for the adminDeleteCourseChatImage field.
 func (r *mutationResolver) AdminDeleteCourseChatImage(ctx context.Context, mediaID string) (bool, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {

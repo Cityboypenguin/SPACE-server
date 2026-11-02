@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -58,6 +59,9 @@ func (r *MySQLAddendumRepository) create(ctx context.Context, parent, table, col
 
 	var locked int64
 	if err = tx.QueryRowContext(ctx, `SELECT id FROM `+parent+` WHERE id = ? FOR UPDATE`, a.TargetID).Scan(&locked); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = repository.ErrAddendumTargetNotFound
+		}
 		return err
 	}
 	var count int
@@ -83,6 +87,35 @@ func (r *MySQLAddendumRepository) create(ctx context.Context, parent, table, col
 	}
 	a.ID = id
 	return nil
+}
+
+func (r *MySQLAddendumRepository) DeleteQuestionAddendum(ctx context.Context, id int64) (int64, bool, error) {
+	return r.delete(ctx, "question_addenda", "question_id", id)
+}
+
+func (r *MySQLAddendumRepository) DeleteAnswerAddendum(ctx context.Context, id int64) (int64, bool, error) {
+	return r.delete(ctx, "answer_addenda", "answer_id", id)
+}
+
+// delete は配信先の質問・回答を返すので、消す前に引いておく。table / col は呼び出し元の定数だけ。
+func (r *MySQLAddendumRepository) delete(ctx context.Context, table, col string, id int64) (int64, bool, error) {
+	var targetID int64
+	err := r.DB.QueryRowContext(ctx, `SELECT `+col+` FROM `+table+` WHERE id = ?`, id).Scan(&targetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	res, err := r.DB.ExecContext(ctx, `DELETE FROM `+table+` WHERE id = ?`, id)
+	if err != nil {
+		return 0, false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, false, err
+	}
+	return targetID, n > 0, nil
 }
 
 func (r *MySQLAddendumRepository) ListQuestionAddenda(ctx context.Context, questionIDs []int64) (map[int64][]*model.Addendum, error) {
