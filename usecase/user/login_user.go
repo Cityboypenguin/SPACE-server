@@ -6,6 +6,7 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/usecase/loginguard"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -35,6 +36,22 @@ func NewLoginUserUseCase(userRepo userLoginRepository) LoginUserUseCase {
 	return &LoginUserInteractor{userRepo: userRepo}
 }
 
+type guardedLoginUser struct {
+	inner LoginUserUseCase
+	guard *loginguard.Guard
+}
+
+// NewGuardedLoginUserUseCase は inner を、失敗が続いたアカウントを一時的に止める形で包む。
+func NewGuardedLoginUserUseCase(inner LoginUserUseCase, guard *loginguard.Guard) LoginUserUseCase {
+	return &guardedLoginUser{inner: inner, guard: guard}
+}
+
+func (uc *guardedLoginUser) Execute(ctx context.Context, email, password string) (*LoginUserResult, error) {
+	return loginguard.Attempt(ctx, uc.guard, "user", email, func() (*LoginUserResult, error) {
+		return uc.inner.Execute(ctx, email, password)
+	})
+}
+
 func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password string) (*LoginUserResult, error) {
 	// ログインだけが照合用のハッシュを取ってよい経路。
 	user, err := uc.userRepo.FindCredentialsByEmail(ctx, email)
@@ -42,11 +59,11 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("invalid email or password")
+		return nil, loginguard.ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, loginguard.ErrInvalidCredentials
 	}
 
 	if user.Status == model.UserStatusFrozen {
@@ -63,7 +80,7 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 			return nil, err
 		}
 		if !ok {
-			return nil, errors.New("invalid email or password")
+			return nil, loginguard.ErrInvalidCredentials
 		}
 		restored = true
 		user.Status = model.UserStatusActive
