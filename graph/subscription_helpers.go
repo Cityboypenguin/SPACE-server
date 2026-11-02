@@ -163,3 +163,28 @@ func (r *subscriptionResolver) messageSubscription(ctx context.Context, roomID, 
 		func(m *gqlmodel.Message) (*gqlmodel.Message, bool) { return m, true },
 	), nil
 }
+
+// chatThreadChangedTopic は親ルームのスレッドが作られた・変更された・新着があったことのトピック。
+func chatThreadChangedTopic(parentRoomID int64) string {
+	return encodeGraphID("room", parentRoomID) + ":threads:changed"
+}
+
+// ChatThreadChanged は chatThreadChangedTopic に流れる値。台をまたぐので
+// pubsub の Codec に登録してある（graph/pubsub_types.go）。
+type ChatThreadChanged struct {
+	ThreadID string `json:"threadID"`
+}
+
+// publishChatThreadChanged は room がスレッドなら、親ルームの購読者へそのスレッドの ID を知らせる。
+func publishChatThreadChanged(bus interface{ Publish(string, interface{}) }, room *model.Room) {
+	if room == nil || room.ParentRoomID == nil {
+		return
+	}
+	bus.Publish(chatThreadChangedTopic(*room.ParentRoomID), &ChatThreadChanged{ThreadID: encodeGraphID("room", room.ID)})
+}
+
+func (r *Resolver) publishChatThreadChanged(room *model.Room) {
+	if r.PubSub != nil {
+		publishChatThreadChanged(r.PubSub, room)
+	}
+}

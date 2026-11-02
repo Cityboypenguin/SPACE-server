@@ -919,6 +919,7 @@ type ComplexityRoot struct {
 		AnswerAdded                    func(childComplexity int, questionID string) int
 		AnswerDeleted                  func(childComplexity int, questionID string) int
 		AnswerUpdated                  func(childComplexity int, questionID string) int
+		ChatThreadChanged              func(childComplexity int, parentRoomID string) int
 		MessageAdded                   func(childComplexity int, roomID string) int
 		MessageDeleted                 func(childComplexity int, roomID string) int
 		MessageUpdated                 func(childComplexity int, roomID string) int
@@ -1352,6 +1353,7 @@ type SubscriptionResolver interface {
 	PollAdded(ctx context.Context, roomID string) (<-chan *model.Poll, error)
 	PollUpdated(ctx context.Context, pollID string) (<-chan *model.Poll, error)
 	PollDeleted(ctx context.Context, roomID string) (<-chan *model.Poll, error)
+	ChatThreadChanged(ctx context.Context, parentRoomID string) (<-chan string, error)
 }
 type UserResolver interface {
 	AvatarURL(ctx context.Context, obj *model.User) (*string, error)
@@ -6378,6 +6380,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.AnswerUpdated(childComplexity, args["questionID"].(string)), true
+	case "Subscription.chatThreadChanged":
+		if e.ComplexityRoot.Subscription.ChatThreadChanged == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_chatThreadChanged_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.ChatThreadChanged(childComplexity, args["parentRoomID"].(string)), true
 	case "Subscription.messageAdded":
 		if e.ComplexityRoot.Subscription.MessageAdded == nil {
 			break
@@ -12909,6 +12922,20 @@ func (ec *executionContext) field_Subscription_answerUpdated_args(ctx context.Co
 		return nil, err
 	}
 	args["questionID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_chatThreadChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "parentRoomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parentRoomID"] = arg0
 	return args, nil
 }
 
@@ -33649,6 +33676,50 @@ func (ec *executionContext) fieldContext_Subscription_pollDeleted(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_chatThreadChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Subscription_chatThreadChanged(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().ChatThreadChanged(ctx, fc.Args["parentRoomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Subscription_chatThreadChanged(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_chatThreadChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _TermsConsentPage_items(ctx context.Context, field graphql.CollectedField, obj *model.TermsConsentPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -46519,6 +46590,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_pollUpdated(ctx, fields[0])
 	case "pollDeleted":
 		return ec._Subscription_pollDeleted(ctx, fields[0])
+	case "chatThreadChanged":
+		return ec._Subscription_chatThreadChanged(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}

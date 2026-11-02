@@ -11,8 +11,11 @@ concurrency:
 jobs:
   validate:
     uses: ./.github/workflows/azure-validation.yml
+  # AWS への配信（deploy.yml）と同じく、サーバーのテストが通らなければ配信しない。
+  test:
+    uses: ./.github/workflows/test.yml
   deploy:
-    needs: validate
+    needs: [validate, test]
     runs-on: ubuntu-latest
     environment: azure-production
     steps:
