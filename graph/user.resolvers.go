@@ -136,8 +136,8 @@ func (r *mutationResolver) RefreshUserToken(ctx context.Context, refreshToken st
 }
 
 // LogoutUser is the resolver for the logoutUser field.
-func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, error) {
-	if err := r.LogoutUserUseCase.Execute(ctx, token); err != nil {
+func (r *mutationResolver) LogoutUser(ctx context.Context, token string, refreshToken *string) (bool, error) {
+	if err := r.LogoutUserUseCase.Execute(ctx, token, refreshToken); err != nil {
 		return false, err
 	}
 	return true, nil

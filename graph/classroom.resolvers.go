@@ -284,9 +284,14 @@ func (r *pollResolver) Options(ctx context.Context, obj *gqlmodel.Poll) ([]*gqlm
 		return nil, err
 	}
 
+	hidden := pollResultsHidden(ctx, obj, results, time.Now())
 	out := make([]*gqlmodel.PollOption, 0, len(results))
 	for _, res := range results {
-		out = append(out, toGraphPollOption(res))
+		opt := toGraphPollOption(res)
+		if hidden {
+			opt.VoteCount = 0
+		}
+		out = append(out, opt)
 	}
 	return out, nil
 }

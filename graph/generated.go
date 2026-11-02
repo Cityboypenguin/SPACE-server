@@ -543,8 +543,8 @@ type ComplexityRoot struct {
 		LikeAnswer                        func(childComplexity int, id string) int
 		LoginAdministrator                func(childComplexity int, input model.LoginInput) int
 		LoginUser                         func(childComplexity int, input model.LoginInput) int
-		LogoutAdministrator               func(childComplexity int, token string) int
-		LogoutUser                        func(childComplexity int, token string) int
+		LogoutAdministrator               func(childComplexity int, token string, refreshToken *string) int
+		LogoutUser                        func(childComplexity int, token string, refreshToken *string) int
 		MarkAllNotificationsAsRead        func(childComplexity int) int
 		MarkAllNotificationsAsReadByActor func(childComplexity int, typeArg string, actorID string) int
 		MarkNotificationAsRead            func(childComplexity int, id string) int
@@ -1080,7 +1080,7 @@ type MutationResolver interface {
 	UpdateAdministrator(ctx context.Context, id string, input model.UpdateAdministratorInput) (*model.Administrator, error)
 	LoginAdministrator(ctx context.Context, input model.LoginInput) (*model.AdministratorAuthPayload, error)
 	RefreshAdministratorToken(ctx context.Context, refreshToken string) (*model.AdministratorAuthPayload, error)
-	LogoutAdministrator(ctx context.Context, token string) (bool, error)
+	LogoutAdministrator(ctx context.Context, token string, refreshToken *string) (bool, error)
 	AdminRegisterTimetableEntry(ctx context.Context, userID string, courseID string) (*model.TimetableEntry, error)
 	AdminRemoveTimetableEntry(ctx context.Context, id string, userID string) (bool, error)
 	AdminSetTimetableEntryColor(ctx context.Context, id string, userID string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
@@ -1175,7 +1175,7 @@ type MutationResolver interface {
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.UserAccount, error)
 	LoginUser(ctx context.Context, input model.LoginInput) (*model.UserAuthPayload, error)
 	RefreshUserToken(ctx context.Context, refreshToken string) (*model.UserAuthPayload, error)
-	LogoutUser(ctx context.Context, token string) (bool, error)
+	LogoutUser(ctx context.Context, token string, refreshToken *string) (bool, error)
 	RequestPasswordReset(ctx context.Context, email string) (bool, error)
 	VerifyPasswordResetOtp(ctx context.Context, email string, otp string) (string, error)
 	ResetPassword(ctx context.Context, resetToken string, newPassword string) (bool, error)
@@ -3890,7 +3890,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.LogoutAdministrator(childComplexity, args["token"].(string)), true
+		return e.ComplexityRoot.Mutation.LogoutAdministrator(childComplexity, args["token"].(string), args["refreshToken"].(*string)), true
 	case "Mutation.logoutUser":
 		if e.ComplexityRoot.Mutation.LogoutUser == nil {
 			break
@@ -3901,7 +3901,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.LogoutUser(childComplexity, args["token"].(string)), true
+		return e.ComplexityRoot.Mutation.LogoutUser(childComplexity, args["token"].(string), args["refreshToken"].(*string)), true
 	case "Mutation.markAllNotificationsAsRead":
 		if e.ComplexityRoot.Mutation.MarkAllNotificationsAsRead == nil {
 			break
@@ -9796,6 +9796,14 @@ func (ec *executionContext) field_Mutation_logoutAdministrator_args(ctx context.
 		return nil, err
 	}
 	args["token"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "refreshToken",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["refreshToken"] = arg1
 	return args, nil
 }
 
@@ -9810,6 +9818,14 @@ func (ec *executionContext) field_Mutation_logoutUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["token"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "refreshToken",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["refreshToken"] = arg1
 	return args, nil
 }
 
@@ -20469,7 +20485,7 @@ func (ec *executionContext) _Mutation_logoutAdministrator(ctx context.Context, f
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().LogoutAdministrator(ctx, fc.Args["token"].(string))
+			return ec.Resolvers.Mutation().LogoutAdministrator(ctx, fc.Args["token"].(string), fc.Args["refreshToken"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
@@ -24565,7 +24581,7 @@ func (ec *executionContext) _Mutation_logoutUser(ctx context.Context, field grap
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().LogoutUser(ctx, fc.Args["token"].(string))
+			return ec.Resolvers.Mutation().LogoutUser(ctx, fc.Args["token"].(string), fc.Args["refreshToken"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {

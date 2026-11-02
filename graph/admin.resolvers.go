@@ -110,8 +110,8 @@ func (r *mutationResolver) RefreshAdministratorToken(ctx context.Context, refres
 }
 
 // LogoutAdministrator is the resolver for the logoutAdministrator field.
-func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string) (bool, error) {
-	if err := r.LogoutAdministratorUseCase.Execute(ctx, token); err != nil {
+func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string, refreshToken *string) (bool, error) {
+	if err := r.LogoutAdministratorUseCase.Execute(ctx, token, refreshToken); err != nil {
 		return false, err
 	}
 	return true, nil

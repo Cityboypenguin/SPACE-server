@@ -88,7 +88,7 @@ extend type Mutation {
   updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   refreshAdministratorToken(refreshToken: String!): AdministratorAuthPayload!
-  logoutAdministrator(token: String!): Boolean!
+  logoutAdministrator(token: String!, refreshToken: String): Boolean!
   # 管理者用: 任意のユーザーの時間割を操作する。
   adminRegisterTimetableEntry(userID: ID!, courseID: ID!): TimetableEntry!
   adminRemoveTimetableEntry(id: ID!, userID: ID!): Boolean!

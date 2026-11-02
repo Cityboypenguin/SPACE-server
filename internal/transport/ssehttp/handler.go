@@ -85,14 +85,7 @@ func NewHandler(hub *sse.Broker, ticketRepo repository.SSETicketRepository, watc
 			return echo.NewHTTPError(http.StatusInternalServerError, "streaming unsupported")
 		}
 
-		// Last-sse.Event-ID が送られていれば再接続とみなしてリプレイする
-		// ヘッダーがなければ初回接続（lastEventID = -1 でリプレイなし）
-		lastEventID := -1
-		if raw := req.Header.Get("Last-sse.Event-ID"); raw != "" {
-			if n, err := strconv.Atoi(raw); err == nil {
-				lastEventID = n
-			}
-		}
+		lastEventID := lastEventIDFrom(req)
 
 		cl, missed, err := hub.Subscribe(userID, lastEventID)
 		if err != nil {
@@ -213,4 +206,23 @@ func authenticate(
 	}
 
 	return repository.StreamSession{}, echo.NewHTTPError(http.StatusUnauthorized, "missing ticket")
+}
+
+// lastEventIDFrom は再接続のときに「最後に受け取った ID」を読む。
+// 送られていなければ初回接続として -1（リプレイなし）を返す。
+//
+// ブラウザが自分でつなぎ直すときは Last-Event-ID ヘッダーで届く。ただし
+// チケットは使い捨てなので、その再接続はたいてい 401 で終わり、クライアントは
+// 新しい EventSource を張り直す。新しい EventSource はヘッダーを送れないので、
+// クライアントは覚えておいた ID を ?lastEventId= に載せてくる。
+func lastEventIDFrom(req *http.Request) int {
+	raw := req.Header.Get("Last-Event-ID")
+	if raw == "" {
+		raw = req.URL.Query().Get("lastEventId")
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return -1
+	}
+	return n
 }
