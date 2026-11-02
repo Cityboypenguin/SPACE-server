@@ -29,6 +29,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/clientip"
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
@@ -121,10 +122,10 @@ func main() {
 
 	e := echo.New()
 
-	// Behind AWS ALB: trust private-network IPs as proxy hops so c.RealIP()
-	// returns the real client IP instead of being spoofable via X-Forwarded-For.
+	// 本番は CloudFront（と Azure では nginx）を通って届く。中継を信頼する経路に入れ、
+	// c.RealIP() が利用者の IP を返すようにする。X-Forwarded-For を偽っても騙せない。
 	if isProd {
-		e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustPrivateNet(true))
+		e.IPExtractor = clientip.Extractor()
 	}
 
 	userRepository := mysql.NewMySQLUserRepository(database)
@@ -344,7 +345,7 @@ func main() {
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
 	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer)
 	verifyPasswordResetOTPUseCase := userusecase.NewVerifyPasswordResetOTPUseCase(passwordResetRepository)
-	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository)
+	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository, loginGuard)
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
@@ -872,6 +873,7 @@ func main() {
 		authmiddleware.GraphQLIPRateLimitRate,
 		authmiddleware.GraphQLIPRateLimitBurst,
 	)))
+	e.Use(clientip.Middleware())
 	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
 	e.Use(authmiddleware.GraphQLRateLimit(infraredis.NewRateLimiterStore(

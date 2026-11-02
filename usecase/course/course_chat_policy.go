@@ -8,26 +8,30 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
 
-const courseChatEnabledKey = "course_chat_enabled"
-
 // EnsureCourseChatEnabled blocks course chat content while keeping timetable APIs available.
 func EnsureCourseChatEnabled(ctx context.Context, settingRepo repository.SystemSettingRepository) error {
-	claims, err := authz.RequireAuth(ctx)
+	stopped, err := courseChatStoppedFor(ctx, settingRepo)
 	if err != nil {
 		return err
 	}
-	if authz.IsAdminRole(claims.Role) {
-		return nil
-	}
-	if settingRepo == nil {
-		return nil
-	}
-	value, err := settingRepo.Get(ctx, courseChatEnabledKey)
-	if err != nil {
-		return err
-	}
-	if value == "false" {
+	if stopped {
 		return apperr.Forbidden("授業内チャットはメンテナンス中のため、この操作はできません。")
 	}
 	return nil
+}
+
+// courseChatStoppedFor は、呼び出した人にとって授業チャットが一括停止されているか。管理者は止まらない。
+func courseChatStoppedFor(ctx context.Context, settingRepo repository.SystemSettingRepository) (bool, error) {
+	claims, err := authz.RequireAuth(ctx)
+	if err != nil {
+		return false, err
+	}
+	if authz.IsAdminRole(claims.Role) || settingRepo == nil {
+		return false, nil
+	}
+	value, err := settingRepo.Get(ctx, repository.SystemSettingCourseChatEnabled)
+	if err != nil {
+		return false, err
+	}
+	return value == "false", nil
 }

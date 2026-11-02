@@ -47,7 +47,7 @@ func NewGuardedLoginUserUseCase(inner LoginUserUseCase, guard *loginguard.Guard)
 }
 
 func (uc *guardedLoginUser) Execute(ctx context.Context, email, password string) (*LoginUserResult, error) {
-	return loginguard.Attempt(ctx, uc.guard, "user", email, func() (*LoginUserResult, error) {
+	return loginguard.Attempt(ctx, uc.guard, loginguard.ScopeUser, email, func() (*LoginUserResult, error) {
 		return uc.inner.Execute(ctx, email, password)
 	})
 }
@@ -59,6 +59,7 @@ func (uc *LoginUserInteractor) Execute(ctx context.Context, email, password stri
 		return nil, err
 	}
 	if user == nil {
+		loginguard.CompareWithoutAccount(password)
 		return nil, loginguard.ErrInvalidCredentials
 	}
 

@@ -603,6 +603,7 @@ type PageViewInput struct {
 	Path            string `json:"path"`
 	DurationSeconds int32  `json:"durationSeconds"`
 	MaxScrollDepth  int32  `json:"maxScrollDepth"`
+	Resumed         *bool  `json:"resumed,omitempty"`
 }
 
 type PageViewStat struct {

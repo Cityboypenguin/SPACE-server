@@ -269,6 +269,8 @@ input PageViewInput {
   path: String!
   durationSeconds: Int!
   maxScrollDepth: Int!
+  # タブへ戻って同じ画面の続きを見たぶん。閲覧数には数えず、滞在時間だけ足す。
+  resumed: Boolean = false
 }
 
 enum TimeSeriesGranularity {

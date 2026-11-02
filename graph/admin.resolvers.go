@@ -412,9 +412,14 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	return enabled, nil
 }
 
+// ToggleCourseChat is the resolver for the toggleCourseChat field.
 func (r *mutationResolver) ToggleCourseChat(ctx context.Context, enabled bool) (bool, error) {
 	if err := r.ManageSystemSettingUsecase.SetCourseChatEnabled(ctx, enabled); err != nil {
 		return false, err
+	}
+	// 授業チャットを開いたままの画面に、停止・再開を知らせて表示を切り替えさせる。
+	if r.SSEBroker != nil {
+		r.SSEBroker.Broadcast("course_chat_status", map[string]any{"enabled": enabled})
 	}
 	return enabled, nil
 }
@@ -427,6 +432,7 @@ func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel
 			Path:            pv.Path,
 			DurationSeconds: int(pv.DurationSeconds),
 			MaxScrollDepth:  int(pv.MaxScrollDepth),
+			Resumed:         pv.Resumed != nil && *pv.Resumed,
 		}
 	}
 	if err := r.RecordSessionUseCase.Execute(ctx, int(input.SessionDurationSeconds), pageViews); err != nil {
@@ -518,8 +524,9 @@ func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
 	return r.MaintenanceFlag.Load(), nil
 }
 
+// CourseChatEnabled is the resolver for the courseChatEnabled field.
 func (r *queryResolver) CourseChatEnabled(ctx context.Context) (bool, error) {
-	if _, err := requireAdminAuth(ctx); err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
 	return r.ManageSystemSettingUsecase.IsCourseChatEnabled(ctx)

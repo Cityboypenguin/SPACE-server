@@ -44,6 +44,8 @@ func (r *signupOTPRepo) FindLatestByEmail(context.Context, string) (*model.Email
 	return &model.EmailOTP{Code: r.code}, nil
 }
 
+func (r *signupOTPRepo) RecordFailure(context.Context, string) error { return nil }
+
 func (r *signupOTPRepo) Delete(context.Context, string) error {
 	r.deletes++
 	return nil

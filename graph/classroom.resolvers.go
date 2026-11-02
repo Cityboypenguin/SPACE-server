@@ -72,7 +72,6 @@ func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body s
 		return nil, err
 	}
 	return nil, apperr.InvalidInput("質問は編集できません")
-
 }
 
 // DeleteQuestion is the resolver for the deleteQuestion field.
@@ -111,7 +110,6 @@ func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body str
 		return nil, err
 	}
 	return nil, apperr.InvalidInput("回答は編集できません")
-
 }
 
 // DeleteAnswer is the resolver for the deleteAnswer field.

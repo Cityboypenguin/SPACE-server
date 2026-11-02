@@ -12,8 +12,6 @@ type ManageSystemSettingUsecase struct {
 	settingRepo repository.SystemSettingRepository
 }
 
-const courseChatEnabledKey = "course_chat_enabled"
-
 func NewManageSystemSettingUsecase(repo repository.SystemSettingRepository) *ManageSystemSettingUsecase {
 	return &ManageSystemSettingUsecase{settingRepo: repo}
 }
@@ -42,11 +40,11 @@ func (u *ManageSystemSettingUsecase) SetCourseChatEnabled(ctx context.Context, e
 	if enabled {
 		value = "true"
 	}
-	return u.settingRepo.Update(ctx, courseChatEnabledKey, value, time.Now().Unix())
+	return u.settingRepo.Update(ctx, repository.SystemSettingCourseChatEnabled, value, time.Now().Unix())
 }
 
 func (u *ManageSystemSettingUsecase) IsCourseChatEnabled(ctx context.Context) (bool, error) {
-	value, err := u.settingRepo.Get(ctx, courseChatEnabledKey)
+	value, err := u.settingRepo.Get(ctx, repository.SystemSettingCourseChatEnabled)
 	if err != nil {
 		return false, err
 	}

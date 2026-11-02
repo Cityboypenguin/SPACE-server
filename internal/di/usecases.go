@@ -109,7 +109,6 @@ func NewQuestionUseCases(
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.QuestionUseCases{
 		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, ng),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable, ng),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
 		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
@@ -117,7 +116,6 @@ func NewQuestionUseCases(
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
 		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, ng),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, ng),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),

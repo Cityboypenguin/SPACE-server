@@ -179,34 +179,11 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 }
 
 // DeleteMediaByIDAndUserID は添付を1件消す。投稿の編集（usecase/post）が
-// 本文更新と同じ RunInTx の中から呼ぶので、隣の DeleteQuestionMedia などと同じく
-// extractDB を通す。ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても
-// 添付だけ消えたままになる。
+// 本文更新と同じ RunInTx の中から呼ぶので、extractDB を通す。
+// ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても添付だけ消えたままになる。
 func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
 	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, mediaID, userID)
-	return err
-}
-
-func (r *MySQLMediaRepository) DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error {
-	db := extractDB(ctx, r.DB)
-	query := `
-		DELETE m FROM media m
-		JOIN question_media qm ON qm.media_id = m.id
-		WHERE qm.question_id = ? AND m.id = ?
-	`
-	_, err := db.ExecContext(ctx, query, questionID, mediaID)
-	return err
-}
-
-func (r *MySQLMediaRepository) DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error {
-	db := extractDB(ctx, r.DB)
-	query := `
-		DELETE m FROM media m
-		JOIN answer_media am ON am.media_id = m.id
-		WHERE am.answer_id = ? AND m.id = ?
-	`
-	_, err := db.ExecContext(ctx, query, answerID, mediaID)
 	return err
 }
 

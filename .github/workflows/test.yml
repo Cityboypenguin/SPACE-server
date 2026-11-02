@@ -6,6 +6,7 @@ on:
     branches:
       - Develop
       - main
+  workflow_call:
 
 jobs:
   go:

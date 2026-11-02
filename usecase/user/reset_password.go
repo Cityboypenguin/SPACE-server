@@ -6,6 +6,7 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/Cityboypenguin/SPACE-server/usecase/loginguard"
 )
 
 type ResetPasswordUseCase interface {
@@ -17,15 +18,18 @@ var _ ResetPasswordUseCase = &ResetPasswordInteractor{}
 type ResetPasswordInteractor struct {
 	userRepo    userPasswordRepository
 	pwResetRepo repository.PasswordResetRepository
+	loginGuard  *loginguard.Guard
 }
 
 func NewResetPasswordUseCase(
 	userRepo userPasswordRepository,
 	pwResetRepo repository.PasswordResetRepository,
+	loginGuard *loginguard.Guard,
 ) ResetPasswordUseCase {
 	return &ResetPasswordInteractor{
 		userRepo:    userRepo,
 		pwResetRepo: pwResetRepo,
+		loginGuard:  loginGuard,
 	}
 }
 
@@ -58,5 +62,6 @@ func (uc *ResetPasswordInteractor) Execute(ctx context.Context, resetToken, newP
 		return err
 	}
 
+	uc.loginGuard.Forgive(ctx, loginguard.ScopeUser, email)
 	return nil
 }

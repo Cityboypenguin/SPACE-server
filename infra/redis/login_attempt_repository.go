@@ -16,8 +16,9 @@ func NewRedisLoginAttemptRepository(client *redis.Client) repository.LoginAttemp
 	return &RedisLoginAttemptRepository{client: client}
 }
 
-func loginFailureKey(key string) string { return "login:fail:" + key }
-func loginLockKey(key string) string    { return "login:lock:" + key }
+func loginFailureKey(key string) string   { return "login:fail:" + key }
+func loginLockKey(key string) string      { return "login:lock:" + key }
+func loginKnownKey(key, ip string) string { return "login:known:" + key + "|" + ip }
 
 var recordLoginFailureScript = redis.NewScript(`
 local n = redis.call('INCR', KEYS[1])
@@ -42,5 +43,14 @@ func (r *RedisLoginAttemptRepository) RecordFailure(ctx context.Context, key str
 }
 
 func (r *RedisLoginAttemptRepository) Clear(ctx context.Context, key string) error {
-	return r.client.Del(ctx, loginFailureKey(key)).Err()
+	return r.client.Del(ctx, loginFailureKey(key), loginLockKey(key)).Err()
+}
+
+func (r *RedisLoginAttemptRepository) RememberIP(ctx context.Context, key, ip string, ttl time.Duration) error {
+	return r.client.Set(ctx, loginKnownKey(key, ip), "1", ttl).Err()
+}
+
+func (r *RedisLoginAttemptRepository) IsKnownIP(ctx context.Context, key, ip string) (bool, error) {
+	n, err := r.client.Exists(ctx, loginKnownKey(key, ip)).Result()
+	return n > 0, err
 }

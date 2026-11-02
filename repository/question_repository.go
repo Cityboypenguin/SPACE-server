@@ -10,9 +10,6 @@ type QuestionRepository interface {
 	SaveQuestion(ctx context.Context, q *model.Question) error
 	GetQuestionByID(ctx context.Context, id int64) (*model.Question, error)
 	ListQuestionsByRoomID(ctx context.Context, roomID int64, q PageQuery) ([]*model.Question, int, error)
-	// UpdateQuestionBody edits a question's body, scoped to askerUserID so only the
-	// asker can edit it. Returns false if no row matched.
-	UpdateQuestionBody(ctx context.Context, questionID, askerUserID int64, body string) (bool, error)
 	// SetBestAnswer marks a question as answered with the given best answer, scoped to
 	// askerUserID so only the asker can select it. It returns false if no row matched
 	// (question not found, or the caller is not the asker).
