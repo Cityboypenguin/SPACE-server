@@ -191,8 +191,10 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	db, cleanup := analyticsTestDB(t)
 	defer cleanup()
 
+	// 「本日」は日本時間で区切るので、今の時刻なら必ず本日に入る
+	// （UTC の正午にすると、UTC の 15 時以降は日本時間の前の日になる）。
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location()).Unix()
+	today := now.Unix()
 	const (
 		liveRoom    = int64(1) // 生きたメッセージがあるコミュニティ
 		deletedRoom = int64(2) // 削除済みメッセージしか無いコミュニティ
@@ -252,7 +254,7 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	}
 
 	// 時系列の messages 系列も同じ。
-	day := now.Format("2006-01-02")
+	day := now.In(appJST).Format("2006-01-02") // 時系列も日本時間の日付で引く
 	points, err := repo.GetTimeSeries(context.Background(), "day", day, day, repository.AllFields())
 	if err != nil {
 		t.Fatalf("GetTimeSeries failed: %v", err)
