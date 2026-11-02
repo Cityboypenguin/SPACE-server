@@ -1,4 +1,4 @@
-package accountpurge
+package dailyjob
 
 import (
 	"testing"
@@ -19,8 +19,8 @@ func TestNextRunDelay(t *testing.T) {
 		{"a failure retries within the hour", at(10, 0), true, time.Hour},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := nextRunDelay(tt.now, tt.failed); got != tt.want {
-				t.Fatalf("nextRunDelay = %v, want %v", got, tt.want)
+			if got := NextRunDelay(tt.now, 4, tt.failed); got != tt.want {
+				t.Fatalf("NextRunDelay = %v, want %v", got, tt.want)
 			}
 		})
 	}

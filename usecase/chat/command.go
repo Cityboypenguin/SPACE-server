@@ -10,6 +10,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
@@ -55,8 +56,16 @@ type MessageCommandDeps struct {
 	// NGWords は授業内チャットの投稿の前に、NGワードを検査する。nil なら検査しない。
 	NGWords ngword.Guard
 
+	// Threads はスレッドの親チャットにあるカードを引く。nil なら更新を配信しない。
+	Threads ThreadAnnouncementFinder
+
 	// Events は配信・通知の出口。nil を渡すと何もしない実装が入る。
 	Events EventPublisher
+}
+
+// ThreadAnnouncementFinder はスレッドのカードになっている親チャットのメッセージを引く口。
+type ThreadAnnouncementFinder interface {
+	AnnouncementID(ctx context.Context, roomID int64) (int64, error)
 }
 
 var _ MessageCommandService = &messageCommandService{}
@@ -143,6 +152,7 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		MemberIDs: access.MemberIDs,
 		HasMedia:  len(in.MediaInputs) > 0,
 	})
+	s.refreshThreadCard(ctx, access.Room)
 	return msg, nil
 }
 
@@ -303,8 +313,39 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 	if deleted {
 		// 配信先はメッセージ実体の RoomID から作る（引数の roomID ではない）。
 		s.deps.Events.MessageDeleted(ctx, MessageDeletedEvent{RoomID: msg.RoomID, MessageID: msg.ID})
+		if room, err := s.deps.GetRoom.Execute(ctx, msg.RoomID); err == nil {
+			s.refreshThreadCard(ctx, room)
+		}
 	}
 	return deleted, nil
+}
+
+// refreshThreadCard はスレッドの発言数が変わったことを親チャットのカードへ配信する。
+// 発言はもう保存できているので、失敗はログだけ残して操作は成功のまま返す。
+func (s *messageCommandService) refreshThreadCard(ctx context.Context, room *model.Room) {
+	if s.deps.Threads == nil || room == nil || room.ParentRoomID == nil {
+		return
+	}
+	if err := s.publishThreadCard(ctx, room); err != nil {
+		logger.Log.Warn().Err(err).Str("component", "chat_thread").Int64("room_id", room.ID).Msg("failed to refresh the thread card")
+	}
+}
+
+func (s *messageCommandService) publishThreadCard(ctx context.Context, room *model.Room) error {
+	announcementID, err := s.deps.Threads.AnnouncementID(ctx, room.ID)
+	if err != nil || announcementID == 0 {
+		return err
+	}
+	announcement, err := s.deps.GetMessage.Execute(ctx, announcementID)
+	if err != nil || announcement == nil {
+		return err
+	}
+	parent, err := s.deps.GetRoom.Execute(ctx, *room.ParentRoomID)
+	if err != nil {
+		return err
+	}
+	s.deps.Events.MessageUpdated(ctx, MessageUpdatedEvent{Room: parent, Message: announcement, ActorID: announcement.UserID})
+	return nil
 }
 
 // screenNGWords は授業ルームの投稿だけにNGワードの検査をかける（管理者は除く）。

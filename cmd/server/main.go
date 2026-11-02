@@ -32,6 +32,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
+	"github.com/Cityboypenguin/SPACE-server/internal/dailyjob"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/di"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -93,6 +94,9 @@ func newInstanceID() string {
 // 同じ Redis を別の環境（検証と本番）で共有してしまったときに、片方の
 // メッセージがもう片方の購読者へ流れないようにするための区切り。
 const pubsubChannelPrefix = "space:pubsub:"
+
+// removedImagePurgeHourJST は外した画像の自動削除を走らせる時刻。利用の少ない時間帯にする。
+const removedImagePurgeHourJST = 5
 
 func main() {
 	isProd := os.Getenv("APP_ENV") == "production"
@@ -466,6 +470,7 @@ func main() {
 	}
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(accountDeletionDeps)
 	deleteMyAccountUseCase := userusecase.NewDeleteMyAccountUseCase(accountDeletionDeps)
+	removedImagePurgeDone := make(chan struct{})
 	accountPurger := accountpurge.New(userusecase.NewPurgeExpiredAccountsUseCase(accountDeletionDeps))
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
@@ -573,6 +578,7 @@ func main() {
 		ResolveMentions:  resolveMessageMentionsUseCase,
 		ListMentions:     listMessageMentionsUseCase,
 		ListMessageMedia: listMediaByMessageIDsUseCase,
+		Threads:          &mysql.MySQLChatThreadRepository{DB: database},
 		Events:           chatEventPublisher,
 	})
 	messageReactionRepository := mysql.NewMySQLMessageReactionRepository(database)
@@ -870,7 +876,7 @@ func main() {
 	// DataLoader はリクエストごとに作り直す（キャッシュがリクエスト内でだけ正しいため）。
 	// 渡す口は名前付きフィールドで指定する。同じ形のインターフェースが並ぶので、
 	// 位置引数だと取り違えてもコンパイルが通ってしまう。
-	e.Use(echo.WrapMiddleware(dataloader.Middleware(dataloader.UseCases{
+	loaderUseCases := dataloader.UseCases{
 		GetUsersByIDs:                  getUsersByIDsUseCase,
 		GetPostsByIDs:                  getPostsByIDsUseCase,
 		ListMediaByPostIDs:             listMediaByPostIDsUseCase,
@@ -894,7 +900,8 @@ func main() {
 		CountAnswersByQuestionIDs:      countAnswersByQuestionIDsUseCase,
 		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
 		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
-	})))
+	}
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(loaderUseCases)))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -912,6 +919,7 @@ func main() {
 			},
 		),
 	)
+	gqlServer.AroundResponses(dataloader.FreshLoadersForSubscriptions(func() *dataloader.Loaders { return dataloader.New(loaderUseCases) }))
 	// コンテキストキー：InitFunc成功・ユーザーIDをCloseFunc側で参照するために使う
 	type wsConnectedKey struct{}
 	type wsUserIDKey struct{}
@@ -1041,6 +1049,15 @@ func main() {
 		defer close(accountPurgeDone)
 		accountPurger.Run(accountPurgeCtx)
 	}()
+	go func() {
+		defer close(removedImagePurgeDone)
+		(&dailyjob.Runner{
+			Name:        "removed_course_chat_image_purge",
+			HourJST:     removedImagePurgeHourJST,
+			Exec:        courseImageService.PurgeExpired,
+			DoneMessage: "purged the removed course chat images past their retention",
+		}).Run(accountPurgeCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -1066,6 +1083,11 @@ func main() {
 	case <-activityArchiveDone:
 	case <-shutdownCtx.Done():
 		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
+	}
+	select {
+	case <-removedImagePurgeDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("removed image purge did not stop before shutdown")
 	}
 	select {
 	case <-accountPurgeDone:

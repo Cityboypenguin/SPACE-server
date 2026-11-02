@@ -1,6 +1,7 @@
 package miniorepo
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -264,6 +265,15 @@ func (r *MinIOStorageRepository) ForBucket(bucket string, signReads bool) *MinIO
 	copied.signReads = signReads
 	copied.publicEndpoint = ""
 	return &copied
+}
+
+func (r *MinIOStorageRepository) PutObject(ctx context.Context, objectKey, contentType string, body []byte) error {
+	_, err := r.client.PutObject(ctx, r.bucket, objectKey, bytes.NewReader(body), int64(len(body)), minio.PutObjectOptions{
+		ContentType:        contentType,
+		ContentDisposition: repository.ServedContentDisposition,
+		CacheControl:       repository.ServedCacheControl,
+	})
+	return err
 }
 
 func (r *MinIOStorageRepository) DeleteObject(ctx context.Context, objectKey string) error {

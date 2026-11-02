@@ -37,6 +37,11 @@ func (s headerStore) PublicURL(string) string {
 	s.t.Fatal("PublicURL は呼ばれないはず")
 	return ""
 }
+func (s headerStore) PutObject(context.Context, string, string, []byte) error {
+	s.t.Fatal("PutObject は呼ばれないはず")
+	return nil
+}
+
 func (s headerStore) DeleteObject(context.Context, string) error {
 	s.t.Fatal("DeleteObject は呼ばれないはず")
 	return nil

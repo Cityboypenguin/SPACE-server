@@ -88,6 +88,9 @@ type StorageRepository interface {
 	// 往復になるため。その間に置き直されると「測ったもの」と「中身を確かめた
 	// もの」が別になる。呼び出し側は2つの ETag が同じことを確かめる。
 	ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error)
+	// PutObject はアプリが持っている中身を置く。利用者の保存物と同じ配り方の指定を付ける。
+	// キーは呼び出し側が引き直した、まだ誰も知らないものであること。
+	PutObject(ctx context.Context, objectKey, contentType string, body []byte) error
 	PublicURL(objectKey string) string
 	DeleteObject(ctx context.Context, objectKey string) error
 	// UploadRequestHeaders は、PresignedPutURL で出した URL へ PUT するときに

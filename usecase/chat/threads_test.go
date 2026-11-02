@@ -253,3 +253,46 @@ func TestThreadTitleIsScreenedOnlyInCourseRooms(t *testing.T) {
 		t.Errorf("rename: err = %v, want InvalidInput", err)
 	}
 }
+
+type fakeAnnouncementFinder struct {
+	id  int64
+	err error
+}
+
+func (f fakeAnnouncementFinder) AnnouncementID(context.Context, int64) (int64, error) {
+	return f.id, f.err
+}
+
+func TestRefreshThreadCard_PublishesTheAnnouncementToTheParent(t *testing.T) {
+	parentID := int64(communityRoomID)
+	thread := &model.Room{ID: 50, ParentRoomID: &parentID}
+	build := func(finder ThreadAnnouncementFinder) (*messageCommandService, *fakeEvents) {
+		events := &fakeEvents{}
+		return &messageCommandService{deps: MessageCommandDeps{
+			Threads:    finder,
+			GetMessage: &fakeGetMessage{msg: &model.Message{ID: 7, RoomID: parentID, UserID: 10}},
+			GetRoom:    &fakeGetRoom{rooms: map[int64]*model.Room{parentID: {ID: parentID}}},
+			Events:     events,
+		}}, events
+	}
+
+	s, events := build(fakeAnnouncementFinder{id: 7})
+	s.refreshThreadCard(context.Background(), thread)
+	if len(events.updated) != 1 || events.updated[0].Message.ID != 7 || events.updated[0].Room.ID != parentID {
+		t.Fatalf("updated = %+v", events.updated)
+	}
+
+	// スレッドでないルームでは何も配信しない。
+	s, events = build(fakeAnnouncementFinder{id: 7})
+	s.refreshThreadCard(context.Background(), &model.Room{ID: parentID})
+	if len(events.updated) != 0 {
+		t.Errorf("not a thread: updated = %+v", events.updated)
+	}
+
+	// カードが引けなくても発言は成功のまま（配信だけ諦める）。
+	s, events = build(fakeAnnouncementFinder{err: errors.New("down")})
+	s.refreshThreadCard(context.Background(), thread)
+	if len(events.updated) != 0 {
+		t.Errorf("lookup failed: updated = %+v", events.updated)
+	}
+}

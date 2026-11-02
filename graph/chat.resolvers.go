@@ -150,13 +150,7 @@ func (r *messageResolver) Reactions(ctx context.Context, obj *gqlmodel.Message) 
 		return nil, fmt.Errorf("invalid message id")
 	}
 
-	// 購読（WebSocket）の ctx は接続の間ずっと同じローダーを使い回すので、同じメッセージの
-	// 2回目以降の配信がキャッシュした古い集計を返してしまう。リアクションは付け外しで
-	// 変わる値なので、読む前に必ずこのキーのキャッシュを捨てる。同じキーの Load は
-	// 引き続き1つのバッチに束ねられるため、一覧表示の N+1 は起きない。
-	loader := dataloader.For(ctx).ReactionLoader
-	loader.Clear(numericID)
-	reactions, err := loader.Load(ctx, numericID)
+	reactions, err := dataloader.For(ctx).ReactionLoader.Load(ctx, numericID)
 	if err != nil {
 		return nil, err
 	}

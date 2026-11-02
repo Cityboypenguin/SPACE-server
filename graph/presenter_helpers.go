@@ -3,13 +3,16 @@ package graph
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
@@ -138,6 +141,23 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 	default:
 		return ""
 	}
+}
+
+// courseChatImageFilter は画像の一覧の絞り込みを読み解く。
+func courseChatImageFilter(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource) (repository.CourseChatImageFilter, error) {
+	filter := repository.CourseChatImageFilter{}
+	if roomID != nil {
+		id, err := decodeGraphID(ctx, "room", *roomID)
+		if err != nil {
+			return filter, fmt.Errorf("invalid room id")
+		}
+		filter.RoomID = &id
+	}
+	if source != nil {
+		src := model.CourseChatImageSource(strings.ToLower(string(*source)))
+		filter.Source = &src
+	}
+	return filter, nil
 }
 
 func toGraphReportNotificationRecipient(recipient *model.ReportNotificationRecipient) *gqlmodel.ReportNotificationRecipient {
