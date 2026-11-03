@@ -106,6 +106,7 @@ func TestUsecaseKindsMapToRealKinds(t *testing.T) {
 		uploadusecase.Avatar:            Avatar,
 		uploadusecase.CommunityIcon:     CommunityIcon,
 		uploadusecase.TermsDocument:     TermsDocument,
+		uploadusecase.ChatStamp:         ChatStamp,
 	}
 	if len(cases) != len(kinds) {
 		t.Fatalf("種別が %d 個あるのに、ユースケース側の名前は %d 個しかない", len(kinds), len(cases))
@@ -163,6 +164,7 @@ func TestOnlyMessageMediaIsPrivate(t *testing.T) {
 		Avatar.Prefix:        false,
 		CommunityIcon.Prefix: false,
 		TermsDocument.Prefix: false,
+		ChatStamp.Prefix:     false,
 	}
 	if len(want) != len(kinds) {
 		t.Fatalf("種別が %d 個あるのに、表は %d 個しかない", len(kinds), len(want))

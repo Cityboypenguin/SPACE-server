@@ -578,7 +578,17 @@ func (r *queryResolver) MessageReactionEmojis(ctx context.Context) ([]string, er
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-	return model.AllowedMessageReactionEmojis(), nil
+	rows, err := r.StampService.List(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, v := range rows {
+		if v.Status == "active" && v.AllowReaction {
+			out = append(out, v.ID)
+		}
+	}
+	return out, nil
 }
 
 // Room is the resolver for the room field.

@@ -53,6 +53,7 @@ import (
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
+	"github.com/Cityboypenguin/SPACE-server/usecase/chatstamp"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
@@ -576,7 +577,9 @@ func main() {
 	ngWordRepository := mysql.NewMySQLNGWordRepository(database)
 	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
 	ngWordAdmin := ngwordusecase.NewAdminService(ngWordRepository, ngWordGuard)
+	stampService := &chatstamp.Service{Repo: &mysql.ChatStampRepository{DB: database}, Uploads: uploadAcceptor, Tx: txManager}
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
+		Stamps:           stampService,
 		NGWords:          ngWordGuard,
 		Access:           chatAccessPolicy,
 		GetRoom:          getRoomUseCase,
@@ -591,6 +594,7 @@ func main() {
 	})
 	messageReactionRepository := mysql.NewMySQLMessageReactionRepository(database)
 	chatReactionService := chatusecase.NewMessageReactionService(chatusecase.MessageReactionDeps{
+		Stamps:     stampService,
 		Access:     chatAccessPolicy,
 		GetRoom:    getRoomUseCase,
 		GetMessage: getMessageByIDUseCase,
@@ -650,6 +654,7 @@ func main() {
 		Events: chatEventPublisher, NGWords: ngWordGuard,
 	}
 	resolver := &graph.Resolver{
+		StampService: stampService,
 		StorageRepository:        storageRepository,
 		MessageStorageRepository: messageStorageRepository,
 		MaintenanceRepository:    maintenanceRepository,

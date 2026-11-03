@@ -366,3 +366,50 @@ func TestCourseSyncMigration(t *testing.T) {
 		t.Errorf("courses.source survived the down migration")
 	}
 }
+
+// Exercise the real migrator with multiStatements disabled, as in the app.
+// Splitting SQL on semicolons in a test would mask an invalid migration file.
+func TestChatStampMigrationsThroughApplicationRunner(t *testing.T) {
+	database := throwawayDB(t)
+	m := newMigrator(t, database)
+	if err := m.Migrate(126); err != nil {
+		t.Fatalf("migrate to previous version: %v", err)
+	}
+	var before int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunMigrations(database); err != nil {
+		t.Fatalf("application migrations: %v", err)
+	}
+	var version uint
+	var dirty bool
+	if err := database.QueryRow(`SELECT version,dirty FROM schema_migrations`).Scan(&version, &dirty); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := LatestVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != latest || dirty {
+		t.Fatalf("version=%d dirty=%v; want %d clean", version, dirty, latest)
+	}
+	for _, column := range []struct{ table, name string }{{"messages", "stamp_id"}, {"message_reactions", "emoji"}} {
+		var width int
+		if err := database.QueryRow(`SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?`, column.table, column.name).Scan(&width); err != nil {
+			t.Fatal(err)
+		}
+		if width != 64 {
+			t.Fatalf("%s.%s width=%d", column.table, column.name, width)
+		}
+	}
+	if n := count(t, database, `SELECT COUNT(*) FROM chat_stamps`); n != 0 {
+		t.Fatalf("unexpected seeded stamps: %d", n)
+	}
+	if n := count(t, database, `SELECT COUNT(*) FROM messages`); n != before {
+		t.Fatal("migration changed message rows")
+	}
+	if err := RunMigrations(database); err != nil {
+		t.Fatalf("second startup: %v", err)
+	}
+}

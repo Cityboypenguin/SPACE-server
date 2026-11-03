@@ -171,6 +171,10 @@ func (m *NGWordMatcher) Match(text string) *NGWord {
 	return nil
 }
 
+// NGWordMask avoids asterisks on purpose: Chrome on macOS can treat a field whose value is
+// set to asterisks by script as a password and block Japanese input.
+const NGWordMask = "××××"
+
 // Mask replaces every matching span while keeping the original spelling of other text.
 // NFKC segments map normalized byte offsets back to the original input, including
 // combined kana, compatibility expansions, and invisible characters inside a match.
@@ -238,7 +242,7 @@ func (m *NGWordMatcher) Mask(text string) string {
 	offset := 0
 	for _, match := range merged {
 		result.WriteString(text[offset:match.start])
-		result.WriteString("****")
+		result.WriteString(NGWordMask)
 		offset = match.end
 	}
 	result.WriteString(text[offset:])

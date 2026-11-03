@@ -104,7 +104,7 @@ func NewMessage(param CreateMessageParam) (*Message, error) {
 		if content != "" || len(param.MediaKeys) > 0 {
 			return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
 		}
-		if !IsAllowedMessageStamp(*param.StampID) {
+		if !IsValidMessageStampID(*param.StampID) {
 			return nil, apperr.InvalidInput("このスタンプは使えません")
 		}
 	} else if content == "" && len(param.MediaKeys) == 0 {

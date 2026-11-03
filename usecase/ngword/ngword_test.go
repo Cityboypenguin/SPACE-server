@@ -148,7 +148,7 @@ func TestGuardReturnsAllMaskedFields(t *testing.T) {
 	if !errors.As(err, &blocked) {
 		t.Fatalf("want BlockedError, got %v", err)
 	}
-	if len(blocked.Texts) != 2 || blocked.Texts[0].Original != "前RESPON後" || blocked.Texts[0].Masked != "前****後" || blocked.Texts[1].Masked != "選択肢****" {
+	if len(blocked.Texts) != 2 || blocked.Texts[0].Original != "前RESPON後" || blocked.Texts[0].Masked != "前××××後" || blocked.Texts[1].Masked != "選択肢××××" {
 		t.Fatalf("masked texts = %+v", blocked.Texts)
 	}
 	if len(repo.hits) != 1 {

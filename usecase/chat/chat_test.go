@@ -367,6 +367,7 @@ func newHarness() *harness {
 		GetUser:            h.users,
 	}
 	h.commandDeps = MessageCommandDeps{
+		Stamps:          testStampCatalog{},
 		GetRoom:         getRoom,
 		GetRoomUserRole: &fakeRoomUserRole{role: model.RoomUserRoleMember},
 		GetMessage:      h.getMessage,

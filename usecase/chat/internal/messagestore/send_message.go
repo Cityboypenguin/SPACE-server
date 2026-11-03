@@ -92,7 +92,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 	if stampID != nil && (content != "" || len(mediaInputs) > 0 || len(mentions) > 0) {
 		return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
 	}
-	if stampID != nil && !model.IsAllowedMessageStamp(*stampID) {
+	if stampID != nil && !model.IsValidMessageStampID(*stampID) {
 		return nil, apperr.InvalidInput("このスタンプは使えません")
 	}
 

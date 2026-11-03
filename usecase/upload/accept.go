@@ -46,6 +46,7 @@ const (
 	// DM の本文は暗号化して保存しているので、添付だけ URL を知る誰にでも見える
 	// のは扱いが噛み合わない。
 	MessageAttachment Kind = "message-media"
+	ChatStamp         Kind = "chat-stamps"
 	Avatar            Kind = "avatars"
 	CommunityIcon     Kind = "community-icons"
 	TermsDocument     Kind = "terms"

@@ -97,13 +97,13 @@ func TestNGWordMatcherMask(t *testing.T) {
 		name, text, want string
 		rules            [][2]string
 	}{
-		{"multiple and repeated", "前RESPONと死ね、respon後", "前****と****、****後", [][2]string{{"word", "respon"}, {"word", "死ね"}}},
-		{"width and invisible", "前ＲＥＳ\u200bＰＯＮ後", "前****後", [][2]string{{"word", "respon"}}},
-		{"combined kana", "前ｶﾞとカ\u3099後", "前****と****後", [][2]string{{"word", "ガ"}}},
-		{"expansion", "前㍿後", "前****後", [][2]string{{"word", "株式"}}},
-		{"overlap", "前ababa後", "前****後", [][2]string{{"word", "aba"}}},
-		{"overlapping rules", "前abcd後", "前****後", [][2]string{{"word", "abc"}, {"word", "bcd"}}},
-		{"regex", "番号１２３４５６７８９です", "番号****です", [][2]string{{"regex", `[0-9]{9}`}}},
+		{"multiple and repeated", "前RESPONと死ね、respon後", "前××××と××××、××××後", [][2]string{{"word", "respon"}, {"word", "死ね"}}},
+		{"width and invisible", "前ＲＥＳ\u200bＰＯＮ後", "前××××後", [][2]string{{"word", "respon"}}},
+		{"combined kana", "前ｶﾞとカ\u3099後", "前××××と××××後", [][2]string{{"word", "ガ"}}},
+		{"expansion", "前㍿後", "前××××後", [][2]string{{"word", "株式"}}},
+		{"overlap", "前ababa後", "前××××後", [][2]string{{"word", "aba"}}},
+		{"overlapping rules", "前abcd後", "前××××後", [][2]string{{"word", "abc"}, {"word", "bcd"}}},
+		{"regex", "番号１２３４５６７８９です", "番号××××です", [][2]string{{"regex", `[0-9]{9}`}}},
 		{"clean preserved", "  ＡＢＣ と😀  ", "  ＡＢＣ と😀  ", [][2]string{{"word", "respon"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

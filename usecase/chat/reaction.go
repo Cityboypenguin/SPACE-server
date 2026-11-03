@@ -15,7 +15,7 @@ import (
 
 // MessageReactionService はメッセージへのリアクション（絵文字）の付け外し。
 //
-// 付けてよいのは model.AllowedMessageReactionEmojis の絵文字だけ。権限は編集・削除と
+// 付けてよいのは管理者が公開したリアクション用スタンプだけ。権限は編集・削除と
 // 同じ ensureMutateAccess を通す（授業内チャットなら現学期かつ履修中、コミュニティ・DM
 // なら参加者）。他人のメッセージにも付けられるので、所有権の判定は無い。
 type MessageReactionService interface {
@@ -23,8 +23,8 @@ type MessageReactionService interface {
 	RemoveReaction(ctx context.Context, in MessageReactionInput) (*model.Message, error)
 }
 
-// maxReactionEmojiRunes は message_reactions.emoji（VARCHAR(32)）に入る最大の文字数。
-const maxReactionEmojiRunes = 32
+// maxReactionEmojiRunes は message_reactions.emoji（VARCHAR(64)）に入る最大の文字数。
+const maxReactionEmojiRunes = 64
 
 type MessageReactionInput struct {
 	RoomID    int64
@@ -33,6 +33,9 @@ type MessageReactionInput struct {
 }
 
 type MessageReactionDeps struct {
+	Stamps interface {
+		RequireAllowed(context.Context, string, bool) error
+	}
 	// Access は権限判定。自前で membership を見に行かないこと。
 	Access AccessPolicy
 	// GetRoom は「メッセージが実際に属するルーム」を引くため（呼び出し元が名乗った
@@ -86,11 +89,14 @@ func (s *messageReactionService) change(
 	}
 
 	if requireAllowed {
-		if !model.IsAllowedMessageReactionEmoji(in.Emoji) {
+		if s.deps.Stamps == nil {
 			return nil, apperr.InvalidInput("この絵文字は使えません")
 		}
+		if err := s.deps.Stamps.RequireAllowed(ctx, in.Emoji, true); err != nil {
+			return nil, err
+		}
 	} else if in.Emoji == "" || utf8.RuneCountInString(in.Emoji) > maxReactionEmojiRunes {
-		// 外すときは許可リストを見ないが、保存形式（VARCHAR(32)）を超える長い文字列が
+		// 外すときは許可リストを見ないが、保存形式（VARCHAR(64)）を超える長い文字列が
 		// DB まで届かないよう、長さだけは見る。
 		return nil, apperr.InvalidInput("この絵文字は使えません")
 	}

@@ -72,3 +72,12 @@ func LogProbe(ctx context.Context, action string, target string, suppliedID stri
 		Str("supplied_id", suppliedID).
 		Str("reason", reason), ctx).Send()
 }
+
+// LogStampSaved retains the editable values so later changes do not erase the audit record.
+func LogStampSaved(ctx context.Context, id string, version int64, before, after map[string]any) {
+	WithActor(logger.Log.Info().Str("event", "chat_stamp_saved").Str("stamp_id", id).Int64("version", version).Interface("before", before).Interface("after", after), ctx).Send()
+}
+
+func LogStampsReordered(ctx context.Context, reaction bool, ids []string) {
+	WithActor(logger.Log.Info().Str("event", "chat_stamps_reordered").Bool("reaction", reaction).Strs("ids", ids), ctx).Send()
+}

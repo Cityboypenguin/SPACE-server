@@ -31,6 +31,9 @@ type MessageCommandService interface {
 
 // MessageCommandDeps は書き込み経路が実際に使うものだけ。
 type MessageCommandDeps struct {
+	Stamps interface {
+		RequireAllowed(context.Context, string, bool) error
+	}
 	// Access は権限判定。自前で membership やブロックを見に行かないこと。
 	Access AccessPolicy
 
@@ -122,6 +125,14 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		return nil, err
 	}
 
+	if in.StampID != nil {
+		if s.deps.Stamps == nil {
+			return nil, apperr.InvalidInput("スタンプ管理が設定されていません")
+		}
+		if err := s.deps.Stamps.RequireAllowed(ctx, *in.StampID, false); err != nil {
+			return nil, err
+		}
+	}
 	// NGワードは授業内チャットだけが対象（スタンプには文面が無い）。管理者の投稿は止めない。
 	if err := s.screenNGWords(ctx, claims, access.Room, in.Content); err != nil {
 		return nil, err

@@ -38,6 +38,7 @@ const allowedStamp = "stamp:thanks"
 func newReactionService(h *harness) (MessageReactionService, *fakeReactions) {
 	reactions := &fakeReactions{}
 	svc := NewMessageReactionService(MessageReactionDeps{
+		Stamps:     testStampCatalog{},
 		Access:     h.access,
 		GetRoom:    &fakeGetRoom{rooms: testRooms()},
 		GetMessage: h.getMessage,
@@ -207,7 +208,7 @@ func TestRemoveReaction_RejectsEmptyOrOverlongEmoji(t *testing.T) {
 	svc, reactions := newReactionService(h)
 
 	// 許可リストは見ないが、保存形式(VARCHAR(32))を超える長さや空文字はDBまで通さない。
-	for _, emoji := range []string{"", strings.Repeat("あ", 33), strings.Repeat("x", 1<<20)} {
+	for _, emoji := range []string{"", strings.Repeat("あ", 65), strings.Repeat("x", 1<<20)} {
 		_, err := svc.RemoveReaction(ctxAsUser(10), MessageReactionInput{RoomID: communityRoomID, MessageID: 5, Emoji: emoji})
 		if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
 			t.Fatalf("emoji of %d bytes: err = %v, want InvalidInput", len(emoji), err)
@@ -216,4 +217,14 @@ func TestRemoveReaction_RejectsEmptyOrOverlongEmoji(t *testing.T) {
 	if len(reactions.removed) != 0 || len(h.events.updated) != 0 {
 		t.Error("a rejected removal must not reach the repository or be delivered")
 	}
+}
+
+// Availability is supplied by the catalog, separately from chat access checks.
+type testStampCatalog struct{}
+
+func (testStampCatalog) RequireAllowed(_ context.Context, id string, reaction bool) error {
+	if id == allowedStamp || (!reaction && id == "stamp:ryokai") {
+		return nil
+	}
+	return apperr.InvalidInput("利用できません")
 }

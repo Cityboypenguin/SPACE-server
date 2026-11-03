@@ -95,8 +95,8 @@ func TestNewMessage_StampCannotBeCombined(t *testing.T) {
 	}
 }
 
-func TestNewMessage_RejectsStampsNotOnTheList(t *testing.T) {
-	for _, id := range []string{"", "stamp:", "stamp:unknown", "👍", "ryokai"} {
+func TestNewMessage_RejectsMalformedStampIDs(t *testing.T) {
+	for _, id := range []string{"", "stamp:", "stamp:invalid/id", "👍", "ryokai"} {
 		if _, err := NewMessage(CreateMessageParam{RoomID: 1, UserID: 2, StampID: strPtr(id)}); err == nil {
 			t.Errorf("stamp id %q must be rejected", id)
 		}

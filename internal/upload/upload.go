@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/google/uuid"
@@ -107,7 +108,9 @@ var (
 	TermsDocument = Kind{Prefix: "terms", MaxBytes: 5 * mb, Exts: map[string]string{"text/markdown": ".md"}, Label: "規約ドキュメント"}
 )
 
-var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument}
+var ChatStamp = Kind{Prefix: "chat-stamps", MaxBytes: maxStampSourceBytes, Exts: map[string]string{"image/png": ".png", "image/svg+xml": ".svg"}, Label: "スタンプ画像", Owned: true}
+
+var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument, ChatStamp}
 
 // StagingPrefix は署名付きURLが書き込める唯一の場所。
 //
@@ -402,6 +405,36 @@ func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind,
 		return "", fmt.Errorf("invalid object key")
 	}
 
+	// Normalize stamp dimensions before storing them under an immutable key.
+	if want.Prefix == ChatStamp.Prefix {
+		body, etag, err := store.ObjectHead(ctx, objectKey, want.MaxBytes+1)
+		if err != nil {
+			return "", fmt.Errorf("failed to read the uploaded image")
+		}
+		if etag != info.ETag || int64(len(body)) != info.Size {
+			return "", errNotUploaded
+		}
+		var canonical []byte
+		if info.ContentType == "image/png" {
+			canonical, err = normalizeStampPNG(body)
+		} else {
+			canonical, err = normalizeStampSVG(body)
+		}
+		if err != nil {
+			return "", err
+		}
+		writer, ok := store.(interface {
+			PutObject(context.Context, string, string, []byte) error
+		})
+		if !ok {
+			return "", fmt.Errorf("stamp image storage is not configured")
+		}
+		if err := writer.PutObject(ctx, finalKey, info.ContentType, canonical); err != nil {
+			return "", fmt.Errorf("failed to store the uploaded image")
+		}
+		_ = store.DeleteObject(ctx, objectKey)
+		return finalKey, nil
+	}
 	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag, info.ContentType); err != nil {
 		if errors.Is(err, repository.ErrObjectChanged) {
 			// 測ってから写すまでの間に置き直された。検査していないものは公開しない。
@@ -475,12 +508,20 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	}
 
 	if info.Size > kind.MaxBytes {
+		if kind.Prefix == ChatStamp.Prefix {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプの元画像は20MiB以下にしてください")
+		}
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sのサイズが上限（%dMB）を超えています", kind.Label, kind.MaxBytes/mb)
 	}
 	// Content-Type も見る。サイズだけ見ても、画像のつもりの口へ実行可能ファイルを
 	// 置かれると、そのまま公開URLから配られる。空は「申告が無い」なので弾く。
 	if _, ok := kind.Ext(info.ContentType); !ok {
+		if kind.Prefix == ChatStamp.Prefix {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプ画像はPNGまたはSVGを指定してください")
+		}
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sの形式が受け付けられません: %s", kind.Label, info.ContentType)
 	}
@@ -488,7 +529,11 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	// ここまでで見たのは「利用者がそう名乗った」という記録だけ。署名付き PUT では
 	// Content-Type も利用者が決めるので、中身が HTML のファイルを image/png と
 	// 名乗って置ける。実物の先頭を読んで、名乗りと一致していることを確かめる。
-	head, headETag, err := store.ObjectHead(ctx, objectKey, sniffLimit)
+	readLimit := int64(sniffLimit)
+	if kind.Prefix == ChatStamp.Prefix {
+		readLimit = kind.MaxBytes + 1
+	}
+	head, headETag, err := store.ObjectHead(ctx, objectKey, readLimit)
 	if err != nil {
 		// 置き場の不調と「形式が違う」を言い分けない理由は無いので、素直に失敗を返す。
 		// 通すと検査が素通しになる。消さないのは、こちらの不調で利用者の
@@ -501,10 +546,21 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	if headETag != info.ETag {
 		return repository.ObjectInfo{}, errNotUploaded
 	}
+	if kind.Prefix == ChatStamp.Prefix {
+		if int64(len(head)) != info.Size {
+			return repository.ObjectInfo{}, fmt.Errorf("画像全体を検証できません")
+		}
+		if err := ValidateStampImage(info.ContentType, head); err != nil {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, err
+		}
+		return info, nil
+	}
 	if !contentTypeMatchesBytes(info.ContentType, head) {
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sの中身が %s ではありません", kind.Label, info.ContentType)
 	}
+
 	return info, nil
 }
 

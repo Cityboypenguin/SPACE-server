@@ -194,6 +194,37 @@ type Blocker struct {
 	CreatedAt     string `json:"createdAt"`
 }
 
+type ChatStamp struct {
+	ID            string `json:"id"`
+	Label         string `json:"label"`
+	ImageURL      string `json:"imageUrl"`
+	DisplaySize   string `json:"displaySize"`
+	Status        string `json:"status"`
+	AllowMessage  bool   `json:"allowMessage"`
+	AllowReaction bool   `json:"allowReaction"`
+	MessageOrder  int32  `json:"messageOrder"`
+	ReactionOrder int32  `json:"reactionOrder"`
+	Version       int32  `json:"version"`
+}
+
+type ChatStampInput struct {
+	ID            *string `json:"id,omitempty"`
+	Label         string  `json:"label"`
+	UploadKey     *string `json:"uploadKey,omitempty"`
+	DisplaySize   string  `json:"displaySize"`
+	Status        string  `json:"status"`
+	AllowMessage  bool    `json:"allowMessage"`
+	AllowReaction bool    `json:"allowReaction"`
+	MessageOrder  int32   `json:"messageOrder"`
+	ReactionOrder int32   `json:"reactionOrder"`
+	Version       int32   `json:"version"`
+}
+
+type ChatStampOrderInput struct {
+	ID      string `json:"id"`
+	Version int32  `json:"version"`
+}
+
 type ChatThread struct {
 	RoomID        string  `json:"roomID"`
 	ParentRoomID  string  `json:"parentRoomID"`
