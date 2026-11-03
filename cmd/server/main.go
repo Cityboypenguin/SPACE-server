@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -1027,6 +1028,11 @@ func main() {
 			gqlErr.Extensions = map[string]interface{}{}
 		}
 		gqlErr.Extensions["code"] = string(errorCodeFor(e))
+		var blocked *ngwordusecase.BlockedError
+		if errors.As(e, &blocked) {
+			gqlErr.Extensions["code"] = "NG_WORD_BLOCKED"
+			gqlErr.Extensions["maskedTexts"] = blocked.Texts
+		}
 		return gqlErr
 	})
 

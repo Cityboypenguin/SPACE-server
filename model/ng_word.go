@@ -2,6 +2,7 @@ package model
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -168,4 +169,78 @@ func (m *NGWordMatcher) Match(text string) *NGWord {
 		}
 	}
 	return nil
+}
+
+// Mask replaces every matching span while keeping the original spelling of other text.
+// NFKC segments map normalized byte offsets back to the original input, including
+// combined kana, compatibility expansions, and invisible characters inside a match.
+func (m *NGWordMatcher) Mask(text string) string {
+	if m == nil || text == "" {
+		return text
+	}
+	type span struct{ start, end int }
+	var normalized strings.Builder
+	var origins []span
+	for start := 0; start < len(text); {
+		size := norm.NFKC.NextBoundaryInString(text[start:], true)
+		if size <= 0 {
+			size = len(text) - start
+		}
+		end := start + size
+		segment := NormalizeForNGWord(text[start:end])
+		normalized.WriteString(segment)
+		for range len(segment) {
+			origins = append(origins, span{start, end})
+		}
+		start = end
+	}
+	value := normalized.String()
+	var spans []span
+	for _, c := range m.words {
+		var matches [][]int
+		if c.re != nil {
+			matches = c.re.FindAllStringIndex(value, -1)
+		} else {
+			// Advance one rune so overlapping occurrences are also masked.
+			for offset := 0; offset < len(value); {
+				index := strings.Index(value[offset:], c.needle)
+				if index < 0 {
+					break
+				}
+				start := offset + index
+				matches = append(matches, []int{start, start + len(c.needle)})
+				_, size := utf8.DecodeRuneInString(value[start:])
+				offset = start + size
+			}
+		}
+		for _, match := range matches {
+			if match[0] < match[1] {
+				spans = append(spans, span{origins[match[0]].start, origins[match[1]-1].end})
+			}
+		}
+	}
+	if len(spans) == 0 {
+		return text
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+	merged := []span{spans[0]}
+	for _, next := range spans[1:] {
+		last := &merged[len(merged)-1]
+		if next.start < last.end {
+			if next.end > last.end {
+				last.end = next.end
+			}
+		} else {
+			merged = append(merged, next)
+		}
+	}
+	var result strings.Builder
+	offset := 0
+	for _, match := range merged {
+		result.WriteString(text[offset:match.start])
+		result.WriteString("****")
+		offset = match.end
+	}
+	result.WriteString(text[offset:])
+	return result.String()
 }

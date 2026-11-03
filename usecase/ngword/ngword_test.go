@@ -140,3 +140,18 @@ func TestGuard_KeepsThePreviousListWhenReloadFails(t *testing.T) {
 		t.Error("the previous list must still block the word while the reload fails")
 	}
 }
+
+func TestGuardReturnsAllMaskedFields(t *testing.T) {
+	repo := &fakeRepo{words: []*model.NGWord{{ID: 1, Pattern: "respon", MatchType: model.NGWordMatchWord}}}
+	err := NewGuard(repo).Screen(context.Background(), 1, nil, model.NGWordSourcePoll, "前RESPON後", "安全な選択肢", "選択肢respon")
+	var blocked *BlockedError
+	if !errors.As(err, &blocked) {
+		t.Fatalf("want BlockedError, got %v", err)
+	}
+	if len(blocked.Texts) != 2 || blocked.Texts[0].Original != "前RESPON後" || blocked.Texts[0].Masked != "前****後" || blocked.Texts[1].Masked != "選択肢****" {
+		t.Fatalf("masked texts = %+v", blocked.Texts)
+	}
+	if len(repo.hits) != 1 {
+		t.Fatalf("want one blocked attempt, got %d", len(repo.hits))
+	}
+}

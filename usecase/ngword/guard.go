@@ -38,9 +38,21 @@ func (NoopGuard) Screen(context.Context, int64, *int64, model.NGWordSource, ...s
 	return nil
 }
 
-// BlockedMessage は止めたときにユーザーへ返す文言。どの語に当たったかは明かさない
-// （明かすと、すり抜ける言い換えを探す手がかりになる）。
+// BlockedMessage は止めたときにユーザーへ返す文言。
 const BlockedMessage = "使えない言葉が含まれているため、投稿できません。内容を直してください"
+
+// MaskedText contains only the submitted text and its masked version, never the rules.
+type MaskedText struct {
+	Original string `json:"original"`
+	Masked   string `json:"masked"`
+}
+
+type BlockedError struct {
+	Texts []MaskedText
+}
+
+func (e *BlockedError) Error() string { return BlockedMessage }
+func (e *BlockedError) Unwrap() error { return apperr.InvalidInput(BlockedMessage) }
 
 // cacheTTL は登録内容を覚えておく長さ。投稿のたびにDBを引かないための保持で、
 // 管理画面での変更はこの手元の保持を捨てて即座に効く（複数台でも、この秒数のうちに揃う）。
@@ -135,7 +147,14 @@ func (g *guard) Screen(ctx context.Context, userID int64, roomID *int64, source 
 			// 記録に失敗しても、止めること自体は変えない。
 			logger.Log.Error().Err(err).Str("component", "ngword").Msg("failed to record an ng word hit")
 		}
-		return apperr.InvalidInput(BlockedMessage)
+		masked := make([]MaskedText, 0, len(texts))
+		for _, text := range texts {
+			replacement := m.Mask(text)
+			if replacement != text {
+				masked = append(masked, MaskedText{Original: text, Masked: replacement})
+			}
+		}
+		return &BlockedError{Texts: masked}
 	}
 	return nil
 }
