@@ -90,3 +90,36 @@ func TestAdminPostsAndOwnersAfterAccountSplit(t *testing.T) {
 		t.Fatalf("owner lookup after account split: %+v err=%v", owners, err)
 	}
 }
+
+// スレッドは授業のルームとは別のルームに書かれる。授業の発言数にはスレッドの中の発言も入れないと、
+// スレッドで盛り上がっている授業が「ほとんど発言の無い授業」に見えてしまう。
+func TestCourseMessageCountIncludesThreads(t *testing.T) {
+	db, cleanup := courseSyncTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	repo := NewMySQLCourseRepository(db)
+	quiet, err := repo.SaveCourseWithRoom(ctx, repository.SaveCourseParam{DayOfWeek: "月", Period: 1, TeacherName: "先生", CourseName: "授業A", Year: 2026, Semester: "前期", DedupKey: "a", Source: model.CourseSourceManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	busy, err := repo.SaveCourseWithRoom(ctx, repository.SaveCourseParam{DayOfWeek: "月", Period: 1, TeacherName: "先生", CourseName: "授業B", Year: 2026, Semester: "前期", DedupKey: "b", Source: model.CourseSourceManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 授業A: 授業のルームに1件。授業B: 授業のルームには無く、2つのスレッドに合わせて3件。
+	mustExec(t, db, `INSERT INTO rooms (id, name, type, created_at, updated_at, parent_room_id) VALUES (900, 't1', 'course', 1, 1, ?), (901, 't2', 'course', 1, 1, ?)`, busy.RoomID, busy.RoomID)
+	mustExec(t, db, `INSERT INTO messages VALUES (1, ?), (2, 900), (3, 900), (4, 901)`, quiet.RoomID)
+
+	sortBy, order := "messageCount", "DESC"
+	courses, _, err := repo.ListCourses(ctx, repository.ListCoursesParam{Page: repository.PageQuery{Limit: 20}, SortBy: &sortBy, SortOrder: &order})
+	if err != nil || len(courses) != 2 {
+		t.Fatalf("list: %v", err)
+	}
+	if courses[0].ID != busy.ID || courses[0].MessageCount != 3 || courses[1].MessageCount != 1 {
+		t.Fatalf("thread messages are not counted: %+v / %+v", courses[0], courses[1])
+	}
+	found, _, err := repo.SearchByDayPeriod(ctx, "月", 1, "授業B", 2026, "前期", repository.PageQuery{Limit: 20})
+	if err != nil || len(found) != 1 || found[0].MessageCount != 3 {
+		t.Fatalf("search does not count thread messages: %+v err=%v", found, err)
+	}
+}

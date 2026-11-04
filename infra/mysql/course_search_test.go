@@ -20,6 +20,8 @@ func TestSearchByDayPeriod_ReturnsMessageCount(t *testing.T) {
 		ADD COLUMN updated_at BIGINT NOT NULL DEFAULT 0,
 		ADD COLUMN source VARCHAR(32) NOT NULL DEFAULT 'manual', ADD COLUMN source_ref VARCHAR(255) NULL, ADD COLUMN source_name VARCHAR(255) NULL,
 		ADD COLUMN discontinued_at BIGINT NULL`)
+	// 発言数はスレッド（親を持つルーム）の分も数えるので、rooms にも親の列が要る。
+	mustExec(t, db, `ALTER TABLE rooms ADD COLUMN parent_room_id BIGINT NULL`)
 	mustExec(t, db, `INSERT INTO rooms (id, type) VALUES (1, 'course'), (2, 'course')`)
 	mustExec(t, db, `INSERT INTO courses (room_id, day_of_week, period, teacher_name, course_name, year, semester, dedup_key, created_at, updated_at) VALUES
 		(1, '月', 1, '先生A', '微分積分', 2026, '前期', 'a', 1, 1), (2, '月', 1, '先生B', '線形代数', 2026, '前期', 'b', 1, 1)`)

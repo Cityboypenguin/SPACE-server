@@ -256,7 +256,7 @@ func (r *MySQLCourseRepository) SearchByDayPeriod(ctx context.Context, dayOfWeek
 	// scanCoursesWithMessageCount は最後の列に message_count を読む。列が足りないと
 	// 「expected 12 destination arguments」で検索そのものが壊れる（ac2fe52 以降の不具合）。
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT `+courseColumns+`, (SELECT COUNT(*) FROM messages m WHERE m.room_id = c.room_id) AS message_count FROM courses c
+		`SELECT `+courseColumns+`, `+countRoomAndThreadsMessages("c.room_id", "")+` AS message_count FROM courses c
 		 WHERE c.day_of_week = ? AND c.period = ? AND c.year = ? AND (c.semester = ? OR c.semester = ?) AND c.discontinued_at IS NULL AND (c.course_name LIKE ? OR c.teacher_name LIKE ?)
 		 ORDER BY c.course_name, c.id
 		 LIMIT ? OFFSET ?`,
@@ -356,7 +356,7 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 		case "registeredCount":
 			orderByClause = "ORDER BY COUNT(DISTINCT cu.user_id) " + sortOrder + ", c.id DESC"
 		case "messageCount":
-			orderByClause = "ORDER BY COUNT(DISTINCT m.id) " + sortOrder + ", c.id DESC"
+			orderByClause = "ORDER BY message_count " + sortOrder + ", c.id DESC"
 		case "createdAt":
 			orderByClause = "ORDER BY c.created_at " + sortOrder + ", c.id DESC"
 		}
@@ -364,10 +364,9 @@ func (r *MySQLCourseRepository) ListCourses(ctx context.Context, param repositor
 
 	query := `
 	SELECT ` + courseColumns + `,
-		COUNT(DISTINCT m.id) AS message_count
+		` + countRoomAndThreadsMessages("c.room_id", "") + ` AS message_count
         FROM courses c
 		LEFT JOIN timetables cu ON c.id = cu.course_id
-        LEFT JOIN messages m ON c.room_id = m.room_id
         ` + whereClause + `
         GROUP BY c.id
         ` + orderByClause + `

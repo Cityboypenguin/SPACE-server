@@ -30,6 +30,7 @@ func courseSyncTestDB(t *testing.T) (*sql.DB, func()) {
 			type VARCHAR(32) NOT NULL,
 			created_at BIGINT NOT NULL,
 			updated_at BIGINT NOT NULL,
+			parent_room_id BIGINT NULL,
 			PRIMARY KEY (id)
 		)`,
 		`CREATE TABLE courses (

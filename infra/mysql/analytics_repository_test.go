@@ -133,7 +133,7 @@ func analyticsSchemaDDL() []string {
 		`CREATE TABLE media (id BIGINT NOT NULL, content_type VARCHAR(100) NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE favorites (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE favorite_users (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
-		`CREATE TABLE rooms (id BIGINT NOT NULL AUTO_INCREMENT, type VARCHAR(50) NOT NULL, PRIMARY KEY (id))`,
+		`CREATE TABLE rooms (id BIGINT NOT NULL AUTO_INCREMENT, type VARCHAR(50) NOT NULL, parent_room_id BIGINT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE room_users (room_id BIGINT NOT NULL, user_id BIGINT NOT NULL)`,
 		`CREATE TABLE communities (
 			id BIGINT NOT NULL AUTO_INCREMENT,
@@ -265,6 +265,58 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("time series messages total = %d, want 2 (削除済み3件を除く)", total)
+	}
+}
+
+// コミュニティの発言数と「最近活動しているコミュニティ」には、スレッドの中の発言も入れる。
+// スレッドは親とは別のルームなので、親のルームだけを見ると、スレッドでしか話していない
+// コミュニティが「発言の無いコミュニティ」になってしまう。
+func TestCommunityAnalyticsCountsThreadMessages(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	today := time.Now().Unix()
+	const (
+		parentRoom = int64(1)
+		threadRoom = int64(2) // parentRoom のスレッド
+		otherRoom  = int64(3) // 発言の無いコミュニティ
+	)
+	mustExec(t, db, `INSERT INTO rooms (id, type, parent_room_id) VALUES (?, 'community', NULL), (?, 'community', ?), (?, 'community', NULL)`,
+		parentRoom, threadRoom, parentRoom, otherRoom)
+	mustExec(t, db, `INSERT INTO communities (id, name, room_id) VALUES (1, 'threaded', ?), (2, 'silent', ?)`, parentRoom, otherRoom)
+	// 親に1件、スレッドに生存2件と削除1件。
+	mustExec(t, db, `
+		INSERT INTO messages (room_id, user_id, created_at, deleted_at) VALUES
+			(?, 100, ?, NULL),
+			(?, 100, ?, NULL),
+			(?, 101, ?, NULL),
+			(?, 102, ?, ?)`,
+		parentRoom, today,
+		threadRoom, today,
+		threadRoom, today,
+		threadRoom, today, today)
+
+	repo := NewMySQLAnalyticsRepository(db)
+	items, _, err := repo.GetCommunityAnalytics(context.Background(), repository.PageQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("GetCommunityAnalytics failed: %v", err)
+	}
+	byName := map[string]int{}
+	for _, it := range items {
+		byName[it.Name] = it.MessageCount
+	}
+	if byName["threaded"] != 3 || byName["silent"] != 0 {
+		t.Errorf("MessageCount = %v, want threaded=3 (親1件+スレッド2件), silent=0", byName)
+	}
+
+	// スレッドにしか発言が無くても、最近活動しているコミュニティに数える。
+	mustExec(t, db, `DELETE FROM messages WHERE room_id = ?`, parentRoom)
+	s, err := repo.GetAnalyticsSummary(context.Background(), repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetAnalyticsSummary failed: %v", err)
+	}
+	if s.ActiveCommunitiesLast30Days != 1 {
+		t.Errorf("ActiveCommunitiesLast30Days = %d, want 1 (スレッドだけで話しているコミュニティを含む)", s.ActiveCommunitiesLast30Days)
 	}
 }
 

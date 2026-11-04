@@ -206,10 +206,8 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 		{[]string{"commentsToday"}, &s.CommentsToday, `SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"messagesToday"}, &s.MessagesToday, `SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"activeCommunitiesLast30Days"}, &s.ActiveCommunitiesLast30Days, `
-			SELECT COUNT(DISTINCT c.id) FROM communities c
-			INNER JOIN rooms r ON r.id = c.room_id
-			INNER JOIN messages m ON m.room_id = r.id
-			WHERE m.deleted_at IS NULL AND m.created_at >= ?`, []any{w.days30Start}},
+			SELECT COUNT(*) FROM communities c
+			WHERE ` + existsRoomAndThreadsMessages("c.room_id", " AND m.deleted_at IS NULL AND m.created_at >= ?"), []any{w.days30Start, w.days30Start}},
 		{[]string{fieldTotalFollows, fieldAvgFollowersPerUser, fieldAvgFollowingPerUser},
 			&s.TotalFollows, `SELECT COUNT(*) FROM favorite_users`, nil},
 		{[]string{"usersWithProfile"}, &s.UsersWithProfile, `SELECT COUNT(DISTINCT user_id) FROM profiles`, nil},
@@ -452,10 +450,9 @@ func (r *MySQLAnalyticsRepository) GetCommunityAnalytics(ctx context.Context, q 
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT c.id, c.name,
 		       COUNT(DISTINCT ru.user_id) AS member_count,
-		       COUNT(DISTINCT m.id) AS message_count
+		       `+countRoomAndThreadsMessages("c.room_id", " AND m.deleted_at IS NULL")+` AS message_count
 		FROM communities c
 		LEFT JOIN room_users ru ON ru.room_id = c.room_id
-		LEFT JOIN messages m ON m.room_id = c.room_id AND m.deleted_at IS NULL
 		GROUP BY c.id, c.name
 		ORDER BY member_count DESC, c.id ASC
 		LIMIT ? OFFSET ?`, q.Limit, q.Offset)

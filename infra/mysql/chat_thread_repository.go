@@ -9,6 +9,33 @@ import (
 	"time"
 )
 
+// roomAndThreadsMessageSources は、授業・コミュニティのルームと、その配下のスレッドに書かれた
+// メッセージを引く2つの FROM〜WHERE 句（メッセージの別名は m）。roomExpr はルームIDの列（例: c.room_id）、
+// cond は m に足す条件（" AND m.deleted_at IS NULL" のように先頭に AND を付ける）。
+//
+// スレッドは親とは別のルームなので、m.room_id = c.room_id だけで数えると、スレッドでどれだけ
+// やり取りがあっても「あまり発言されていないルーム」に見える。発言数を数えるところはこれを使う。
+// 親とスレッドを OR でひとつの条件にまとめると、MySQL がルームの索引で引けず messages を
+// 端からなめるので、別々に引いて足す。cond に ? があるときは引数を2回ぶん渡すこと。
+func roomAndThreadsMessageSources(roomExpr, cond string) [2]string {
+	return [2]string{
+		"FROM messages m WHERE m.room_id = " + roomExpr + cond,
+		"FROM rooms tr JOIN messages m ON m.room_id = tr.id WHERE tr.parent_room_id = " + roomExpr + cond,
+	}
+}
+
+// countRoomAndThreadsMessages はルームと配下のスレッドのメッセージ数を返す式。
+func countRoomAndThreadsMessages(roomExpr, cond string) string {
+	src := roomAndThreadsMessageSources(roomExpr, cond)
+	return "((SELECT COUNT(*) " + src[0] + ") + (SELECT COUNT(*) " + src[1] + "))"
+}
+
+// existsRoomAndThreadsMessages はルームか配下のスレッドに該当するメッセージがあるかの条件。
+func existsRoomAndThreadsMessages(roomExpr, cond string) string {
+	src := roomAndThreadsMessageSources(roomExpr, cond)
+	return "(EXISTS (SELECT 1 " + src[0] + ") OR EXISTS (SELECT 1 " + src[1] + "))"
+}
+
 type MySQLChatThreadRepository struct{ DB *sql.DB }
 
 var _ repository.ChatThreadRepository = (*MySQLChatThreadRepository)(nil)
