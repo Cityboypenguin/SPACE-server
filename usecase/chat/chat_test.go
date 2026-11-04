@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
@@ -83,6 +84,16 @@ func (f *fakeCheckRoomWritable) Execute(_ context.Context, _ int64) error {
 	return f.err
 }
 
+// fakeGetUser は表示用の利用者取得の代役。withdrawn に入れた人は退会済みとして nil を返す。
+type fakeGetUser struct{ withdrawn map[int64]bool }
+
+func (f *fakeGetUser) Execute(_ context.Context, id int64) (*model.User, error) {
+	if f.withdrawn[id] {
+		return nil, nil
+	}
+	return &model.User{ID: id, Status: model.UserStatusActive}, nil
+}
+
 type fakeCheckBlockRelation struct {
 	blocked bool
 	// calls / partnerID は「誰を相手にブロックを見に行ったか」。ブロック判定を
@@ -104,12 +115,16 @@ func (f *fakeGetMessage) Execute(_ context.Context, _ int64) (*model.Message, er
 }
 
 type fakeSendMessage struct {
+	calls         int
 	savedMentions []*model.Mention
+	savedStampID  *string
 }
 
-func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error) {
+func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error) {
+	f.calls++
 	f.savedMentions = mentions
-	return &model.Message{ID: 100, RoomID: roomID, UserID: userID, Content: content, ReplyToID: replyToID, Mentions: mentions}, nil
+	f.savedStampID = stampID
+	return &model.Message{ID: 100, RoomID: roomID, UserID: userID, Content: content, ReplyToID: replyToID, StampID: stampID, Mentions: mentions}, nil
 }
 
 type fakeUpdateMessage struct{ called bool }
@@ -193,21 +208,15 @@ func (f *fakeListMessagesAround) Execute(_ context.Context, _, _ int64, _ int) (
 type fakeEvents struct {
 	NoopEventPublisher
 	updated []MessageUpdatedEvent
+	deleted []MessageDeletedEvent
+}
+
+func (f *fakeEvents) MessageDeleted(_ context.Context, ev MessageDeletedEvent) {
+	f.deleted = append(f.deleted, ev)
 }
 
 func (f *fakeEvents) MessageUpdated(_ context.Context, ev MessageUpdatedEvent) {
 	f.updated = append(f.updated, ev)
-}
-
-type fakeAnonIdentity struct {
-	calls  int
-	roomID int64
-}
-
-func (f *fakeAnonIdentity) Execute(_ context.Context, roomID, userID int64) (*model.RoomAnonymousIdentity, error) {
-	f.calls++
-	f.roomID = roomID
-	return &model.RoomAnonymousIdentity{ID: 1, RoomID: roomID, UserID: userID, Label: "匿名001"}, nil
 }
 
 // fakeReadStatus は授業ルームの既読位置取得（course_room_reads 経路）の代役。
@@ -258,16 +267,19 @@ func (f *fakeMarkRead) Execute(_ context.Context, roomID, _ int64, lastReadMessa
 // --- helpers ---------------------------------------------------------------
 
 const (
-	courseRoomID    int64 = 1
-	communityRoomID int64 = 2
-	dmRoomID        int64 = 3
+	courseRoomID       int64 = 1
+	courseThreadRoomID int64 = 800
+	communityRoomID    int64 = 2
+	dmRoomID           int64 = 3
 )
 
 func testRooms() map[int64]*model.Room {
+	parent := courseRoomID
 	return map[int64]*model.Room{
-		courseRoomID:    {ID: courseRoomID, Type: model.RoomTypeCourse},
-		communityRoomID: {ID: communityRoomID, Type: model.RoomTypeCommunity},
-		dmRoomID:        {ID: dmRoomID, Type: model.RoomTypeDM},
+		courseThreadRoomID: {ID: courseThreadRoomID, Type: model.RoomTypeCourse, ParentRoomID: &parent},
+		courseRoomID:       {ID: courseRoomID, Type: model.RoomTypeCourse},
+		communityRoomID:    {ID: communityRoomID, Type: model.RoomTypeCommunity},
+		dmRoomID:           {ID: dmRoomID, Type: model.RoomTypeDM},
 	}
 }
 
@@ -295,6 +307,7 @@ type harness struct {
 
 	members       *fakeMembers
 	isMember      *fakeIsMember
+	users         *fakeGetUser
 	readStatus    *fakeRoomReadStatus
 	courseRead    *fakeReadStatus
 	markRead      *fakeMarkRead
@@ -303,7 +316,6 @@ type harness struct {
 	updateMessage *fakeUpdateMessage
 	deleteMessage *fakeDeleteMessage
 	checkWritable *fakeCheckRoomWritable
-	anonIdentity  *fakeAnonIdentity
 	getMessage    *fakeGetMessage
 	listMentions  *fakeListMentions
 	listMedia     *fakeListMessageMedia
@@ -340,7 +352,6 @@ func newHarness() *harness {
 		updateMessage: &fakeUpdateMessage{},
 		deleteMessage: &fakeDeleteMessage{},
 		checkWritable: &fakeCheckRoomWritable{},
-		anonIdentity:  &fakeAnonIdentity{},
 		getMessage:    &fakeGetMessage{},
 		listMentions:  &fakeListMentions{},
 		listMedia:     &fakeListMessageMedia{},
@@ -348,6 +359,7 @@ func newHarness() *harness {
 		listAround:    &fakeListMessagesAround{},
 		events:        &fakeEvents{},
 		blockRelation: &fakeCheckBlockRelation{},
+		users:         &fakeGetUser{withdrawn: map[int64]bool{}},
 	}
 	h.isMember = &fakeIsMember{members: h.members}
 	getRoom := &fakeGetRoom{rooms: rooms}
@@ -357,8 +369,10 @@ func newHarness() *harness {
 		IsRoomMember:       h.isMember,
 		CheckRoomWritable:  h.checkWritable,
 		CheckBlockRelation: h.blockRelation,
+		GetUser:            h.users,
 	}
 	h.commandDeps = MessageCommandDeps{
+		Stamps:          testStampCatalog{},
 		GetRoom:         getRoom,
 		GetRoomUserRole: &fakeRoomUserRole{role: model.RoomUserRoleMember},
 		GetMessage:      h.getMessage,
@@ -369,11 +383,10 @@ func newHarness() *harness {
 			update: h.updateMessage,
 			delete: h.deleteMessage,
 		},
-		ResolveMentions:              &fakeResolveMentions{rooms: rooms},
-		ListMentions:                 h.listMentions,
-		ListMessageMedia:             h.listMedia,
-		GetOrCreateAnonymousIdentity: h.anonIdentity,
-		Events:                       h.events,
+		ResolveMentions:  &fakeResolveMentions{rooms: rooms},
+		ListMentions:     h.listMentions,
+		ListMessageMedia: h.listMedia,
+		Events:           h.events,
 	}
 	h.queryDeps = MessageQueryDeps{
 		ListMessages:       h.listMessages,
@@ -493,35 +506,48 @@ func TestListMessages_GoesThroughTheSameReadPolicy(t *testing.T) {
 
 // --- 送信 -------------------------------------------------------------------
 
-func TestSendMessage_CourseRoomAssignsAnonymousIdentityAtPostTime(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h.anonIdentity.calls != 1 {
-		t.Fatalf("anonymous identity allocations = %d, want 1 (採番は投稿時に確定させる)", h.anonIdentity.calls)
-	}
-	if h.anonIdentity.roomID != courseRoomID {
-		t.Errorf("allocated in room %d, want %d", h.anonIdentity.roomID, courseRoomID)
-	}
+// fakeNGGuard は contains を含む文面を止める。screened は検査に回った回数。
+type fakeNGGuard struct {
+	contains string
+	screened int
 }
 
-func TestSendMessage_NonCourseRoomDoesNotAllocateAnonymousIdentity(t *testing.T) {
-	h := newHarness()
-
-	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "hi"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func (g *fakeNGGuard) Screen(_ context.Context, _ int64, _ *int64, _ model.NGWordSource, texts ...string) error {
+	g.screened++
+	for _, t := range texts {
+		if strings.Contains(t, g.contains) {
+			return apperr.InvalidInput("blocked")
+		}
 	}
-	if h.anonIdentity.calls != 0 {
-		t.Errorf("anonymous identity allocations = %d, want 0 outside course rooms", h.anonIdentity.calls)
+	return nil
+}
+
+func TestSendMessage_NGWordBlocksOnlyInCourseRooms(t *testing.T) {
+	h := newHarness()
+	guard := &fakeNGGuard{contains: "NG"}
+	h.commandDeps.NGWords = guard
+	h.rebuild()
+
+	_, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (授業内チャットはNGワードで止める)", err)
+	}
+	if h.sendMessage.calls != 0 {
+		t.Error("a blocked message must not be saved")
+	}
+
+	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("community room: err = %v, want nil (対象は授業内チャットだけ)", err)
+	}
+	if _, err := h.commands.SendMessage(ctxAsAdmin(10), SendMessageInput{RoomID: courseRoomID, Content: "this is NG"}); err != nil {
+		t.Errorf("admin: err = %v, want nil (管理者の投稿は止めない)", err)
 	}
 }
 
 func TestSendMessage_MentionsAreDroppedInCourseRoom(t *testing.T) {
 	h := newHarness()
 
-	// 授業内チャットは匿名なので実名メンションが成立してはいけない。クライアントが
+	// 授業内チャットではメンションが成立しない（MentionsSupported 参照）。クライアントが
 	// mentionUserIDs を送ってきても、保存に渡るのは検証済み（＝空）の結果だけ。
 	if _, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{
 		RoomID:         courseRoomID,
@@ -769,6 +795,36 @@ func TestUpdateMessage_ArchivedCourseRoomRejectsEdit(t *testing.T) {
 	}
 	if h.updateMessage.called {
 		t.Error("the message must not be updated when the course room is no longer writable")
+	}
+}
+
+func TestUpdateMessage_CourseRoomRejectsEdit(t *testing.T) {
+	h := newHarness()
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: courseRoomID, UserID: 10}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: courseRoomID, MessageID: 5, Content: "x"})
+	if err == nil {
+		t.Fatal("expected course chat message edits to be rejected")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Errorf("error code = %s, want %s", apperr.CodeOf(err), apperr.CodeInvalidInput)
+	}
+	if h.updateMessage.called {
+		t.Error("the message must not be updated in a course room")
+	}
+}
+
+// 授業のスレッドも親と同じ type を持つので、同じく編集できない。
+func TestUpdateMessage_CourseThreadRejectsEdit(t *testing.T) {
+	h := newHarness()
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: courseThreadRoomID, UserID: 10}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: courseThreadRoomID, MessageID: 5, Content: "x"})
+	if err == nil {
+		t.Fatal("expected course thread message edits to be rejected")
+	}
+	if h.updateMessage.called {
+		t.Error("the message must not be updated in a course thread")
 	}
 }
 
@@ -1049,19 +1105,37 @@ func TestEnsureWriteAccess_DMWithoutBlockIsAllowed(t *testing.T) {
 	}
 }
 
-// 相手が退会して room_users の行が消えた DM は相手が決まらない。ブロック関係を
-// 引きようが無いので判定を飛ばし、拒否もしない（送り先が居ないだけで、ここで
-// 「ブロックされています」と言うのは嘘になる）。
-func TestEnsureWriteAccess_DMWithoutAPartnerSkipsTheBlockCheck(t *testing.T) {
+// 相手が完全に削除された DM は room_users の行が消え、自分しか残っていない。
+// 送っても誰にも届かないので、ブロックとは別の理由で断る。
+func TestEnsureWriteAccess_DMWithoutAPartnerIsRejectedAsWithdrawn(t *testing.T) {
 	h := newHarness()
-	h.blockRelation.blocked = true
 	h.members.byRoom[dmRoomID] = []int64{10}
 
-	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); err != nil {
-		t.Fatalf("a DM whose partner is gone must not be rejected as blocked, got: %v", err)
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
 	}
 	if h.blockRelation.calls != 0 {
 		t.Errorf("block relation was checked %d times without a partner, want 0", h.blockRelation.calls)
+	}
+}
+
+// 相手が退会手続き中の DM も断る（取り消さない限り読まれないまま消えるため）。
+func TestEnsureWriteAccess_DMWithDeactivatedPartnerIsRejected(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), dmRoomID); !errors.Is(err, ErrDMPartnerWithdrawn) {
+		t.Fatalf("err = %v, want ErrDMPartnerWithdrawn", err)
+	}
+}
+
+// 相手の退会は DM だけの話。コミュニティでは退会した人が居ても書き込める。
+func TestEnsureWriteAccess_WithdrawnMemberDoesNotCloseACommunity(t *testing.T) {
+	h := newHarness()
+	h.users.withdrawn[11] = true
+
+	if _, err := h.access.EnsureWriteAccess(ctxAsUser(10), communityRoomID); err != nil {
+		t.Fatalf("a community must stay writable when a member withdrew, got: %v", err)
 	}
 }
 
@@ -1085,5 +1159,63 @@ func TestMarkAsRead_PassesTheClientsReadPositionThrough(t *testing.T) {
 	}
 	if h.markCourse.messageID == nil || *h.markCourse.messageID != position {
 		t.Fatalf("read position handed to the course use case = %v, want %d", h.markCourse.messageID, position)
+	}
+}
+
+// --- スタンプだけのメッセージ -------------------------------------------------
+
+func TestSendMessage_StampIsPassedToTheStore(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+
+	msg, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{RoomID: communityRoomID, StampID: &stamp})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h.sendMessage.savedStampID == nil || *h.sendMessage.savedStampID != stamp {
+		t.Errorf("stamp passed to the store = %v, want %q", h.sendMessage.savedStampID, stamp)
+	}
+	if msg.StampID == nil || *msg.StampID != stamp {
+		t.Errorf("returned message = %+v, want the stamp", msg)
+	}
+}
+
+func TestSendMessage_StampCannotBeCombinedWithMentions(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+
+	_, err := h.commands.SendMessage(ctxAsUser(10), SendMessageInput{
+		RoomID: communityRoomID, StampID: &stamp, MentionUserIDs: []int64{11},
+	})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (スタンプとメンションは一緒に送れない。黙って捨てない)", err)
+	}
+	if h.sendMessage.savedStampID != nil {
+		t.Error("nothing may be saved when the combination is rejected")
+	}
+}
+
+func TestUpdateMessage_RejectsAStampMessage(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: communityRoomID, UserID: 10, StampID: &stamp}
+
+	_, err := h.commands.UpdateMessage(ctxAsUser(10), UpdateMessageInput{RoomID: communityRoomID, MessageID: 5, Content: "x"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeInvalidInput {
+		t.Fatalf("err = %v, want InvalidInput (スタンプは編集できない)", err)
+	}
+	if h.updateMessage.called {
+		t.Error("a stamp message must not be updated")
+	}
+}
+
+func TestDeleteMessage_AllowsDeletingAStampMessage(t *testing.T) {
+	h := newHarness()
+	stamp := "stamp:ryokai"
+	h.getMessage.msg = &model.Message{ID: 5, RoomID: communityRoomID, UserID: 10, StampID: &stamp}
+
+	deleted, err := h.commands.DeleteMessage(ctxAsUser(10), DeleteMessageInput{RoomID: communityRoomID, MessageID: 5})
+	if err != nil || !deleted {
+		t.Fatalf("deleted = %v, err = %v, want the stamp message to be deletable", deleted, err)
 	}
 }

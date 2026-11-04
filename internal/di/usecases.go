@@ -12,10 +12,11 @@ package di
 import (
 	"github.com/Cityboypenguin/SPACE-server/graph"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	ngword "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
+	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	semesterusecase "github.com/Cityboypenguin/SPACE-server/usecase/semester"
@@ -41,6 +42,7 @@ func NewCommunityUseCases(
 		SearchCommunityUseCase:        communityusecase.NewSearchCommunityUseCase(communityRepo),
 		ListMyCommunitiesUseCase:      communityusecase.NewListMyCommunitiesUseCase(communityRepo),
 		ListAllCommunitiesUseCase:     communityusecase.NewListAllCommunitiesUseCase(communityRepo),
+		AdminListCommunitiesUseCase:   communityusecase.NewAdminListCommunitiesUseCase(communityRepo, roomUserRepo),
 		GetRandomCommunitiesUseCase:   *communityusecase.NewGetRandomCommunitiesUseCase(communityRepo),
 	}
 }
@@ -51,13 +53,15 @@ func NewCourseUseCases(
 	courseRepo repository.CourseRepository,
 	timetableRepo repository.TimetableRepository,
 	settingRepo repository.SystemSettingRepository,
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
 	userSettingRepo repository.UserSettingRepository,
 	roomRepo repository.RoomRepository,
 	blockRepo repository.BlockerRepository,
 	// 授業一覧の未読バッジしか使わないので、合成インターフェースではなく
 	// 未読集計の口だけを受け取る。
 	unreadCounter repository.MessageUnreadCounter,
+	courseSyncRepo repository.CourseSyncRepository,
+	txManager repository.TxManager,
+	notifier notificationuc.NotificationPublisher,
 ) graph.CourseUseCases {
 	return graph.CourseUseCases{
 		SearchCoursesUseCase:               courseusecase.NewSearchCoursesUseCase(courseRepo, settingRepo),
@@ -75,7 +79,8 @@ func NewCourseUseCases(
 		GetCurrentSemesterUseCase:          semesterusecase.NewGetCurrentSemesterUseCase(settingRepo),
 		UpdateCurrentSemesterUseCase:       semesterusecase.NewUpdateCurrentSemesterUseCase(settingRepo),
 		ListCourseRoomUnreadCountsUseCase:  courseusecase.NewListCourseRoomUnreadCountsUseCase(unreadCounter, settingRepo),
-		ImportCoursesUseCase:               courseusecase.NewImportCoursesUseCase(courseRepo),
+		SyncCoursesUseCase:                 courseusecase.NewSyncCoursesUseCase(courseRepo, courseSyncRepo, txManager, settingRepo, notifier),
+		CourseSyncAdminUseCase:             courseusecase.NewCourseSyncAdminUseCase(courseSyncRepo),
 		ListCoursesUseCase:                 courseusecase.NewListCoursesUseCase(courseRepo),
 		ListCourseYearsUseCase:             courseusecase.NewListCourseYearsUseCase(courseRepo),
 		ListDedupKeysByYearUseCase:         courseusecase.NewListDedupKeysByYearUseCase(courseRepo),
@@ -98,22 +103,19 @@ func NewQuestionUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
-	// 匿名ID(匿名NNN)は投稿時に確定させるので、質問・回答の作成にも採番の口が要る。
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
+	// 投稿・編集の前にNGワードで検査する。
+	ng ngword.Guard,
 ) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
-	anonIdentity := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)
 	return graph.QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, anonIdentity),
-		UpdateQuestionUseCase:   questionusecase.NewUpdateQuestionUseCase(events, questionRepo, mediaRepo, txManager, requireWritable),
+		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, ng),
 		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
 		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
 		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
 		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
 		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, anonIdentity),
-		UpdateAnswerUseCase:     answerusecase.NewUpdateAnswerUseCase(events, questionRepo, answerRepo, mediaRepo, txManager, requireWritable),
+		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, ng),
 		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
@@ -128,12 +130,12 @@ func NewPollUseCases(
 	courseRepo repository.CourseRepository,
 	settingRepo repository.SystemSettingRepository,
 	timetableRepo repository.TimetableRepository,
-	// 匿名ID(匿名NNN)は投稿時に確定させるので、投票の作成にも採番の口が要る。
-	anonIdentityRepo repository.RoomAnonymousIdentityRepository,
+	// 投票の作成の前にNGワードで検査する。
+	ng ngword.Guard,
 ) graph.PollUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.PollUseCases{
-		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable, anonusecase.NewGetOrCreateAnonymousIdentityUseCase(anonIdentityRepo)),
+		CreatePollUseCase:  pollusecase.NewCreatePollUseCase(events, pollRepo, requireWritable, ng),
 		VotePollUseCase:    pollusecase.NewVotePollUseCase(events, pollRepo, requireWritable),
 		DeletePollUseCase:  pollusecase.NewDeletePollUseCase(events, pollRepo, requireWritable),
 		ListPollsUseCase:   pollusecase.NewListPollsUseCase(pollRepo),

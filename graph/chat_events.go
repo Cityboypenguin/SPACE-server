@@ -12,7 +12,6 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
@@ -66,9 +65,6 @@ type ChatEventPublisherDeps struct {
 
 	// GetMessage は引用返信の通知先（返信元の投稿者）を引くため。
 	GetMessage messageusecase.GetMessageByIDUseCase
-	// GetAnonymousIdentity は授業ルームの返信通知の文言に使う匿名ラベル。
-	// 採番しない読み取り専用の口（採番は投稿時に送信サービス側で済んでいる）。
-	GetAnonymousIdentity anonusecase.GetAnonymousIdentityUseCase
 
 	MarkNotificationsAsReadByActor notificationuc.MarkAllAsReadByActorUseCase
 }
@@ -113,7 +109,6 @@ const (
 	chatDeliveryDMNotification    = "dm_notification"
 	chatDeliveryReplyNotification = "message_reply_notification"
 	chatDeliveryReplyParentLookup = "message_reply_parent_lookup"
-	chatDeliveryAnonymousLabel    = "anonymous_label_lookup"
 	chatDeliveryMentionNotify     = "mention_notification"
 	chatDeliveryDMReadSync        = "dm_notification_read_sync"
 )
@@ -135,6 +130,8 @@ func (p *chatEventPublisher) MessageSent(ctx context.Context, ev chatusecase.Mes
 	// 購読中の画面へのメッセージ配信だけは同期。インメモリの publish なので安価な一方、
 	// 順序が入れ替わるとチャット本体のメッセージが入れ替わって表示されるため。
 	p.deps.PubSub.Publish(roomGraphID+":message:added", toGraphMessage(ev.Message))
+	// スレッドの新着は、親ルームでスレッド一覧を開いている画面にも知らせる（件数が変わる）。
+	publishChatThreadChanged(p.deps.PubSub, ev.Room)
 
 	// 残り（宛先ぶんの SSE と通知）はリクエストの外へ。どちらも順序を要しない。
 	p.async(ctx, "message_sent", func(ctx context.Context) {
@@ -163,10 +160,9 @@ func (p *chatEventPublisher) MessageSent(ctx context.Context, ev chatusecase.Mes
 //
 // # なぜ actorID を載せないのか
 //
-// 授業内チャットは匿名なので、投稿者を特定できる情報をイベントに乗せると匿名性が崩れる
-// （受け取った側が roomID と突き合わせれば「今その授業に投稿したのは誰か」が分かる）。
-// 代わりに配信対象から投稿者自身を除外し、hasNewMessage は常に true にする。
-// 受信者ごとに値を変える必要が無くなるので、宛先ごとの計算も要らない。
+// 配信対象から投稿者自身を除外してあるので、受け取った側は「自分以外の誰かが投稿した」
+// とだけ分かればよく、hasNewMessage は常に true にできる。受信者ごとに値を変える必要が
+// 無いので、宛先ごとの計算も要らない。
 func (p *chatEventPublisher) broadcastRoomChanged(ctx context.Context, ev chatusecase.MessageSentEvent, roomGraphID string) {
 	recipients, err := p.roomChangedRecipients(ctx, ev)
 	if err != nil {
@@ -184,7 +180,7 @@ func (p *chatEventPublisher) broadcastRoomChanged(ctx context.Context, ev chatus
 		"messageID": encodeGraphID("message", ev.Message.ID),
 		// 宛先から投稿者を除いてあるので、受け取った時点で必ず「自分以外の新着」。
 		"hasNewMessage": true,
-		"lastMessage":   messagePreview(ev.Message.Content, ev.HasMedia),
+		"lastMessage":   messageSummary(ev.Message, ev.HasMedia),
 		"sentAt":        roomChangedSentAt(time.Now()),
 	}
 	for _, userID := range recipients {
@@ -232,13 +228,13 @@ func roomChangedSentAt(now time.Time) string {
 
 // roomChangedRecipients は更新を知らせるべき利用者IDを、ルーム種別に応じて解決する。
 //
-// 授業ルームは room_users を使わない設計（誰でも閲覧でき匿名で表示する）なので、
+// 授業ルームは room_users を使わない設計（履修していなくても誰でも閲覧できる）なので、
 // 履修者は時間割から引く。それ以外のルームは、送信の権限判定で既に room_users を
 // 引いてあり（usecase/chat/access.go の writeAccess.MemberIDs）、イベントに載って
 // 運ばれてくる。同じクエリを2度投げないためにそれをそのまま使う。
 func (p *chatEventPublisher) roomChangedRecipients(ctx context.Context, ev chatusecase.MessageSentEvent) ([]int64, error) {
 	if ev.Room.Type == model.RoomTypeCourse {
-		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.ID)
+		return p.deps.CourseRegistrantIDs.Execute(ctx, ev.Room.PolicyRoomID())
 	}
 	return ev.MemberIDs, nil
 }
@@ -246,7 +242,7 @@ func (p *chatEventPublisher) roomChangedRecipients(ctx context.Context, ev chatu
 // publishSentNotifications は送信に伴う通知（DM・引用返信・メンション）をまとめて出す。
 // どれもベストエフォートで、失敗はログに残して先へ進む。
 func (p *chatEventPublisher) publishSentNotifications(ctx context.Context, ev chatusecase.MessageSentEvent) {
-	previewMessage := messagePreview(ev.Message.Content, ev.HasMedia)
+	previewMessage := messageSummary(ev.Message, ev.HasMedia)
 
 	// DM ルームの場合、相手に通知を送る
 	if ev.Room.Type == model.RoomTypeDM {
@@ -322,8 +318,8 @@ func (p *chatEventPublisher) MessageDeleted(ctx context.Context, ev chatusecase.
 func (p *chatEventPublisher) RoomMarkedAsRead(ctx context.Context, ev chatusecase.RoomMarkedAsReadEvent) {
 	roomGraphID := encodeGraphID("room", ev.Room.ID)
 
-	// 既読の配信は相手側の既読表示のためのもの。授業内チャットは匿名なので、
-	// 誰が読んだか(実ユーザーID)をルームの購読者へ配信しない。
+	// 既読の配信は相手側の既読表示のためのもの。授業内チャットは閲覧者が多く
+	// 既読表示を出さないので、誰が読んだかをルームの購読者へ配信しない。
 	//
 	// 購読配信なので同期（message:* と同じ経路を使う。「送信 → 既読」が逆転すると
 	// 既読表示が巻き戻って見える）。
@@ -392,11 +388,6 @@ func (p *chatEventPublisher) syncDMNotificationsOnRead(ctx context.Context, ev c
 // publishMessageReplyNotification notifies the author of the message that `reply`
 // quotes. 自分自身への返信、および返信先が見つからない（削除済み）場合は何もしない。
 //
-// 授業内チャットは匿名なので、通知文言にはルーム内の匿名ラベルを入れ、actor_id は
-// あえて保存しない。actor_id を残すと myNotifications(actorID:) や
-// markAllNotificationsAsReadByActor など actor で絞り込むAPIから
-// 「匿名NNN = そのユーザー」を突き合わせられてしまい、匿名性が崩れるため。
-//
 // 遷移先の組み立てにはルームIDと種別が要るが notifications 行は targetType/targetID の
 // 1組しか持てないため、SSE には Extra で roomID/roomType を添える（GraphQL 側は
 // Notification.targetMessage から辿れる）。
@@ -432,29 +423,12 @@ func (p *chatEventPublisher) publishMessageReplyNotification(ctx context.Context
 	// 通知一覧・通知詳細・SSE のトーストはどれも message をそのまま出すので、
 	// 文言に入れておけば3箇所ぶんの組み立てが要らない。
 	message := notificationuc.MessageRepliedInRoom(room.Name)
-	notificationActorID := &actorID
-	if room.Type == model.RoomTypeCourse {
-		// 匿名IDは投稿時に確定済みなので、ここは採番せず読むだけ。行が引けなくても
-		// 実名を出すわけにはいかないので、番号なしの「匿名」で通知する。
-		label := anonymousPlaceholderLabel
-		identity, err := p.deps.GetAnonymousIdentity.Execute(ctx, room.ID, actorID)
-		if err != nil {
-			logChatDelivery(err, chatDeliveryAnonymousLabel).
-				Int64("room_id", room.ID).
-				Int64("message_id", reply.ID).
-				Msg("failed to resolve anonymous identity for reply notification")
-		} else if identity != nil {
-			label = identity.Label
-		}
-		message = notificationuc.MessageAnonymousRepliedInRoom(room.Name, label)
-		notificationActorID = nil
-	}
 
 	targetType := notificationuc.TargetMessage
 	if err := p.deps.NotificationPublisher.Publish(ctx, notificationuc.PublishParams{
 		UserID:     parent.UserID,
 		Type:       notificationuc.TypeMessageReply,
-		ActorID:    notificationActorID,
+		ActorID:    &actorID,
 		TargetType: &targetType,
 		TargetID:   &reply.ID,
 		Message:    message,
@@ -520,6 +494,18 @@ func (p *chatEventPublisher) publishMentionNotifications(ctx context.Context, ro
 			Int("recipients", len(params)).
 			Msg("failed to publish mention notifications")
 	}
+}
+
+// stampMessageSummary はスタンプだけのメッセージの一覧プレビュー・通知文言。
+const stampMessageSummary = "[スタンプを送信しました]"
+
+// messageSummary はメッセージ1件の一覧プレビュー・通知文言。スタンプだけのメッセージは本文が空なので、
+// 「新しいメッセージが届きました」ではなく「スタンプ」と分かる文言にする。
+func messageSummary(m *model.Message, hasMedia bool) string {
+	if m.StampID != nil {
+		return stampMessageSummary
+	}
+	return messagePreview(m.Content, hasMedia)
 }
 
 // messagePreview は一覧画面のプレビュー・通知文言に使う要約テキストを作る。

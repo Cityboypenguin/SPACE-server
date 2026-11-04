@@ -1,0 +1,1 @@
+ALTER TABLE messages MODIFY stamp_id VARCHAR(64) NULL;

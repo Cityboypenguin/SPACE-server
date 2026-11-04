@@ -85,8 +85,13 @@ func (s *readReceiptService) MarkAsRead(ctx context.Context, roomID int64, lastR
 		return fmt.Errorf("failed to get room")
 	}
 
+	if room.ParentRoomID != nil {
+		if _, err := s.deps.Access.EnsureReadAccess(ctx, roomID); err != nil {
+			return err
+		}
+	}
 	var memberIDs []int64
-	if room.Type == model.RoomTypeCourse {
+	if room.Type == model.RoomTypeCourse || room.ParentRoomID != nil {
 		if err := s.deps.MarkCourseRoomAsRead.Execute(ctx, roomID, claims.ID, lastReadMessageID); err != nil {
 			return err
 		}
@@ -147,11 +152,11 @@ func (s *readReceiptService) ReadStatusOfAuthorizedRoom(ctx context.Context, roo
 // readStatus は既読位置の置き場を選ぶだけの内部処理（権限判定は呼び出し側で済ませる）。
 //
 // どちらの経路も「相手の既読位置（PartnerLastReadAt）が入るのは DM だけ」で揃えて
-// ある。授業内チャットは匿名なので常に nil（GetCourseRoomReadStatusUseCase）、
+// ある。授業内チャットは常に nil（GetCourseRoomReadStatusUseCase）、
 // コミュニティは相手が1人に決まらないので nil（GetRoomReadStatusUseCase が room.Type
 // で判定する）。理由は roomusecase.RoomReadStatus のコメントに1箇所だけ書いてある。
 func (s *readReceiptService) readStatus(ctx context.Context, room *model.Room, userID int64) (*roomusecase.RoomReadStatus, error) {
-	if room.Type == model.RoomTypeCourse {
+	if room.Type == model.RoomTypeCourse || room.ParentRoomID != nil {
 		return s.deps.GetCourseRoomReadStatus.Execute(ctx, room.ID, userID)
 	}
 	return s.deps.GetRoomReadStatus.Execute(ctx, room, userID)

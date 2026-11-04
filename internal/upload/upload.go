@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/google/uuid"
@@ -64,6 +65,16 @@ type Kind struct {
 	// 他人のキーを申告できると、まだ受け入れていない他人のアップロードを
 	// こちらの操作で消したり写したりできてしまう（Accept のコメント参照）。
 	Owned bool
+	// Private は「非公開の置き場へ入れる種別か」。
+	//
+	// 公開の置き場は匿名読み取りを許してあり、URL を知っていれば誰でも取れる。
+	// DM の添付はそこに置けない（本文は暗号化して保存しているのに、添付だけ
+	// 誰でも見られる状態になる）。true の種別は別の置き場へ入れ、表示は
+	// 期限付きの署名付きURLで配る。
+	//
+	// どの置き場を使うかは呼び出し側が選ぶ。この型は判断の材料を持つだけで、
+	// 置き場そのものは知らない（internal/upload は保管先の実装に依らない）。
+	Private bool
 }
 
 const (
@@ -81,14 +92,25 @@ var imageExts = map[string]string{
 
 var (
 	Avatar = Kind{Prefix: "avatars", MaxBytes: 5 * mb, Exts: imageExts, Label: "アバター画像", Owned: true}
-	// Media は投稿・メッセージ・質問・回答の添付。
-	Media         = Kind{Prefix: "media", MaxBytes: 20 * mb, Exts: imageExts, Label: "添付画像", Owned: true}
+	// Media は投稿・質問・回答の添付。公開の置き場に入る。
+	//
+	// 以前は DM の添付もこれを使っていた。公開の置き場は匿名読み取りを許して
+	// あるので、DM の添付が URL を知る誰にでも見えていた（本文は暗号化して
+	// 保存しているので、扱いが噛み合っていなかった）。DM は MessageMedia に分けた。
+	Media = Kind{Prefix: "media", MaxBytes: 20 * mb, Exts: imageExts, Label: "添付画像", Owned: true}
+	// MessageMedia は DM の添付。非公開の置き場に入り、表示は署名付きURLで配る。
+	//
+	// 上限と受け付ける種別は Media と揃えてある。利用者からすると同じ「画像の添付」
+	// で、送る先が DM かどうかで通る大きさが変わるのは説明できない。
+	MessageMedia  = Kind{Prefix: "message-media", MaxBytes: 20 * mb, Exts: imageExts, Label: "メッセージの添付画像", Owned: true, Private: true}
 	CommunityIcon = Kind{Prefix: "community-icons", MaxBytes: 5 * mb, Exts: imageExts, Label: "コミュニティアイコン", Owned: true}
 	// 規約ドキュメントは管理者だけが置く。誰のものでもないので所有者セグメントは無い。
 	TermsDocument = Kind{Prefix: "terms", MaxBytes: 5 * mb, Exts: map[string]string{"text/markdown": ".md"}, Label: "規約ドキュメント"}
 )
 
-var kinds = []Kind{Avatar, Media, CommunityIcon, TermsDocument}
+var ChatStamp = Kind{Prefix: "chat-stamps", MaxBytes: maxStampSourceBytes, Exts: map[string]string{"image/png": ".png", "image/svg+xml": ".svg"}, Label: "スタンプ画像", Owned: true}
+
+var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument, ChatStamp}
 
 // StagingPrefix は署名付きURLが書き込める唯一の場所。
 //
@@ -266,11 +288,28 @@ func acceptedKeyFor(stagingKey string) (string, error) {
 	return rest[:slash+1] + uuid.NewString() + rest[dot:], nil
 }
 
+// RemovedPrefix は管理者が利用者の目から外した添付の置き場。非公開の置き場にだけ作る。
+// どの種別にも当たらないので、署名付きURLの発行や受け入れの対象にならない。
+const RemovedPrefix = "removed"
+
+// RemovedKeyFor は外した添付の新しいキーを作る。mediaID から決まるので、途中で失敗して
+// やり直しても同じ場所を指す。元のキーからは拡張子だけ引き継ぐ。
+func RemovedKeyFor(mediaID int64, objectKey string) string {
+	slash := strings.LastIndex(objectKey, "/")
+	dot := strings.LastIndex(objectKey, ".")
+	ext := ""
+	if dot > slash {
+		ext = objectKey[dot:]
+	}
+	return fmt.Sprintf("%s/%d%s", RemovedPrefix, mediaID, ext)
+}
+
 // ObjectStore は Accept が要るぶんだけの StorageRepository。
 // repository.StorageRepository がそのまま満たす。
 type ObjectStore interface {
 	StatObject(ctx context.Context, objectKey string) (repository.ObjectInfo, error)
-	CopyObject(ctx context.Context, srcKey, dstKey, srcETag string) error
+	CopyObject(ctx context.Context, srcKey, dstKey, srcETag, contentType string) error
+	ObjectHead(ctx context.Context, objectKey string, limit int64) ([]byte, string, error)
 	DeleteObject(ctx context.Context, objectKey string) error
 }
 
@@ -325,7 +364,18 @@ type ObjectStore interface {
 //
 // 測る（StatObject）と写す（CopyObject）の間にもう一度置かれると、検査したものと
 // 別のものが公開される。写すときに「測ったときの ETag と同じなら」という条件を
-// 付けて塞いである（一致しなければ何も書かれず ErrObjectChanged が返る）。
+// 付けて塞いである。一致しなければ何も書かれない。
+//
+// ただし「何のエラーが返るか」は置き場によって違う。Azure は条件の不一致を
+// CannotVerifyCopySource で返してくるため（実機で確認）、ErrObjectChanged では
+// なく ErrObjectNotFound に分類される。Azure はこのコードを「元が本当に無い」
+// ときにも、署名や権限の一時的な不調のときにも使うので、コードだけでは
+// 区別できない。
+//
+// どちらに分類されても写しは行われないので、検査していないものが公開される
+// ことはない。変わるのは利用者へ返る文言だけ（errNotUploaded か、一般の
+// 保存失敗か）。ここを「Azure でも ErrObjectChanged が返る」前提で書き直すと、
+// サーバー側の不調を利用者の操作ミスとして表示することになる。
 func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind, owner string) (string, error) {
 	if err := CheckKey(objectKey, want, owner); err != nil {
 		return "", fmt.Errorf("invalid object key")
@@ -355,7 +405,37 @@ func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind,
 		return "", fmt.Errorf("invalid object key")
 	}
 
-	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag); err != nil {
+	// Normalize stamp dimensions before storing them under an immutable key.
+	if want.Prefix == ChatStamp.Prefix {
+		body, etag, err := store.ObjectHead(ctx, objectKey, want.MaxBytes+1)
+		if err != nil {
+			return "", fmt.Errorf("failed to read the uploaded image")
+		}
+		if etag != info.ETag || int64(len(body)) != info.Size {
+			return "", errNotUploaded
+		}
+		var canonical []byte
+		if info.ContentType == "image/png" {
+			canonical, err = normalizeStampPNG(body)
+		} else {
+			canonical, err = normalizeStampSVG(body)
+		}
+		if err != nil {
+			return "", err
+		}
+		writer, ok := store.(interface {
+			PutObject(context.Context, string, string, []byte) error
+		})
+		if !ok {
+			return "", fmt.Errorf("stamp image storage is not configured")
+		}
+		if err := writer.PutObject(ctx, finalKey, info.ContentType, canonical); err != nil {
+			return "", fmt.Errorf("failed to store the uploaded image")
+		}
+		_ = store.DeleteObject(ctx, objectKey)
+		return finalKey, nil
+	}
+	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag, info.ContentType); err != nil {
 		if errors.Is(err, repository.ErrObjectChanged) {
 			// 測ってから写すまでの間に置き直された。検査していないものは公開しない。
 			return "", errNotUploaded
@@ -428,15 +508,59 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	}
 
 	if info.Size > kind.MaxBytes {
+		if kind.Prefix == ChatStamp.Prefix {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプの元画像は20MiB以下にしてください")
+		}
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sのサイズが上限（%dMB）を超えています", kind.Label, kind.MaxBytes/mb)
 	}
 	// Content-Type も見る。サイズだけ見ても、画像のつもりの口へ実行可能ファイルを
 	// 置かれると、そのまま公開URLから配られる。空は「申告が無い」なので弾く。
 	if _, ok := kind.Ext(info.ContentType); !ok {
+		if kind.Prefix == ChatStamp.Prefix {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプ画像はPNGまたはSVGを指定してください")
+		}
 		_ = store.DeleteObject(ctx, objectKey)
 		return repository.ObjectInfo{}, fmt.Errorf("%sの形式が受け付けられません: %s", kind.Label, info.ContentType)
 	}
+
+	// ここまでで見たのは「利用者がそう名乗った」という記録だけ。署名付き PUT では
+	// Content-Type も利用者が決めるので、中身が HTML のファイルを image/png と
+	// 名乗って置ける。実物の先頭を読んで、名乗りと一致していることを確かめる。
+	readLimit := int64(sniffLimit)
+	if kind.Prefix == ChatStamp.Prefix {
+		readLimit = kind.MaxBytes + 1
+	}
+	head, headETag, err := store.ObjectHead(ctx, objectKey, readLimit)
+	if err != nil {
+		// 置き場の不調と「形式が違う」を言い分けない理由は無いので、素直に失敗を返す。
+		// 通すと検査が素通しになる。消さないのは、こちらの不調で利用者の
+		// アップロードを捨てないため。
+		return repository.ObjectInfo{}, fmt.Errorf("failed to verify the uploaded file")
+	}
+	// 大きさを測った要求と先頭を読んだ要求は別の往復なので、その間に置き直されて
+	// いれば「測ったもの」と「中身を確かめたもの」が別になる。写しは info.ETag を
+	// 条件に行うので、確かめたのが別物なら受け付けてはいけない。
+	if headETag != info.ETag {
+		return repository.ObjectInfo{}, errNotUploaded
+	}
+	if kind.Prefix == ChatStamp.Prefix {
+		if int64(len(head)) != info.Size {
+			return repository.ObjectInfo{}, fmt.Errorf("画像全体を検証できません")
+		}
+		if err := ValidateStampImage(info.ContentType, head); err != nil {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, err
+		}
+		return info, nil
+	}
+	if !contentTypeMatchesBytes(info.ContentType, head) {
+		_ = store.DeleteObject(ctx, objectKey)
+		return repository.ObjectInfo{}, fmt.Errorf("%sの中身が %s ではありません", kind.Label, info.ContentType)
+	}
+
 	return info, nil
 }
 

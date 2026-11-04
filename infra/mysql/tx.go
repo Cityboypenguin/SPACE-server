@@ -31,3 +31,23 @@ func extractDB(ctx context.Context, db *sql.DB) dbtx {
 	}
 	return db
 }
+
+// inTx は ctx に乗っているトランザクションに参加し、無ければ自分で開いて fn を走らせる。
+//
+// 1つの書き込みが複数の表にまたがるのに、呼び出し側がトランザクションを張るとは
+// 限らない口（新規登録の users + user_accounts など）で使う。途中で失敗したときに
+// 片方の表だけ書かれた状態を残さないため。
+func inTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error) error {
+	if _, ok := txFromContext(ctx); ok {
+		return fn(ctx)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(withTx(ctx, tx)); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}

@@ -10,8 +10,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 )
 
 const MaxMediaCount = 4
@@ -29,7 +29,7 @@ type CreateQuestionInteractor struct {
 	mediaRepo       mediaAttachRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
-	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
+	ng              ngword.Guard
 }
 
 func NewCreateQuestionUseCase(events EventPublisher, uploads uploadusecase.Acceptor,
@@ -37,7 +37,8 @@ func NewCreateQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
-	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
+	// ng は本文を保存の前に検査する。権限と存在の確認のあとに呼ぶので、投稿できない人の試行は数えない。nil なら検査しない。
+	ng ngword.Guard,
 ) CreateQuestionUseCase {
 	return &CreateQuestionInteractor{
 		events:          orNoop(events),
@@ -46,7 +47,7 @@ func NewCreateQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
-		anonIdentity:    anonIdentity,
+		ng:              ng,
 	}
 }
 
@@ -72,12 +73,7 @@ func (uc *CreateQuestionInteractor) Execute(ctx context.Context, roomID int64, b
 	if _, err := uc.requireWritable.Execute(ctx, roomID); err != nil {
 		return nil, err
 	}
-
-	// 匿名ID(匿名NNN)は投稿時に確定させる。質問箱は授業内チャット専用なので、
-	// メッセージ送信（usecase/chat）と同じ扱いにして「番号は初投稿順」という
-	// 仕様を全ての投稿経路で守る。表示側は採番しない（読むだけ）。
-	// 詳細は usecase/chat の ensureAnonymousIdentity のコメントを参照。
-	if _, err := uc.anonIdentity.Execute(ctx, roomID, claims.ID); err != nil {
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourceQuestion, body); err != nil {
 		return nil, err
 	}
 

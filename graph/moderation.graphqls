@@ -6,6 +6,8 @@ extend type Query {
     limit: Int = 20
     offset: Int = 0
   ): ReportPage!
+  getReport(id: ID!): UserReport
+  reportNotificationRecipients: [ReportNotificationRecipient!]!
   searchInquiries(
     status: InquiryStatus
     limit: Int = 20
@@ -20,6 +22,8 @@ extend type Mutation {
   unfreezeUser(id: ID!): Boolean!
   createReport(input: CreateReportInput!): UserReport!
   updateReportStatus(id: ID!, status: ReportStatus!): UserReport!
+  addReportNotificationRecipient(email: String!): ReportNotificationRecipient!
+  removeReportNotificationRecipient(id: ID!): Boolean!
   createInquiry(input: CreateInquiryInput!): Inquiry!
   updateInquiryStatus(id: ID!, status: InquiryStatus!): Inquiry!
   setReportServiceStatus(enabled: Boolean!): Boolean!
@@ -76,6 +80,12 @@ enum ReportTargetType {
   POST
   USER
   COMMUNITY
+  MESSAGE
+  QUESTION
+  ANSWER
+  POLL
+  # コミュニティ・授業内チャットのスレッド。targetID はスレッドのルームのID。
+  THREAD
 }
 
 type UserReport {
@@ -89,6 +99,43 @@ type UserReport {
   createdAt: String!
   updatedAt: String!
   content: String
+  # 通報を受けた時点の内容。targetType が MESSAGE・QUESTION・ANSWER・POLL・THREAD のときだけ入る。
+  # 管理者向けの応答だけに載せ、createReport の応答（通報者）には載せない。
+  reportedContent: ReportedContent
+}
+
+# 通報を受けた時点の内容。あとから編集・削除されても変わらない。
+type ReportedContent {
+  # 内容が書かれた授業・コミュニティ（DM）。スレッドの中なら親のもの。
+  roomID: ID!
+  roomType: String!
+  roomName: String!
+  # スレッドの中の内容（または THREAD の通報）のときのスレッドの題名。スレッドでなければ null。
+  threadTitle: String
+  # 投稿者の利用者ID。授業内チャットが匿名表示だった時期の通報は null（authorName は匿名ラベル）。
+  authorID: ID
+  authorName: String!
+  authorAccountID: String
+  # メッセージ・質問・回答の本文、投票の設問、またはスレッドの題名。
+  content: String!
+  media: [Media!]!
+  # スタンプだけのメッセージのスタンプのID。このとき content は空。
+  stampID: String
+  # 質問・回答への追記（古い順）。
+  addenda: [String!]!
+  # 回答が答えている質問の本文。回答の通報だけで入る。
+  parentBody: String
+  # 投票の選択肢。投票の通報だけで入り、投票した人は含まない。
+  pollOptions: [String!]!
+  createdAt: String!
+  updatedAt: String!
+}
+
+# 通報を受け付けたときにお知らせメールを送る宛先。
+type ReportNotificationRecipient {
+  ID: ID!
+  email: String!
+  createdAt: String!
 }
 
 input ReportSearchFilter {

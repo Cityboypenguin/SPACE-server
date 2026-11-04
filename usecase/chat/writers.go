@@ -41,6 +41,7 @@ import (
 // つまりこれは「うっかり別の層から保存を呼んでしまう」事故を型で潰す仕組みで、
 // 悪意ある回避を防ぐ壁ではない。
 type MessageWriters struct {
+	system repository.MessageWriter
 	send   messagestore.SendMessageUseCase
 	update messagestore.UpdateMessageUseCase
 	delete messagestore.DeleteMessageUseCase
@@ -60,6 +61,7 @@ func NewMessageWriters(
 	txManager repository.TxManager,
 ) MessageWriters {
 	return MessageWriters{
+		system: writer,
 		send:   messagestore.NewSendMessageUseCase(uploads, reader, writer, mentionStore, mediaRepo, txManager),
 		update: messagestore.NewUpdateMessageUseCase(reader, writer, mentionStore, txManager),
 		delete: messagestore.NewDeleteMessageUseCase(writer),

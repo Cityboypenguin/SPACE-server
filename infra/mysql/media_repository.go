@@ -103,6 +103,54 @@ func (r *MySQLMediaRepository) CreateAnswerMediaBatch(ctx context.Context, answe
 	return r.createMediaLinks(ctx, "answer_media", "answer_id", answerID, mediaIDs, startPosition)
 }
 
+// ListStorageKeysByUploader はその利用者がアップロードした全メディアの保存先キー。
+// トランザクションの中で呼ばれる（退会者の削除）ので extractDB を通す。
+func (r *MySQLMediaRepository) ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx,
+		`SELECT storage_key FROM media WHERE uploader_user_id = ? ORDER BY id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
+// ListReportableMediaByUploader はトランザクションの中でも使えるよう extractDB を通す。
+func (r *MySQLMediaRepository) ListReportableMediaByUploader(ctx context.Context, userID int64) ([]repository.ReportableMedia, error) {
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, `
+		SELECT m.id, m.storage_key, m.content_type, ?, l.message_id FROM media m JOIN message_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?
+		UNION ALL
+		SELECT m.id, m.storage_key, m.content_type, ?, l.question_id FROM media m JOIN question_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?
+		UNION ALL
+		SELECT m.id, m.storage_key, m.content_type, ?, l.answer_id FROM media m JOIN answer_media l ON l.media_id = m.id WHERE m.uploader_user_id = ?`,
+		string(model.TargetMessage), userID, string(model.TargetQuestion), userID, string(model.TargetAnswer), userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []repository.ReportableMedia
+	for rows.Next() {
+		var item repository.ReportableMedia
+		var targetType string
+		if err := rows.Scan(&item.MediaID, &item.StorageKey, &item.ContentType, &targetType, &item.TargetID); err != nil {
+			return nil, err
+		}
+		item.TargetType = model.ReportTargetType(targetType)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) ([]*model.Media, error) {
 	query := `
 		SELECT m.id, m.uploader_user_id, m.storage_key, m.content_type, m.width, m.height, m.created_at
@@ -131,34 +179,11 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 }
 
 // DeleteMediaByIDAndUserID は添付を1件消す。投稿の編集（usecase/post）が
-// 本文更新と同じ RunInTx の中から呼ぶので、隣の DeleteQuestionMedia などと同じく
-// extractDB を通す。ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても
-// 添付だけ消えたままになる。
+// 本文更新と同じ RunInTx の中から呼ぶので、extractDB を通す。
+// ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても添付だけ消えたままになる。
 func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
 	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, mediaID, userID)
-	return err
-}
-
-func (r *MySQLMediaRepository) DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error {
-	db := extractDB(ctx, r.DB)
-	query := `
-		DELETE m FROM media m
-		JOIN question_media qm ON qm.media_id = m.id
-		WHERE qm.question_id = ? AND m.id = ?
-	`
-	_, err := db.ExecContext(ctx, query, questionID, mediaID)
-	return err
-}
-
-func (r *MySQLMediaRepository) DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error {
-	db := extractDB(ctx, r.DB)
-	query := `
-		DELETE m FROM media m
-		JOIN answer_media am ON am.media_id = m.id
-		WHERE am.answer_id = ? AND m.id = ?
-	`
-	_, err := db.ExecContext(ctx, query, answerID, mediaID)
 	return err
 }
 

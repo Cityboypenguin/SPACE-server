@@ -11,6 +11,7 @@ import (
 	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 )
@@ -22,34 +23,7 @@ func (r *answerResolver) User(ctx context.Context, obj *gqlmodel.Answer) (*gqlmo
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	// 回答は質問を経由しないとルームが分からないので、匿名表示の判定に質問を引く。
-	// 引けないと授業ルームでも実名で出てしまうため、失敗は必ず残す
-	// （ID のデコード失敗は audit.LogProbe が既に記録している）。
-	//
-	// 質問は DataLoader 経由。1つの質問にぶら下がる回答は全て同じ質問を指すので、
-	// 新しいクエリが増えるのではなくリクエスト内キャッシュで1回に畳まれる
-	// （回答一覧 N 件で N クエリ → 1クエリ）。
-	qid, err := decodeGraphID(ctx, "question", obj.QuestionID)
-	if err == nil {
-		q, err := dataloader.For(ctx).QuestionLoader.Load(ctx, qid)
-		if err != nil {
-			logChatLookup(err, chatLookupQuestionRoom).
-				Int64("question_id", qid).
-				Int64("author_user_id", numericUserID).
-				Msg("failed to load the question; falling back to showing the real user")
-		} else if q != nil {
-			roomIDStr := encodeGraphID("room", q.RoomID)
-			if anon := r.anonymousUserForCourseRoom(ctx, roomIDStr, numericUserID); anon != nil {
-				return anon, nil
-			}
-		}
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // Media is the resolver for the media field.
@@ -94,26 +68,10 @@ func (r *mutationResolver) CreateQuestion(ctx context.Context, roomID string, bo
 
 // UpdateQuestion is the resolver for the updateQuestion field.
 func (r *mutationResolver) UpdateQuestion(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Question, error) {
-	qid, err := decodeGraphID(ctx, "question", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid question id")
-	}
-
-	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
-	for _, strID := range deletedMediaIDs {
-		mediaID, err := decodeGraphID(ctx, "media", strID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid media id")
-		}
-		mediaIDs = append(mediaIDs, mediaID)
-	}
-
-	q, err := r.UpdateQuestionUseCase.Execute(ctx, qid, body, mediaIDs)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	return toGraphQuestion(q), nil
+	return nil, apperr.InvalidInput("質問は編集できません")
 }
 
 // DeleteQuestion is the resolver for the deleteQuestion field.
@@ -148,27 +106,10 @@ func (r *mutationResolver) AnswerQuestion(ctx context.Context, questionID string
 
 // UpdateAnswer is the resolver for the updateAnswer field.
 func (r *mutationResolver) UpdateAnswer(ctx context.Context, id string, body string, deletedMediaIDs []string) (*gqlmodel.Answer, error) {
-	aid, err := decodeGraphID(ctx, "answer", id)
-	if err != nil {
-		return nil, fmt.Errorf("invalid answer id")
-	}
-
-	mediaIDs := make([]int64, 0, len(deletedMediaIDs))
-	for _, strID := range deletedMediaIDs {
-		mediaID, err := decodeGraphID(ctx, "media", strID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid media id")
-		}
-		mediaIDs = append(mediaIDs, mediaID)
-	}
-
-	aw, err := r.UpdateAnswerUseCase.Execute(ctx, aid, body, mediaIDs)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
-
-	gqlA := toGraphAnswerWithLikes(aw)
-	return gqlA, nil
+	return nil, apperr.InvalidInput("回答は編集できません")
 }
 
 // DeleteAnswer is the resolver for the deleteAnswer field.
@@ -325,29 +266,7 @@ func (r *pollResolver) User(ctx context.Context, obj *gqlmodel.Poll) (*gqlmodel.
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
-		// 投票の「先生からの投票」表示のため、匿名化しつつも role だけは実ユーザーのものを
-		// 引き継ぐ(name/avatarUrl/ID等は匿名IDのまま個人を特定できないようにする)。
-		//
-		// 引けなくても匿名表示のまま返す（role が既定値になるだけで匿名性は壊れない）。
-		// ただし「先生からの投票」バッジが黙って消えるのは気づきにくいのでログに残す。
-		u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-		if err != nil {
-			logChatLookup(err, chatLookupPollAuthorRole).
-				Str("poll_id", obj.ID).
-				Int64("author_user_id", numericUserID).
-				Msg("failed to load the poll author; the role badge falls back to the default")
-		} else if u != nil {
-			anon.Role = u.Role
-		}
-		return anon, nil
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // Options is the resolver for the options field.
@@ -365,9 +284,14 @@ func (r *pollResolver) Options(ctx context.Context, obj *gqlmodel.Poll) ([]*gqlm
 		return nil, err
 	}
 
+	hidden := pollResultsHidden(ctx, obj, results, time.Now())
 	out := make([]*gqlmodel.PollOption, 0, len(results))
 	for _, res := range results {
-		out = append(out, toGraphPollOption(res))
+		opt := toGraphPollOption(res)
+		if hidden {
+			opt.VoteCount = 0
+		}
+		out = append(out, opt)
 	}
 	return out, nil
 }
@@ -500,15 +424,7 @@ func (r *questionResolver) User(ctx context.Context, obj *gqlmodel.Question) (*g
 		return nil, fmt.Errorf("invalid user id: %s", obj.User.ID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericUserID); anon != nil {
-		return anon, nil
-	}
-
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericUserID)
-	if err != nil || u == nil {
-		return nil, err
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericUserID)
 }
 
 // BestAnswer is the resolver for the bestAnswer field.
@@ -683,3 +599,55 @@ type (
 	pollResolver     struct{ *Resolver }
 	questionResolver struct{ *Resolver }
 )
+
+// AddQuestionAddendum is the resolver for the addQuestionAddendum field.
+func (r *mutationResolver) AddQuestionAddendum(ctx context.Context, questionID string, body string) (*gqlmodel.Question, error) {
+	qid, err := decodeGraphID(ctx, "question", questionID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid question id")
+	}
+	q, err := r.Addenda.AddToQuestion(ctx, qid, body)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphQuestion(q), nil
+}
+
+// AddAnswerAddendum is the resolver for the addAnswerAddendum field.
+func (r *mutationResolver) AddAnswerAddendum(ctx context.Context, answerID string, body string) (*gqlmodel.Answer, error) {
+	aid, err := decodeGraphID(ctx, "answer", answerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid answer id")
+	}
+	aw, err := r.Addenda.AddToAnswer(ctx, aid, body)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAnswerWithLikes(aw), nil
+}
+
+// Addenda is the resolver for the addenda field.
+func (r *questionResolver) Addenda(ctx context.Context, obj *gqlmodel.Question) ([]*gqlmodel.Addendum, error) {
+	numericID, err := decodeGraphID(ctx, "question", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	list, err := dataloader.For(ctx).QuestionAddendaLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAddenda("question_addendum", list), nil
+}
+
+// Addenda is the resolver for the addenda field.
+func (r *answerResolver) Addenda(ctx context.Context, obj *gqlmodel.Answer) ([]*gqlmodel.Addendum, error) {
+	numericID, err := decodeGraphID(ctx, "answer", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	list, err := dataloader.For(ctx).AnswerAddendaLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphAddenda("answer_addendum", list), nil
+}

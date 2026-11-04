@@ -165,7 +165,7 @@ func TestRecordSession_BulkInsertMatchesOneAtATime(t *testing.T) {
 		t.Fatalf("/dm: got %+v, want %+v", got["/dm"], want)
 	}
 
-	// 2セッション目も同じ行へ積み上がる。
+	// 2回目の送信も同じ行へ積み上がる。
 	if err := repo.RecordSession(ctx, 1, 15, []repository.PageViewInput{
 		{Path: "/timeline", DurationSeconds: 7, MaxScrollDepth: 5},
 	}); err != nil {
@@ -183,7 +183,79 @@ func TestRecordSession_BulkInsertMatchesOneAtATime(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT session_count FROM user_session_summaries`).Scan(&sessions); err != nil {
 		t.Fatalf("failed to read user_session_summaries: %v", err)
 	}
-	if sessions != 2 {
-		t.Fatalf("expected 2 sessions recorded, got %d", sessions)
+	// 間を空けずに送られたぶんは同じセッション（TestRecordSession_CountsOnlyAfterGap）。
+	if sessions != 1 {
+		t.Fatalf("expected 1 session recorded, got %d", sessions)
+	}
+}
+
+// タブの切り替えで何度送られても、間が30分空くまでは1セッションのまま。滞在時間は足し込む。
+func TestRecordSession_CountsOnlyAfterGap(t *testing.T) {
+	db, cleanup := favoriteTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	for _, stmt := range []string{
+		`DROP TABLE IF EXISTS user_session_summaries`,
+		`CREATE TABLE user_session_summaries (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, date DATE NOT NULL, session_count INT NOT NULL DEFAULT 0, total_duration_seconds BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY unique_user_date (user_id, date))`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := NewMySQLSessionRepository(db)
+	read := func() (count, total int) {
+		t.Helper()
+		if err := db.QueryRow(`SELECT session_count, total_duration_seconds FROM user_session_summaries WHERE user_id = 1`).Scan(&count, &total); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := repo.RecordSession(ctx, 1, 10, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count, total := read(); count != 1 || total != 20 {
+		t.Fatalf("after two sends within the gap: count=%d total=%d, want 1, 20", count, total)
+	}
+
+	if _, err := db.Exec(`UPDATE user_session_summaries SET updated_at = updated_at - ?`, sessionGapSeconds+1); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RecordSession(ctx, 1, 10, nil); err != nil {
+		t.Fatal(err)
+	}
+	if count, total := read(); count != 2 || total != 30 {
+		t.Fatalf("after the gap: count=%d total=%d, want 2, 30", count, total)
+	}
+}
+
+// タブへ戻って続きを見たぶんは、閲覧数と深さの平均を動かさず滞在時間だけ足す。
+func TestRecordSession_ResumedKeepsViewCount(t *testing.T) {
+	db, cleanup := favoriteTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	for _, stmt := range []string{
+		`CREATE TABLE user_session_summaries (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, date DATE NOT NULL, session_count INT NOT NULL DEFAULT 0, total_duration_seconds BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY unique_user_date (user_id, date))`,
+		`CREATE TABLE page_view_stats (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, date DATE NOT NULL, page_path VARCHAR(255) NOT NULL, view_count INT NOT NULL DEFAULT 0, total_duration_seconds BIGINT NOT NULL DEFAULT 0, total_max_scroll_depth BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY u (user_id, date, page_path))`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := NewMySQLSessionRepository(db)
+	if err := repo.RecordSession(ctx, 1, 10, []repository.PageViewInput{{Path: "/home", DurationSeconds: 10, MaxScrollDepth: 50}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RecordSession(ctx, 1, 5, []repository.PageViewInput{{Path: "/home", DurationSeconds: 5, MaxScrollDepth: 80, Resumed: true}}); err != nil {
+		t.Fatal(err)
+	}
+	var views, duration, scroll int
+	if err := db.QueryRow(`SELECT view_count, total_duration_seconds, total_max_scroll_depth FROM page_view_stats`).Scan(&views, &duration, &scroll); err != nil {
+		t.Fatal(err)
+	}
+	if views != 1 || duration != 15 || scroll != 50 {
+		t.Fatalf("views=%d duration=%d scroll=%d, want 1, 15, 50", views, duration, scroll)
 	}
 }

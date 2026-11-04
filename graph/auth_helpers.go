@@ -49,10 +49,9 @@ func denyNotVisible(ctx context.Context, action string, target string, targetID 
 	return apperr.Forbidden("forbidden")
 }
 
-// isCallerID reports whether userGraphID (an opaque "user"-kind ID, decoded before
-// any per-room anonymization is applied) refers to the currently authenticated
-// caller. Used to compute isMine on Message/Question/Answer so the frontend can
-// tell its own posts apart even when the author is displayed anonymously.
+// isCallerID reports whether userGraphID (an opaque "user"-kind ID) refers to the
+// currently authenticated caller. Used to compute isMine on Message/Question/Answer
+// so the frontend can tell its own posts apart.
 func isCallerID(ctx context.Context, userGraphID string) bool {
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {

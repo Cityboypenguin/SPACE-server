@@ -79,10 +79,6 @@ func kickedUserIDs(updates []communityusecase.MemberUpdate) []int64 {
 // チャット表示まわりで「取れなくても画面は返す」取得の失敗ログに使う lookup 名。
 // 配信側の chatDelivery* と同じく、grep する側が経路で絞れるよう1箇所に集める。
 const (
-	chatLookupCourseRoom         = "course_room_lookup"
-	chatLookupAnonymousLabel     = "anonymous_label_lookup"
-	chatLookupQuestionRoom       = "question_room_lookup"
-	chatLookupPollAuthorRole     = "poll_author_role_lookup"
 	chatLookupBlockRelation      = "block_relation_lookup"
 	chatLookupBlockedUserIDs     = "blocked_user_ids_lookup"
 	chatLookupLastMessages       = "last_messages_lookup"

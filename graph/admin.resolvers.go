@@ -8,6 +8,8 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/infra/scraper"
@@ -16,6 +18,7 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 )
 
 // CreateAdministrator is the resolver for the createAdministrator field.
@@ -107,8 +110,8 @@ func (r *mutationResolver) RefreshAdministratorToken(ctx context.Context, refres
 }
 
 // LogoutAdministrator is the resolver for the logoutAdministrator field.
-func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string) (bool, error) {
-	if err := r.LogoutAdministratorUseCase.Execute(ctx, token); err != nil {
+func (r *mutationResolver) LogoutAdministrator(ctx context.Context, token string, refreshToken *string) (bool, error) {
+	if err := r.LogoutAdministratorUseCase.Execute(ctx, token, refreshToken); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -227,37 +230,65 @@ func (r *mutationResolver) AdminDeleteQuestion(ctx context.Context, id string) (
 }
 
 // AdminTriggerCourseImport is the resolver for the adminTriggerCourseImport field.
-func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32) (*gqlmodel.CourseImportStatus, error) {
+func (r *mutationResolver) AdminTriggerCourseImport(ctx context.Context, year int32, dryRun *bool) (*gqlmodel.CourseImportStatus, error) {
 	claims, err := requireAdminAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	status, err := r.CourseImportTracker.Start(int(year), func(bgCtx context.Context, reportProgress func(processed, total int)) (int, int, error) {
+	isDryRun := dryRun != nil && *dryRun
+	status, err := r.CourseImportTracker.StartRun(int(year), isDryRun, func(bgCtx context.Context, reportProgress func(processed, total int)) (courseimport.Outcome, error) {
 		bgCtx = auth.WithClaims(bgCtx, claims)
+		startedAt := time.Now()
 		knownDedupKeys, err := r.ListDedupKeysByYearUseCase.Execute(bgCtx, int(year))
 		if err != nil {
-			return 0, 0, err
+			return courseimport.Outcome{}, err
 		}
 
 		sc, err := scraper.NewSenshuSyllabusScraper()
 		if err != nil {
-			return 0, 0, err
+			return courseimport.Outcome{}, err
 		}
 		defer sc.Close()
-		scraped, skippedRows, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys, reportProgress)
+		fetched, err := sc.FetchCourses(bgCtx, int(year), knownDedupKeys, reportProgress)
 		if err != nil {
-			return 0, skippedRows, err
+			return courseimport.Outcome{}, err
 		}
-		result, err := r.ImportCoursesUseCase.Execute(bgCtx, scraped)
+		run, err := r.SyncCoursesUseCase.Execute(bgCtx, courseusecase.SyncCoursesInput{
+			Year:         int(year),
+			DryRun:       isDryRun,
+			Courses:      fetched.Courses,
+			Completeness: fetched.Completeness,
+			StartedAt:    startedAt,
+		})
 		if err != nil {
-			return 0, skippedRows, err
+			return courseimport.Outcome{}, err
 		}
-		return result.Imported, skippedRows + result.Skipped, nil
+		return courseimport.Outcome{
+			Imported: run.Created,
+			Skipped:  fetched.SkippedSlots + run.Unchanged,
+			RunID:    run.ID,
+		}, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return toGraphCourseImportStatus(status), nil
+}
+
+// AdminResolveCourseSyncReview is the resolver for the adminResolveCourseSyncReview field.
+func (r *mutationResolver) AdminResolveCourseSyncReview(ctx context.Context, id string, decision gqlmodel.CourseSyncReviewDecision) (*gqlmodel.CourseSyncReview, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_review", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync review id")
+	}
+	review, err := r.CourseSyncAdminUseCase.ResolveReview(ctx, numericID, model.CourseSyncReviewStatus(decision))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCourseSyncReview(review), nil
 }
 
 // AdminCreateCourse is the resolver for the adminCreateCourse field.
@@ -381,6 +412,18 @@ func (r *mutationResolver) ToggleMaintenanceMode(ctx context.Context, enabled bo
 	return enabled, nil
 }
 
+// ToggleCourseChat is the resolver for the toggleCourseChat field.
+func (r *mutationResolver) ToggleCourseChat(ctx context.Context, enabled bool) (bool, error) {
+	if err := r.ManageSystemSettingUsecase.SetCourseChatEnabled(ctx, enabled); err != nil {
+		return false, err
+	}
+	// 授業チャットを開いたままの画面に、停止・再開を知らせて表示を切り替えさせる。
+	if r.SSEBroker != nil {
+		r.SSEBroker.Broadcast("course_chat_status", map[string]any{"enabled": enabled})
+	}
+	return enabled, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -389,6 +432,7 @@ func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel
 			Path:            pv.Path,
 			DurationSeconds: int(pv.DurationSeconds),
 			MaxScrollDepth:  int(pv.MaxScrollDepth),
+			Resumed:         pv.Resumed != nil && *pv.Resumed,
 		}
 	}
 	if err := r.RecordSessionUseCase.Execute(ctx, int(input.SessionDurationSeconds), pageViews); err != nil {
@@ -478,6 +522,14 @@ func (r *queryResolver) MaintenanceMode(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return r.MaintenanceFlag.Load(), nil
+}
+
+// CourseChatEnabled is the resolver for the courseChatEnabled field.
+func (r *queryResolver) CourseChatEnabled(ctx context.Context) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.ManageSystemSettingUsecase.IsCourseChatEnabled(ctx)
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.
@@ -617,8 +669,96 @@ func (r *queryResolver) AdminGetCourse(ctx context.Context, id string) (*gqlmode
 	return gqlCourse, nil
 }
 
+// AdminListCommunities is the resolver for the adminListCommunities field.
+func (r *queryResolver) AdminListCommunities(ctx context.Context, keyword *string, sortBy *gqlmodel.AdminCommunitySortField, sortOrder *gqlmodel.SortOrder, limit *int32, offset *int32) (*gqlmodel.AdminCommunityPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	filter := repository.AdminCommunityFilter{SortBy: repository.CommunitySortCreatedAt, Desc: true}
+	if keyword != nil {
+		filter.Keyword = *keyword
+	}
+	if sortBy != nil {
+		switch *sortBy {
+		case gqlmodel.AdminCommunitySortFieldName:
+			filter.SortBy = repository.CommunitySortName
+		case gqlmodel.AdminCommunitySortFieldMemberCount:
+			filter.SortBy = repository.CommunitySortMemberCount
+		}
+	}
+	if sortOrder != nil {
+		filter.Desc = *sortOrder == gqlmodel.SortOrderDesc
+	}
+
+	communities, total, err := r.AdminListCommunitiesUseCase.Execute(ctx, filter, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items, err := r.toGraphAdminCommunities(ctx, communities,
+		fieldRequested(ctx, "items", "community", "memberCount"), fieldRequested(ctx, "items", "owner"))
+	if err != nil {
+		return nil, err
+	}
+	return &gqlmodel.AdminCommunityPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminGetCommunity is the resolver for the adminGetCommunity field.
+func (r *queryResolver) AdminGetCommunity(ctx context.Context, id string) (*gqlmodel.AdminCommunity, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "community", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid community id")
+	}
+	c, err := r.GetCommunityUseCase.Execute(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, nil
+	}
+	items, err := r.toGraphAdminCommunities(ctx, []*model.Community{c},
+		fieldRequested(ctx, "community", "memberCount"), fieldRequested(ctx, "owner"))
+	if err != nil {
+		return nil, err
+	}
+	return items[0], nil
+}
+
+// AdminListPosts is the resolver for the adminListPosts field.
+func (r *queryResolver) AdminListPosts(ctx context.Context, keyword *string, status *gqlmodel.AdminPostStatus, limit *int32, offset *int32) (*gqlmodel.PostPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	filter := repository.AdminPostFilter{}
+	if keyword != nil {
+		filter.Keyword = *keyword
+	}
+	if status != nil {
+		switch *status {
+		case gqlmodel.AdminPostStatusActive:
+			filter.Status = repository.AdminPostStatusActive
+		case gqlmodel.AdminPostStatusDeleted:
+			filter.Status = repository.AdminPostStatusDeleted
+		}
+	}
+
+	posts, total, err := r.AdminListPostsUseCase.Execute(ctx, filter, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.Post, 0, len(posts))
+	for _, post := range posts {
+		items = append(items, toGraphPost(post))
+	}
+	return &gqlmodel.PostPage{Items: items, Total: int32(total)}, nil
+}
+
 // AdminListCourses is the resolver for the adminListCourses field.
-func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
+func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semester *string, dayOfWeek *string, keyword *string, sortBy *string, sortOrder *gqlmodel.SortOrder, limit *int32, offset *int32) (*gqlmodel.CoursePage, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -632,11 +772,20 @@ func (r *queryResolver) AdminListCourses(ctx context.Context, year *int32, semes
 	if keyword != nil {
 		kw = *keyword
 	}
+
+	var sortOrderStr *string
+	if sortOrder != nil {
+		s := string(*sortOrder)
+		sortOrderStr = &s
+	}
+
 	items, total, err := r.ListCoursesUseCase.Execute(ctx, courseusecase.ListCoursesParam{
 		Year:      y,
 		Semester:  semester,
 		DayOfWeek: dayOfWeek,
 		Keyword:   kw,
+		SortBy:    sortBy,
+		SortOrder: sortOrderStr,
 		Page:      resolvePageQuery(ctx, limit, offset, defaultPageSize),
 	})
 	if err != nil {
@@ -685,4 +834,296 @@ func (r *subscriptionResolver) AdminCourseImportStatusUpdated(ctx context.Contex
 			return toGraphCourseImportStatus(status), true
 		},
 	), nil
+}
+
+// AdminCourseSyncRuns is the resolver for the adminCourseSyncRuns field.
+func (r *queryResolver) AdminCourseSyncRuns(ctx context.Context, year *int32, limit *int32, offset *int32) (*gqlmodel.CourseSyncRunPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	var y *int
+	if year != nil {
+		v := int(*year)
+		y = &v
+	}
+	runs, total, err := r.CourseSyncAdminUseCase.ListRuns(ctx, y, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncRun, 0, len(runs))
+	for _, run := range runs {
+		items = append(items, toGraphCourseSyncRun(run))
+	}
+	return &gqlmodel.CourseSyncRunPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCourseSyncRun is the resolver for the adminCourseSyncRun field.
+func (r *queryResolver) AdminCourseSyncRun(ctx context.Context, id string) (*gqlmodel.CourseSyncRun, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_run", id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync run id")
+	}
+	run, err := r.CourseSyncAdminUseCase.GetRun(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphCourseSyncRun(run), nil
+}
+
+// AdminCourseSyncChanges is the resolver for the adminCourseSyncChanges field.
+func (r *queryResolver) AdminCourseSyncChanges(ctx context.Context, runID string, kind *gqlmodel.CourseSyncChangeKind, limit *int32, offset *int32) (*gqlmodel.CourseSyncChangePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	numericID, err := decodeGraphID(ctx, "course_sync_run", runID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course sync run id")
+	}
+	var k *model.CourseSyncChangeKind
+	if kind != nil {
+		v := model.CourseSyncChangeKind(*kind)
+		k = &v
+	}
+	changes, total, err := r.CourseSyncAdminUseCase.ListChanges(ctx, numericID, k, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncChange, 0, len(changes))
+	for _, c := range changes {
+		items = append(items, toGraphCourseSyncChange(c))
+	}
+	return &gqlmodel.CourseSyncChangePage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCourseSyncReviews is the resolver for the adminCourseSyncReviews field.
+func (r *queryResolver) AdminCourseSyncReviews(ctx context.Context, year *int32, status *gqlmodel.CourseSyncReviewStatus, limit *int32, offset *int32) (*gqlmodel.CourseSyncReviewPage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	param := repository.ListCourseSyncReviewsParam{Page: resolvePageQuery(ctx, limit, offset, defaultPageSize)}
+	if year != nil {
+		v := int(*year)
+		param.Year = &v
+	}
+	if status != nil {
+		v := model.CourseSyncReviewStatus(*status)
+		param.Status = &v
+	}
+	reviews, total, err := r.CourseSyncAdminUseCase.ListReviews(ctx, param)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*gqlmodel.CourseSyncReview, 0, len(reviews))
+	for _, rv := range reviews {
+		items = append(items, toGraphCourseSyncReview(rv))
+	}
+	return &gqlmodel.CourseSyncReviewPage{Items: items, Total: int32(total)}, nil
+}
+
+// AdminCreateNGWord is the resolver for the adminCreateNGWord field.
+func (r *mutationResolver) AdminCreateNGWord(ctx context.Context, pattern string, matchType gqlmodel.NGWordMatchType) (*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	w, err := r.NGWordAdmin.Create(ctx, pattern, fromGraphNGWordMatchType(matchType))
+	if err != nil {
+		return nil, err
+	}
+	return toGraphNGWord(w), nil
+}
+
+// AdminDeleteNGWord is the resolver for the adminDeleteNGWord field.
+func (r *mutationResolver) AdminDeleteNGWord(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "ng_word", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid ng word id")
+	}
+	return r.NGWordAdmin.Delete(ctx, numericID)
+}
+
+// AdminNGWords is the resolver for the adminNGWords field.
+func (r *queryResolver) AdminNGWords(ctx context.Context) ([]*gqlmodel.NGWord, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	words, err := r.NGWordAdmin.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.NGWord, 0, len(words))
+	for _, w := range words {
+		out = append(out, toGraphNGWord(w))
+	}
+	return out, nil
+}
+
+// AdminNGWordStats is the resolver for the adminNGWordStats field.
+func (r *queryResolver) AdminNGWordStats(ctx context.Context) (*gqlmodel.NGWordStats, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	stats, err := r.NGWordAdmin.Stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.NGWordStats{
+		Total:  int32(stats.Total),
+		ByWord: make([]*gqlmodel.NGWordCount, 0, len(stats.ByWord)),
+		ByUser: make([]*gqlmodel.NGWordUserCount, 0, len(stats.ByUser)),
+	}
+	for _, c := range stats.ByWord {
+		out.ByWord = append(out.ByWord, &gqlmodel.NGWordCount{Pattern: c.Pattern, Count: int32(c.Count)})
+	}
+	for _, c := range stats.ByUser {
+		out.ByUser = append(out.ByUser, &gqlmodel.NGWordUserCount{
+			UserID:    encodeGraphID("user", c.UserID),
+			Name:      c.Name,
+			AccountID: c.AccountID,
+			Count:     int32(c.Count),
+		})
+	}
+	return out, nil
+}
+
+// AdminDeleteQuestionAddendum is the resolver for the adminDeleteQuestionAddendum field.
+func (r *mutationResolver) AdminDeleteQuestionAddendum(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "question_addendum", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid addendum id")
+	}
+	return r.Addenda.DeleteFromQuestion(ctx, numericID)
+}
+
+// AdminDeleteAnswerAddendum is the resolver for the adminDeleteAnswerAddendum field.
+func (r *mutationResolver) AdminDeleteAnswerAddendum(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "answer_addendum", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid addendum id")
+	}
+	return r.Addenda.DeleteFromAnswer(ctx, numericID)
+}
+
+// AdminDeleteCourseChatImage is the resolver for the adminDeleteCourseChatImage field.
+func (r *mutationResolver) AdminDeleteCourseChatImage(ctx context.Context, mediaID string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "media", mediaID)
+	if err != nil {
+		return false, fmt.Errorf("invalid media id")
+	}
+	if err := r.CourseImages.Delete(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// AdminRestoreCourseChatImage is the resolver for the adminRestoreCourseChatImage field.
+func (r *mutationResolver) AdminRestoreCourseChatImage(ctx context.Context, mediaID string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "media", mediaID)
+	if err != nil {
+		return false, fmt.Errorf("invalid media id")
+	}
+	if err := r.CourseImages.Restore(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// AdminListRemovedCourseChatImages is the resolver for the adminListRemovedCourseChatImages field.
+func (r *queryResolver) AdminListRemovedCourseChatImages(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource, limit *int32, offset *int32) (*gqlmodel.AdminRemovedCourseChatImagePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	filter, err := courseChatImageFilter(ctx, roomID, source)
+	if err != nil {
+		return nil, err
+	}
+	pq := resolvePageQuery(ctx, limit, offset, 24)
+	items, total, err := r.CourseImages.ListRemoved(ctx, filter, pq.Limit, pq.Offset)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.AdminRemovedCourseChatImagePage{Total: int32(total), Items: make([]*gqlmodel.AdminRemovedCourseChatImage, 0, len(items))}
+	for _, img := range items {
+		g := &gqlmodel.AdminRemovedCourseChatImage{
+			ID:                encodeGraphID("media", img.MediaID),
+			Source:            gqlmodel.CourseChatImageSource(strings.ToUpper(string(img.Source))),
+			URL:               r.messageMediaURL(img.RemovedKey),
+			RoomID:            encodeGraphID("room", img.RoomID),
+			CourseName:        img.CourseName,
+			UploaderID:        encodeGraphID("user", img.Uploader.ID),
+			UploaderName:      img.Uploader.Name,
+			UploaderAccountID: img.Uploader.AccountID,
+			CreatedAt:         img.CreatedAt.Format(timeFormat),
+			RemovedAt:         img.RemovedAt.Format(timeFormat),
+			Reported:          img.Reported,
+		}
+		if !img.Reported {
+			expiresAt := img.RemovedAt.Add(courseimageusecase.RemovedRetention).Format(timeFormat)
+			g.ExpiresAt = &expiresAt
+		}
+		out.Items = append(out.Items, g)
+	}
+	return out, nil
+}
+
+// AdminListCourseChatImages is the resolver for the adminListCourseChatImages field.
+func (r *queryResolver) AdminListCourseChatImages(ctx context.Context, roomID *string, source *gqlmodel.CourseChatImageSource, limit *int32, offset *int32) (*gqlmodel.AdminCourseChatImagePage, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	filter, err := courseChatImageFilter(ctx, roomID, source)
+	if err != nil {
+		return nil, err
+	}
+	pq := resolvePageQuery(ctx, limit, offset, 24)
+	items, total, err := r.CourseImages.List(ctx, filter, pq.Limit, pq.Offset)
+	if err != nil {
+		return nil, err
+	}
+	out := &gqlmodel.AdminCourseChatImagePage{Total: int32(total), Items: make([]*gqlmodel.AdminCourseChatImage, 0, len(items))}
+	for _, img := range items {
+		url := r.StorageRepository.PublicURL(img.Media.StorageKey)
+		if img.Source == model.CourseChatImageSourceMessage {
+			url = r.messageMediaURL(img.Media.StorageKey)
+		}
+		g := &gqlmodel.AdminCourseChatImage{
+			ID:                encodeGraphID("media", img.Media.ID),
+			Source:            gqlmodel.CourseChatImageSource(strings.ToUpper(string(img.Source))),
+			URL:               url,
+			RoomID:            encodeGraphID("room", img.RoomID),
+			CourseName:        img.CourseName,
+			UploaderID:        encodeGraphID("user", img.Uploader.ID),
+			UploaderName:      img.Uploader.Name,
+			UploaderAccountID: img.Uploader.AccountID,
+			TargetDeleted:     img.TargetDeleted,
+			CreatedAt:         img.Media.CreatedAt.Format(timeFormat),
+		}
+		if img.Media.Width != nil {
+			w := int32(*img.Media.Width)
+			g.Width = &w
+		}
+		if img.Media.Height != nil {
+			h := int32(*img.Media.Height)
+			g.Height = &h
+		}
+		out.Items = append(out.Items, g)
+	}
+	return out, nil
 }

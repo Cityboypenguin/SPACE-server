@@ -1,0 +1,40 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - Develop
+      - main
+  workflow_call:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -ppass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Vet
+        run: go vet ./...
+      # SPACE_TEST_MYSQL_DSN が無いとマイグレーションと SQL のテストは飛ばされる。
+      - name: Test
+        env:
+          SPACE_TEST_MYSQL_DSN: root:pass@tcp(127.0.0.1:3306)/
+        run: go test ./...

@@ -15,12 +15,14 @@ import (
 type CreateReportUsecase struct {
 	reportRepo  repository.ReportRepository
 	settingRepo repository.SystemSettingRepository
+	notifier    ReportCreatedNotifier
 }
 
-func NewCreateReportUsecase(reportRepo repository.ReportRepository, settingRepo repository.SystemSettingRepository) *CreateReportUsecase {
+func NewCreateReportUsecase(reportRepo repository.ReportRepository, settingRepo repository.SystemSettingRepository, notifier ReportCreatedNotifier) *CreateReportUsecase {
 	return &CreateReportUsecase{
 		reportRepo:  reportRepo,
 		settingRepo: settingRepo,
+		notifier:    notifier,
 	}
 }
 
@@ -31,6 +33,8 @@ type CreateReportInput struct {
 	Reason       string
 	CustomReason *string
 	Content      *string
+	// ReportedContent は通報時点の内容の写し。メッセージ・質問・回答・投票のときだけ渡す。
+	ReportedContent *model.ReportedContent
 }
 
 func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInput) (*model.Report, error) {
@@ -68,10 +72,13 @@ func (u *CreateReportUsecase) Execute(ctx context.Context, input CreateReportInp
 	if input.Content != nil {
 		report.PostContent = input.Content
 	}
+	report.ReportedContent = input.ReportedContent
 
 	if err := u.reportRepo.Save(ctx, report); err != nil {
 		return nil, err
 	}
+
+	u.notifier.Notify(ctx, report)
 
 	return report, nil
 }

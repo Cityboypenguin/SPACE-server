@@ -2,11 +2,11 @@ package administrator
 
 import (
 	"context"
-	"errors"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/Cityboypenguin/SPACE-server/usecase/loginguard"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -30,17 +30,34 @@ func NewLoginAdministratorUseCase(adminRepo repository.AdministratorRepository) 
 	return &LoginAdministratorInteractor{adminRepo: adminRepo}
 }
 
+type guardedLoginAdministrator struct {
+	inner LoginAdministratorUseCase
+	guard *loginguard.Guard
+}
+
+// NewGuardedLoginAdministratorUseCase は inner を、失敗が続いたアカウントを一時的に止める形で包む。
+func NewGuardedLoginAdministratorUseCase(inner LoginAdministratorUseCase, guard *loginguard.Guard) LoginAdministratorUseCase {
+	return &guardedLoginAdministrator{inner: inner, guard: guard}
+}
+
+func (uc *guardedLoginAdministrator) Execute(ctx context.Context, email, password string) (*LoginAdministratorResult, error) {
+	return loginguard.Attempt(ctx, uc.guard, loginguard.ScopeAdministrator, email, func() (*LoginAdministratorResult, error) {
+		return uc.inner.Execute(ctx, email, password)
+	})
+}
+
 func (uc *LoginAdministratorInteractor) Execute(ctx context.Context, email, password string) (*LoginAdministratorResult, error) {
 	admin, err := uc.adminRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
 	if admin == nil {
-		return nil, errors.New("invalid email or password")
+		loginguard.CompareWithoutAccount(password)
+		return nil, loginguard.ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.HashedPassword), []byte(password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, loginguard.ErrInvalidCredentials
 	}
 
 	accessToken, err := auth.GenerateAccessToken(admin.ID, "administrator")

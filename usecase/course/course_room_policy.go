@@ -34,6 +34,9 @@ func (p courseRoomWritePolicy) ensureWritable(ctx context.Context, roomID int64)
 	if c == nil {
 		return nil, nil
 	}
+	if err := EnsureCourseChatEnabled(ctx, p.settingRepo); err != nil {
+		return nil, err
+	}
 
 	if err := p.ensureCurrentSemester(ctx, c); err != nil {
 		return nil, err

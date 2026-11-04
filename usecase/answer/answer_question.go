@@ -10,8 +10,8 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	"github.com/Cityboypenguin/SPACE-server/usecase/course"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 )
 
 const MaxMediaCount = 4
@@ -30,7 +30,7 @@ type AnswerQuestionInteractor struct {
 	mediaRepo       mediaAttachRepository
 	txManager       repository.TxManager
 	requireWritable course.RequireWritableCourseRoomUseCase
-	anonIdentity    anonusecase.GetOrCreateAnonymousIdentityUseCase
+	ng              ngword.Guard
 }
 
 func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Acceptor,
@@ -39,7 +39,8 @@ func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
 	requireWritable course.RequireWritableCourseRoomUseCase,
-	anonIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase,
+	// ng は本文を保存の前に検査する。権限と存在の確認のあとに呼ぶので、投稿できない人の試行は数えない。nil なら検査しない。
+	ng ngword.Guard,
 ) AnswerQuestionUseCase {
 	return &AnswerQuestionInteractor{
 		events:          orNoop(events),
@@ -49,7 +50,7 @@ func NewAnswerQuestionUseCase(events EventPublisher, uploads uploadusecase.Accep
 		mediaRepo:       mediaRepo,
 		txManager:       txManager,
 		requireWritable: requireWritable,
-		anonIdentity:    anonIdentity,
+		ng:              ng,
 	}
 }
 
@@ -83,10 +84,8 @@ func (uc *AnswerQuestionInteractor) Execute(ctx context.Context, questionID int6
 	if _, err := uc.requireWritable.Execute(ctx, q.RoomID); err != nil {
 		return nil, err
 	}
-
-	// 匿名ID(匿名NNN)は投稿時に確定させる（質問・投票・メッセージと同じ扱い）。
-	// 詳細は usecase/chat の ensureAnonymousIdentity のコメントを参照。
-	if _, err := uc.anonIdentity.Execute(ctx, q.RoomID, claims.ID); err != nil {
+	roomID := q.RoomID
+	if err := ngword.ScreenFor(ctx, uc.ng, claims, &roomID, model.NGWordSourceAnswer, body); err != nil {
 		return nil, err
 	}
 

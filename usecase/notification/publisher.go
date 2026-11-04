@@ -28,6 +28,13 @@ const (
 	// TypeMessageMention はコミュニティチャットでの @表示名 メンション。
 	// 返信と同じく遷移先がルーム内の該当メッセージなので、投稿のメンションとは別タイプにしている。
 	TypeMessageMention NotificationType = "message_mention"
+	// TypeTimetableRemoved はシラバス同期で授業のコマが変わり、移った先のコマに別の授業を
+	// 登録していたため、その授業を時間割から外したことを知らせる（時間割は1コマ1授業）。
+	TypeTimetableRemoved NotificationType = "timetable_removed"
+	// TypeQuestionAddendum / TypeAnswerAddendum は授業内チャットの質問・回答への追記（NTF-01, NTF-02）。
+	// 遷移先は授業の質問箱の、その質問（targetType=question, targetID=質問）。
+	TypeQuestionAddendum NotificationType = "question_addendum"
+	TypeAnswerAddendum   NotificationType = "answer_addendum"
 )
 
 type TargetType string
@@ -38,6 +45,9 @@ const (
 	TargetCommunity    TargetType = "community"
 	TargetAnnouncement TargetType = "announcement"
 	TargetMessage      TargetType = "message"
+	TargetCourse       TargetType = "course"
+	// TargetQuestion は授業内チャットの質問（追記の通知の遷移先）。
+	TargetQuestion TargetType = "question"
 )
 
 type PublishParams struct {

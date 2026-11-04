@@ -34,6 +34,44 @@ func LogMessageDeleted(ctx context.Context, roomID int64, messageID int64) {
 		Int64("message_id", messageID), ctx).Send()
 }
 
+// LogThreadDeleted records an administrator deleting a chat thread together with all of its messages.
+func LogThreadDeleted(ctx context.Context, parentRoomID int64, threadRoomID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "chat_thread_deleted").
+		Int64("parent_room_id", parentRoomID).
+		Int64("thread_room_id", threadRoomID), ctx).Send()
+}
+
+// LogCourseChatImageDeleted records an administrator deleting an image from the course chat
+// (message / question / answer attachment): who (via WithActor), which media, and where it was attached.
+func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string, targetID int64, uploaderID int64, removedKey string) {
+	WithActor(logger.Log.Info().
+		Str("event", "course_chat_image_deleted").
+		Int64("media_id", mediaID).
+		Str("source", source).
+		Int64("target_id", targetID).
+		Int64("uploader_id", uploaderID).
+		Str("removed_key", removedKey), ctx).Send()
+}
+
+// LogCourseChatImageRestored records an administrator putting a removed image back.
+func LogCourseChatImageRestored(ctx context.Context, mediaID int64, source string, targetID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "course_chat_image_restored").
+		Int64("media_id", mediaID).
+		Str("source", source).
+		Int64("target_id", targetID), ctx).Send()
+}
+
+// LogAddendumDeleted records an administrator deleting one addendum of a question or an answer.
+func LogAddendumDeleted(ctx context.Context, kind string, addendumID int64, targetID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "addendum_deleted").
+		Str("kind", kind).
+		Int64("addendum_id", addendumID).
+		Int64("target_id", targetID), ctx).Send()
+}
+
 func LogProbe(ctx context.Context, action string, target string, suppliedID string, reason string) {
 	WithActor(logger.Log.Warn().
 		Str("event", "audit_probe").
@@ -41,4 +79,13 @@ func LogProbe(ctx context.Context, action string, target string, suppliedID stri
 		Str("target", target).
 		Str("supplied_id", suppliedID).
 		Str("reason", reason), ctx).Send()
+}
+
+// LogStampSaved retains the editable values so later changes do not erase the audit record.
+func LogStampSaved(ctx context.Context, id string, version int64, before, after map[string]any) {
+	WithActor(logger.Log.Info().Str("event", "chat_stamp_saved").Str("stamp_id", id).Int64("version", version).Interface("before", before).Interface("after", after), ctx).Send()
+}
+
+func LogStampsReordered(ctx context.Context, reaction bool, ids []string) {
+	WithActor(logger.Log.Info().Str("event", "chat_stamps_reordered").Bool("reaction", reaction).Strs("ids", ids), ctx).Send()
 }

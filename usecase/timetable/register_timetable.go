@@ -2,7 +2,9 @@ package timetable
 
 import (
 	"context"
+	"errors"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
@@ -30,5 +32,9 @@ func (uc *RegisterTimetableInteractor) Execute(ctx context.Context, courseID int
 	if err != nil {
 		return nil, err
 	}
-	return uc.timetableRepo.Upsert(ctx, claims.ID, courseID)
+	entry, err := uc.timetableRepo.Upsert(ctx, claims.ID, courseID)
+	if errors.Is(err, repository.ErrCourseDiscontinued) {
+		return nil, apperr.InvalidInput("廃止された授業（シラバスに掲載されなくなった授業）は新しく登録できません。")
+	}
+	return entry, err
 }

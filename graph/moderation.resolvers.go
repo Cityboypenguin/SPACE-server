@@ -62,6 +62,36 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 		return nil, fmt.Errorf("invalid target id")
 	}
 
+	switch input.TargetType {
+	case gqlmodel.ReportTargetTypeMessage, gqlmodel.ReportTargetTypeQuestion, gqlmodel.ReportTargetTypeAnswer, gqlmodel.ReportTargetTypePoll, gqlmodel.ReportTargetTypeThread:
+		res, err := r.CreateContentReportUsecase.Execute(ctx, report.CreateContentReportInput{
+			ReporterID:   claims.ID,
+			TargetType:   model.ReportTargetType(input.TargetType),
+			TargetID:     numericTargetID,
+			Reason:       input.Reason,
+			CustomReason: input.CustomReason,
+		})
+		if err != nil {
+			return nil, err
+		}
+		reporter, err := r.GetUserByIDUseCase.Execute(ctx, claims.ID)
+		if err != nil || reporter == nil {
+			return nil, fmt.Errorf("failed to fetch reporter")
+		}
+		// reportedContent は返さない。通報時点の写しを読めるのは管理者だけ。
+		return &gqlmodel.UserReport{
+			ID:           res.ID,
+			TargetType:   input.TargetType,
+			TargetID:     encodeGraphID(kind, numericTargetID),
+			Reason:       res.Reason,
+			CustomReason: res.CustomReason,
+			Status:       gqlmodel.ReportStatusPending,
+			Reporter:     toGraphUser(reporter),
+			CreatedAt:    res.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+		}, nil
+	}
+
 	var snapshotContent *string
 
 	if strings.ToUpper(string(input.TargetType)) == "POST" || input.TargetType == "post" {
@@ -117,31 +147,39 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 		r.InvalidateAnalyticsSummary()
 	}
 
+	// 更新は済んでいるので、通報者が退会済みでも失敗にしない。
 	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
-	if err != nil || reporter == nil {
+	if err != nil {
 		return nil, fmt.Errorf("failed to fetch reporter")
 	}
+	return r.toGraphUserReport(ctx, res, reporter), nil
+}
 
-	targetType := gqlmodel.ReportTargetType(res.TargetType)
-	targetID := res.TargetID
-	if kind := reportTargetKind(targetType); kind != "" {
-		if numericID, err := strconv.ParseInt(res.TargetID, 10, 64); err == nil {
-			targetID = encodeGraphID(kind, numericID)
-		}
+// AddReportNotificationRecipient is the resolver for the addReportNotificationRecipient field.
+func (r *mutationResolver) AddReportNotificationRecipient(ctx context.Context, email string) (*gqlmodel.ReportNotificationRecipient, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
 	}
+	recipient, err := r.ManageNotificationRecipientUsecase.Add(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphReportNotificationRecipient(recipient), nil
+}
 
-	return &gqlmodel.UserReport{
-		ID:           res.ID,
-		TargetType:   targetType,
-		TargetID:     targetID,
-		Reason:       res.Reason,
-		CustomReason: res.CustomReason,
-		Status:       status,
-		Reporter:     toGraphUser(reporter),
-		Content:      res.PostContent,
-		CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
-	}, nil
+// RemoveReportNotificationRecipient is the resolver for the removeReportNotificationRecipient field.
+func (r *mutationResolver) RemoveReportNotificationRecipient(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "report_notification_recipient", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid recipient id")
+	}
+	if err := r.ManageNotificationRecipientUsecase.Remove(ctx, numericID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // CreateInquiry is the resolver for the createInquiry field.
@@ -257,19 +295,55 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 		}
 
 		gqlReports = append(gqlReports, &gqlmodel.UserReport{
-			ID:           res.ID,
-			TargetType:   targetType,
-			TargetID:     targetID,
-			Reason:       res.Reason,
-			CustomReason: res.CustomReason,
-			Status:       gqlmodel.ReportStatus(res.Status),
-			Reporter:     reporterUser,
-			Content:      reportContent,
-			CreatedAt:    res.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:    res.UpdatedAt.Format(time.RFC3339),
+			ID:              res.ID,
+			TargetType:      targetType,
+			TargetID:        targetID,
+			Reason:          res.Reason,
+			CustomReason:    res.CustomReason,
+			Status:          gqlmodel.ReportStatus(res.Status),
+			Reporter:        reporterUser,
+			Content:         reportContent,
+			ReportedContent: r.toGraphReportedContent(ctx, res.ReportedContent),
+			CreatedAt:       res.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 	return &gqlmodel.ReportPage{Items: gqlReports, Total: int32(total)}, nil
+}
+
+// GetReport is the resolver for the getReport field.
+func (r *queryResolver) GetReport(ctx context.Context, id string) (*gqlmodel.UserReport, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	res, err := r.ManageReportUsecase.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	reporter, err := r.GetUserByIDUseCase.Execute(ctx, res.ReporterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch reporter")
+	}
+	return r.toGraphUserReport(ctx, res, reporter), nil
+}
+
+// ReportNotificationRecipients is the resolver for the reportNotificationRecipients field.
+func (r *queryResolver) ReportNotificationRecipients(ctx context.Context) ([]*gqlmodel.ReportNotificationRecipient, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return nil, err
+	}
+	recipients, err := r.ManageNotificationRecipientUsecase.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gqlmodel.ReportNotificationRecipient, 0, len(recipients))
+	for _, recipient := range recipients {
+		out = append(out, toGraphReportNotificationRecipient(recipient))
+	}
+	return out, nil
 }
 
 // SearchInquiries is the resolver for the searchInquiries field.

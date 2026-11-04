@@ -13,10 +13,14 @@
 
 type Query {
   maintenanceMode: Boolean!
+  # 授業チャットが一括停止されていないか。利用者の画面も停止中の表示に使うので、
+  # ログインしていれば誰でも読める。切り替えは SSE の course_chat_status で届く。
+  courseChatEnabled: Boolean!
 }
 
 type Mutation {
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
+  toggleCourseChat(enabled: Boolean!): Boolean!
 }
 
 type Subscription {

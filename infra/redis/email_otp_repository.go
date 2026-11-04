@@ -32,7 +32,14 @@ func emailOTPRateKey(email string) string {
 	return otpRateLimitPrefix + strings.ToLower(strings.TrimSpace(email))
 }
 
+func emailOTPAttemptsKey(email string) string {
+	return "email_otp_attempts:" + strings.ToLower(strings.TrimSpace(email))
+}
+
 func (r *RedisEmailOTPRepository) Save(ctx context.Context, otp *model.EmailOTP) error {
+	if err := r.client.Del(ctx, emailOTPAttemptsKey(otp.Email)).Err(); err != nil {
+		return err
+	}
 	return r.client.Set(ctx, emailOTPKey(otp.Email), otp.Code, otpTTL).Err()
 }
 
@@ -57,6 +64,21 @@ func (r *RedisEmailOTPRepository) FindLatestByEmail(ctx context.Context, email s
 
 func (r *RedisEmailOTPRepository) Delete(ctx context.Context, email string) error {
 	return r.client.Del(ctx, emailOTPKey(email)).Err()
+}
+
+var recordEmailOTPFailureScript = redis.NewScript(`
+local failures = redis.call('INCR', KEYS[2])
+if failures == 1 then
+  redis.call('PEXPIRE', KEYS[2], ARGV[2])
+end
+if failures >= tonumber(ARGV[1]) then
+  redis.call('DEL', KEYS[1], KEYS[2])
+end
+return failures`)
+
+func (r *RedisEmailOTPRepository) RecordFailure(ctx context.Context, email string) error {
+	return recordEmailOTPFailureScript.Run(ctx, r.client,
+		[]string{emailOTPKey(email), emailOTPAttemptsKey(email)}, otpMaxFailures, otpTTL.Milliseconds()).Err()
 }
 
 func (r *RedisEmailOTPRepository) TryBeginSend(ctx context.Context, email string) (bool, error) {

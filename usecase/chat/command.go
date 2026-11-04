@@ -8,18 +8,20 @@ import (
 
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/audit"
+	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/internal/logger"
 	"github.com/Cityboypenguin/SPACE-server/model"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	"github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 )
 
 // MessageCommandService はメッセージを書き換える操作（送信・編集・削除）。
 //
-// 受け持つのは「権限判定を通す → メンションを解決する → 匿名IDを確定させる →
-// 保存する → 配信・通知を出す」という順序で、判定そのものは AccessPolicy、保存
+// 受け持つのは「権限判定を通す → メンションを解決する → 保存する →
+// 配信・通知を出す」という順序で、判定そのものは AccessPolicy、保存
 // そのものは MessageWriters に居る。読み取りは MessageQueryService 側。
 type MessageCommandService interface {
 	SendMessage(ctx context.Context, in SendMessageInput) (*model.Message, error)
@@ -29,6 +31,9 @@ type MessageCommandService interface {
 
 // MessageCommandDeps は書き込み経路が実際に使うものだけ。
 type MessageCommandDeps struct {
+	Stamps interface {
+		RequireAllowed(context.Context, string, bool) error
+	}
 	// Access は権限判定。自前で membership やブロックを見に行かないこと。
 	Access AccessPolicy
 
@@ -51,11 +56,19 @@ type MessageCommandDeps struct {
 	// メッセージを作らせない）を守れるのは添付を引けるこの層だけ。
 	ListMessageMedia mediausecase.ListMediaByMessageIDsUseCase
 
-	// GetOrCreateAnonymousIdentity は授業ルームへの投稿時に匿名IDを確定させる。
-	GetOrCreateAnonymousIdentity anonusecase.GetOrCreateAnonymousIdentityUseCase
+	// NGWords は授業内チャットの投稿の前に、NGワードを検査する。nil なら検査しない。
+	NGWords ngword.Guard
+
+	// Threads はスレッドの親チャットにあるカードを引く。nil なら更新を配信しない。
+	Threads ThreadAnnouncementFinder
 
 	// Events は配信・通知の出口。nil を渡すと何もしない実装が入る。
 	Events EventPublisher
+}
+
+// ThreadAnnouncementFinder はスレッドのカードになっている親チャットのメッセージを引く口。
+type ThreadAnnouncementFinder interface {
+	AnnouncementID(ctx context.Context, roomID int64) (int64, error)
 }
 
 var _ MessageCommandService = &messageCommandService{}
@@ -67,6 +80,9 @@ type messageCommandService struct {
 func NewMessageCommandService(deps MessageCommandDeps) MessageCommandService {
 	if deps.Events == nil {
 		deps.Events = NoopEventPublisher{}
+	}
+	if deps.NGWords == nil {
+		deps.NGWords = ngword.NoopGuard{}
 	}
 	return &messageCommandService{deps: deps}
 }
@@ -82,6 +98,8 @@ type SendMessageInput struct {
 	// （message.MentionsSupported: コミュニティのみ）から判定させる。
 	MentionUserIDs []int64
 	ReplyToID      *int64
+	// StampID を渡すと、スタンプだけのメッセージを送る（本文・添付・メンションは付けられない）。
+	StampID *string
 }
 
 type UpdateMessageInput struct {
@@ -107,19 +125,33 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		return nil, err
 	}
 
+	if in.StampID != nil {
+		if s.deps.Stamps == nil {
+			return nil, apperr.InvalidInput("スタンプ管理が設定されていません")
+		}
+		if err := s.deps.Stamps.RequireAllowed(ctx, *in.StampID, false); err != nil {
+			return nil, err
+		}
+	}
+	// NGワードは授業内チャットだけが対象（スタンプには文面が無い）。管理者の投稿は止めない。
+	if err := s.screenNGWords(ctx, claims, access.Room, in.Content); err != nil {
+		return nil, err
+	}
+
 	// メンションが成立するルームか（コミュニティのみ）の判定は ResolveMentions 側に
 	// あり、ここは検証済みの結果だけを保存に渡す。リゾルバから ResolveMentions を
 	// 直接呼ぶ経路は無くしてあるので、別経路から実名メンションを通す余地は無い。
-	mentions, err := s.deps.ResolveMentions.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MentionUserIDs)
+	// スタンプには本文が無いのでメンションは成立しない。黙って捨てずに、組み合わせが誤りだと返す
+	// （クライアントの送信ミスに気づけるように）。本文・添付との併用の拒否は保存側（messagestore）が持つ。
+	if in.StampID != nil && len(in.MentionUserIDs) > 0 {
+		return nil, apperr.InvalidInput("スタンプはメンションと一緒に送れません")
+	}
+	mentions, err := s.deps.ResolveMentions.Execute(ctx, access.Room.PolicyRoomID(), claims.ID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.ensureAnonymousIdentity(ctx, access.Room, claims.ID); err != nil {
-		return nil, err
-	}
-
-	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, mentions)
+	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, in.StampID, mentions)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +163,7 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		MemberIDs: access.MemberIDs,
 		HasMedia:  len(in.MediaInputs) > 0,
 	})
+	s.refreshThreadCard(ctx, access.Room)
 	return msg, nil
 }
 
@@ -157,9 +190,21 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	if err := s.deps.Access.ensureMutateAccess(ctx, claims, room); err != nil {
 		return nil, err
 	}
+	if room.Type == model.RoomTypeCourse {
+		return nil, apperr.InvalidInput("授業内チャットのメッセージは編集できません")
+	}
 	if !existing.CanBeEditedBy(claims.ID, isAdmin) {
 		audit.LogDenied(ctx, "update_message", "message", in.MessageID, "not owner")
 		return nil, errors.New("forbidden: can only update your own messages")
+	}
+	// スタンプのメッセージには、直す本文が無い（削除はできる）。
+	if existing.StampID != nil {
+		return nil, apperr.InvalidInput("スタンプは編集できません")
+	}
+
+	// 編集後の本文も、投稿と同じくNGワードを検査する（直して通す抜け道を作らない）。
+	if err := s.screenNGWords(ctx, claims, room, in.Content); err != nil {
+		return nil, err
 	}
 
 	// 本文を空にする編集は、添付が1枚も無いときだけ弾く
@@ -169,7 +214,7 @@ func (s *messageCommandService) UpdateMessage(ctx context.Context, in UpdateMess
 	}
 
 	// 編集後の本文でメンションを解決し直す。本文から消えたメンションは保存側で消える。
-	mentions, err := s.deps.ResolveMentions.Execute(ctx, existing.RoomID, existing.UserID, in.Content, in.MentionUserIDs)
+	mentions, err := s.deps.ResolveMentions.Execute(ctx, room.PolicyRoomID(), existing.UserID, in.Content, in.MentionUserIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +278,10 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		return false, err
 	}
 
+	if msg.ThreadRoomID != nil {
+		return false, apperr.InvalidInput("スレッドの作成案内は削除できません")
+	}
+
 	room, err := s.deps.GetRoom.Execute(ctx, msg.RoomID)
 	if err != nil {
 		// 下のルーム判定にルーム種別が要るので、引けないときは安全側に倒す。
@@ -256,7 +305,7 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 		if room.Type != model.RoomTypeCommunity {
 			return false, errors.New("forbidden: can only delete your own messages")
 		}
-		role, err := s.deps.GetRoomUserRole.Execute(ctx, msg.RoomID)
+		role, err := s.deps.GetRoomUserRole.Execute(ctx, room.PolicyRoomID())
 		if err != nil {
 			// 役割が引けないときは安全側（拒否）に倒す。挙動は従来どおりだが、
 			// オーナーの削除が DB 障害で「権限がない」に化けているのと、本当に
@@ -278,32 +327,48 @@ func (s *messageCommandService) DeleteMessage(ctx context.Context, in DeleteMess
 	if deleted {
 		// 配信先はメッセージ実体の RoomID から作る（引数の roomID ではない）。
 		s.deps.Events.MessageDeleted(ctx, MessageDeletedEvent{RoomID: msg.RoomID, MessageID: msg.ID})
+		if room, err := s.deps.GetRoom.Execute(ctx, msg.RoomID); err == nil {
+			s.refreshThreadCard(ctx, room)
+		}
 	}
 	return deleted, nil
 }
 
-// ensureAnonymousIdentity は授業ルームへの書き込み時に匿名ID（匿名NNN）を確定させる。
-//
-// 以前は表示時（messageResolver.User など）に採番していたため、(a) 読むだけの
-// クエリが DB に行を作る副作用を持ち、(b) 番号が「そのルームで初めて投稿した順」
-// ではなく「初めて誰かの画面に出た順」になりえた。投稿時に採番すれば番号は
-// 投稿順に固定され、表示側は読み取りだけで済む。
-//
-// 保存トランザクションの外で呼んでいるのは、採番がルームごとのカウンタ
-// (room_anonymous_sequences) を1文で進める独立した処理で、メッセージ保存の
-// トランザクションに巻き込む必要が無いため。保存が失敗しても残るのは
-// 「まだ投稿していない人の番号」だけで、その人が次に投稿したときに同じ行が
-// 再利用されるので実害はない（カウンタは進んだままだが、番号の欠番は許容する。
-// 詳細は infra/mysql/room_anonymous_identity_repository.go の GetOrCreate）。
-//
-// 権限判定ではなく「投稿という行為に伴う副作用」なので、AccessPolicy ではなく
-// 送信サービス側に置いている。
-func (s *messageCommandService) ensureAnonymousIdentity(ctx context.Context, room *model.Room, userID int64) error {
+// refreshThreadCard はスレッドの発言数が変わったことを親チャットのカードへ配信する。
+// 発言はもう保存できているので、失敗はログだけ残して操作は成功のまま返す。
+func (s *messageCommandService) refreshThreadCard(ctx context.Context, room *model.Room) {
+	if s.deps.Threads == nil || room == nil || room.ParentRoomID == nil {
+		return
+	}
+	if err := s.publishThreadCard(ctx, room); err != nil {
+		logger.Log.Warn().Err(err).Str("component", "chat_thread").Int64("room_id", room.ID).Msg("failed to refresh the thread card")
+	}
+}
+
+func (s *messageCommandService) publishThreadCard(ctx context.Context, room *model.Room) error {
+	announcementID, err := s.deps.Threads.AnnouncementID(ctx, room.ID)
+	if err != nil || announcementID == 0 {
+		return err
+	}
+	announcement, err := s.deps.GetMessage.Execute(ctx, announcementID)
+	if err != nil || announcement == nil {
+		return err
+	}
+	parent, err := s.deps.GetRoom.Execute(ctx, *room.ParentRoomID)
+	if err != nil {
+		return err
+	}
+	s.deps.Events.MessageUpdated(ctx, MessageUpdatedEvent{Room: parent, Message: announcement, ActorID: announcement.UserID})
+	return nil
+}
+
+// screenNGWords は授業ルームの投稿だけにNGワードの検査をかける（管理者は除く）。
+func (s *messageCommandService) screenNGWords(ctx context.Context, claims *auth.Claims, room *model.Room, content string) error {
 	if room == nil || room.Type != model.RoomTypeCourse {
 		return nil
 	}
-	_, err := s.deps.GetOrCreateAnonymousIdentity.Execute(ctx, room.ID, userID)
-	return err
+	roomID := room.ID
+	return ngword.ScreenFor(ctx, s.deps.NGWords, claims, &roomID, model.NGWordSourceMessage, content)
 }
 
 // ensureMessageNotEmptied は「本文も添付も無いメッセージは存在しない」という
@@ -351,7 +416,13 @@ func (s *messageCommandService) ensureMessageNotEmptied(ctx context.Context, exi
 // メッセージIDが実在するかどうかを外から測れてしまうので、どちらも
 // "message not found" に寄せている。
 func (s *messageCommandService) loadMessageInRoom(ctx context.Context, roomID, messageID int64) (*model.Message, error) {
-	msg, err := s.deps.GetMessage.Execute(ctx, messageID)
+	return loadMessageInRoom(ctx, s.deps.GetMessage, roomID, messageID)
+}
+
+// loadMessageInRoom は上のメソッドの本体。リアクション（reaction.go）など、
+// 同じ照合が要る別サービスからも使うため、サービスに依存しない形で切り出してある。
+func loadMessageInRoom(ctx context.Context, getMessage messageusecase.GetMessageByIDUseCase, roomID, messageID int64) (*model.Message, error) {
+	msg, err := getMessage.Execute(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message")
 	}

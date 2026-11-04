@@ -114,8 +114,12 @@ func analyticsSchemaDDL() []string {
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			created_at BIGINT NOT NULL,
 			status VARCHAR(32) NOT NULL DEFAULT 'active',
-			last_active_at BIGINT NULL,
 			PRIMARY KEY (id)
+		)`,
+		`CREATE TABLE user_accounts (
+			user_id BIGINT NOT NULL,
+			last_active_at BIGINT NULL,
+			PRIMARY KEY (user_id)
 		)`,
 		`CREATE TABLE posts (
 			id BIGINT NOT NULL AUTO_INCREMENT,
@@ -129,7 +133,7 @@ func analyticsSchemaDDL() []string {
 		`CREATE TABLE media (id BIGINT NOT NULL, content_type VARCHAR(100) NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE favorites (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE favorite_users (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
-		`CREATE TABLE rooms (id BIGINT NOT NULL AUTO_INCREMENT, type VARCHAR(50) NOT NULL, PRIMARY KEY (id))`,
+		`CREATE TABLE rooms (id BIGINT NOT NULL AUTO_INCREMENT, type VARCHAR(50) NOT NULL, parent_room_id BIGINT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE room_users (room_id BIGINT NOT NULL, user_id BIGINT NOT NULL)`,
 		`CREATE TABLE communities (
 			id BIGINT NOT NULL AUTO_INCREMENT,
@@ -152,6 +156,7 @@ func analyticsSchemaDDL() []string {
 		`CREATE TABLE notifications (id BIGINT NOT NULL AUTO_INCREMENT, is_read BOOLEAN NOT NULL DEFAULT FALSE, PRIMARY KEY (id))`,
 		`CREATE TABLE user_session_summaries (
 			user_id BIGINT NOT NULL,
+			date DATE NULL,
 			session_count INT NOT NULL DEFAULT 0,
 			total_duration_seconds BIGINT NOT NULL DEFAULT 0
 		)`,
@@ -186,8 +191,10 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	db, cleanup := analyticsTestDB(t)
 	defer cleanup()
 
+	// 「本日」は日本時間で区切るので、今の時刻なら必ず本日に入る
+	// （UTC の正午にすると、UTC の 15 時以降は日本時間の前の日になる）。
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location()).Unix()
+	today := now.Unix()
 	const (
 		liveRoom    = int64(1) // 生きたメッセージがあるコミュニティ
 		deletedRoom = int64(2) // 削除済みメッセージしか無いコミュニティ
@@ -247,7 +254,7 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	}
 
 	// 時系列の messages 系列も同じ。
-	day := now.Format("2006-01-02")
+	day := now.In(appJST).Format("2006-01-02") // 時系列も日本時間の日付で引く
 	points, err := repo.GetTimeSeries(context.Background(), "day", day, day, repository.AllFields())
 	if err != nil {
 		t.Fatalf("GetTimeSeries failed: %v", err)
@@ -258,6 +265,58 @@ func TestAnalyticsExcludesDeletedMessages(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("time series messages total = %d, want 2 (削除済み3件を除く)", total)
+	}
+}
+
+// コミュニティの発言数と「最近活動しているコミュニティ」には、スレッドの中の発言も入れる。
+// スレッドは親とは別のルームなので、親のルームだけを見ると、スレッドでしか話していない
+// コミュニティが「発言の無いコミュニティ」になってしまう。
+func TestCommunityAnalyticsCountsThreadMessages(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+
+	today := time.Now().Unix()
+	const (
+		parentRoom = int64(1)
+		threadRoom = int64(2) // parentRoom のスレッド
+		otherRoom  = int64(3) // 発言の無いコミュニティ
+	)
+	mustExec(t, db, `INSERT INTO rooms (id, type, parent_room_id) VALUES (?, 'community', NULL), (?, 'community', ?), (?, 'community', NULL)`,
+		parentRoom, threadRoom, parentRoom, otherRoom)
+	mustExec(t, db, `INSERT INTO communities (id, name, room_id) VALUES (1, 'threaded', ?), (2, 'silent', ?)`, parentRoom, otherRoom)
+	// 親に1件、スレッドに生存2件と削除1件。
+	mustExec(t, db, `
+		INSERT INTO messages (room_id, user_id, created_at, deleted_at) VALUES
+			(?, 100, ?, NULL),
+			(?, 100, ?, NULL),
+			(?, 101, ?, NULL),
+			(?, 102, ?, ?)`,
+		parentRoom, today,
+		threadRoom, today,
+		threadRoom, today,
+		threadRoom, today, today)
+
+	repo := NewMySQLAnalyticsRepository(db)
+	items, _, err := repo.GetCommunityAnalytics(context.Background(), repository.PageQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("GetCommunityAnalytics failed: %v", err)
+	}
+	byName := map[string]int{}
+	for _, it := range items {
+		byName[it.Name] = it.MessageCount
+	}
+	if byName["threaded"] != 3 || byName["silent"] != 0 {
+		t.Errorf("MessageCount = %v, want threaded=3 (親1件+スレッド2件), silent=0", byName)
+	}
+
+	// スレッドにしか発言が無くても、最近活動しているコミュニティに数える。
+	mustExec(t, db, `DELETE FROM messages WHERE room_id = ?`, parentRoom)
+	s, err := repo.GetAnalyticsSummary(context.Background(), repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetAnalyticsSummary failed: %v", err)
+	}
+	if s.ActiveCommunitiesLast30Days != 1 {
+		t.Errorf("ActiveCommunitiesLast30Days = %d, want 1 (スレッドだけで話しているコミュニティを含む)", s.ActiveCommunitiesLast30Days)
 	}
 }
 
@@ -330,7 +389,8 @@ func TestSummaryPartialMatchesFullValues(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now().Unix()
-	mustExec(t, db, `INSERT INTO users (id, created_at, status, last_active_at) VALUES (1, ?, 'active', ?), (2, ?, 'frozen', ?)`, now, now, now, now)
+	mustExec(t, db, `INSERT INTO users (id, created_at, status) VALUES (1, ?, 'active'), (2, ?, 'frozen')`, now, now)
+	mustExec(t, db, `INSERT INTO user_accounts (user_id, last_active_at) VALUES (1, ?), (2, ?)`, now, now)
 	mustExec(t, db, `INSERT INTO posts (id, user_id, parent_id, created_at, deleted_at) VALUES
 		(1, 1, NULL, ?, NULL), (2, 1, NULL, ?, NULL), (3, 1, 1, ?, NULL), (4, 2, NULL, ?, ?)`, now, now, now, now, now)
 	mustExec(t, db, `INSERT INTO favorites (id, created_at) VALUES (1, ?), (2, ?), (3, ?)`, now, now, now)
@@ -436,11 +496,15 @@ func TestTimeSeriesHourlyActiveUsersCountsEveryHour(t *testing.T) {
 	)
 
 	// last_active_at は「最後の活動時刻」だけを持つ。修正前の集計はこれを見ていた。
-	mustExec(t, db, `INSERT INTO users (id, created_at, status, last_active_at) VALUES (?,?,'active',?),(?,?,'active',?),(?,?,'active',?),(?,?,'active',?)`,
-		alice, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-18 14:30:00"),
-		bob, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-18 12:30:00"),
-		carol, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-17 23:30:00"),
-		dave, jstHourUnix(t, "2026-09-01 00:00:00"), jstHourUnix(t, "2026-09-14 12:30:00"),
+	registered := jstHourUnix(t, "2026-09-01 00:00:00")
+	mustExec(t, db, `INSERT INTO users (id, created_at, status) VALUES (?,?,'active'),(?,?,'active'),(?,?,'active'),(?,?,'active')`,
+		alice, registered, bob, registered, carol, registered, dave, registered,
+	)
+	mustExec(t, db, `INSERT INTO user_accounts (user_id, last_active_at) VALUES (?,?),(?,?),(?,?),(?,?)`,
+		alice, jstHourUnix(t, "2026-09-18 14:30:00"),
+		bob, jstHourUnix(t, "2026-09-18 12:30:00"),
+		carol, jstHourUnix(t, "2026-09-17 23:30:00"),
+		dave, jstHourUnix(t, "2026-09-14 12:30:00"),
 	)
 	mustExec(t, db, `INSERT INTO user_activity_hours (user_id, activity_hour) VALUES
 		(?, '2026-09-18 10:00:00'),
@@ -493,7 +557,7 @@ func TestTimeSeriesHourlyActiveUsersCountsEveryHour(t *testing.T) {
 	// 10時台に last_active_at を持つユーザーは0人。alice も bob もその後さらに
 	// 活動しているので、last_active_at からは「10時に活動した」ことが分からない。
 	var lastActiveInHour10 int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM users WHERE DATE_FORMAT(FROM_UNIXTIME(last_active_at + 32400), '%Y-%m-%d %H:00') = '2026-09-18 10:00'`).Scan(&lastActiveInHour10); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM user_accounts WHERE DATE_FORMAT(FROM_UNIXTIME(last_active_at + 32400), '%Y-%m-%d %H:00') = '2026-09-18 10:00'`).Scan(&lastActiveInHour10); err != nil {
 		t.Fatalf("failed to run the legacy count: %v", err)
 	}
 	if lastActiveInHour10 != 0 {

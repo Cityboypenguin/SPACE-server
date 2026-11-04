@@ -27,6 +27,8 @@ func NewPubSubCodec() *pubsub.Codec {
 	// 閲覧権限が変わった合図。GraphQL の型ではない（クライアントへは配らず、
 	// 購読中のループが自分で受けて判定をやり直すためだけに流れる）。
 	c.Register("room_access_changed", (*RoomAccessChanged)(nil))
+	// スレッドの作成・変更・新着の合図。中身はスレッドの ID だけ。
+	c.Register("chat_thread_changed", (*ChatThreadChanged)(nil))
 	// 取り込み状況だけは値で流している（Publish 側が courseimport.Status を
 	// そのまま渡す）ので、値の型で登録する。ここをポインタにすると、受け手の
 	// 型アサーションが通らずこのトピックだけ届かなくなる。

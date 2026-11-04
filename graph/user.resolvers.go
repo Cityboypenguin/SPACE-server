@@ -75,14 +75,10 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 
 // DeleteMyAccount is the resolver for the deleteMyAccount field.
 func (r *mutationResolver) DeleteMyAccount(ctx context.Context) (bool, error) {
-	claims, err := requireAuth(ctx)
-	if err != nil {
+	if _, err := requireAuth(ctx); err != nil {
 		return false, err
 	}
-
-	numericID := claims.ID
-
-	return r.DeleteUserUseCase.Execute(ctx, numericID)
+	return r.DeleteMyAccountUseCase.Execute(ctx)
 }
 
 // UpdateUser is the resolver for the updateUser field.
@@ -118,9 +114,10 @@ func (r *mutationResolver) LoginUser(ctx context.Context, input gqlmodel.LoginIn
 	}
 
 	return &gqlmodel.UserAuthPayload{
-		Token:        result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		User:         toGraphUserAccount(result.User),
+		Token:           result.AccessToken,
+		RefreshToken:    result.RefreshToken,
+		User:            toGraphUserAccount(result.User),
+		AccountRestored: result.AccountRestored,
 	}, nil
 }
 
@@ -139,8 +136,8 @@ func (r *mutationResolver) RefreshUserToken(ctx context.Context, refreshToken st
 }
 
 // LogoutUser is the resolver for the logoutUser field.
-func (r *mutationResolver) LogoutUser(ctx context.Context, token string) (bool, error) {
-	if err := r.LogoutUserUseCase.Execute(ctx, token); err != nil {
+func (r *mutationResolver) LogoutUser(ctx context.Context, token string, refreshToken *string) (bool, error) {
+	if err := r.LogoutUserUseCase.Execute(ctx, token, refreshToken); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -506,7 +503,7 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string, pr
 
 	// これは閲覧判定ではなく「メンション候補を引けるのはメンバーだけ」という別規則。
 	// EnsureReadAccess は非メンバーの管理者にも閲覧を許すので、そこには寄せない。
-	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, rid)
+	role, err := r.GetRoomUserRoleUseCase.Execute(ctx, room.PolicyRoomID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -514,7 +511,7 @@ func (r *queryResolver) MentionCandidates(ctx context.Context, roomID string, pr
 		return nil, errors.New("forbidden: not a member of this room")
 	}
 
-	users, err := r.SearchRoomUsersUseCase.Execute(ctx, rid, prefix, resolveLimit(limit, 8, 50))
+	users, err := r.SearchRoomUsersUseCase.Execute(ctx, room.PolicyRoomID(), prefix, resolveLimit(limit, 8, 50))
 	if err != nil {
 		return nil, fmt.Errorf("failed to search room members")
 	}

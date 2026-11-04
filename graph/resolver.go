@@ -1,12 +1,14 @@
 package graph
 
 import (
+	"github.com/Cityboypenguin/SPACE-server/usecase/chatstamp"
 	"sync/atomic"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
 	"github.com/Cityboypenguin/SPACE-server/internal/pubsub"
 	"github.com/Cityboypenguin/SPACE-server/internal/sse"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
@@ -15,11 +17,13 @@ import (
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	"github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	favoriteuser "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	"github.com/Cityboypenguin/SPACE-server/usecase/post"
@@ -66,9 +70,16 @@ const CourseImportStatusTopic = "course_import:status"
 // favorite、block、terms など）は空行で区切ってあるだけにしてある。構造体に
 // しても増えるのは名前だけで、探しにくくなるぶん損になる。
 type Resolver struct {
-	StorageRepository     repository.StorageRepository
-	MaintenanceRepository repository.MaintenanceRepository
-	MaintenanceFlag       *atomic.Bool
+	StampService      *chatstamp.Service
+	StorageRepository repository.StorageRepository
+	// MessageStorageRepository は DM の添付だけを見る置き場。非公開のコンテナーを
+	// 指しており、表示URLは期限付きの署名付きになる。
+	//
+	// StorageRepository と同じ型なので、取り違えても型では気づけない。DM に
+	// 関わる経路（送信の受け入れと、Message.media の表示URL）でだけこちらを使う。
+	MessageStorageRepository repository.StorageRepository
+	MaintenanceRepository    repository.MaintenanceRepository
+	MaintenanceFlag          *atomic.Bool
 
 	UserUseCases
 	PostUseCases
@@ -110,8 +121,10 @@ type Resolver struct {
 	QuestionUseCases
 	PollUseCases
 
-	CreateReportUsecase reportusecase.CreateReportUsecase
-	ManageReportUsecase reportusecase.ManageReportUsecase
+	CreateReportUsecase                reportusecase.CreateReportUsecase
+	CreateContentReportUsecase         *reportusecase.CreateContentReportUsecase
+	ManageReportUsecase                reportusecase.ManageReportUsecase
+	ManageNotificationRecipientUsecase *reportusecase.ManageNotificationRecipientUsecase
 
 	NotificationUseCases
 
@@ -161,6 +174,15 @@ type Resolver struct {
 	// 唯一の入口。起動時（cmd/server/main.go）も同じインスタンスを使う。
 	TermsBroadcastScheduler *termsusecase.BroadcastScheduler
 
+	// CourseImages は授業内チャットの画像の一元管理（管理画面）。
+	CourseImages *courseimageusecase.Service
+
+	// Addenda は質問・回答への追記。
+	Addenda *addendumusecase.Service
+
+	// NGWordAdmin は管理画面でのNGワードの登録・削除・集計。
+	NGWordAdmin *ngwordusecase.AdminService
+
 	ManageSystemSettingUsecase systemsettingsusecase.ManageSystemSettingUsecase
 	ManageUserSettingUsecase   usersettingsusecase.ManageUserSettingUsecase
 
@@ -186,6 +208,7 @@ type UserUseCases struct {
 	VerifyEmailOTPUseCase       user.VerifyEmailOTPUseCase
 	ListUsersUseCase            user.ListUsersUseCase
 	DeleteUserUseCase           user.DeleteUserUseCase
+	DeleteMyAccountUseCase      user.DeleteMyAccountUseCase
 	UpdateUserUseCase           user.UpdateUserUseCase
 	SearchUsersUseCase          user.SearchUsersUseCase
 	// 管理画面のユーザー検索（連絡先を含む）。一般ユーザー向けは SearchUsersUseCase。
@@ -208,6 +231,7 @@ type PostUseCases struct {
 	GetPostByIDIncludeDeletedUseCase         post.GetPostByIDIncludeDeletedUseCase
 	CreatePostUseCase                        post.CreatePostUseCase
 	ListPostsUseCase                         post.ListPostsUseCase
+	AdminListPostsUseCase                    post.AdminListPostsUseCase
 	DeletePostUseCase                        post.DeletePostUseCase
 	UpdatePostUseCase                        post.UpdatePostUseCase
 	SearchPostsUseCase                       post.SearchPostsUseCase
@@ -258,7 +282,7 @@ type MessageRoomUseCases struct {
 
 // ChatUseCases はチャット（授業内チャット・コミュニティ・DM）の業務ルールの入口。
 //
-// 権限判定・メンション解決・匿名IDの採番・保存・通知は全て usecase/chat 側にあり、
+// 権限判定・メンション解決・保存・通知は全て usecase/chat 側にあり、
 // リゾルバは GraphQL ID のデコードと GraphQL 型への変換だけを行う。
 //
 // 全部入りのサービス1つではなく責務ごとに4つ持つ。1つにまとめると、そのサービスが
@@ -266,12 +290,15 @@ type MessageRoomUseCases struct {
 // 参照）。埋め込みにしてあるので呼び出し側は r.ChatCommands.SendMessage(...) の
 // ように書ける。
 type ChatUseCases struct {
+	ThreadService *chatusecase.ThreadService
 	// ChatAccess は閲覧・書き込みの権限判定。他の3つもこれを共有しているので、
 	// 「リゾルバで判定して、サービスでも判定して」が二重にならない。
 	ChatAccess   chatusecase.AccessPolicy
 	ChatCommands chatusecase.MessageCommandService
 	ChatQueries  chatusecase.MessageQueryService
 	ChatReads    chatusecase.ReadReceiptService
+	// ChatReactions はメッセージへのリアクションの付け外し。
+	ChatReactions chatusecase.MessageReactionService
 }
 
 type CommunityUseCases struct {
@@ -282,6 +309,7 @@ type CommunityUseCases struct {
 	SearchCommunityUseCase        communityusecase.SearchCommunityUseCase
 	ListMyCommunitiesUseCase      communityusecase.ListMyCommunitiesUseCase
 	ListAllCommunitiesUseCase     communityusecase.ListAllCommunitiesUseCase
+	AdminListCommunitiesUseCase   communityusecase.AdminListCommunitiesUseCase
 	GetRandomCommunitiesUseCase   communityusecase.GetRandomCommunitiesUseCase
 }
 
@@ -301,7 +329,8 @@ type CourseUseCases struct {
 	GetCurrentSemesterUseCase          semesterusecase.GetCurrentSemesterUseCase
 	UpdateCurrentSemesterUseCase       semesterusecase.UpdateCurrentSemesterUseCase
 	ListCourseRoomUnreadCountsUseCase  courseusecase.ListCourseRoomUnreadCountsUseCase
-	ImportCoursesUseCase               courseusecase.ImportCoursesUseCase
+	SyncCoursesUseCase                 courseusecase.SyncCoursesUseCase
+	CourseSyncAdminUseCase             courseusecase.CourseSyncAdminUseCase
 	ListCoursesUseCase                 courseusecase.ListCoursesUseCase
 	ListCourseYearsUseCase             courseusecase.ListCourseYearsUseCase
 	ListDedupKeysByYearUseCase         courseusecase.ListDedupKeysByYearUseCase
@@ -313,7 +342,6 @@ type CourseUseCases struct {
 
 type QuestionUseCases struct {
 	CreateQuestionUseCase   questionusecase.CreateQuestionUseCase
-	UpdateQuestionUseCase   questionusecase.UpdateQuestionUseCase
 	ListQuestionsUseCase    questionusecase.ListQuestionsUseCase
 	GetQuestionByIDUseCase  questionusecase.GetQuestionByIDUseCase
 	SelectBestAnswerUseCase questionusecase.SelectBestAnswerUseCase
@@ -321,7 +349,6 @@ type QuestionUseCases struct {
 	DeleteQuestionUseCase   questionusecase.DeleteQuestionUseCase
 	DeleteMyQuestionUseCase questionusecase.DeleteMyQuestionUseCase
 	AnswerQuestionUseCase   answerusecase.AnswerQuestionUseCase
-	UpdateAnswerUseCase     answerusecase.UpdateAnswerUseCase
 	DeleteAnswerUseCase     answerusecase.DeleteAnswerUseCase
 	LikeAnswerUseCase       answerusecase.LikeAnswerUseCase
 	UnlikeAnswerUseCase     answerusecase.UnlikeAnswerUseCase

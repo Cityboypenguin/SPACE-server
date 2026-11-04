@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,13 +25,16 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/infra/mysql"
 	infraredis "github.com/Cityboypenguin/SPACE-server/infra/redis"
 	infrasmtp "github.com/Cityboypenguin/SPACE-server/infra/smtp"
+	"github.com/Cityboypenguin/SPACE-server/internal/accountpurge"
 	"github.com/Cityboypenguin/SPACE-server/internal/activityarchive"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
+	"github.com/Cityboypenguin/SPACE-server/internal/clientip"
 	"github.com/Cityboypenguin/SPACE-server/internal/config"
 	"github.com/Cityboypenguin/SPACE-server/internal/connlimit"
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
+	"github.com/Cityboypenguin/SPACE-server/internal/dailyjob"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
 	"github.com/Cityboypenguin/SPACE-server/internal/di"
 	"github.com/Cityboypenguin/SPACE-server/internal/logger"
@@ -42,25 +46,29 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	addendumusecase "github.com/Cityboypenguin/SPACE-server/usecase/addendum"
 	"github.com/Cityboypenguin/SPACE-server/usecase/administrator"
 	analyticsusecase "github.com/Cityboypenguin/SPACE-server/usecase/analytics"
 	announcementusecase "github.com/Cityboypenguin/SPACE-server/usecase/announcement"
-	anonusecase "github.com/Cityboypenguin/SPACE-server/usecase/anon"
 	answerusecase "github.com/Cityboypenguin/SPACE-server/usecase/answer"
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
+	"github.com/Cityboypenguin/SPACE-server/usecase/chatstamp"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
+	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
 	fuusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite_user"
 	inquiryusecase "github.com/Cityboypenguin/SPACE-server/usecase/inquiry"
+	"github.com/Cityboypenguin/SPACE-server/usecase/loginguard"
 	mediausecase "github.com/Cityboypenguin/SPACE-server/usecase/media"
 	messageusecase "github.com/Cityboypenguin/SPACE-server/usecase/message"
+	ngwordusecase "github.com/Cityboypenguin/SPACE-server/usecase/ngword"
 	notificationuc "github.com/Cityboypenguin/SPACE-server/usecase/notification"
 	pollusecase "github.com/Cityboypenguin/SPACE-server/usecase/poll"
 	postusecase "github.com/Cityboypenguin/SPACE-server/usecase/post"
 	profileusecase "github.com/Cityboypenguin/SPACE-server/usecase/profile"
-	questionusecase "github.com/Cityboypenguin/SPACE-server/usecase/question"
 	reportusecase "github.com/Cityboypenguin/SPACE-server/usecase/report"
+	reportedmediausecase "github.com/Cityboypenguin/SPACE-server/usecase/reportedmedia"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
 	sessionusecase "github.com/Cityboypenguin/SPACE-server/usecase/session"
 	systemsettingsusecase "github.com/Cityboypenguin/SPACE-server/usecase/system_settings"
@@ -92,6 +100,9 @@ func newInstanceID() string {
 // メッセージがもう片方の購読者へ流れないようにするための区切り。
 const pubsubChannelPrefix = "space:pubsub:"
 
+// removedImagePurgeHourJST は外した画像の自動削除を走らせる時刻。利用の少ない時間帯にする。
+const removedImagePurgeHourJST = 5
+
 func main() {
 	isProd := os.Getenv("APP_ENV") == "production"
 
@@ -113,10 +124,10 @@ func main() {
 
 	e := echo.New()
 
-	// Behind AWS ALB: trust private-network IPs as proxy hops so c.RealIP()
-	// returns the real client IP instead of being spoofable via X-Forwarded-For.
+	// 本番は CloudFront（と Azure では nginx）を通って届く。中継を信頼する経路に入れ、
+	// c.RealIP() が利用者の IP を返すようにする。X-Forwarded-For を偽っても騙せない。
 	if isProd {
-		e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustPrivateNet(true))
+		e.IPExtractor = clientip.Extractor()
 	}
 
 	userRepository := mysql.NewMySQLUserRepository(database)
@@ -124,7 +135,10 @@ func main() {
 	postRepository := mysql.NewMySQLPostRepository(database)
 	favoriteRepository := mysql.NewMySQLFavoriteRepository(database)
 	profileRepository := mysql.NewMySQLProfileRepository(database)
-	reportRepository := mysql.NewMySQLReportRepository(database)
+	reportRepository, err := mysql.NewMySQLReportRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize report encryption")
+	}
 	favoriteuserRepository := mysql.NewMySQLFavoriteUserRepository(database)
 	blockRepository := mysql.NewMySQLBlockRepository(database)
 	inquiryRepository := mysql.NewMySQLInquiryRepository(database)
@@ -156,6 +170,7 @@ func main() {
 	roomUserRepository := mysql.NewMySQLRoomUserRepository(database)
 	communityRepository := mysql.NewMySQLCommunityRepository(database)
 	courseRepository := mysql.NewMySQLCourseRepository(database)
+	courseSyncRepository := mysql.NewMySQLCourseSyncRepository(database)
 	instanceID := newInstanceID()
 
 	// Redis はここで繋ぐ。subscription の配信（下の chatBus）が Redis に乗るので、
@@ -182,7 +197,6 @@ func main() {
 		},
 	)
 	timetableRepository := mysql.NewMySQLTimetableRepository(database)
-	roomAnonymousIdentityRepository := mysql.NewMySQLRoomAnonymousIdentityRepository(database)
 	courseRoomReadRepository := mysql.NewMySQLCourseRoomReadRepository(database)
 	questionRepository, err := mysql.NewMySQLQuestionRepository(database)
 	if err != nil {
@@ -194,16 +208,30 @@ func main() {
 	}
 	pollRepository := mysql.NewMySQLPollRepository(database)
 
+	// ファイルの置き場は2つある。どちらも同じ実装で、見ているコンテナー（バケット）
+	// と表示URLの作り方だけが違う。
+	//
+	//   storageRepository        公開。匿名読み取りを許してあり、素のURLで配る。
+	//                            アバター、コミュニティアイコン、投稿・質問・回答の添付。
+	//   messageStorageRepository 非公開。表示は期限付きの署名付きURL。DM の添付。
+	//
+	// DM を分けてあるのは、本文を暗号化して保存しているのに添付だけ URL を知る
+	// 誰にでも見える状態を避けるため（internal/upload.MessageMedia 参照）。
+	//
+	// 受け入れの手順（staging の検査、ETag 条件付きの複製、最終キーの引き直し）は
+	// どちらも共通で、internal/upload がそのまま両方に効く。
 	var storageRepository repository.StorageRepository
+	var messageStorageRepository repository.StorageRepository
 	var privateStorageRepository repository.PrivateStorageRepository
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
-		storage, storageErr := azurerepo.New()
+		storage, storageErr := azurerepo.New(context.Background())
 		err = storageErr
 		if err != nil {
 			logger.Log.Fatal().Err(err).Msg("failed to connect to azure blob storage")
 		}
 		storageRepository = storage
 		privateStorageRepository = storage
+		messageStorageRepository = storage.ForContainer(messageMediaContainer(), true)
 	} else {
 		storage, storageErr := miniorepo.New()
 		err = storageErr
@@ -212,6 +240,7 @@ func main() {
 		}
 		storageRepository = storage
 		privateStorageRepository = storage
+		messageStorageRepository = storage.ForBucket(messageMediaContainer(), true)
 	}
 	activityArchiveRepository := mysql.NewMySQLActivityArchiveRepository(database)
 	activityArchiver, err := activityarchive.New(activityArchiveRepository, privateStorageRepository, config.ActivityArchiveHMACKey(isProd))
@@ -222,7 +251,6 @@ func main() {
 	activityArchiveDone := make(chan struct{})
 
 	listUsersUseCase := userusecase.NewListUsersUseCase(userRepository)
-	deleteUserUseCase := userusecase.NewDeleteUserUseCase(userRepository, postRepository, roomRepository, roomUserRepository, txManager)
 	updateUserUseCase := userusecase.NewUpdateUserUseCase(userRepository)
 	getUserByIDUseCase := userusecase.NewGetUserByIDUseCase(userRepository)
 	getUsersByIDsUseCase := userusecase.NewGetUsersByIDsUseCase(userRepository)
@@ -232,7 +260,8 @@ func main() {
 	getUserAccountsByIDsUseCase := userusecase.NewGetUserAccountsByIDsUseCase(userRepository)
 	searchUserAccountsUseCase := userusecase.NewSearchUserAccountsUseCase(userRepository)
 	suggestUsersUseCase := userusecase.NewSuggestUsersUseCase(userRepository)
-	loginUserUseCase := userusecase.NewLoginUserUseCase(userRepository)
+	loginGuard := loginguard.New(infraredis.NewRedisLoginAttemptRepository(redisClient))
+	loginUserUseCase := userusecase.NewGuardedLoginUserUseCase(userusecase.NewLoginUserUseCase(userRepository), loginGuard)
 	freezeUserUseCase := userusecase.NewFreezeUserUseCase(userRepository)
 	unfreezeUserUseCase := userusecase.NewUnfreezeUserUseCase(userRepository)
 	getProfileUseCase := profileusecase.NewGetProfileUseCase(profileRepository)
@@ -240,7 +269,11 @@ func main() {
 	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
 	// アップロードの受け入れ（上限・種別の検査と、署名付きURLの及ばないキーへの移送）。
 	// 1つ作って、オブジェクトキーを保存するユースケース全部へ配る。
-	uploadAcceptor := upload.NewAcceptor(storageRepository)
+	uploadAcceptor := upload.NewAcceptor(storageRepository, messageStorageRepository)
+
+	// 退会（本人・管理者・猶予切れ）。添付の実体の後片付けは受け入れと同じ置き場で行う。
+	accountPurgeCtx, stopAccountPurge := context.WithCancel(context.Background())
+	accountPurgeDone := make(chan struct{})
 
 	setAvatarUseCase := profileusecase.NewSetAvatarUseCase(uploadAcceptor, profileRepository, mediaRepository, txManager)
 	deleteAvatarUseCase := profileusecase.NewDeleteAvatarUseCase(profileRepository)
@@ -252,7 +285,7 @@ func main() {
 	deleteAdministratorUseCase := administrator.NewDeleteAdministratorUseCase(administratorRepository, txManager)
 	updateAdministratorUseCase := administrator.NewUpdateAdministratorUseCase(administratorRepository)
 	searchAdministratorsUseCase := administrator.NewSearchAdministratorsUseCase(administratorRepository)
-	loginAdministratorUseCase := administrator.NewLoginAdministratorUseCase(administratorRepository)
+	loginAdministratorUseCase := administrator.NewGuardedLoginAdministratorUseCase(administrator.NewLoginAdministratorUseCase(administratorRepository), loginGuard)
 
 	// createPostUseCase / updatePostUseCase は通知発行のため notificationPublisher に依存する。
 	// publisher 構築後（下方）に生成する。
@@ -262,6 +295,7 @@ func main() {
 	getRootPostUseCase := postusecase.NewGetRootPostUseCase(postRepository)
 	getPostByIDIncludeDeletedUseCase := postusecase.NewGetPostByIDIncludeDeletedUseCase(postRepository)
 	listPostsUseCase := postusecase.NewListPostsUseCase(postRepository)
+	adminListPostsUseCase := postusecase.NewAdminListPostsUseCase(postRepository)
 	searchPostsUseCase := postusecase.NewSearchPostsUseCase(postRepository)
 	searchPostsByHashtagUseCase := postusecase.NewSearchPostsByHashtagUseCase(postRepository)
 	popularHashtagsUseCase := postusecase.NewPopularHashtagsUseCase(postRepository)
@@ -311,9 +345,10 @@ func main() {
 	refreshAdministratorTokenUseCase := administrator.NewRefreshAdministratorTokenUseCase(administratorRepository, revokedTokenRepository)
 	logoutUserUseCase := userusecase.NewLogoutUserUseCase(revokedTokenRepository)
 	logoutAdministratorUseCase := administrator.NewLogoutAdministratorUseCase(revokedTokenRepository)
-	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer)
+	passwordResetMailRunner := async.NewRunner("password_reset_mail")
+	requestPasswordResetUseCase := userusecase.NewRequestPasswordResetUseCase(userRepository, passwordResetRepository, mailer, passwordResetMailRunner)
 	verifyPasswordResetOTPUseCase := userusecase.NewVerifyPasswordResetOTPUseCase(passwordResetRepository)
-	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository)
+	resetPasswordUseCase := userusecase.NewResetPasswordUseCase(userRepository, passwordResetRepository, loginGuard)
 
 	listMediaByPostIDUseCase := mediausecase.NewListMediaByPostIDUseCase(mediaRepository)
 	listMediaByPostIDsUseCase := mediausecase.NewListMediaByPostIDsUseCase(mediaRepository)
@@ -347,7 +382,7 @@ func main() {
 	countUsersByRoomIDsUseCase := roomusecase.NewCountUsersByRoomIDsUseCase(roomUserRepository)
 	listJoinedRoomIDsUseCase := roomusecase.NewListJoinedRoomIDsUseCase(roomUserRepository)
 	listMyDMRoomsUseCase := roomusecase.NewListMyDMRoomsUseCase(roomUserRepository)
-	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository)
+	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository, userRepository)
 	leaveCommunityUseCase := roomusecase.NewLeaveCommunityUseCase(roomRepository, roomUserRepository, txManager)
 	deleteOrphanedDMUseCase := roomusecase.NewDeleteOrphanedDMUseCase(roomRepository, roomUserRepository, txManager)
 	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
@@ -362,9 +397,6 @@ func main() {
 	markCourseRoomAsReadUseCase := roomusecase.NewMarkCourseRoomAsReadUseCase(courseRoomReadRepository, messageRepository)
 	// 授業ルームの学期・履修判定。チャットサービスが送信・編集・削除で使う。
 	checkRoomWritableUseCase := courseusecase.NewCheckRoomWritableUseCase(courseRepository, systemSettingRepository, timetableRepository)
-	getOrCreateAnonymousIdentityUseCase := anonusecase.NewGetOrCreateAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
-	// 採番しない読み取り専用の口。授業ルームの返信通知の文言（匿名NNN）に使う。
-	getAnonymousIdentityUseCase := anonusecase.NewGetAnonymousIdentityUseCase(roomAnonymousIdentityRepository)
 	getCourseRoomReadStatusUseCase := roomusecase.NewGetCourseRoomReadStatusUseCase(courseRoomReadRepository, messageRepository, courseRepository, timetableRepository)
 	getRoomReadStatusBatchUseCase := roomusecase.NewGetRoomReadStatusBatchUseCase(roomUserRepository, messageRepository)
 	// 授業ルームの更新通知の宛先（履修者）。未読数は数えず、IDだけを引く軽い経路
@@ -378,7 +410,10 @@ func main() {
 
 	// リポジトリからユースケースを組み立てる配線は internal/di に集約。
 
-	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository)
+	reportNotificationAsyncRunner := async.NewRunner("report_notification")
+	reportNotificationRecipientRepository := mysql.NewMySQLReportNotificationRecipientRepository(database)
+	reportCreatedNotifier := reportusecase.NewEmailReportCreatedNotifier(reportNotificationRecipientRepository, mailer, reportNotificationAsyncRunner)
+	createReportUseCase := reportusecase.NewCreateReportUsecase(reportRepository, systemSettingRepository, reportCreatedNotifier)
 	manageReportUseCase := reportusecase.NewManageReportUsecase(reportRepository)
 	manageSystemSettingUseCase := systemsettingsusecase.NewManageSystemSettingUsecase(systemSettingRepository)
 	manageUserSettingUseCase := usersettingsusecase.NewManageUserSettingUsecase(userSettingRepository)
@@ -428,6 +463,23 @@ func main() {
 	sseFanout := infraredis.NewSSEFanout(redisClient, pubsubChannelPrefix, sseBroker.DeliverLocal)
 	sseBroker.SetFanout(sseFanout)
 	notificationPublisher := notificationuc.NewNotificationPublisher(notificationRepository, sseBroker)
+	accountDeletionDeps := userusecase.AccountDeletionDeps{
+		Users:     userRepository,
+		Posts:     postRepository,
+		Rooms:     roomRepository,
+		RoomUsers: roomUserRepository,
+		// 唯一のオーナーが退会したとき、オーナーを引き継いだ人へ知らせる。
+		Communities:   communityRepository,
+		Notifier:      notificationPublisher,
+		Media:         mediaRepository,
+		ReportedMedia: reportedmediausecase.New(reportRepository, storageRepository, messageStorageRepository),
+		Objects:       uploadAcceptor,
+		TxManager:     txManager,
+	}
+	deleteUserUseCase := userusecase.NewDeleteUserUseCase(accountDeletionDeps)
+	deleteMyAccountUseCase := userusecase.NewDeleteMyAccountUseCase(accountDeletionDeps)
+	removedImagePurgeDone := make(chan struct{})
+	accountPurger := accountpurge.New(userusecase.NewPurgeExpiredAccountsUseCase(accountDeletionDeps))
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
 	createPostUseCase := postusecase.NewCreatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
@@ -438,13 +490,11 @@ func main() {
 	// 触るので Resolver には持たせない（単体取得と二重に持つと、片方だけ使う
 	// リゾルバが残って N+1 が戻る）。
 	getRoomsByIDsUseCase := roomusecase.NewGetRoomsByIDsUseCase(roomRepository)
-	getQuestionsByIDsUseCase := questionusecase.NewGetQuestionsByIDsUseCase(questionRepository)
 	getAnswersByIDsUseCase := answerusecase.NewGetAnswersByIDsUseCase(answerRepository)
 	listAnswerPagesByQuestionIDsUseCase := answerusecase.NewListAnswerPagesByQuestionIDsUseCase(answerRepository)
 	countAnswersByQuestionIDsUseCase := answerusecase.NewCountAnswersByQuestionIDsUseCase(answerRepository)
 	listPollOptionResultsByPollIDsUseCase := pollusecase.NewListPollOptionResultsByPollIDsUseCase(pollRepository)
 	countPollVotersByPollIDsUseCase := pollusecase.NewCountPollVotersByPollIDsUseCase(pollRepository)
-	getAnonymousIdentitiesUseCase := anonusecase.NewGetAnonymousIdentitiesUseCase(roomAnonymousIdentityRepository)
 	createFavoriteUseCase := favoriteusecase.NewCreateFavoriteUseCase(favoriteRepository, postRepository, notificationPublisher)
 
 	termsRepository := mysql.NewMySQLTermsRepository(database)
@@ -454,7 +504,13 @@ func main() {
 	checkConsentUseCase := termsusecase.NewCheckConsentUseCase(termsRepository)
 	listTermsUseCase := termsusecase.NewListTermsUseCase(termsRepository)
 	listConsentsUseCase := termsusecase.NewListConsentsUseCase(termsRepository)
-	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(termsRepository, sseBroker)
+	// 規約の配信は台をまたいで1回だけにする。タイマーは各台のメモリにあるので、
+	// 門番が無いと台数ぶん重複して飛ぶ。起動時の取りこぼし拾いもこの印が要る。
+	termsBroadcastScheduler := termsusecase.NewBroadcastScheduler(
+		termsRepository,
+		sseBroker,
+		infraredis.NewTermsBroadcastClaim(redisClient, pubsubChannelPrefix),
+	)
 
 	// リクエストの応答を待たせずに走らせる処理（チャット配信・お知らせ通知・活動記録）の
 	// 実行口。流儀は internal/async.Runner の1つだけに揃えてあり、component 名だけが違う。
@@ -462,7 +518,7 @@ func main() {
 	chatEventAsyncRunner := chatusecase.NewAsyncRunner()
 	announcementAsyncRunner := async.NewRunner("announcement")
 	userActivityAsyncRunner := async.NewRunner("user_activity")
-	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner}
+	asyncRunners := []*async.Runner{chatEventAsyncRunner, announcementAsyncRunner, userActivityAsyncRunner, reportNotificationAsyncRunner, passwordResetMailRunner}
 
 	// 認証済みリクエストの活動記録。毎リクエスト DB へ書かないよう、ユーザーごとに
 	// 間引いてから Runner へ渡す（internal/middleware/user_activity.go 参照）。
@@ -503,7 +559,6 @@ func main() {
 		CourseRegistrantIDs:            getCourseRegistrantIDsUseCase,
 		Async:                          chatEventAsyncRunner,
 		GetMessage:                     getMessageByIDUseCase,
-		GetAnonymousIdentity:           getAnonymousIdentityUseCase,
 		MarkNotificationsAsReadByActor: markAllAsReadByActorUseCase,
 	})
 
@@ -514,19 +569,68 @@ func main() {
 		GetRoomMemberIDs:   getUserIDsByRoomIDUseCase,
 		IsRoomMember:       isRoomMemberUseCase,
 		CheckRoomWritable:  checkRoomWritableUseCase,
+		SystemSettingRepo:  systemSettingRepository,
 		CheckBlockRelation: checkBlockRelationUseCase,
+		GetUser:            getUserByIDUseCase,
 	})
+	// NGワード。授業内チャットのメッセージ・質問・回答を、投稿の前に検査する。
+	ngWordRepository := mysql.NewMySQLNGWordRepository(database)
+	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
+	ngWordAdmin := ngwordusecase.NewAdminService(ngWordRepository, ngWordGuard)
+	stampService := &chatstamp.Service{Repo: &mysql.ChatStampRepository{DB: database}, Uploads: uploadAcceptor, Tx: txManager}
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
-		Access:                       chatAccessPolicy,
-		GetRoom:                      getRoomUseCase,
-		GetRoomUserRole:              getRoomUserRoleUseCase,
-		GetMessage:                   getMessageByIDUseCase,
-		Writers:                      chatMessageWriters,
-		ResolveMentions:              resolveMessageMentionsUseCase,
-		ListMentions:                 listMessageMentionsUseCase,
-		ListMessageMedia:             listMediaByMessageIDsUseCase,
-		GetOrCreateAnonymousIdentity: getOrCreateAnonymousIdentityUseCase,
-		Events:                       chatEventPublisher,
+		Stamps:           stampService,
+		NGWords:          ngWordGuard,
+		Access:           chatAccessPolicy,
+		GetRoom:          getRoomUseCase,
+		GetRoomUserRole:  getRoomUserRoleUseCase,
+		GetMessage:       getMessageByIDUseCase,
+		Writers:          chatMessageWriters,
+		ResolveMentions:  resolveMessageMentionsUseCase,
+		ListMentions:     listMessageMentionsUseCase,
+		ListMessageMedia: listMediaByMessageIDsUseCase,
+		Threads:          &mysql.MySQLChatThreadRepository{DB: database},
+		Events:           chatEventPublisher,
+	})
+	messageReactionRepository := mysql.NewMySQLMessageReactionRepository(database)
+	chatReactionService := chatusecase.NewMessageReactionService(chatusecase.MessageReactionDeps{
+		Stamps:     stampService,
+		Access:     chatAccessPolicy,
+		GetRoom:    getRoomUseCase,
+		GetMessage: getMessageByIDUseCase,
+		Reactions:  messageReactionRepository,
+		Events:     chatEventPublisher,
+	})
+	listMessageReactionsUseCase := messageusecase.NewListMessageReactionsByMessageIDsUseCase(messageReactionRepository)
+	// 授業内チャットの画像の一元管理。
+	courseChatImageRepository := mysql.NewMySQLCourseChatImageRepository(database)
+	courseImageService := courseimageusecase.NewService(courseimageusecase.Deps{
+		Images:         courseChatImageRepository,
+		Reports:        reportRepository,
+		Public:         storageRepository,
+		MessageStore:   messageStorageRepository,
+		Messages:       messageRepository,
+		Questions:      questionRepository,
+		Answers:        answerRepository,
+		GetRoom:        getRoomUseCase,
+		ChatEvents:     chatEventPublisher,
+		QuestionEvents: classroomEvents,
+		AnswerEvents:   classroomEvents,
+	})
+	// 質問・回答への追記。
+	addendumRepository, err := mysql.NewMySQLAddendumRepository(database)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to initialize addendum repository")
+	}
+	addendumService := addendumusecase.NewService(addendumusecase.Deps{
+		Questions:       questionRepository,
+		Answers:         answerRepository,
+		Addenda:         addendumRepository,
+		RequireWritable: courseusecase.NewRequireWritableCourseRoomUseCase(courseRepository, systemSettingRepository, timetableRepository),
+		NGWords:         ngWordGuard,
+		QuestionEvents:  classroomEvents,
+		AnswerEvents:    classroomEvents,
+		Notifier:        graph.NewAddendumNotifier(notificationPublisher, getRoomUseCase),
 	})
 	chatQueryService := chatusecase.NewMessageQueryService(chatusecase.MessageQueryDeps{
 		Access:             chatAccessPolicy,
@@ -544,10 +648,17 @@ func main() {
 		Events:                  chatEventPublisher,
 	})
 
+	threadService := &chatusecase.ThreadService{
+		Access: chatAccessPolicy, Messages: messageRepository, Rooms: roomRepository, Threads: &mysql.MySQLChatThreadRepository{DB: database},
+		Tx: txManager, Writers: chatMessageWriters, Role: getRoomUserRoleUseCase,
+		Events: chatEventPublisher, NGWords: ngWordGuard,
+	}
 	resolver := &graph.Resolver{
-		StorageRepository:     storageRepository,
-		MaintenanceRepository: maintenanceRepository,
-		MaintenanceFlag:       maintenanceFlag,
+		StampService: stampService,
+		StorageRepository:        storageRepository,
+		MessageStorageRepository: messageStorageRepository,
+		MaintenanceRepository:    maintenanceRepository,
+		MaintenanceFlag:          maintenanceFlag,
 
 		UserUseCases: graph.UserUseCases{
 			CreateUserUseCase:             createUserUseCase,
@@ -555,6 +666,7 @@ func main() {
 			VerifyEmailOTPUseCase:         verifyEmailOTPUseCase,
 			ListUsersUseCase:              listUsersUseCase,
 			DeleteUserUseCase:             deleteUserUseCase,
+			DeleteMyAccountUseCase:        deleteMyAccountUseCase,
 			UpdateUserUseCase:             updateUserUseCase,
 			GetUserByIDUseCase:            getUserByIDUseCase,
 			GetUsersByIDsUseCase:          getUsersByIDsUseCase,
@@ -597,6 +709,7 @@ func main() {
 			GetPostByIDIncludeDeletedUseCase:         getPostByIDIncludeDeletedUseCase,
 			CreatePostUseCase:                        createPostUseCase,
 			ListPostsUseCase:                         listPostsUseCase,
+			AdminListPostsUseCase:                    adminListPostsUseCase,
 			DeletePostUseCase:                        deletePostUseCase,
 			UpdatePostUseCase:                        updatePostUseCase,
 			SearchPostsUseCase:                       searchPostsUseCase,
@@ -648,19 +761,34 @@ func main() {
 		},
 
 		CommunityUseCases: di.NewCommunityUseCases(uploadAcceptor, communityRepository, roomUserRepository, txManager),
-		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, roomAnonymousIdentityRepository, userSettingRepository, roomRepository, blockRepository, messageRepository),
-		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
-		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, roomAnonymousIdentityRepository),
+		CourseUseCases:    di.NewCourseUseCases(courseRepository, timetableRepository, systemSettingRepository, userSettingRepository, roomRepository, blockRepository, messageRepository, courseSyncRepository, txManager, notificationPublisher),
+		QuestionUseCases:  di.NewQuestionUseCases(uploadAcceptor, classroomEvents, questionRepository, answerRepository, mediaRepository, txManager, courseRepository, systemSettingRepository, timetableRepository, ngWordGuard),
+		PollUseCases:      di.NewPollUseCases(classroomEvents, pollRepository, courseRepository, systemSettingRepository, timetableRepository, ngWordGuard),
 
-		CreateReportUsecase:          *createReportUseCase,
-		ManageReportUsecase:          *manageReportUseCase,
-		ManageSystemSettingUsecase:   *manageSystemSettingUseCase,
-		ManageUserSettingUsecase:     *manageUserSettingUseCase,
-		GetAnalyticsUseCase:          getAnalyticsUseCase,
-		GetCommunityAnalyticsUseCase: getCommunityAnalyticsUseCase,
-		GetTimeSeriesUseCase:         getTimeSeriesUseCase,
-		RecordSessionUseCase:         recordSessionUseCase,
-		InvalidateAnalyticsSummary:   cachedAnalyticsRepo.InvalidateSummary,
+		CreateReportUsecase: *createReportUseCase,
+		CreateContentReportUsecase: reportusecase.NewCreateContentReportUsecase(reportusecase.CreateContentReportDeps{
+			Reports:   createReportUseCase,
+			Access:    chatAccessPolicy,
+			Messages:  messageRepository,
+			Questions: questionRepository,
+			Answers:   answerRepository,
+			Polls:     pollRepository,
+			Addenda:   addendumRepository,
+			Media:     mediaRepository,
+			Users:     getUserByIDUseCase,
+		}),
+		ManageReportUsecase:                *manageReportUseCase,
+		CourseImages:                       courseImageService,
+		Addenda:                            addendumService,
+		NGWordAdmin:                        ngWordAdmin,
+		ManageNotificationRecipientUsecase: reportusecase.NewManageNotificationRecipientUsecase(reportNotificationRecipientRepository),
+		ManageSystemSettingUsecase:         *manageSystemSettingUseCase,
+		ManageUserSettingUsecase:           *manageUserSettingUseCase,
+		GetAnalyticsUseCase:                getAnalyticsUseCase,
+		GetCommunityAnalyticsUseCase:       getCommunityAnalyticsUseCase,
+		GetTimeSeriesUseCase:               getTimeSeriesUseCase,
+		RecordSessionUseCase:               recordSessionUseCase,
+		InvalidateAnalyticsSummary:         cachedAnalyticsRepo.InvalidateSummary,
 
 		CreateFavoriteUserUseCase:      createFavoriteUserUseCase,
 		DeleteFavoriteUserUseCase:      deleteFavoriteUserUseCase,
@@ -716,10 +844,12 @@ func main() {
 		CourseImportTracker: courseImportTracker,
 
 		ChatUseCases: graph.ChatUseCases{
-			ChatAccess:   chatAccessPolicy,
-			ChatCommands: chatCommandService,
-			ChatQueries:  chatQueryService,
-			ChatReads:    chatReadService,
+			ThreadService: threadService,
+			ChatAccess:    chatAccessPolicy,
+			ChatCommands:  chatCommandService,
+			ChatReactions: chatReactionService,
+			ChatQueries:   chatQueryService,
+			ChatReads:     chatReadService,
 		},
 	}
 
@@ -743,10 +873,22 @@ func main() {
 		},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 	}))
-	// RateLimit はIPベースで安価なため、JWT検証（DB/Redis照合あり）より前に置く
-	e.Use(authmiddleware.GraphQLRateLimit())
+	// IP ごとの制限は安価なため、JWT検証（DB/Redis照合あり）より前に置く
+	e.Use(authmiddleware.GraphQLIPRateLimit(infraredis.NewRateLimiterStore(
+		redisClient,
+		pubsubChannelPrefix,
+		authmiddleware.GraphQLIPRateLimitRate,
+		authmiddleware.GraphQLIPRateLimitBurst,
+	)))
+	e.Use(clientip.Middleware())
 	e.Use(authmiddleware.MetricsMiddleware())
 	e.Use(authmiddleware.JWTAuth(revokedTokenRepository, userRepository, administratorRepository, userActivityRecorder))
+	e.Use(authmiddleware.GraphQLRateLimit(infraredis.NewRateLimiterStore(
+		redisClient,
+		pubsubChannelPrefix,
+		authmiddleware.GraphQLRateLimitRate,
+		authmiddleware.GraphQLRateLimitBurst,
+	)))
 	e.Use(authmiddleware.MaintenanceMode(maintenanceFlag))
 	e.Use(authmiddleware.BlockFilter(blockRepository))
 	e.Use(authmiddleware.GraphQLAudit())
@@ -754,7 +896,7 @@ func main() {
 	// DataLoader はリクエストごとに作り直す（キャッシュがリクエスト内でだけ正しいため）。
 	// 渡す口は名前付きフィールドで指定する。同じ形のインターフェースが並ぶので、
 	// 位置引数だと取り違えてもコンパイルが通ってしまう。
-	e.Use(echo.WrapMiddleware(dataloader.Middleware(dataloader.UseCases{
+	loaderUseCases := dataloader.UseCases{
 		GetUsersByIDs:                  getUsersByIDsUseCase,
 		GetPostsByIDs:                  getPostsByIDsUseCase,
 		ListMediaByPostIDs:             listMediaByPostIDsUseCase,
@@ -767,17 +909,19 @@ func main() {
 		CountFavoritesByPostIDs:        countFavoritesByPostIDsUseCase,
 		ListPostIDsFavoritedBy:         listPostIDsFavoritedByUseCase,
 		GetMessagesByIDs:               getMessagesByIDsUseCase,
+		ListMessageReactions:           listMessageReactionsUseCase,
+		ListQuestionAddenda:            addendumusecase.NewListQuestionAddendaUseCase(addendumRepository),
+		ListAnswerAddenda:              addendumusecase.NewListAnswerAddendaUseCase(addendumRepository),
 		ListMentionsByPostIDs:          listPostMentionsUseCase,
 		ListMentionsByMessageIDs:       listMessageMentionsUseCase,
 		GetRoomsByIDs:                  getRoomsByIDsUseCase,
-		GetQuestionsByIDs:              getQuestionsByIDsUseCase,
 		GetAnswersByIDs:                getAnswersByIDsUseCase,
 		ListAnswerPagesByQuestionIDs:   listAnswerPagesByQuestionIDsUseCase,
 		CountAnswersByQuestionIDs:      countAnswersByQuestionIDsUseCase,
 		ListPollOptionResultsByPollIDs: listPollOptionResultsByPollIDsUseCase,
 		CountPollVotersByPollIDs:       countPollVotersByPollIDsUseCase,
-		GetAnonymousIdentities:         getAnonymousIdentitiesUseCase,
-	})))
+	}
+	e.Use(echo.WrapMiddleware(dataloader.Middleware(loaderUseCases)))
 
 	// テスト用エンドポイント
 	e.GET("/", func(c echo.Context) error {
@@ -795,6 +939,7 @@ func main() {
 			},
 		),
 	)
+	gqlServer.AroundResponses(dataloader.FreshLoadersForSubscriptions(func() *dataloader.Loaders { return dataloader.New(loaderUseCases) }))
 	// コンテキストキー：InitFunc成功・ユーザーIDをCloseFunc側で参照するために使う
 	type wsConnectedKey struct{}
 	type wsUserIDKey struct{}
@@ -888,6 +1033,11 @@ func main() {
 			gqlErr.Extensions = map[string]interface{}{}
 		}
 		gqlErr.Extensions["code"] = string(errorCodeFor(e))
+		var blocked *ngwordusecase.BlockedError
+		if errors.As(e, &blocked) {
+			gqlErr.Extensions["code"] = "NG_WORD_BLOCKED"
+			gqlErr.Extensions["maskedTexts"] = blocked.Texts
+		}
 		return gqlErr
 	})
 
@@ -920,6 +1070,19 @@ func main() {
 		defer close(activityArchiveDone)
 		activityArchiver.Run(activityArchiveCtx)
 	}()
+	go func() {
+		defer close(accountPurgeDone)
+		accountPurger.Run(accountPurgeCtx)
+	}()
+	go func() {
+		defer close(removedImagePurgeDone)
+		(&dailyjob.Runner{
+			Name:        "removed_course_chat_image_purge",
+			HourJST:     removedImagePurgeHourJST,
+			Exec:        courseImageService.PurgeExpired,
+			DoneMessage: "purged the removed course chat images past their retention",
+		}).Run(accountPurgeCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -933,6 +1096,7 @@ func main() {
 
 	logger.Log.Info().Msg("shutting down server...")
 	stopActivityArchive()
+	stopAccountPurge()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -945,6 +1109,16 @@ func main() {
 	case <-shutdownCtx.Done():
 		logger.Log.Error().Err(shutdownCtx.Err()).Msg("activity archive did not stop before shutdown")
 	}
+	select {
+	case <-removedImagePurgeDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("removed image purge did not stop before shutdown")
+	}
+	select {
+	case <-accountPurgeDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("account purge did not stop before shutdown")
+	}
 	if err := courseImportTracker.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error().Err(err).Msg("course import did not stop before shutdown; leaving DB and Redis open")
 		return
@@ -954,6 +1128,7 @@ func main() {
 	// DB 接続を閉じる前に片付ける。ここで待たないと、処理中の書き込みが
 	// 「閉じた DB」に当たって全部失敗する。待ちきれなかったぶんは諦める
 	// （どれもベストエフォート。chat.EventPublisher 参照）。
+	reportCreatedNotifier.Flush(shutdownCtx)
 	for _, runner := range asyncRunners {
 		if err := runner.Wait(shutdownCtx); err != nil {
 			logger.Log.Error().Err(err).Msg("async tasks did not drain before shutdown")
@@ -1003,6 +1178,18 @@ func errorCodeFor(err error) apperr.Code {
 }
 
 // allowedOriginsFromEnv returns the list of allowed CORS/WS origins.
+// messageMediaContainer は DM の添付を入れるコンテナー（バケット）名。
+//
+// 公開の置き場とは別にする。既定値を持たせてあるのは、この名前を入れ忘れた
+// だけで DM の添付が公開側へ落ちる、という壊れ方を避けるため（空文字を
+// そのまま渡すと、実装側はコンテナー未指定として扱ってしまう）。
+func messageMediaContainer() string {
+	if v := strings.TrimSpace(os.Getenv("MESSAGE_MEDIA_CONTAINER")); v != "" {
+		return v
+	}
+	return "space-message-media"
+}
+
 // If ALLOWED_ORIGINS is not set, it falls back to wildcard (dev-friendly).
 func allowedOriginsFromEnv(isProd bool) []string {
 	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))

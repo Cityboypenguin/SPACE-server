@@ -3,7 +3,7 @@
 // なぜ usecase/chat/internal/ に置いているか:
 //
 // これらは認可を一切持たない。授業ルームの学期・履修、room_users の membership、
-// DM のブロック判定、所有権、匿名IDの採番は全て usecase/chat 側の判定で、ここを
+// DM のブロック判定、所有権は全て usecase/chat 側の判定で、ここを
 // 直接呼べばそれらが丸ごとバイパスされる。以前は usecase/message にあり
 // 「サービス経由で呼ぶこと」という doc コメントだけが歯止めだったので、別の
 // リゾルバやバッチが素直に呼んでしまえば認可なしで書き込めてしまった。
@@ -39,7 +39,7 @@ import (
 // SendMessageUseCase はメッセージ1件の「保存処理」。
 //
 // 権限判定はここには無い（授業ルームの学期・履修、room_users の membership、
-// DM のブロック判定、匿名IDの採番は usecase/chat の送信サービスが持つ）。
+// DM のブロック判定は usecase/chat の送信サービスが持つ）。
 // このパッケージが internal に居るおかげで、認可を通さずこのユースケースへ
 // 辿り着く経路はコンパイル時に塞がれている（リポジトリの書き込み口まで塞がる
 // わけではない。パッケージのコメント参照）。
@@ -47,7 +47,8 @@ type SendMessageUseCase interface {
 	// replyToID を渡すと引用返信になる。返信先は同じルームの未削除メッセージである
 	// 必要があり、そうでなければエラーになる。
 	// mentions は ResolveMentionsUseCase で検証済みのメンション（コミュニティのみ）。
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (*model.Message, error)
+	// stampID を渡すとスタンプだけのメッセージになる（本文・添付・メンションとは同時に送れない）。
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -82,17 +83,24 @@ func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, mentions []*model.Mention) (_ *model.Message, err error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (_ *model.Message, err error) {
 	content = strings.TrimSpace(content)
 	if err := validateContent(content); err != nil {
 		return nil, err
+	}
+	// スタンプの検証は、添付のアップロードを受け入れる前に済ませる（受け入れた後で弾くと後始末が要る）。
+	if stampID != nil && (content != "" || len(mediaInputs) > 0 || len(mentions) > 0) {
+		return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
+	}
+	if stampID != nil && !model.IsValidMessageStampID(*stampID) {
+		return nil, apperr.InvalidInput("このスタンプは使えません")
 	}
 
 	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
 	uploads := uploadusecase.Begin(uc.uploads)
 	defer uploads.DiscardOnError(ctx, &err)
 
-	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
+	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.MessageAttachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +132,7 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 		UserID:    userID,
 		ReplyToID: replyToID,
 		Content:   content,
+		StampID:   stampID,
 		MediaKeys: mediaKeys,
 		CreatedAt: now,
 		UpdatedAt: now,

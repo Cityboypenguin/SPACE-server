@@ -53,6 +53,17 @@ type Status struct {
 	// finishes (State moves to SUCCEEDED/FAILED before the caller can react to it).
 	Processed int
 	Total     int
+	// DryRun は「実行したら何が変わるか」だけを見積もる実行（授業には書かない）。
+	DryRun bool
+	// RunID は成功した実行の結果（course_sync_runs）の ID。サマリーを引くのに使う。
+	RunID int64
+}
+
+// Outcome は1回の実行の結果。
+type Outcome struct {
+	Imported int
+	Skipped  int
+	RunID    int64
 }
 
 type Tracker struct {
@@ -164,6 +175,15 @@ func (t *Tracker) setProgress(token string, processed, total int) {
 // context would be cancelled once the mutation response is sent). run is handed
 // t.SetProgress so it can report incremental progress while it works.
 func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress func(processed, total int)) (imported, skipped int, err error)) (Status, error) {
+	return t.StartRun(year, false, func(ctx context.Context, reportProgress func(processed, total int)) (Outcome, error) {
+		imported, skipped, err := run(ctx, reportProgress)
+		return Outcome{Imported: imported, Skipped: skipped}, err
+	})
+}
+
+// StartRun は Start と同じく取り込みを裏で走らせる。dryRun を状態に載せ、run が返す
+// Outcome.RunID（実行結果の ID）を成功時の状態に残す。
+func (t *Tracker) StartRun(year int, dryRun bool, run func(ctx context.Context, reportProgress func(processed, total int)) (Outcome, error)) (Status, error) {
 	t.mu.Lock()
 	if t.stopping {
 		t.mu.Unlock()
@@ -174,7 +194,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 	// 実行中かどうかは共有の記録で決める。自分の台のメモリだけを見ていると、
 	// 管理者2人が別々の台に当たったときに同じ取り込みが2本走る。
 	now := time.Now()
-	snapshot := Status{State: StateRunning, Year: year, StartedAt: &now}
+	snapshot := Status{State: StateRunning, Year: year, StartedAt: &now, DryRun: dryRun}
 	token, acquired, err := t.store.TryStart(t.ctx, snapshot)
 	if err != nil {
 		// 取れたかどうかが分からないまま走らせない。二重起動は、同じ年度の
@@ -277,7 +297,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 			t.setProgress(token, processed, total)
 		}
 
-		imported, skipped, err := run(bgCtx, reportProgress)
+		outcome, err := run(bgCtx, reportProgress)
 		close(stopHeartbeat)
 		close(stopWatchdog)
 		finished := time.Now()
@@ -307,7 +327,7 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 			return
 		}
 		if err != nil {
-			t.status = Status{State: StateFailed, Year: year, ErrorMessage: err.Error(), StartedAt: startedAt, FinishedAt: &finished}
+			t.status = Status{State: StateFailed, Year: year, ErrorMessage: err.Error(), StartedAt: startedAt, FinishedAt: &finished, DryRun: dryRun}
 			final := t.status
 			t.runToken = ""
 			t.mu.Unlock()
@@ -315,7 +335,8 @@ func (t *Tracker) Start(year int, run func(ctx context.Context, reportProgress f
 			t.finish(token, final)
 			return
 		}
-		t.status = Status{State: StateSucceeded, Year: year, Imported: imported, Skipped: skipped, StartedAt: startedAt, FinishedAt: &finished}
+		t.status = Status{State: StateSucceeded, Year: year, Imported: outcome.Imported, Skipped: outcome.Skipped,
+			StartedAt: startedAt, FinishedAt: &finished, DryRun: dryRun, RunID: outcome.RunID}
 		final := t.status
 		t.runToken = ""
 		t.mu.Unlock()

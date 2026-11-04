@@ -8,10 +8,16 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
 	"github.com/Cityboypenguin/SPACE-server/usecase/block"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	roomusecase "github.com/Cityboypenguin/SPACE-server/usecase/room"
+	userusecase "github.com/Cityboypenguin/SPACE-server/usecase/user"
 )
+
+// ErrDMPartnerWithdrawn は、退会した相手との DM へ送ろうとしたとき。
+// 退会手続き中の人へ送っても、本人が取り消さない限り読まれないまま消えるので断る。
+var ErrDMPartnerWithdrawn = errors.New("相手が退会しているため、メッセージを送信できません")
 
 // AccessPolicy はチャットの権限判定。閲覧・書き込み・編集削除の可否をここだけで決める。
 //
@@ -50,7 +56,11 @@ type AccessPolicyDeps struct {
 
 	// CheckRoomWritable は授業ルームの学期・履修判定（非授業ルームは素通し）。
 	CheckRoomWritable  courseusecase.CheckRoomWritableUseCase
+	SystemSettingRepo  repository.SystemSettingRepository
 	CheckBlockRelation block.CheckBlockRelationUseCase
+	// GetUser は DM の相手が退会していないかを見る。退会手続き中・削除済みの人は
+	// nil で返る（表示用の取得なので）。
+	GetUser userusecase.GetUserByIDUseCase
 }
 
 var _ AccessPolicy = &accessPolicy{}
@@ -66,7 +76,7 @@ func NewAccessPolicy(deps AccessPolicyDeps) AccessPolicy {
 // EnsureReadAccess は roomID を閲覧してよいかを判定する。
 //
 // 判定規則:
-//   - 授業内チャット: 認証済みなら誰でも閲覧可（F-04 全授業公開。投稿者は匿名表示）。
+//   - 授業内チャット: 認証済みなら誰でも閲覧可（F-04 全授業公開）。
 //   - それ以外: room_users の membership が要る。
 //   - 管理者: DM 以外なら非メンバーでも閲覧可。
 //
@@ -90,6 +100,9 @@ func (p *accessPolicy) EnsureReadAccess(ctx context.Context, roomID int64) (*mod
 		return nil, err
 	}
 	if room.Type == model.RoomTypeCourse {
+		if err := courseusecase.EnsureCourseChatEnabled(ctx, p.deps.SystemSettingRepo); err != nil {
+			return nil, err
+		}
 		return room, nil
 	}
 
@@ -115,7 +128,7 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 	}
 	// ここで要るのは「自分が入っているか」だけ。メンバー一覧を引いて探すと、
 	// 閲覧・購読・編集・削除のたびにルームの人数ぶんの行が戻る。
-	isMember, err := p.deps.IsRoomMember.Execute(ctx, room.ID, claims.ID)
+	isMember, err := p.deps.IsRoomMember.Execute(ctx, room.PolicyRoomID(), claims.ID)
 	if err != nil {
 		return fmt.Errorf("failed to verify room membership")
 	}
@@ -140,7 +153,7 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 //	DM          | membership 必須                   | membership 必須（非参加のDMは不可）
 //
 // 授業ルームで membership を見ないのは、授業内チャットが room_users を使わない
-// 設計（誰でも閲覧でき匿名で表示する）だから。代わりに「現学期かつ履修中か」を
+// 設計（履修していなくても誰でも閲覧できる）だから。代わりに「現学期かつ履修中か」を
 // CheckRoomWritable が見る。送信時 (ensureWriteAccessFor) と同じ判定なので、
 // 送れる状態でなければ直せもしない、で揃う。
 //
@@ -148,11 +161,14 @@ func (p *accessPolicy) ensureRoomParticipation(ctx context.Context, claims *auth
 // 新しく話しかけさせない」ための設定であって、既に送ってしまった自分の発言を消す
 // 手段まで奪う理由が無いため。
 func (p *accessPolicy) ensureMutateAccess(ctx context.Context, claims *auth.Claims, room *model.Room) error {
+	if room.ThreadClosedAt != nil && !authz.IsAdminRole(claims.Role) {
+		return errors.New("このスレッドはクローズされています")
+	}
 	if room.Type == model.RoomTypeCourse {
 		if authz.IsAdminRole(claims.Role) {
 			return nil
 		}
-		return p.deps.CheckRoomWritable.Execute(ctx, room.ID)
+		return p.deps.CheckRoomWritable.Execute(ctx, room.PolicyRoomID())
 	}
 	return p.ensureRoomParticipation(ctx, claims, room)
 }
@@ -184,15 +200,19 @@ type writeAccess struct {
 //
 //   - 授業内チャット: room_users を使わず、現在の学期と一致するか（アーカイブ
 //     されていないか）と時間割に登録済みかを CheckRoomWritableUseCase が見る。
-//   - それ以外: membership が必須。DM だけはブロック関係があれば拒否。
+//   - それ以外: membership が必須。DM だけは相手が退会しているか、ブロック関係が
+//     あれば拒否。
 func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Claims, roomID int64) (*writeAccess, error) {
 	room, err := p.deps.GetRoom.Execute(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room")
 	}
 
+	if room.ThreadClosedAt != nil {
+		return nil, errors.New("このスレッドはクローズされています")
+	}
 	if room.Type == model.RoomTypeCourse {
-		if err := p.deps.CheckRoomWritable.Execute(ctx, roomID); err != nil {
+		if err := p.deps.CheckRoomWritable.Execute(ctx, room.PolicyRoomID()); err != nil {
 			return nil, err
 		}
 		return &writeAccess{Room: room}, nil
@@ -202,7 +222,7 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 	// membership を要求する（非メンバーのコミュニティへ管理者名義で書き込む機能は
 	// 元から無く、閲覧・モデレーションのために広げた管理者権限を「発言」まで
 	// 広げる理由が無いため）。閲覧・編集・削除とは意図的に別の規則。
-	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, roomID)
+	memberIDs, err := p.deps.GetRoomMemberIDs.Execute(ctx, room.PolicyRoomID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify room membership")
 	}
@@ -216,20 +236,28 @@ func (p *accessPolicy) ensureWriteAccessFor(ctx context.Context, claims *auth.Cl
 	// 参加者同士にブロック関係があっても場そのものは使えるのが正しい（ブロックは
 	// 1対1の会話を止める機能であって、共同の場から締め出す機能ではない）ので、
 	// 人数ではなくルーム種別で判定する。
+	//
+	// 相手が退会していれば断る。退会手続き中なら相手は表示から消えていて、削除済みなら
+	// room_users の行ごと消えて自分しか残っていない（相手が1人に決まらない）。
 	if room.Type == model.RoomTypeDM {
-		if partnerID, ok := soleOtherMember(memberIDs, claims.ID); ok {
-			isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, partnerID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check block status")
-			}
-			if isBlocked {
-				return nil, errors.New("ブロック設定によりメッセージを送信できません")
-			}
+		partnerID, ok := soleOtherMember(memberIDs, claims.ID)
+		if !ok {
+			return nil, ErrDMPartnerWithdrawn
 		}
-		// 相手が1人に決まらない DM（相手が退会して room_users の行が消え、自分しか
-		// 残っていない等）はブロック判定を飛ばす。ブロック関係は「相手が誰か」が
-		// 決まらないと引けず、ここで拒否側に倒すと「ブロックしていないのに送れない」
-		// 説明のつかない状態になるため。送り先が居ないだけなので、通しても害はない。
+		partner, err := p.deps.GetUser.Execute(ctx, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check the DM partner")
+		}
+		if partner == nil {
+			return nil, ErrDMPartnerWithdrawn
+		}
+		isBlocked, err := p.deps.CheckBlockRelation.Execute(ctx, partnerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block status")
+		}
+		if isBlocked {
+			return nil, errors.New("ブロック設定によりメッセージを送信できません")
+		}
 	}
 
 	return &writeAccess{Room: room, MemberIDs: memberIDs}, nil

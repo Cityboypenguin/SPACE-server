@@ -13,6 +13,7 @@ import (
 
 	gqlmodel "github.com/Cityboypenguin/SPACE-server/graph/model"
 	"github.com/Cityboypenguin/SPACE-server/internal/dataloader"
+	"github.com/Cityboypenguin/SPACE-server/internal/upload"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
@@ -51,15 +52,6 @@ func (r *messageResolver) Room(ctx context.Context, obj *gqlmodel.Message) (*gql
 
 // UserID is the resolver for the userID field.
 func (r *messageResolver) UserID(ctx context.Context, obj *gqlmodel.Message) (string, error) {
-	numericID, err := decodeGraphID(ctx, "user", obj.UserID)
-	if err != nil {
-		return "", nil
-	}
-
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
-		return anon.ID, nil
-	}
-
 	return obj.UserID, nil
 }
 
@@ -70,10 +62,6 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 		return nil, fmt.Errorf("invalid user id: %s", obj.UserID)
 	}
 
-	if anon := r.anonymousUserForCourseRoom(ctx, obj.RoomID, numericID); anon != nil {
-		return anon, nil
-	}
-
 	// スキーマ上 Message.user は非null（user: User!）。退会したユーザーの
 	// メッセージがここへ来るので、nil を返すと gqlgen の非null用マーシャラが
 	// 「the requested element is null which the schema does not allow」を立て、
@@ -81,18 +69,9 @@ func (r *messageResolver) User(ctx context.Context, obj *gqlmodel.Message) (*gql
 	// 混ざるとそのルームの履歴が丸ごと出なくなる。投稿側（postResolver.User）と
 	// 同じく「削除されたアカウント」の代替を返して、履歴は読めるままにする。
 	//
-	// 授業ルームは上の匿名表示で先に返るので、ここへ来るのは DM とコミュニティ。
-	//
 	// 読み込みエラーと不存在は分ける。まとめて代替で塗り潰すと、DBが一時的に
 	// 答えられないだけの相手まで退会済みとして表示してしまう。
-	u, err := dataloader.For(ctx).UserLoader.Load(ctx, numericID)
-	if err != nil {
-		return nil, err
-	}
-	if u == nil {
-		return toGraphDeletedUserWithID(numericID), nil
-	}
-	return toGraphUser(u), nil
+	return authorUser(ctx, numericID)
 }
 
 // Media is the resolver for the media field.
@@ -107,9 +86,24 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	}
 	var result []*gqlmodel.Media
 	for _, m := range mediaList {
-		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
+		// DM の添付は非公開の置き場にあるので、そちら（署名付きURLを返す側）から
+		// URL を作る。公開側の PublicURL を使うと、存在しないキーを指す素の URL に
+		// なって表示できない。
+		result = append(result, toGraphMedia(m, r.messageMediaURL(m.StorageKey)))
 	}
 	return result, nil
+}
+
+// messageMediaURL は DM の添付の表示URLを作る。
+//
+// 分離前に保存された添付は公開側のコンテナーに残っており、キーの先頭が "media/"
+// になっている。移行が終わるまで両方が DB に居るので、キーで見分けて取りに行く先を
+// 変える。移行後は "message-media/" だけになり、前半の分岐は通らなくなる。
+func (r *Resolver) messageMediaURL(storageKey string) string {
+	if kind, ok := upload.KindForObjectKey(storageKey); ok && !kind.Private {
+		return r.StorageRepository.PublicURL(storageKey)
+	}
+	return r.MessageStorageRepository.PublicURL(storageKey)
 }
 
 // IsMine is the resolver for the isMine field.
@@ -147,6 +141,29 @@ func (r *messageResolver) Mentions(ctx context.Context, obj *gqlmodel.Message) (
 		return nil, err
 	}
 	return resolveMentions(ctx, mentions)
+}
+
+// Reactions is the resolver for the reactions field.
+func (r *messageResolver) Reactions(ctx context.Context, obj *gqlmodel.Message) ([]*gqlmodel.MessageReaction, error) {
+	numericID, err := decodeGraphID(ctx, "message", obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	reactions, err := dataloader.For(ctx).ReactionLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*gqlmodel.MessageReaction, 0, len(reactions))
+	for _, reaction := range reactions {
+		result = append(result, &gqlmodel.MessageReaction{
+			Emoji:       reaction.Emoji,
+			Count:       int32(reaction.Count),
+			ReactedByMe: reaction.ReactedByMe,
+		})
+	}
+	return result, nil
 }
 
 // CreateRoom is the resolver for the createRoom field.
@@ -310,7 +327,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 // 権限判定（授業の学期・履修 / membership / ブロック）、メンションの検証、
 // 保存後の配信・通知は全て ChatCommands 側にある。ここは GraphQL ID のデコードと
 // GraphQL 型への変換だけを行う。
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*gqlmodel.Message, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -336,8 +353,15 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 
 	ucMediaInputs := r.toMediaInputs(mediaInputs)
 
+	// 空文字は「スタンプ無し」として扱う（クライアントが空で送ってきても通常のメッセージにする）。
+	var stamp *string
+	if stampID != nil && *stampID != "" {
+		stamp = stampID
+	}
+
 	msg, err := r.ChatCommands.SendMessage(ctx, chatusecase.SendMessageInput{
 		RoomID:         rid,
+		StampID:        stamp,
 		Content:        content,
 		MediaInputs:    ucMediaInputs,
 		MentionUserIDs: mentionIDs,
@@ -366,6 +390,50 @@ func (r *mutationResolver) DeleteMessage(ctx context.Context, roomID string, id 
 	}
 
 	return r.ChatCommands.DeleteMessage(ctx, chatusecase.DeleteMessageInput{RoomID: rid, MessageID: numericID})
+}
+
+// AddMessageReaction is the resolver for the addMessageReaction field.
+func (r *mutationResolver) AddMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*gqlmodel.Message, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	mid, err := decodeGraphID(ctx, "message", messageID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.ChatReactions.AddReaction(ctx, chatusecase.MessageReactionInput{RoomID: rid, MessageID: mid, Emoji: emoji})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphMessage(msg), nil
+}
+
+// RemoveMessageReaction is the resolver for the removeMessageReaction field.
+func (r *mutationResolver) RemoveMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*gqlmodel.Message, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+
+	rid, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room id")
+	}
+	mid, err := decodeGraphID(ctx, "message", messageID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message id")
+	}
+
+	msg, err := r.ChatReactions.RemoveReaction(ctx, chatusecase.MessageReactionInput{RoomID: rid, MessageID: mid, Emoji: emoji})
+	if err != nil {
+		return nil, err
+	}
+	return toGraphMessage(msg), nil
 }
 
 // UpdateMessage is the resolver for the updateMessage field.
@@ -505,6 +573,24 @@ func (r *queryResolver) Messages(ctx context.Context, roomID string, limit *int3
 	return &gqlmodel.MessagePage{Items: items, HasMoreBefore: page.HasMoreBefore, HasMoreAfter: page.HasMoreAfter}, nil
 }
 
+// MessageReactionEmojis is the resolver for the messageReactionEmojis field.
+func (r *queryResolver) MessageReactionEmojis(ctx context.Context) ([]string, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return nil, err
+	}
+	rows, err := r.StampService.List(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, v := range rows {
+		if v.Status == "active" && v.AllowReaction {
+			out = append(out, v.ID)
+		}
+	}
+	return out, nil
+}
+
 // Room is the resolver for the room field.
 func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, error) {
 	// 認証は requireRoomReadAccess（ChatAccess.EnsureReadAccess）側でも行われるが、
@@ -540,9 +626,10 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 	// 特定するため）も使うので、どちらかが選ばれていれば引く。
 	wantMembers := fieldRequested(ctx, "user")
 	wantMessagingDisabled := fieldRequested(ctx, "isMessagingDisabled")
+	wantPartnerWithdrawn := fieldRequested(ctx, "isPartnerWithdrawn")
 
 	var users []*model.User
-	if wantMembers || wantMessagingDisabled {
+	if wantMembers || wantMessagingDisabled || wantPartnerWithdrawn {
 		usersByRoomID, err := r.ListUsersByRoomIDsUseCase.Execute(ctx, []int64{rid})
 		if err != nil {
 			return nil, fmt.Errorf("failed to load room members")
@@ -558,13 +645,20 @@ func (r *queryResolver) Room(ctx context.Context, id string) (*gqlmodel.Room, er
 		gqlRoom.User = members
 	}
 
-	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor のブロック判定と
+	// 入力欄を閉じるのは DM だけ。AccessPolicy.ensureWriteAccessFor の判定と
 	// 同じ規則に揃える（画面の状態と実際の送信可否が食い違わないようにするため）。
-	// 相手が1人に決まらない DM ではブロックを引けないので、向こうと同じく判定しない。
-	gqlRoom.IsMessagingDisabled = false
-	if wantMessagingDisabled && room.Type == model.RoomTypeDM {
+	//
+	// メンバー一覧は表示用なので、退会手続き中の人は載らず、削除済みの人は行ごと無い。
+	// どちらでも相手が1人に決まらないので、それを「相手が退会している」とみなす。
+	// 送信側が相手を GetUserByID（同じく表示用）で確かめるのと同じ結果になる。
+	gqlRoom.IsMessagingDisabled = room.ThreadClosedAt != nil
+	gqlRoom.IsPartnerWithdrawn = false
+	if (wantMessagingDisabled || wantPartnerWithdrawn) && room.Type == model.RoomTypeDM {
 		partnerID, ok := dmPartnerID(users, claims.ID)
-		if ok {
+		if !ok {
+			gqlRoom.IsPartnerWithdrawn = true
+			gqlRoom.IsMessagingDisabled = true
+		} else if wantMessagingDisabled {
 			// 引けなかったときは従来どおり「ブロックなし」として入力欄を開けたままにする。
 			// 実際に送ろうとすれば AccessPolicy 側のブロック判定で弾かれるので通ることは
 			// ないが、入力欄の状態だけが食い違うので失敗は残す。
@@ -629,9 +723,10 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	// 「退会済みで自分しか居ない」の判定）ので、どちらかが選ばれていれば引く。
 	wantMembers := fieldRequested(ctx, "items", "user")
 	wantMessagingDisabled := fieldRequested(ctx, "items", "isMessagingDisabled")
+	wantPartnerWithdrawn := fieldRequested(ctx, "items", "isPartnerWithdrawn")
 
 	usersByRoomID := map[int64][]*model.User{}
-	if wantMembers || wantMessagingDisabled {
+	if wantMembers || wantMessagingDisabled || wantPartnerWithdrawn {
 		usersByRoomID, err = r.ListUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load room members")
@@ -680,6 +775,7 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 	result := make([]*gqlmodel.Room, 0, len(rooms))
 	for _, room := range rooms {
 		users := usersByRoomID[room.ID]
+		// 表示用のメンバー一覧なので、相手が退会手続き中でも削除済みでも自分しか残らない。
 		hasOnlyCurrentUser := len(users) == 1 && users[0].ID == claims.ID
 
 		gqlRoom := toGraphRoom(room)
@@ -703,9 +799,11 @@ func (r *queryResolver) MyDMRooms(ctx context.Context, limit *int32, offset *int
 			gqlRoom.IsMessagingDisabled = hasOnlyCurrentUser ||
 				(room.Type == model.RoomTypeDM && hasPartner && blockedSet[partnerID])
 		}
+		gqlRoom.IsPartnerWithdrawn = wantPartnerWithdrawn && room.Type == model.RoomTypeDM && hasOnlyCurrentUser
 
 		if lastMsg := lastMessageMap[room.ID]; lastMsg != nil {
-			gqlRoom.Content = &lastMsg.Content
+			summary := lastMessageText(lastMsg)
+			gqlRoom.Content = &summary
 		}
 
 		applyRoomReadStatus(gqlRoom, readStatusMap[room.ID])

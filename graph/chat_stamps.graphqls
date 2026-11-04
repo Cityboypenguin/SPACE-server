@@ -1,0 +1,35 @@
+# Image definitions shared by message stamps and reactions.
+extend type Query {
+ chatStamps: [ChatStamp!]!
+ adminChatStamps: [ChatStamp!]!
+ adminStampUploadUrl(contentType: String!): PresignedUploadUrl!
+}
+extend type Mutation {
+ adminSaveChatStamp(input: ChatStampInput!): ChatStamp!
+ adminReorderChatStamps(items: [ChatStampOrderInput!]!, reaction: Boolean!): Boolean!
+}
+type ChatStamp {
+ id: String!
+ label: String!
+ imageUrl: String!
+ displaySize: String!
+ status: String!
+ allowMessage: Boolean!
+ allowReaction: Boolean!
+ messageOrder: Int!
+ reactionOrder: Int!
+ version: Int!
+}
+input ChatStampInput {
+ id: String
+ label: String!
+ uploadKey: String
+ displaySize: String!
+ status: String!
+ allowMessage: Boolean!
+ allowReaction: Boolean!
+ messageOrder: Int!
+ reactionOrder: Int!
+ version: Int!
+}
+input ChatStampOrderInput { id: String!, version: Int! }

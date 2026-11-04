@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
+	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vikstrous/dataloadgen"
 )
 
@@ -40,6 +42,16 @@ type GetRepliesByPostIDsIncludeDeletedUseCase interface {
 type GetMessagesByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Message, error)
 }
+
+// ListAddendaUseCase は複数の質問（または回答）の追記をまとめて引く（Question.addenda /
+// Answer.addenda 用）。追記が無いものは map に入らない。
+type ListAddendaUseCase interface {
+	Execute(ctx context.Context, ids []int64) (map[int64][]*model.Addendum, error)
+}
+
+type ListMessageReactionsByMessageIDsUseCase interface {
+	Execute(ctx context.Context, messageIDs []int64) (map[int64][]*model.MessageReaction, error)
+}
 type GetFavoritesByPostIDsUseCase interface {
 	Execute(ctx context.Context, postIDs []int64, q repository.PageQuery) (map[int64][]*model.Favorite, error)
 }
@@ -61,9 +73,6 @@ type ListMentionsByMessageIDsUseCase interface {
 type GetRoomsByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*model.Room, error)
 }
-type GetQuestionsByIDsUseCase interface {
-	Execute(ctx context.Context, ids []int64) (map[int64]*model.Question, error)
-}
 type GetAnswersByIDsUseCase interface {
 	Execute(ctx context.Context, ids []int64) (map[int64]*repository.AnswerWithLikes, error)
 }
@@ -75,9 +84,6 @@ type ListPollOptionResultsByPollIDsUseCase interface {
 }
 type CountPollVotersByPollIDsUseCase interface {
 	Execute(ctx context.Context, pollIDs []int64) (map[int64]int, error)
-}
-type GetAnonymousIdentitiesUseCase interface {
-	Execute(ctx context.Context, keys []repository.RoomUserKey) (map[repository.RoomUserKey]*model.RoomAnonymousIdentity, error)
 }
 
 type ctxKey string
@@ -139,19 +145,25 @@ type Loaders struct {
 	FavoritedByMeLoader *dataloadgen.Loader[FavoritedByKey, bool]
 	// MessageLoader は引用返信の返信先メッセージ用。削除済み・不存在は nil を返す。
 	MessageLoader *dataloadgen.Loader[int64, *model.Message]
+	// ReactionLoader は Message.reactions 用。閲覧者ごとの値（reactedByMe）を含む。
+	// 購読（WebSocket）の ctx は接続の間ずっと同じローダーを使い回すため、
+	// Message.reactions のリゾルバは Load の前に Clear して古い集計を返さないようにしている
+	// （graph/chat.resolvers.go 参照）。
+	ReactionLoader *dataloadgen.Loader[int64, []*model.MessageReaction]
+	// QuestionAddendaLoader / AnswerAddendaLoader は Question.addenda / Answer.addenda 用。
+	// 追記は足されるたびに変わるので、購読（接続の間ローダーを使い回す）ではリゾルバが
+	// Load の前に Clear する。
+	QuestionAddendaLoader *dataloadgen.Loader[int64, []*model.Addendum]
+	AnswerAddendaLoader   *dataloadgen.Loader[int64, []*model.Addendum]
 	// PostMentionLoader / MessageMentionLoader は本文中のメンション用。
 	// 一覧表示で1件ずつ引くと N+1 になるためまとめて解決する。
 	PostMentionLoader    *dataloadgen.Loader[int64, []*model.Mention]
 	MessageMentionLoader *dataloadgen.Loader[int64, []*model.Mention]
 	// PostLoader は Post.parent と Favorite.post 用。削除済み・不存在は nil を返す。
 	PostLoader *dataloadgen.Loader[int64, *model.Post]
-	// RoomLoader は Message.room と、授業ルームかどうかの判定（匿名表示）用。
+	// RoomLoader は Message.room 用。
 	// 不存在は nil を返す。
 	RoomLoader *dataloadgen.Loader[int64, *model.Room]
-	// QuestionLoader は Answer.user が匿名表示かを決めるためのルーム特定用。
-	// 回答は質問を経由しないとルームが分からないので、1画面で同じ質問を何度も引く。
-	// 不存在は nil を返す。
-	QuestionLoader *dataloadgen.Loader[int64, *model.Question]
 	// AnswerLoader は Question.bestAnswer 用。不存在は nil を返す。
 	AnswerLoader *dataloadgen.Loader[int64, *repository.AnswerWithLikes]
 	// AnswerPageLoader は Question.answers 用。回答が無い質問も
@@ -164,10 +176,6 @@ type Loaders struct {
 	// 選択肢が無い投票は nil スライス、投票者が居ない投票は 0 になる。
 	PollOptionLoader     *dataloadgen.Loader[int64, []*repository.PollOptionResult]
 	PollVoterCountLoader *dataloadgen.Loader[int64, int]
-	// AnonymousIdentityLoader は授業内チャットの匿名表示名（匿名NNN）用。
-	// 行が無い（＝そのルームで投稿したことがない）場合は nil を返す。
-	// 呼び出し側はそこで実名へフォールバックしてはいけない。
-	AnonymousIdentityLoader *dataloadgen.Loader[repository.RoomUserKey, *model.RoomAnonymousIdentity]
 }
 
 // batchFromMap は「キーのスライスを受け取り map[K]V を返す関数」を DataLoader が要求する
@@ -396,15 +404,16 @@ type UseCases struct {
 	ListPostIDsFavoritedBy         ListPostIDsFavoritedByUseCase
 	CountAnswersByQuestionIDs      CountAnswersByQuestionIDsUseCase
 	GetMessagesByIDs               GetMessagesByIDsUseCase
+	ListMessageReactions           ListMessageReactionsByMessageIDsUseCase
+	ListQuestionAddenda            ListAddendaUseCase
+	ListAnswerAddenda              ListAddendaUseCase
 	ListMentionsByPostIDs          ListMentionsByPostIDsUseCase
 	ListMentionsByMessageIDs       ListMentionsByMessageIDsUseCase
 	GetRoomsByIDs                  GetRoomsByIDsUseCase
-	GetQuestionsByIDs              GetQuestionsByIDsUseCase
 	GetAnswersByIDs                GetAnswersByIDsUseCase
 	ListAnswerPagesByQuestionIDs   ListAnswerPagesByQuestionIDsUseCase
 	ListPollOptionResultsByPollIDs ListPollOptionResultsByPollIDsUseCase
 	CountPollVotersByPollIDs       CountPollVotersByPollIDsUseCase
-	GetAnonymousIdentities         GetAnonymousIdentitiesUseCase
 }
 
 // batchWait は全ローダー共通のバッチ待ち時間。
@@ -458,19 +467,21 @@ func New(uc UseCases) *Loaders {
 		FavoriteCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountFavoritesByPostIDs.Execute), loaderOptions...),
 		FavoritedByMeLoader: dataloadgen.NewLoader(batchFavoritedBy(uc.ListPostIDsFavoritedBy.Execute), loaderOptions...),
 		MessageLoader:       dataloadgen.NewLoader(batchFromMap(uc.GetMessagesByIDs.Execute), loaderOptions...),
+		ReactionLoader:      dataloadgen.NewLoader(batchFromMap(uc.ListMessageReactions.Execute), loaderOptions...),
+
+		QuestionAddendaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListQuestionAddenda.Execute), loaderOptions...),
+		AnswerAddendaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListAnswerAddenda.Execute), loaderOptions...),
 
 		PostMentionLoader:    dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByPostIDs.Execute), loaderOptions...),
 		MessageMentionLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMentionsByMessageIDs.Execute), loaderOptions...),
 
-		PostLoader:              dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), loaderOptions...),
-		RoomLoader:              dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), loaderOptions...),
-		QuestionLoader:          dataloadgen.NewLoader(batchFromMap(uc.GetQuestionsByIDs.Execute), loaderOptions...),
-		AnswerLoader:            dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
-		AnswerPageLoader:        dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
-		AnswerCountLoader:       dataloadgen.NewLoader(batchFromMap(uc.CountAnswersByQuestionIDs.Execute), loaderOptions...),
-		PollOptionLoader:        dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
-		PollVoterCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
-		AnonymousIdentityLoader: dataloadgen.NewLoader(batchFromMap(uc.GetAnonymousIdentities.Execute), loaderOptions...),
+		PostLoader:           dataloadgen.NewLoader(batchFromSlice(uc.GetPostsByIDs.Execute, func(p *model.Post) int64 { return p.ID }), loaderOptions...),
+		RoomLoader:           dataloadgen.NewLoader(batchFromMap(uc.GetRoomsByIDs.Execute), loaderOptions...),
+		AnswerLoader:         dataloadgen.NewLoader(batchFromMap(uc.GetAnswersByIDs.Execute), loaderOptions...),
+		AnswerPageLoader:     dataloadgen.NewLoader(batchAnswerPages(uc.ListAnswerPagesByQuestionIDs), loaderOptions...),
+		AnswerCountLoader:    dataloadgen.NewLoader(batchFromMap(uc.CountAnswersByQuestionIDs.Execute), loaderOptions...),
+		PollOptionLoader:     dataloadgen.NewLoader(batchFromMap(uc.ListPollOptionResultsByPollIDs.Execute), loaderOptions...),
+		PollVoterCountLoader: dataloadgen.NewLoader(batchFromMap(uc.CountPollVotersByPollIDs.Execute), loaderOptions...),
 	}
 }
 
@@ -489,6 +500,21 @@ func For(ctx context.Context) *Loaders {
 		panic("dataloaders not found in context. Check if middleware is applied.")
 	}
 	return loaders
+}
+
+// FreshLoadersForSubscriptions は購読の配信1回ごとに新しいローダーを使わせる。
+//
+// ローダーは HTTP リクエストごとに作るが、WebSocket の接続は1つのリクエストなので、そのままだと
+// 接続の間ずっと同じローダー（＝同じキャッシュ）を使い回す。すると同じ投稿の2回目以降の配信が、
+// 1回目に読んだ古い添付や集計を返してしまう。
+func FreshLoadersForSubscriptions(newLoaders func() *Loaders) graphql.ResponseMiddleware {
+	return func(ctx context.Context, next graphql.ResponseHandler) *graphql.Response {
+		if graphql.HasOperationContext(ctx) && graphql.GetOperationContext(ctx).Operation != nil &&
+			graphql.GetOperationContext(ctx).Operation.Operation == ast.Subscription {
+			ctx = WithLoaders(ctx, newLoaders())
+		}
+		return next(ctx)
+	}
 }
 
 // WithLoaders は ctx にローダーを差し込む。テストから For(ctx) を使うリゾルバを

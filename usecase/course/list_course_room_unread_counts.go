@@ -31,6 +31,14 @@ func (uc *ListCourseRoomUnreadCountsInteractor) Execute(ctx context.Context) ([]
 	if err != nil {
 		return nil, err
 	}
+	// 一括停止中は授業チャットを開けないので、未読の印も出さない。
+	stopped, err := courseChatStoppedFor(ctx, uc.settingRepo)
+	if err != nil {
+		return nil, err
+	}
+	if stopped {
+		return []*repository.CourseRoomUnread{}, nil
+	}
 
 	year, semesterName, err := semester.Get(ctx, uc.settingRepo)
 	if err != nil {

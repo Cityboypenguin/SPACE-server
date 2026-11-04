@@ -16,9 +16,19 @@ func NewMySQLSessionRepository(db *sql.DB) *MySQLSessionRepository {
 	return &MySQLSessionRepository{DB: db}
 }
 
+// sessionGapSeconds より間が空いたら別の利用として数える。Google Analytics の既定と同じ30分。
+//
+// クライアントはタブを隠すたびに送るので、送信の回数をそのまま数えると、タブを切り替えただけで
+// セッションが増えてしまう。
+const sessionGapSeconds = 30 * 60
+
+// appJST は利用者にとっての「日」を区切るタイムゾーン（利用者はみな日本にいる）。
+var appJST = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 func (r *MySQLSessionRepository) RecordSession(ctx context.Context, userID int64, durationSeconds int, pageViews []repository.PageViewInput) error {
 	now := time.Now()
-	date := now.Format("2006-01-02")
+	// 日付は日本時間で区切る。UTC のままだと、日本時間の 0〜9 時の利用が前の日に入る。
+	date := now.In(appJST).Format("2006-01-02")
 	nowUnix := now.Unix()
 
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -31,10 +41,10 @@ func (r *MySQLSessionRepository) RecordSession(ctx context.Context, userID int64
 		INSERT INTO user_session_summaries (user_id, date, session_count, total_duration_seconds, created_at, updated_at)
 		VALUES (?, ?, 1, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			session_count = session_count + 1,
+			session_count = session_count + IF(updated_at <= ? - ?, 1, 0),
 			total_duration_seconds = total_duration_seconds + VALUES(total_duration_seconds),
 			updated_at = VALUES(updated_at)`,
-		userID, date, durationSeconds, nowUnix, nowUnix)
+		userID, date, durationSeconds, nowUnix, nowUnix, nowUnix, sessionGapSeconds)
 	if err != nil {
 		return err
 	}
@@ -67,13 +77,17 @@ func insertPageViews(ctx context.Context, db dbtx, userID int64, date string, no
 	return inChunks(pageViews, pageViewStatColumns, func(chunk []repository.PageViewInput) error {
 		args := make([]any, 0, len(chunk)*pageViewStatColumns)
 		for _, pv := range chunk {
-			args = append(args, userID, date, pv.Path, 1, pv.DurationSeconds, pv.MaxScrollDepth, nowUnix, nowUnix)
+			views, scroll := 1, pv.MaxScrollDepth
+			if pv.Resumed {
+				views, scroll = 0, 0
+			}
+			args = append(args, userID, date, pv.Path, views, pv.DurationSeconds, scroll, nowUnix, nowUnix)
 		}
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO page_view_stats (user_id, date, page_path, view_count, total_duration_seconds, total_max_scroll_depth, created_at, updated_at)
 			VALUES `+valuesPlaceholders(len(chunk), pageViewStatColumns)+`
 			ON DUPLICATE KEY UPDATE
-				view_count = view_count + 1,
+				view_count = view_count + VALUES(view_count),
 				total_duration_seconds = total_duration_seconds + VALUES(total_duration_seconds),
 				total_max_scroll_depth = total_max_scroll_depth + VALUES(total_max_scroll_depth),
 				updated_at = VALUES(updated_at)`,

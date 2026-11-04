@@ -54,10 +54,6 @@ type AnswerRepository interface {
 	CountAnswersByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64]int, error)
 	// CountAnswersByQuestionID returns questionID's total answer count, for pagination.
 	CountAnswersByQuestionID(ctx context.Context, questionID int64) (int, error)
-	// UpdateAnswerBody edits an answer's body, scoped to authorUserID so only the
-	// author can edit it. Returns false if no row matched (not found, or the caller
-	// isn't the author).
-	UpdateAnswerBody(ctx context.Context, answerID, authorUserID int64, body string) (bool, error)
 	// DeleteAnswer removes an answer, scoped to authorUserID. Returns false if no row
 	// matched (not found, or the caller isn't the author).
 	DeleteAnswer(ctx context.Context, answerID, authorUserID int64) (bool, error)

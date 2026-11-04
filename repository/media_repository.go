@@ -43,17 +43,18 @@ type MediaReader interface {
 	ListByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]*model.Media, error)
 	ListByQuestionIDs(ctx context.Context, questionIDs []int64) (map[int64][]*model.Media, error)
 	ListByAnswerIDs(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
+	// ListStorageKeysByUploader はその利用者がアップロードした全メディアの保存先キー。
+	// 退会者の個人情報を消すとき、media 行は CASCADE で消えるがストレージ上の実体は
+	// 消えないので、行が消える前にキーを控えておくために使う。
+	ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error)
+	// ListReportableMediaByUploader はその利用者の添付のうち、通報の対象（メッセージ・質問・回答）に
+	// 付いているものを、添付先と一緒に返す。
+	ListReportableMediaByUploader(ctx context.Context, userID int64) ([]ReportableMedia, error)
 }
 
 // MediaDeleter は紐づけとメディア本体の削除。
 type MediaDeleter interface {
 	DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error
-	// DeleteQuestionMedia は questionID に添付されている mediaID を削除する（紐付けは
-	// ON DELETE CASCADE で消える）。他の質問・投稿のメディアは対象にしない。
-	DeleteQuestionMedia(ctx context.Context, questionID, mediaID int64) error
-	// DeleteAnswerMedia は answerID に添付されている mediaID を削除する（紐付けは
-	// ON DELETE CASCADE で消える）。他の回答・投稿のメディアは対象にしない。
-	DeleteAnswerMedia(ctx context.Context, answerID, mediaID int64) error
 }
 
 // MediaDimensionRepository は画像の縦横を後から埋める補修用（バッチが使う）。
@@ -72,4 +73,13 @@ type MediaRepository interface {
 	MediaReader
 	MediaDeleter
 	MediaDimensionRepository
+}
+
+// ReportableMedia は通報の対象に付いている添付1件。
+type ReportableMedia struct {
+	MediaID     int64
+	StorageKey  string
+	ContentType string
+	TargetType  model.ReportTargetType
+	TargetID    int64
 }

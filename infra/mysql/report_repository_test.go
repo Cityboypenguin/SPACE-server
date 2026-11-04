@@ -1,0 +1,173 @@
+package mysql
+
+import (
+	"context"
+	"encoding/base64"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
+)
+
+// 通報時点のメッセージは DM の本文を含むので、平文で列に残らないことと、
+// 暗号化したものが読み戻せることを実物の MySQL で確かめる。
+func TestReportRepository_ReportedContentIsEncryptedAndRoundTrips(t *testing.T) {
+	db, cleanup := throwawaySchemaDB(t, "space_report_test", []string{
+		`CREATE TABLE user_reports (
+			id VARCHAR(255) NOT NULL,
+			target_type VARCHAR(50) NOT NULL,
+			target_id VARCHAR(255) NOT NULL,
+			reporter_id BIGINT NOT NULL,
+			reason VARCHAR(100) NOT NULL,
+			custom_reason TEXT,
+			content TEXT NULL,
+			message_snapshot MEDIUMTEXT NULL,
+			status VARCHAR(50) NOT NULL,
+			created_at BIGINT NOT NULL,
+			updated_at BIGINT NOT NULL,
+			PRIMARY KEY (id)
+		) DEFAULT CHARSET=utf8mb4`,
+	})
+	defer cleanup()
+
+	t.Setenv("MESSAGE_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	repo, err := NewMySQLReportRepository(db)
+	if err != nil {
+		t.Fatalf("NewMySQLReportRepository: %v", err)
+	}
+
+	ctx := context.Background()
+	now := time.Unix(1700000000, 0)
+	authorID := int64(2)
+	body := "通報時点の本文 " + strings.Repeat("長", 21000) // TEXT の上限 64KB に収まらない長さになる
+	report := &model.Report{
+		ID: "r1", ReporterID: 1, TargetType: model.TargetMessage, TargetID: "9",
+		Reason: "SPAM", Status: model.StatusPending, CreatedAt: now, UpdatedAt: now,
+		ReportedContent: &model.ReportedContent{
+			ContentID: 9, RoomID: 5, RoomType: model.RoomTypeDM, AuthorID: &authorID, AuthorName: "実名",
+			Content:   body,
+			Media:     []model.ReportedContentMedia{{ID: 3, StorageKey: "media/a.png", ContentType: "image/png", CreatedAt: now}},
+			CreatedAt: now, UpdatedAt: now,
+		},
+	}
+	if err := repo.Save(ctx, report); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	var stored string
+	if err := db.QueryRowContext(ctx, `SELECT message_snapshot FROM user_reports WHERE id = 'r1'`).Scan(&stored); err != nil {
+		t.Fatalf("read the raw column: %v", err)
+	}
+	if strings.Contains(stored, "通報時点の本文") || strings.Contains(stored, "実名") {
+		t.Fatal("message_snapshot must not hold plaintext")
+	}
+
+	got, err := repo.FindByID(ctx, "r1")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+	if got.ReportedContent == nil || got.ReportedContent.Content != body {
+		t.Fatal("snapshot did not round-trip through FindByID")
+	}
+	if got.ReportedContent.AuthorID == nil || *got.ReportedContent.AuthorID != 2 || len(got.ReportedContent.Media) != 1 {
+		t.Fatalf("snapshot = %+v", got.ReportedContent)
+	}
+
+	items, total, err := repo.Search(ctx, nil, repository.PageQuery{Limit: 10, WithTotal: true})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ReportedContent == nil {
+		t.Fatalf("Search = %d items, total %d", len(items), total)
+	}
+}
+
+func TestReportRepository_RepointReportedMedia(t *testing.T) {
+	db, cleanup := throwawaySchemaDB(t, "space_report_media_test", []string{
+		`CREATE TABLE user_reports (
+			id VARCHAR(255) NOT NULL,
+			target_type VARCHAR(50) NOT NULL,
+			target_id VARCHAR(255) NOT NULL,
+			reporter_id BIGINT NOT NULL,
+			reason VARCHAR(100) NOT NULL,
+			custom_reason TEXT,
+			content TEXT NULL,
+			message_snapshot MEDIUMTEXT NULL,
+			status VARCHAR(50) NOT NULL,
+			created_at BIGINT NOT NULL,
+			updated_at BIGINT NOT NULL,
+			PRIMARY KEY (id)
+		) DEFAULT CHARSET=utf8mb4`,
+	})
+	defer cleanup()
+
+	t.Setenv("MESSAGE_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	repo, err := NewMySQLReportRepository(db)
+	if err != nil {
+		t.Fatalf("NewMySQLReportRepository: %v", err)
+	}
+
+	ctx := context.Background()
+	now := time.Unix(1700000000, 0)
+	save := func(id string, targetType model.ReportTargetType, targetID string, keys ...string) {
+		t.Helper()
+		media := []model.ReportedContentMedia{}
+		for _, key := range keys {
+			media = append(media, model.ReportedContentMedia{StorageKey: key, ContentType: "image/png", CreatedAt: now})
+		}
+		if err := repo.Save(ctx, &model.Report{
+			ID: id, ReporterID: 1, TargetType: targetType, TargetID: targetID,
+			Reason: "SPAM", Status: model.StatusPending, CreatedAt: now, UpdatedAt: now,
+			ReportedContent: &model.ReportedContent{Media: media, CreatedAt: now, UpdatedAt: now},
+		}); err != nil {
+			t.Fatalf("Save %s: %v", id, err)
+		}
+	}
+	save("same1", model.TargetQuestion, "9", "media/a.png", "media/b.png")
+	save("same2", model.TargetQuestion, "9", "media/a.png")
+	save("otherTarget", model.TargetAnswer, "9", "media/a.png")
+	// 通報の対象が投稿やユーザーのときは写しが無い。
+	if err := repo.Save(ctx, &model.Report{
+		ID: "none", ReporterID: 1, TargetType: model.TargetQuestion, TargetID: "9",
+		Reason: "SPAM", Status: model.StatusPending, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("Save none: %v", err)
+	}
+
+	has := func(key string) bool {
+		t.Helper()
+		found, err := repo.HasReportedMedia(ctx, model.TargetQuestion, "9", key)
+		if err != nil {
+			t.Fatalf("HasReportedMedia: %v", err)
+		}
+		return found
+	}
+	if !has("media/a.png") || has("media/none.png") {
+		t.Fatal("HasReportedMedia looked at the wrong snapshots")
+	}
+
+	if err := repo.RepointReportedMedia(ctx, model.TargetQuestion, "9", "media/a.png", "media/new.png"); err != nil {
+		t.Fatalf("RepointReportedMedia: %v", err)
+	}
+	same1, err := repo.FindByID(ctx, "same1")
+	if err != nil {
+		t.Fatalf("FindByID same1: %v", err)
+	}
+	if same1.ReportedContent.Media[1].StorageKey != "media/b.png" {
+		t.Errorf("only the old key should have moved: %+v", same1.ReportedContent.Media)
+	}
+	for id, want := range map[string]string{"same1": "media/new.png", "same2": "media/new.png", "otherTarget": "media/a.png"} {
+		got, err := repo.FindByID(ctx, id)
+		if err != nil {
+			t.Fatalf("FindByID %s: %v", id, err)
+		}
+		if got.ReportedContent.Media[0].StorageKey != want {
+			t.Errorf("%s: key = %s, want %s", id, got.ReportedContent.Media[0].StorageKey, want)
+		}
+		if !got.UpdatedAt.Equal(now) {
+			t.Errorf("%s: updated_at moved", id)
+		}
+	}
+}

@@ -10,13 +10,15 @@ import (
 // Message はチャット1件。
 //
 // ここに持たせるのは「メッセージ自身の情報だけで判断できること」に限る。
-// 「授業の学期が終わっていないか」「履修しているか」「匿名表示にするか」といった
+// 「授業の学期が終わっていないか」「履修しているか」といった
 // room / course の知識が要る判定は、メッセージ単体では決められないので
 // usecase 側（CheckRoomWritableUseCase など）に置く。
 type Message struct {
-	ID     int64
-	RoomID int64
-	UserID int64
+	// ThreadRoomID marks a system announcement. Only thread creation may set it.
+	ThreadRoomID *int64
+	ID           int64
+	RoomID       int64
+	UserID       int64
 	// AuthorRole は投稿時点での投稿者の立場（STUDENT / TEACHER）。
 	// 質問・回答・投票と同じく、あとから利用者の属性が変わっても
 	// 「そのとき誰として書いたか」が変わらないよう行に焼き付ける。
@@ -26,6 +28,9 @@ type Message struct {
 	// ケース（削除済み）を扱う必要がある。
 	ReplyToID *int64
 	Content   string
+	// StampID はスタンプだけを送ったメッセージのスタンプのID（"stamp:xxx"）。通常のメッセージは nil。
+	// スタンプのメッセージは本文・添付・メンションを持たない。
+	StampID *string
 	// Mentions は本文中のメンション。書き込み時に解決したものを保持し、
 	// 読み出し時は必要なときだけ（GraphQL の mentions フィールド解決時に）埋める。
 	Mentions  []*Mention
@@ -56,7 +61,7 @@ func (m *Message) CanBeEditedBy(userID int64, isAdmin bool) bool {
 	if m.IsDeleted() {
 		return false
 	}
-	return m.UserID == userID || isAdmin
+	return m.ThreadRoomID == nil && (m.UserID == userID || isAdmin)
 }
 
 // CanBeDeletedBy は userID がこのメッセージを削除してよいかを返す。
@@ -72,6 +77,8 @@ type CreateMessageParam struct {
 	UserID    int64
 	ReplyToID *int64
 	Content   string
+	// StampID を渡すと、スタンプだけのメッセージになる（本文・添付とは同時に送れない）。
+	StampID *string
 	// MediaKeys は添付のストレージキー。本文が空でも添付があれば送信できるため、
 	// 「本文と添付が両方空」を弾くためにここで受け取る（保存自体は media 側の責務）。
 	MediaKeys []string
@@ -91,7 +98,16 @@ type UpdateMessageParam struct {
 // 生成経路（通常送信・将来の別経路）が増えても検証が漏れないようにする。
 func NewMessage(param CreateMessageParam) (*Message, error) {
 	content := strings.TrimSpace(param.Content)
-	if content == "" && len(param.MediaKeys) == 0 {
+	if param.StampID != nil {
+		// スタンプのメッセージは、スタンプ1つだけで成り立つ。本文や添付が混ざると、
+		// 表示（スタンプだけを大きく出す）とプレビュー文言の前提が崩れる。
+		if content != "" || len(param.MediaKeys) > 0 {
+			return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
+		}
+		if !IsValidMessageStampID(*param.StampID) {
+			return nil, apperr.InvalidInput("このスタンプは使えません")
+		}
+	} else if content == "" && len(param.MediaKeys) == 0 {
 		return nil, apperr.InvalidInput("content or media is required")
 	}
 
@@ -115,6 +131,7 @@ func NewMessage(param CreateMessageParam) (*Message, error) {
 		AuthorRole: authorRole,
 		ReplyToID:  param.ReplyToID,
 		Content:    content,
+		StampID:    param.StampID,
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
 	}, nil

@@ -55,6 +55,11 @@ func (uc *RefreshUserTokenInteractor) Execute(ctx context.Context, refreshToken 
 	if u.Status == model.UserStatusFrozen {
 		return nil, errors.New("account is frozen")
 	}
+	// 退会手続き中のトークンは退会の時点で世代を進めて失効させてあるが、
+	// 世代の比較だけに頼らず状態でも断る。
+	if u.Status != model.UserStatusActive {
+		return nil, errors.New("user not found")
+	}
 	version, err := uc.userRepo.GetCredentialsVersionByID(ctx, claims.ID)
 	if err != nil {
 		return nil, err

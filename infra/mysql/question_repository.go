@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/messagecrypto"
@@ -105,27 +104,6 @@ func (r *MySQLQuestionRepository) SetBestAnswer(ctx context.Context, questionID,
 	return n > 0, nil
 }
 
-func (r *MySQLQuestionRepository) UpdateQuestionBody(ctx context.Context, questionID, askerUserID int64, body string) (bool, error) {
-	encryptedBody, err := r.cipher.Encrypt(body)
-	if err != nil {
-		return false, fmt.Errorf("encrypt question body: %w", err)
-	}
-
-	// 写真の削除と同じトランザクションで実行されるため、ctx のトランザクションを使う。
-	result, err := extractDB(ctx, r.DB).ExecContext(ctx,
-		`UPDATE questions SET body = ?, updated_at = ? WHERE id = ? AND asker_user_id = ?`,
-		encryptedBody, time.Now().Unix(), questionID, askerUserID,
-	)
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 func (r *MySQLQuestionRepository) ClearBestAnswer(ctx context.Context, questionID, askerUserID int64) (bool, error) {
 	result, err := r.DB.ExecContext(ctx,
 		`UPDATE questions SET best_answer_id = NULL, is_answered = FALSE, updated_at = ? WHERE id = ? AND asker_user_id = ?`,
@@ -192,43 +170,4 @@ func (r *MySQLQuestionRepository) scanQuestion(row questionScanner) (*model.Ques
 	q.Body = body
 
 	return &q, nil
-}
-
-// GetQuestionsByIDs は GetQuestionByID の一括版。DataLoader から1クエリでまとめて呼ばれる。
-//
-// 見つからなかった ID は map に入れない（単体版が nil, nil を返すのと同じ扱い）。
-func (r *MySQLQuestionRepository) GetQuestionsByIDs(ctx context.Context, ids []int64) (map[int64]*model.Question, error) {
-	result := make(map[int64]*model.Question, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	query := fmt.Sprintf(`
-		SELECT id, room_id, asker_user_id, author_role, body, is_answered, best_answer_id, created_at, updated_at
-		FROM questions WHERE id IN (%s)`, placeholders)
-
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-
-	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		// 復号まで含めて単体版と同じ scanQuestion を通す。ここで別の読み方を
-		// 書くと、列追加や復号の変更が片方だけに入る。
-		q, err := r.scanQuestion(rows)
-		if err != nil {
-			return nil, err
-		}
-		if q != nil {
-			result[q.ID] = q
-		}
-	}
-	return result, rows.Err()
 }

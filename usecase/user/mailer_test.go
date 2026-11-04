@@ -2,10 +2,12 @@ package user
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Cityboypenguin/SPACE-server/internal/async"
 	"github.com/Cityboypenguin/SPACE-server/model"
 	"github.com/Cityboypenguin/SPACE-server/repository"
 )
@@ -63,7 +65,7 @@ func (f *fakePasswordResetRepo) SaveOTP(_ context.Context, _, otp string, _ time
 func TestRequestPasswordReset_SendsOTPThroughMailer(t *testing.T) {
 	mailer := &fakeMailer{}
 	pwRepo := &fakePasswordResetRepo{}
-	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, pwRepo, mailer)
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, pwRepo, mailer, nil)
 
 	if err := uc.Execute(context.Background(), "u@example.com"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -86,7 +88,7 @@ func TestRequestPasswordReset_SendsOTPThroughMailer(t *testing.T) {
 // 未登録のメールアドレスにはユーザー列挙を避けるため何も送らない（従来どおり）。
 func TestRequestPasswordReset_UnknownEmailSendsNothing(t *testing.T) {
 	mailer := &fakeMailer{}
-	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{}, &fakePasswordResetRepo{}, mailer)
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{}, &fakePasswordResetRepo{}, mailer, nil)
 
 	if err := uc.Execute(context.Background(), "nobody@example.com"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +101,7 @@ func TestRequestPasswordReset_UnknownEmailSendsNothing(t *testing.T) {
 func TestRequestPasswordReset_RateLimitsOneRecipient(t *testing.T) {
 	mailer := &fakeMailer{}
 	pwRepo := &fakePasswordResetRepo{}
-	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, pwRepo, mailer)
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, pwRepo, mailer, nil)
 	for i := 0; i < 2; i++ {
 		if err := uc.Execute(context.Background(), "u@example.com"); err != nil {
 			t.Fatal(err)
@@ -108,4 +110,42 @@ func TestRequestPasswordReset_RateLimitsOneRecipient(t *testing.T) {
 	if len(mailer.sent) != 1 {
 		t.Fatalf("sent %d messages, want 1", len(mailer.sent))
 	}
+}
+
+// 送信に失敗しても、未登録のアドレスと同じ成功を返す（応答から登録の有無を分からせない）。
+func TestRequestPasswordReset_MailFailureLooksLikeSuccess(t *testing.T) {
+	mailer := &fakeMailer{err: errors.New("smtp down")}
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, &fakePasswordResetRepo{}, mailer, nil)
+	if err := uc.Execute(context.Background(), "u@example.com"); err != nil {
+		t.Fatalf("got %v, want the same success as an unknown address", err)
+	}
+}
+
+// 送信はリクエストの外で行い、応答はそれを待たない。
+func TestRequestPasswordReset_SendsOutsideTheRequest(t *testing.T) {
+	block := make(chan struct{})
+	mailer := &blockingMailer{release: block}
+	runner := async.NewRunner("test")
+	uc := NewRequestPasswordResetUseCase(&fakeUserRepo{user: &model.User{ID: 1}}, &fakePasswordResetRepo{}, mailer, runner)
+	if err := uc.Execute(context.Background(), "u@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	close(block)
+	if err := runner.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if mailer.sent != 1 {
+		t.Fatalf("sent %d mails, want 1", mailer.sent)
+	}
+}
+
+type blockingMailer struct {
+	release chan struct{}
+	sent    int
+}
+
+func (m *blockingMailer) Send(context.Context, string, string, string) error {
+	<-m.release
+	m.sent++
+	return nil
 }

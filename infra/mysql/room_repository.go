@@ -21,8 +21,8 @@ func NewMySQLRoomRepository(db *sql.DB) repository.RoomRepository {
 }
 
 func (r *MySQLRoomRepository) SaveRoom(ctx context.Context, room *model.Room) error {
-	query := "INSERT INTO rooms (name, type, created_at, updated_at) VALUES (?, ?, ?, ?)"
-	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt.Unix(), room.UpdatedAt.Unix())
+	query := "INSERT INTO rooms (name, type, created_at, updated_at, parent_room_id) VALUES (?, ?, ?, ?, ?)"
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, query, room.Name, room.Type, room.CreatedAt.Unix(), room.UpdatedAt.Unix(), room.ParentRoomID)
 	if err != nil {
 		return err
 	}
@@ -31,12 +31,12 @@ func (r *MySQLRoomRepository) SaveRoom(ctx context.Context, room *model.Room) er
 }
 
 func (r *MySQLRoomRepository) GetRoomByID(ctx context.Context, id int64) (*model.Room, error) {
-	query := "SELECT id, name, type, created_at, updated_at FROM rooms WHERE id = ?"
+	query := "SELECT r.id, r.name, r.type, r.created_at, r.updated_at, r.parent_room_id, t.created_by, t.closed_at FROM rooms r LEFT JOIN chat_threads t ON t.room_id = r.id WHERE r.id = ?"
 	row := extractDB(ctx, r.DB).QueryRowContext(ctx, query, id)
 
 	var room model.Room
 	var createdAt, updatedAt int64
-	err := row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt)
+	err := row.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt, &room.ParentRoomID, &room.ThreadCreatorID, &room.ThreadClosedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Room not found
@@ -74,7 +74,7 @@ func (r *MySQLRoomRepository) GetRoomsByIDs(ctx context.Context, ids []int64) (m
 
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
 	query := fmt.Sprintf(
-		"SELECT id, name, type, created_at, updated_at FROM rooms WHERE id IN (%s)",
+		"SELECT r.id, r.name, r.type, r.created_at, r.updated_at, r.parent_room_id, t.created_by, t.closed_at FROM rooms r LEFT JOIN chat_threads t ON t.room_id = r.id WHERE r.id IN (%s)",
 		placeholders,
 	)
 
@@ -92,7 +92,7 @@ func (r *MySQLRoomRepository) GetRoomsByIDs(ctx context.Context, ids []int64) (m
 	for rows.Next() {
 		var room model.Room
 		var createdAt, updatedAt int64
-		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&room.ID, &room.Name, &room.Type, &createdAt, &updatedAt, &room.ParentRoomID, &room.ThreadCreatorID, &room.ThreadClosedAt); err != nil {
 			return nil, err
 		}
 		room.CreatedAt = time.Unix(createdAt, 0)

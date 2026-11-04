@@ -18,13 +18,65 @@ extend type Query {
   adminGetCommunityAnalytics(limit: Int = 20, offset: Int = 0): CommunityStatsPage!
   adminGetTimeSeries(granularity: TimeSeriesGranularity!, from: String!, to: String!): TimeSeriesData!
   adminCourseImportStatus: CourseImportStatus!
+  # シラバス同期の実行結果（新しい順）。
+  adminCourseSyncRuns(year: Int, limit: Int = 20, offset: Int = 0): CourseSyncRunPage!
+  adminCourseSyncRun(id: ID!): CourseSyncRun
+  # 同期1回ぶんの変更。登録者の多い（影響の大きい）ものから並ぶ。
+  adminCourseSyncChanges(
+    runID: ID!
+    kind: CourseSyncChangeKind
+    limit: Int = 50
+    offset: Int = 0
+  ): CourseSyncChangePage!
+  adminCourseSyncReviews(
+    year: Int
+    status: CourseSyncReviewStatus
+    limit: Int = 20
+    offset: Int = 0
+  ): CourseSyncReviewPage!
   adminListCourseYears: [Int!]!
   adminGetCourse(id: ID!): Course
+  # 管理画面のコミュニティ一覧。検索・並び替え・ページングはすべてサーバー側で行う
+  # （並び替えは全件に対して行ってから窓を切る）。
+  adminListCommunities(
+    keyword: String
+    sortBy: AdminCommunitySortField = CREATED_AT
+    sortOrder: SortOrder = DESC
+    limit: Int = 20
+    offset: Int = 0
+  ): AdminCommunityPage!
+  adminGetCommunity(id: ID!): AdminCommunity
+  # 管理画面の投稿一覧（削除済みを含む）。絞り込みはサーバー側で行う。
+  adminListPosts(
+    keyword: String
+    status: AdminPostStatus = ALL
+    limit: Int = 20
+    offset: Int = 0
+  ): PostPage!
+  # 授業内チャットのNGワードの一覧と、止めた回数の集計。
+  adminNGWords: [NGWord!]!
+  adminNGWordStats: NGWordStats!
+  # 授業内チャットに上がった画像（メッセージ・質問・回答）の一覧。新しい順。
+  adminListCourseChatImages(
+    roomID: ID
+    source: CourseChatImageSource
+    limit: Int = 24
+    offset: Int = 0
+  ): AdminCourseChatImagePage!
+  # 管理者が利用者の目から外した画像。外した順の新しいものから。
+  adminListRemovedCourseChatImages(
+    roomID: ID
+    source: CourseChatImageSource
+    limit: Int = 24
+    offset: Int = 0
+  ): AdminRemovedCourseChatImagePage!
   adminListCourses(
     year: Int
     semester: String
     dayOfWeek: String
     keyword: String
+    sortBy: String
+    sortOrder: SortOrder
     limit: Int = 20
     offset: Int = 0
   ): CoursePage!
@@ -36,7 +88,7 @@ extend type Mutation {
   updateAdministrator(id: ID!, input: UpdateAdministratorInput!): Administrator!
   loginAdministrator(input: LoginInput!): AdministratorAuthPayload!
   refreshAdministratorToken(refreshToken: String!): AdministratorAuthPayload!
-  logoutAdministrator(token: String!): Boolean!
+  logoutAdministrator(token: String!, refreshToken: String): Boolean!
   # 管理者用: 任意のユーザーの時間割を操作する。
   adminRegisterTimetableEntry(userID: ID!, courseID: ID!): TimetableEntry!
   adminRemoveTimetableEntry(id: ID!, userID: ID!): Boolean!
@@ -49,7 +101,21 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
-  adminTriggerCourseImport(year: Int!): CourseImportStatus!
+  # 質問・回答への追記を1件消す（質問・回答そのものは残る）。
+  adminDeleteQuestionAddendum(id: ID!): Boolean!
+  adminDeleteAnswerAddendum(id: ID!): Boolean!
+  # 授業内チャットの画像を消す（ファイルも消える。取り消せない）。
+  adminDeleteCourseChatImage(mediaID: ID!): Boolean!
+  # 外した画像を元の投稿へ戻す。投稿か投稿者がもう無ければエラー。
+  adminRestoreCourseChatImage(mediaID: ID!): Boolean!
+  # NGワードを登録する。含まれている投稿は、投稿の前に止める（授業内チャットのメッセージ・質問・回答・追記・投票・スレッドの題名）。
+  adminCreateNGWord(pattern: String!, matchType: NGWordMatchType!): NGWord!
+  adminDeleteNGWord(id: ID!): Boolean!
+  # シラバスを取り込み、DB の授業を大学に今登録されている内容に合わせる。
+  # dryRun が true なら DB の授業は書き換えず、何が変わるかの結果だけを残す。
+  adminTriggerCourseImport(year: Int!, dryRun: Boolean = false): CourseImportStatus!
+  # 確認待ちの変化に判断を付ける。反映は次の同期で行われる。
+  adminResolveCourseSyncReview(id: ID!, decision: CourseSyncReviewDecision!): CourseSyncReview!
   adminCreateCourse(input: AdminCreateCourseInput!): Course!
   # Deletes the course's chat room, which cascades to the course row itself, every
   # user's timetable registration for it, and all of the room's messages/questions/
@@ -203,6 +269,8 @@ input PageViewInput {
   path: String!
   durationSeconds: Int!
   maxScrollDepth: Int!
+  # タブへ戻って同じ画面の続きを見たぶん。閲覧数には数えず、滞在時間だけ足す。
+  resumed: Boolean = false
 }
 
 enum TimeSeriesGranularity {
@@ -222,4 +290,116 @@ type TimeSeriesPoint {
 
 type TimeSeriesData {
   points: [TimeSeriesPoint!]!
+}
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+enum AdminCommunitySortField {
+  NAME
+  MEMBER_COUNT
+  CREATED_AT
+}
+
+# owner は最初にオーナーになった1人。オーナーがいなければ null。
+type AdminCommunity {
+  community: Community!
+  owner: User
+}
+
+type AdminCommunityPage {
+  items: [AdminCommunity!]!
+  total: Int!
+}
+
+enum AdminPostStatus {
+  ALL
+  ACTIVE
+  DELETED
+}
+
+enum NGWordMatchType {
+  # 含む。大小・全半角は区別しない。
+  WORD
+  # 正規表現（RE2）。例: 9桁の数字 (^|\D)\d{9}($|\D)
+  REGEX
+}
+
+type NGWord {
+  ID: ID!
+  pattern: String!
+  matchType: NGWordMatchType!
+  createdAt: String!
+}
+
+# 止めた回数。本文は残さない。
+type NGWordStats {
+  total: Int!
+  byWord: [NGWordCount!]!
+  byUser: [NGWordUserCount!]!
+}
+
+type NGWordCount {
+  pattern: String!
+  count: Int!
+}
+
+type NGWordUserCount {
+  userID: ID!
+  name: String!
+  accountID: String!
+  count: Int!
+}
+
+enum CourseChatImageSource {
+  MESSAGE
+  QUESTION
+  ANSWER
+}
+
+type AdminCourseChatImage {
+  # 画像(media)のID。adminDeleteCourseChatImage に渡す。
+  ID: ID!
+  source: CourseChatImageSource!
+  url: String!
+  width: Int
+  height: Int
+  roomID: ID!
+  courseName: String!
+  uploaderID: ID!
+  uploaderName: String!
+  uploaderAccountID: String!
+  # 添付先のメッセージが削除済み（画面には出ないが、ファイルは残っている）。
+  targetDeleted: Boolean!
+  createdAt: String!
+}
+
+type AdminRemovedCourseChatImage {
+  # 画像(media)のID。adminRestoreCourseChatImage に渡す。
+  ID: ID!
+  source: CourseChatImageSource!
+  url: String!
+  roomID: ID!
+  courseName: String!
+  uploaderID: ID!
+  uploaderName: String!
+  uploaderAccountID: String!
+  createdAt: String!
+  removedAt: String!
+  # 通報の写しが指している。通報が残る間は自動で消えない。
+  reported: Boolean!
+  # 完全に消える日時。通報があれば null。
+  expiresAt: String
+}
+
+type AdminRemovedCourseChatImagePage {
+  items: [AdminRemovedCourseChatImage!]!
+  total: Int!
+}
+
+type AdminCourseChatImagePage {
+  items: [AdminCourseChatImage!]!
+  total: Int!
 }
