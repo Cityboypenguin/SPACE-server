@@ -57,6 +57,8 @@ type AnswerRepository interface {
 	// DeleteAnswer removes an answer, scoped to authorUserID. Returns false if no row
 	// matched (not found, or the caller isn't the author).
 	DeleteAnswer(ctx context.Context, answerID, authorUserID int64) (bool, error)
+	// AdminDeleteAnswer removes one answer and clears its best-answer selection atomically.
+	AdminDeleteAnswer(ctx context.Context, answerID int64) (bool, error)
 	// LikeAnswer is idempotent: liking an already-liked answer is a no-op.
 	LikeAnswer(ctx context.Context, answerID, userID int64) error
 	// UnlikeAnswer is idempotent: unliking an answer that wasn't liked is a no-op.

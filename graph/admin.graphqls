@@ -101,6 +101,8 @@ extend type Mutation {
     courseIDs: [ID!]!
   ): [TimetableEntry!]!
   adminDeleteQuestion(id: ID!): Boolean!
+  # 回答を1件消す。ベストアンサーなら選択を解除し、質問を未解決に戻す。
+  adminDeleteAnswer(id: ID!): Boolean!
   # 質問・回答への追記を1件消す（質問・回答そのものは残る）。
   adminDeleteQuestionAddendum(id: ID!): Boolean!
   adminDeleteAnswerAddendum(id: ID!): Boolean!

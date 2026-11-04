@@ -164,6 +164,28 @@ func (r *MySQLAnswerRepository) DeleteAnswer(ctx context.Context, answerID, auth
 	return n > 0, nil
 }
 
+// AdminDeleteAnswer also resets resolution when the selected best answer is removed.
+func (r *MySQLAnswerRepository) AdminDeleteAnswer(ctx context.Context, answerID int64) (bool, error) {
+	var deleted bool
+	err := inTx(ctx, r.DB, func(ctx context.Context) error {
+		db := extractDB(ctx, r.DB)
+		if _, err := db.ExecContext(ctx,
+			`UPDATE questions SET best_answer_id = NULL, is_answered = FALSE, updated_at = ? WHERE best_answer_id = ?`,
+			time.Now().Unix(), answerID,
+		); err != nil {
+			return err
+		}
+		result, err := db.ExecContext(ctx, `DELETE FROM answers WHERE id = ?`, answerID)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		deleted = n > 0
+		return err
+	})
+	return deleted, err
+}
+
 func (r *MySQLAnswerRepository) LikeAnswer(ctx context.Context, answerID, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
 		`INSERT IGNORE INTO answer_likes (answer_id, user_id, created_at) VALUES (?, ?, ?)`,
