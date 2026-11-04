@@ -63,7 +63,7 @@ func (r *mutationResolver) CreateReport(ctx context.Context, input gqlmodel.Crea
 	}
 
 	switch input.TargetType {
-	case gqlmodel.ReportTargetTypeMessage, gqlmodel.ReportTargetTypeQuestion, gqlmodel.ReportTargetTypeAnswer, gqlmodel.ReportTargetTypePoll:
+	case gqlmodel.ReportTargetTypeMessage, gqlmodel.ReportTargetTypeQuestion, gqlmodel.ReportTargetTypeAnswer, gqlmodel.ReportTargetTypePoll, gqlmodel.ReportTargetTypeThread:
 		res, err := r.CreateContentReportUsecase.Execute(ctx, report.CreateContentReportInput{
 			ReporterID:   claims.ID,
 			TargetType:   model.ReportTargetType(input.TargetType),
@@ -152,7 +152,7 @@ func (r *mutationResolver) UpdateReportStatus(ctx context.Context, id string, st
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch reporter")
 	}
-	return r.toGraphUserReport(res, reporter), nil
+	return r.toGraphUserReport(ctx, res, reporter), nil
 }
 
 // AddReportNotificationRecipient is the resolver for the addReportNotificationRecipient field.
@@ -303,7 +303,7 @@ func (r *queryResolver) SearchReports(ctx context.Context, filter *gqlmodel.Repo
 			Status:          gqlmodel.ReportStatus(res.Status),
 			Reporter:        reporterUser,
 			Content:         reportContent,
-			ReportedContent: r.toGraphReportedContent(res.ReportedContent),
+			ReportedContent: r.toGraphReportedContent(ctx, res.ReportedContent),
 			CreatedAt:       res.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 		})
@@ -327,7 +327,7 @@ func (r *queryResolver) GetReport(ctx context.Context, id string) (*gqlmodel.Use
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch reporter")
 	}
-	return r.toGraphUserReport(res, reporter), nil
+	return r.toGraphUserReport(ctx, res, reporter), nil
 }
 
 // ReportNotificationRecipients is the resolver for the reportNotificationRecipients field.

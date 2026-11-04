@@ -84,6 +84,8 @@ enum ReportTargetType {
   QUESTION
   ANSWER
   POLL
+  # コミュニティ・授業内チャットのスレッド。targetID はスレッドのルームのID。
+  THREAD
 }
 
 type UserReport {
@@ -97,21 +99,24 @@ type UserReport {
   createdAt: String!
   updatedAt: String!
   content: String
-  # 通報を受けた時点の内容。targetType が MESSAGE・QUESTION・ANSWER・POLL のときだけ入る。
+  # 通報を受けた時点の内容。targetType が MESSAGE・QUESTION・ANSWER・POLL・THREAD のときだけ入る。
   # 管理者向けの応答だけに載せ、createReport の応答（通報者）には載せない。
   reportedContent: ReportedContent
 }
 
 # 通報を受けた時点の内容。あとから編集・削除されても変わらない。
 type ReportedContent {
+  # 内容が書かれた授業・コミュニティ（DM）。スレッドの中なら親のもの。
   roomID: ID!
   roomType: String!
   roomName: String!
+  # スレッドの中の内容（または THREAD の通報）のときのスレッドの題名。スレッドでなければ null。
+  threadTitle: String
   # 投稿者の利用者ID。授業内チャットが匿名表示だった時期の通報は null（authorName は匿名ラベル）。
   authorID: ID
   authorName: String!
   authorAccountID: String
-  # メッセージ・質問・回答の本文、または投票の設問。
+  # メッセージ・質問・回答の本文、投票の設問、またはスレッドの題名。
   content: String!
   media: [Media!]!
   # スタンプだけのメッセージのスタンプのID。このとき content は空。

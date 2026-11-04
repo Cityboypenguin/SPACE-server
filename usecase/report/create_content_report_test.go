@@ -15,9 +15,17 @@ import (
 type fakeRoomAccess struct {
 	room *model.Room
 	err  error
+	// rooms があれば ID で引き分ける（スレッドと親を別々に返すため）。
+	rooms map[int64]*model.Room
 }
 
-func (f *fakeRoomAccess) EnsureReadAccess(context.Context, int64) (*model.Room, error) {
+func (f *fakeRoomAccess) EnsureReadAccess(_ context.Context, id int64) (*model.Room, error) {
+	if f.rooms != nil {
+		if room := f.rooms[id]; room != nil {
+			return room, nil
+		}
+		return nil, errors.New("room not found")
+	}
 	return f.room, f.err
 }
 
@@ -290,5 +298,88 @@ func TestCreateContentReport_DeletedAuthorKeepsID(t *testing.T) {
 	s := f.repo.saved.ReportedContent
 	if s.AuthorID == nil || *s.AuthorID != 2 || s.AuthorName != "" {
 		t.Fatalf("snapshot = %+v", s)
+	}
+}
+
+// threadRooms は ID 4 のコミュニティと、その配下の ID threadID のスレッド。
+func threadRooms(threadID int64, creatorID int64) map[int64]*model.Room {
+	parentID := int64(4)
+	return map[int64]*model.Room{
+		parentID: {ID: parentID, Type: model.RoomTypeCommunity, Name: "写真部"},
+		threadID: {ID: threadID, Type: model.RoomTypeCommunity, Name: "合宿の相談", ParentRoomID: &parentID, ThreadCreatorID: &creatorID},
+	}
+}
+
+// スレッドの中のメッセージの通報には、場所として親のコミュニティを残し、スレッドの題名は別に残す。
+// 題名で親の名前を上書きすると、どこのコミュニティのスレッドなのか分からなくなる。
+func TestCreateContentReport_MessageInAThreadKeepsTheParent(t *testing.T) {
+	f := newContentReportFixture(model.RoomTypeCommunity)
+	f.deps.Access = &fakeRoomAccess{rooms: threadRooms(5, 2)}
+	if _, err := f.execute(model.TargetMessage); err != nil {
+		t.Fatal(err)
+	}
+	s := f.repo.saved.ReportedContent
+	if s.RoomID != 4 || s.RoomName != "写真部" || s.RoomType != model.RoomTypeCommunity {
+		t.Fatalf("place = %d %q %q, want the parent community", s.RoomID, s.RoomName, s.RoomType)
+	}
+	if s.ThreadRoomID == nil || *s.ThreadRoomID != 5 || s.ThreadTitle == nil || *s.ThreadTitle != "合宿の相談" {
+		t.Fatalf("thread = %v %v", s.ThreadRoomID, s.ThreadTitle)
+	}
+}
+
+func TestCreateContentReport_Thread(t *testing.T) {
+	f := newContentReportFixture(model.RoomTypeCommunity)
+	f.deps.Access = &fakeRoomAccess{rooms: threadRooms(9, 2)}
+	if _, err := f.execute(model.TargetThread); err != nil {
+		t.Fatal(err)
+	}
+	saved := f.repo.saved
+	s := saved.ReportedContent
+	if saved.TargetType != model.TargetThread || saved.TargetID != "9" || s.Content != "合宿の相談" {
+		t.Fatalf("saved = %+v / %+v", saved, s)
+	}
+	if s.RoomName != "写真部" || s.ThreadTitle == nil || *s.ThreadTitle != "合宿の相談" {
+		t.Fatalf("place = %q thread = %v", s.RoomName, s.ThreadTitle)
+	}
+	if s.AuthorID == nil || *s.AuthorID != 2 || s.AuthorName != "実名" {
+		t.Fatalf("the thread creator was not recorded: %+v", s)
+	}
+}
+
+func TestCreateContentReport_ThreadRejected(t *testing.T) {
+	t.Run("own thread", func(t *testing.T) {
+		f := newContentReportFixture(model.RoomTypeCommunity)
+		f.deps.Access = &fakeRoomAccess{rooms: threadRooms(9, 1)} // 通報者(1)が作ったスレッド
+		if _, err := f.execute(model.TargetThread); err == nil || f.repo.saved != nil {
+			t.Fatal("reporter could report their own thread")
+		}
+	})
+	t.Run("not a thread", func(t *testing.T) {
+		f := newContentReportFixture(model.RoomTypeCommunity)
+		f.deps.Access = &fakeRoomAccess{rooms: map[int64]*model.Room{9: {ID: 9, Type: model.RoomTypeCommunity, Name: "写真部"}}}
+		if _, err := f.execute(model.TargetThread); err == nil || f.repo.saved != nil {
+			t.Fatal("a whole community was accepted as a thread report")
+		}
+	})
+	t.Run("no read access", func(t *testing.T) {
+		f := newContentReportFixture(model.RoomTypeCommunity)
+		f.deps.Access = &fakeRoomAccess{rooms: map[int64]*model.Room{}}
+		if _, err := f.execute(model.TargetThread); err == nil || f.repo.saved != nil {
+			t.Fatal("an unreadable thread was reported")
+		}
+	})
+}
+
+// 作成者が退会して消えたスレッドも通報できる（投稿者は空のまま）。
+func TestCreateContentReport_ThreadWithoutCreator(t *testing.T) {
+	f := newContentReportFixture(model.RoomTypeCommunity)
+	rooms := threadRooms(9, 2)
+	rooms[9].ThreadCreatorID = nil
+	f.deps.Access = &fakeRoomAccess{rooms: rooms}
+	if _, err := f.execute(model.TargetThread); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.repo.saved.ReportedContent; s.AuthorID != nil || s.AuthorName != "" {
+		t.Fatalf("author = %v %q, want none", s.AuthorID, s.AuthorName)
 	}
 }

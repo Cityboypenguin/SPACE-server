@@ -53,7 +53,7 @@ type CreateContentReportDeps struct {
 	Users     userusecase.GetUserByIDUseCase
 }
 
-// CreateContentReportUsecase はメッセージ・質問・回答・投票の通報を受け付け、
+// CreateContentReportUsecase はメッセージ・質問・回答・投票・スレッドの通報を受け付け、
 // その時点の内容を写して残す。
 type CreateContentReportUsecase struct {
 	deps CreateContentReportDeps
@@ -97,12 +97,19 @@ func (u *CreateContentReportUsecase) Execute(ctx context.Context, input CreateCo
 	if err != nil {
 		return nil, err
 	}
+	// スレッドの中なら、通報には親の授業・コミュニティを残す（スレッドの題名だけでは場所が分からない）。
+	var parent *model.Room
+	if room.ParentRoomID != nil {
+		if parent, err = u.deps.Access.EnsureReadAccess(ctx, *room.ParentRoomID); err != nil {
+			return nil, err
+		}
+	}
 
-	if target.authorID == input.ReporterID {
+	if target.authorID != 0 && target.authorID == input.ReporterID {
 		return nil, apperr.New(apperr.CodeInvalidInput, "自分の投稿を通報することはできません")
 	}
 
-	snapshot, err := u.buildSnapshot(ctx, input.TargetID, target, room)
+	snapshot, err := u.buildSnapshot(ctx, input.TargetID, target, room, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +195,28 @@ func (u *CreateContentReportUsecase) loadTarget(ctx context.Context, input Creat
 				return nil
 			},
 		}, nil
+	case model.TargetThread:
+		// スレッドはルームなので、引くときに閲覧できるかも確かめる（Execute でも確かめ直す）。
+		room, err := u.deps.Access.EnsureReadAccess(ctx, input.TargetID)
+		if err != nil {
+			return nil, err
+		}
+		if room.ParentRoomID == nil {
+			return nil, nil
+		}
+		// 作成者が退会して消えていれば 0（投稿者なしとして写す）。
+		var creatorID int64
+		if room.ThreadCreatorID != nil {
+			creatorID = *room.ThreadCreatorID
+		}
+		return &reportTarget{
+			roomID:     room.ID,
+			authorID:   creatorID,
+			content:    room.Name,
+			createdAt:  room.CreatedAt,
+			updatedAt:  room.UpdatedAt,
+			loadExtras: func(context.Context, *model.ReportedContent) error { return nil },
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported report target: %s", input.TargetType)
 	}
@@ -241,14 +270,18 @@ func (u *CreateContentReportUsecase) attachMediaAndAddenda(
 
 // buildSnapshot は通報された1件だけを写す。メッセージの前後の発言や返信先は写さない
 // （DM は管理者でも読めない決まりなので、通報された発言以外を持ち出さないため）。
-func (u *CreateContentReportUsecase) buildSnapshot(ctx context.Context, id int64, target *reportTarget, room *model.Room) (*model.ReportedContent, error) {
-	authorID := target.authorID
+//
+// parent はスレッドの中の内容のときの親の授業・コミュニティ。場所としては親を写し、スレッドは別に写す。
+func (u *CreateContentReportUsecase) buildSnapshot(ctx context.Context, id int64, target *reportTarget, room, parent *model.Room) (*model.ReportedContent, error) {
+	place := room
+	if parent != nil {
+		place = parent
+	}
 	snapshot := &model.ReportedContent{
 		ContentID:  id,
-		RoomID:     room.ID,
-		RoomType:   room.Type,
-		RoomName:   room.Name,
-		AuthorID:   &authorID,
+		RoomID:     place.ID,
+		RoomType:   place.Type,
+		RoomName:   place.Name,
 		Content:    target.content,
 		StampID:    target.stampID,
 		Media:      []model.ReportedContentMedia{},
@@ -256,9 +289,19 @@ func (u *CreateContentReportUsecase) buildSnapshot(ctx context.Context, id int64
 		CreatedAt:  target.createdAt,
 		UpdatedAt:  target.updatedAt,
 	}
+	if parent != nil {
+		threadRoomID, threadTitle := room.ID, room.Name
+		snapshot.ThreadRoomID = &threadRoomID
+		snapshot.ThreadTitle = &threadTitle
+	}
 	if err := target.loadExtras(ctx, snapshot); err != nil {
 		return nil, err
 	}
+	if target.authorID == 0 {
+		return snapshot, nil
+	}
+	authorID := target.authorID
+	snapshot.AuthorID = &authorID
 
 	author, err := u.deps.Users.Execute(ctx, target.authorID)
 	if err != nil {

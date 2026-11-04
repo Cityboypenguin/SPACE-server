@@ -904,6 +904,7 @@ type ComplexityRoot struct {
 		RoomName        func(childComplexity int) int
 		RoomType        func(childComplexity int) int
 		StampID         func(childComplexity int) int
+		ThreadTitle     func(childComplexity int) int
 		UpdatedAt       func(childComplexity int) int
 	}
 
@@ -6371,6 +6372,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportedContent.StampID(childComplexity), true
+	case "ReportedContent.threadTitle":
+		if e.ComplexityRoot.ReportedContent.ThreadTitle == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedContent.ThreadTitle(childComplexity), true
 	case "ReportedContent.updatedAt":
 		if e.ComplexityRoot.ReportedContent.UpdatedAt == nil {
 			break
@@ -8424,6 +8431,8 @@ func (ec *executionContext) childFields_ReportedContent(ctx context.Context, fie
 		return ec.fieldContext_ReportedContent_roomType(ctx, field)
 	case "roomName":
 		return ec.fieldContext_ReportedContent_roomName(ctx, field)
+	case "threadTitle":
+		return ec.fieldContext_ReportedContent_threadTitle(ctx, field)
 	case "authorID":
 		return ec.fieldContext_ReportedContent_authorID(ctx, field)
 	case "authorName":
@@ -33122,6 +33131,29 @@ func (ec *executionContext) fieldContext_ReportedContent_roomName(_ context.Cont
 	return graphql.NewScalarFieldContext("ReportedContent", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _ReportedContent_threadTitle(ctx context.Context, field graphql.CollectedField, obj *model.ReportedContent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedContent_threadTitle(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ThreadTitle, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedContent_threadTitle(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedContent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _ReportedContent_authorID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedContent) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -47308,6 +47340,11 @@ func (ec *executionContext) _ReportedContent(ctx context.Context, sel ast.Select
 		case "roomName":
 			out.Values[i] = ec._ReportedContent_roomName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "threadTitle":
+			out.Values[i] = ec._ReportedContent_threadTitle(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "authorID":

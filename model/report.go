@@ -21,6 +21,7 @@ const (
 	TargetQuestion  ReportTargetType = "QUESTION"  // 授業の質問
 	TargetAnswer    ReportTargetType = "ANSWER"    // 授業の質問への回答
 	TargetPoll      ReportTargetType = "POLL"      // 授業の投票
+	TargetThread    ReportTargetType = "THREAD"    // コミュニティ・授業内チャットのスレッド（題名と作成者）
 )
 
 type Report struct {
@@ -48,10 +49,16 @@ type Report struct {
 // 項目名を変えると保存済みの通報が読めなくなるので、変えるときは旧名も読めるようにする。
 // メッセージだけが対象だった時期の通報があるため、ContentID の JSON 名は messageId のまま。
 type ReportedContent struct {
-	ContentID int64  `json:"messageId"`
-	RoomID    int64  `json:"roomId"`
-	RoomType  string `json:"roomType"`
-	RoomName  string `json:"roomName"`
+	ContentID int64 `json:"messageId"`
+	// RoomID・RoomName は内容が書かれた授業・コミュニティ（DM）。スレッドの中なら親のもので、
+	// スレッドは ThreadRoomID・ThreadTitle に分けて持つ。スレッドの題名で親の名前を上書きすると、
+	// どこの授業・コミュニティのスレッドなのか分からなくなるため。
+	// この区別を始める前の通報は、スレッドの中でも RoomID・RoomName がスレッドのものになっている。
+	RoomID       int64   `json:"roomId"`
+	RoomType     string  `json:"roomType"`
+	RoomName     string  `json:"roomName"`
+	ThreadRoomID *int64  `json:"threadRoomId,omitempty"`
+	ThreadTitle  *string `json:"threadTitle,omitempty"`
 	// AuthorID は投稿者の利用者ID。退会済みの投稿者は AuthorID のみで名前は空。
 	// 授業内チャットが匿名表示だった時期の通報は nil で、表示名は匿名ラベルになっている。
 	AuthorID        *int64 `json:"authorId"`

@@ -763,6 +763,7 @@ type ReportedContent struct {
 	RoomID          string   `json:"roomID"`
 	RoomType        string   `json:"roomType"`
 	RoomName        string   `json:"roomName"`
+	ThreadTitle     *string  `json:"threadTitle,omitempty"`
 	AuthorID        *string  `json:"authorID,omitempty"`
 	AuthorName      string   `json:"authorName"`
 	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
@@ -1729,6 +1730,7 @@ const (
 	ReportTargetTypeQuestion  ReportTargetType = "QUESTION"
 	ReportTargetTypeAnswer    ReportTargetType = "ANSWER"
 	ReportTargetTypePoll      ReportTargetType = "POLL"
+	ReportTargetTypeThread    ReportTargetType = "THREAD"
 )
 
 var AllReportTargetType = []ReportTargetType{
@@ -1739,11 +1741,12 @@ var AllReportTargetType = []ReportTargetType{
 	ReportTargetTypeQuestion,
 	ReportTargetTypeAnswer,
 	ReportTargetTypePoll,
+	ReportTargetTypeThread,
 }
 
 func (e ReportTargetType) IsValid() bool {
 	switch e {
-	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage, ReportTargetTypeQuestion, ReportTargetTypeAnswer, ReportTargetTypePoll:
+	case ReportTargetTypePost, ReportTargetTypeUser, ReportTargetTypeCommunity, ReportTargetTypeMessage, ReportTargetTypeQuestion, ReportTargetTypeAnswer, ReportTargetTypePoll, ReportTargetTypeThread:
 		return true
 	}
 	return false

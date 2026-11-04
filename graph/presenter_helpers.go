@@ -138,6 +138,8 @@ func reportTargetKind(t gqlmodel.ReportTargetType) string {
 		return "answer"
 	case gqlmodel.ReportTargetTypePoll:
 		return "poll"
+	case gqlmodel.ReportTargetTypeThread:
+		return "room"
 	default:
 		return ""
 	}
@@ -169,7 +171,7 @@ func toGraphReportNotificationRecipient(recipient *model.ReportNotificationRecip
 }
 
 // toGraphUserReport は通報を管理者向けの形にする。reporter が nil なら退会済みとして扱う。
-func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *gqlmodel.UserReport {
+func (r *Resolver) toGraphUserReport(ctx context.Context, res *model.Report, reporter *model.User) *gqlmodel.UserReport {
 	targetType := gqlmodel.ReportTargetType(res.TargetType)
 	targetID := res.TargetID
 	if kind := reportTargetKind(targetType); kind != "" {
@@ -190,7 +192,7 @@ func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *g
 		Status:          gqlmodel.ReportStatus(res.Status),
 		Reporter:        gqlReporter,
 		Content:         res.PostContent,
-		ReportedContent: r.toGraphReportedContent(res.ReportedContent),
+		ReportedContent: r.toGraphReportedContent(ctx, res.ReportedContent),
 		CreatedAt:       res.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       res.UpdatedAt.Format(time.RFC3339),
 	}
@@ -198,10 +200,11 @@ func (r *Resolver) toGraphUserReport(res *model.Report, reporter *model.User) *g
 
 // toGraphReportedContent は通報時点の内容を管理者向けの形にする。
 // 添付の URL だけは表示の時点で組む（署名付き URL は期限が切れるので保存できない）。
-func (r *Resolver) toGraphReportedContent(m *model.ReportedContent) *gqlmodel.ReportedContent {
+func (r *Resolver) toGraphReportedContent(ctx context.Context, m *model.ReportedContent) *gqlmodel.ReportedContent {
 	if m == nil {
 		return nil
 	}
+	m = r.withThreadParent(ctx, m)
 	media := make([]*gqlmodel.Media, 0, len(m.Media))
 	for _, item := range m.Media {
 		media = append(media, toGraphMedia(&model.Media{
@@ -217,6 +220,7 @@ func (r *Resolver) toGraphReportedContent(m *model.ReportedContent) *gqlmodel.Re
 		RoomID:      encodeGraphID("room", m.RoomID),
 		RoomType:    m.RoomType,
 		RoomName:    m.RoomName,
+		ThreadTitle: m.ThreadTitle,
 		AuthorName:  m.AuthorName,
 		Content:     m.Content,
 		Media:       media,
@@ -238,6 +242,30 @@ func (r *Resolver) toGraphReportedContent(m *model.ReportedContent) *gqlmodel.Re
 		out.AuthorName = deletedAccountDisplayName
 	}
 	return out
+}
+
+// withThreadParent は、スレッドと親を分けて写す前の通報を、今のルームから読み替える。
+//
+// 以前はスレッドの中のメッセージを通報すると、場所としてスレッドのルームと題名だけを写していたので、
+// どこの授業・コミュニティのスレッドなのかが分からなかった。写したルームが今もスレッドとして
+// 残っていれば、題名は通報時点のまま、場所を親に置き換える。スレッドが消えていれば元のまま返す。
+func (r *Resolver) withThreadParent(ctx context.Context, m *model.ReportedContent) *model.ReportedContent {
+	if m.ThreadTitle != nil || (m.RoomType != model.RoomTypeCommunity && m.RoomType != model.RoomTypeCourse) || r.GetRoomUseCase == nil {
+		return m
+	}
+	room, err := r.GetRoomUseCase.Execute(ctx, m.RoomID)
+	if err != nil || room.ParentRoomID == nil {
+		return m
+	}
+	parent, err := r.GetRoomUseCase.Execute(ctx, *room.ParentRoomID)
+	if err != nil {
+		return m
+	}
+	out := *m
+	threadRoomID, threadTitle := room.ID, m.RoomName
+	out.ThreadRoomID, out.ThreadTitle = &threadRoomID, &threadTitle
+	out.RoomID, out.RoomType, out.RoomName = parent.ID, parent.Type, parent.Name
+	return &out
 }
 
 func (r *queryResolver) buildProfile(ctx context.Context, u *model.User) (*gqlmodel.Profile, error) {

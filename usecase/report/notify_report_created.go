@@ -27,6 +27,7 @@ var reportTargetLabels = map[model.ReportTargetType]string{
 	model.TargetQuestion:  "質問",
 	model.TargetAnswer:    "回答",
 	model.TargetPoll:      "投票",
+	model.TargetThread:    "スレッド",
 }
 
 // 通報モーダルの選択肢と対応する。reason は利用者が自由に送れる文字列なので、
