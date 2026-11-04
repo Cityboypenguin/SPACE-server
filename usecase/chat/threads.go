@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	"github.com/Cityboypenguin/SPACE-server/internal/audit"
 	"github.com/Cityboypenguin/SPACE-server/internal/auth"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -207,6 +208,47 @@ func (s *ThreadService) Update(ctx context.Context, id int64, title *string, clo
 	}
 
 	return s.Get(ctx, id)
+}
+
+// Delete はスレッドを丸ごと消す。管理者だけができる。
+//
+// スレッドのルームを消せば、中のメッセージ・既読位置・chat_threads の行は外部キーの
+// ON DELETE CASCADE で一緒に消える。親チャットの「スレッドを作成しました」の案内は
+// thread_room_id が NULL になるだけで残り、ただのメッセージに化けるので、同じトランザクションで論理削除する。
+// 戻り値は消したスレッドのルーム（親の購読者へ知らせるのに使う）。
+func (s *ThreadService) Delete(ctx context.Context, id int64) (*model.Room, error) {
+	claims, err := authz.RequireAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	room, err := s.Rooms.GetRoomByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if room == nil || room.ParentRoomID == nil {
+		return nil, apperr.NotFound("スレッドが見つかりません")
+	}
+	announcementID, err := s.Threads.AnnouncementID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = s.Tx.RunInTx(ctx, func(ctx context.Context) error {
+		if announcementID != 0 {
+			if _, err := s.Writers.system.SoftDeleteMessage(ctx, announcementID, claims.ID); err != nil {
+				return err
+			}
+		}
+		_, err := s.Rooms.DeleteRoom(ctx, id)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	audit.LogThreadDeleted(ctx, *room.ParentRoomID, id)
+	if announcementID != 0 && s.Events != nil {
+		s.Events.MessageDeleted(ctx, MessageDeletedEvent{RoomID: *room.ParentRoomID, MessageID: announcementID})
+	}
+	return room, nil
 }
 
 func (s *ThreadService) HasUnread(ctx context.Context, parentID int64) (bool, error) {

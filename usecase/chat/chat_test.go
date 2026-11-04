@@ -208,6 +208,11 @@ func (f *fakeListMessagesAround) Execute(_ context.Context, _, _ int64, _ int) (
 type fakeEvents struct {
 	NoopEventPublisher
 	updated []MessageUpdatedEvent
+	deleted []MessageDeletedEvent
+}
+
+func (f *fakeEvents) MessageDeleted(_ context.Context, ev MessageDeletedEvent) {
+	f.deleted = append(f.deleted, ev)
 }
 
 func (f *fakeEvents) MessageUpdated(_ context.Context, ev MessageUpdatedEvent) {

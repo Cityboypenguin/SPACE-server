@@ -537,6 +537,7 @@ type ComplexityRoot struct {
 		DeleteAnswer                      func(childComplexity int, id string) int
 		DeleteAvatar                      func(childComplexity int) int
 		DeleteBlocker                     func(childComplexity int, blockedUserID string) int
+		DeleteChatThread                  func(childComplexity int, roomID string) int
 		DeleteFavorite                    func(childComplexity int, input model.DeleteFavoriteInput) int
 		DeleteFavoriteUser                func(childComplexity int, favoriteUserID string) int
 		DeleteMessage                     func(childComplexity int, roomID string, id string) int
@@ -1187,6 +1188,7 @@ type MutationResolver interface {
 	ConsentToTerms(ctx context.Context, termsID string) (bool, error)
 	CreateChatThread(ctx context.Context, parentRoomID string, title string) (*model.ChatThread, error)
 	UpdateChatThread(ctx context.Context, roomID string, title *string, closed *bool) (*model.ChatThread, error)
+	DeleteChatThread(ctx context.Context, roomID string) (bool, error)
 	SendEmailOtp(ctx context.Context, email string) (bool, error)
 	VerifyEmailOtp(ctx context.Context, email string, otp string) (bool, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.UserAccount, error)
@@ -3770,6 +3772,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteBlocker(childComplexity, args["blockedUserID"].(string)), true
+	case "Mutation.deleteChatThread":
+		if e.ComplexityRoot.Mutation.DeleteChatThread == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteChatThread_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteChatThread(childComplexity, args["roomID"].(string)), true
 	case "Mutation.deleteFavorite":
 		if e.ComplexityRoot.Mutation.DeleteFavorite == nil {
 			break
@@ -9692,6 +9705,20 @@ func (ec *executionContext) field_Mutation_deleteBlocker_args(ctx context.Contex
 		return nil, err
 	}
 	args["blockedUserID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteChatThread_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
 	return args, nil
 }
 
@@ -24760,6 +24787,50 @@ func (ec *executionContext) fieldContext_Mutation_updateChatThread(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateChatThread_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteChatThread(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteChatThread(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteChatThread(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteChatThread(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteChatThread_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -42564,6 +42635,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateChatThread":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateChatThread(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteChatThread":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteChatThread(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

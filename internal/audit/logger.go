@@ -34,6 +34,14 @@ func LogMessageDeleted(ctx context.Context, roomID int64, messageID int64) {
 		Int64("message_id", messageID), ctx).Send()
 }
 
+// LogThreadDeleted records an administrator deleting a chat thread together with all of its messages.
+func LogThreadDeleted(ctx context.Context, parentRoomID int64, threadRoomID int64) {
+	WithActor(logger.Log.Info().
+		Str("event", "chat_thread_deleted").
+		Int64("parent_room_id", parentRoomID).
+		Int64("thread_room_id", threadRoomID), ctx).Send()
+}
+
 // LogCourseChatImageDeleted records an administrator deleting an image from the course chat
 // (message / question / answer attachment): who (via WithActor), which media, and where it was attached.
 func LogCourseChatImageDeleted(ctx context.Context, mediaID int64, source string, targetID int64, uploaderID int64, removedKey string) {

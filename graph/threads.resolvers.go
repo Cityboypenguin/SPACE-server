@@ -31,6 +31,19 @@ func (r *mutationResolver) UpdateChatThread(ctx context.Context, roomID string, 
 	r.publishChatThreadChanged(thread.Room)
 	return r.toGraphThread(ctx, thread)
 }
+func (r *mutationResolver) DeleteChatThread(ctx context.Context, roomID string) (bool, error) {
+	id, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return false, err
+	}
+	room, err := r.ThreadService.Delete(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	// 親でスレッド一覧を開いている画面に取り直させる。
+	r.publishChatThreadChanged(room)
+	return true, nil
+}
 func (r *queryResolver) ChatThread(ctx context.Context, roomID string) (*gqlmodel.ChatThread, error) {
 	id, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {

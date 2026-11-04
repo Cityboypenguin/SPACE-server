@@ -21,12 +21,27 @@ func (s *threadRoomStore) SaveRoom(_ context.Context, r *model.Room) error {
 	return nil
 }
 
+func (s *threadRoomStore) GetRoomByID(_ context.Context, id int64) (*model.Room, error) {
+	return s.rooms[id], nil
+}
+
+func (s *threadRoomStore) DeleteRoom(_ context.Context, id int64) (bool, error) {
+	_, ok := s.rooms[id]
+	delete(s.rooms, id)
+	return ok, nil
+}
+
 type threadStore struct {
 	repository.ChatThreadRepository
 	rooms        map[int64]*model.Room
 	created      bool
 	updated      bool
 	unreadCalled bool
+	announcement int64
+}
+
+func (s *threadStore) AnnouncementID(_ context.Context, roomID int64) (int64, error) {
+	return s.announcement, nil
 }
 
 func (s *threadStore) HasUnread(_ context.Context, parentID, viewerID int64) (bool, error) {
@@ -55,8 +70,14 @@ func (s *threadStore) Update(_ context.Context, id int64, title string, closed b
 
 type threadMessageStore struct {
 	repository.MessageWriter
-	message *model.Message
-	err     error
+	message     *model.Message
+	err         error
+	softDeleted []int64
+}
+
+func (s *threadMessageStore) SoftDeleteMessage(_ context.Context, id, deletedBy int64) (bool, error) {
+	s.softDeleted = append(s.softDeleted, id)
+	return true, nil
 }
 
 func (s *threadMessageStore) SaveMessage(_ context.Context, m *model.Message) error {
@@ -294,5 +315,54 @@ func TestRefreshThreadCard_PublishesTheAnnouncementToTheParent(t *testing.T) {
 	s.refreshThreadCard(context.Background(), thread)
 	if len(events.updated) != 0 {
 		t.Errorf("lookup failed: updated = %+v", events.updated)
+	}
+}
+
+func TestThreadDeleteRemovesRoomAndAnnouncement(t *testing.T) {
+	s, h, store, messages, tx := threadHarness()
+	thread, err := s.Create(ctxAsUser(10), communityRoomID, "相談")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.announcement = 77
+	tx.called = false
+	room, err := s.Delete(ctxAsAdmin(99), thread.Room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if room.ID != thread.Room.ID || !tx.called {
+		t.Fatal("thread must be deleted in a transaction", room)
+	}
+	if _, ok := store.rooms[thread.Room.ID]; ok {
+		t.Fatal("thread room was not deleted")
+	}
+	if len(messages.softDeleted) != 1 || messages.softDeleted[0] != 77 {
+		t.Fatalf("announcement was not removed: %v", messages.softDeleted)
+	}
+	events := h.events.deleted
+	if len(events) != 1 || events[0].RoomID != communityRoomID || events[0].MessageID != 77 {
+		t.Fatalf("parent room was not told about the removed announcement: %+v", events)
+	}
+}
+
+func TestThreadDeleteRejected(t *testing.T) {
+	s, _, store, messages, _ := threadHarness()
+	thread, err := s.Create(ctxAsUser(10), communityRoomID, "相談")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// スレッドを作った本人やコミュニティのオーナーでも、消せるのは管理者だけ。
+	if _, err := s.Delete(ctxAsUser(10), thread.Room.ID); err == nil {
+		t.Fatal("thread creator deleted the thread")
+	}
+	// 親のルーム（スレッドでないルーム）は、この経路では消せない。
+	if _, err := s.Delete(ctxAsAdmin(99), communityRoomID); err == nil {
+		t.Fatal("parent room was deleted as a thread")
+	}
+	if _, err := s.Delete(ctxAsAdmin(99), 12345); err == nil {
+		t.Fatal("missing thread was reported as deleted")
+	}
+	if _, ok := store.rooms[thread.Room.ID]; !ok || len(messages.softDeleted) != 0 {
+		t.Fatal("rejected delete must not write")
 	}
 }

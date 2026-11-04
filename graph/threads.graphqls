@@ -6,6 +6,8 @@ extend type Query {
 extend type Mutation {
  createChatThread(parentRoomID: ID!, title: String!): ChatThread!
  updateChatThread(roomID: ID!, title: String, closed: Boolean): ChatThread!
+ # 管理者専用。スレッドと中のメッセージをすべて消し、親チャットの案内も消す。
+ deleteChatThread(roomID: ID!): Boolean!
 }
 extend type Subscription {
  # 親ルームのスレッドが作られた・変更された・新着があったときに、そのスレッドの roomID が届く。
