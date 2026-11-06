@@ -1,0 +1,44 @@
+# Azure の外から本番を見張る。VM が止まった、証明書が切れそう、といったときにこの
+# ワークフローが失敗し、GitHub が失敗のメールを送る。
+#
+# 定期実行の失敗のメールは、cron の行を最後に変えた人に届く（GitHub の仕様）。
+# 宛先を変えたいときは、その人が cron の行を変えてコミットする。
+# 公開リポジトリでは、60 日間コミットがないと定期実行が止まる。止まったら Actions の画面で再開する。
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 一時的な瞬断で失敗にしないよう、数回やり直してから判断する。
+      - name: API が応答する
+        run: |
+          body=$(curl -fsS --retry 3 --retry-delay 20 --retry-all-errors --max-time 10 https://api.senshu-universe.com/)
+          grep -q 'Hello from SPACE Server' <<< "$body"
+      - name: GraphQL が応答する
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 --retry-all-errors --max-time 10 \
+            -H 'Content-Type: application/json' -d '{"query":"{__typename}"}' \
+            https://api.senshu-universe.com/query | grep -q '"__typename":"Query"'
+      - name: 画面が表示される
+        run: |
+          for url in https://senshu-universe.com/ https://www.senshu-universe.com/; do
+            curl -fsS --retry 3 --retry-delay 20 --retry-all-errors --max-time 10 -o /dev/null "$url"
+          done
+      # Let's Encrypt は自動更新だが、更新が止まっても気づけるように残り日数を見る。
+      - name: API の証明書が 14 日以上残っている
+        run: |
+          end=$(echo | openssl s_client -connect api.senshu-universe.com:443 -servername api.senshu-universe.com 2>/dev/null \
+            | openssl x509 -noout -enddate | cut -d= -f2)
+          left=$(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 ))
+          echo "残り ${left} 日（${end}）"
+          [ "$left" -ge 14 ]
