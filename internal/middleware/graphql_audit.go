@@ -19,8 +19,11 @@ type graphqlRequestPayload struct {
 }
 
 // sensitivePattern はログ出力時にマスクするフィールド名（大文字小文字・部分一致）。
-var sensitivePattern = regexp.MustCompile(`(?i)password|secret|token`)
+// otp はメール認証やパスワード再設定のワンタイムパスワード。
+var sensitivePattern = regexp.MustCompile(`(?i)password|passwd|secret|token|otp|passcode|credential`)
 
+// maskVariables は入れ子の input オブジェクトや配列の中まで見てマスクする。
+// ログインや登録はパスワードを variables.input の下に入れて送ってくるため。
 func maskVariables(vars map[string]any) map[string]any {
 	if len(vars) == 0 {
 		return vars
@@ -30,10 +33,25 @@ func maskVariables(vars map[string]any) map[string]any {
 		if sensitivePattern.MatchString(k) {
 			masked[k] = "***"
 		} else {
-			masked[k] = v
+			masked[k] = maskValue(v)
 		}
 	}
 	return masked
+}
+
+func maskValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return maskVariables(t)
+	case []any:
+		out := make([]any, len(t))
+		for i, item := range t {
+			out[i] = maskValue(item)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func parseGraphQLBody(c echo.Context) (operationName, maskedVars string) {
