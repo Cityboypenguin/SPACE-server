@@ -108,17 +108,18 @@ func NewQuestionUseCases(
 ) graph.QuestionUseCases {
 	requireWritable := courseusecase.NewRequireWritableCourseRoomUseCase(courseRepo, settingRepo, timetableRepo)
 	return graph.QuestionUseCases{
-		CreateQuestionUseCase:   questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, ng),
-		ListQuestionsUseCase:    questionusecase.NewListQuestionsUseCase(questionRepo),
-		GetQuestionByIDUseCase:  questionusecase.NewGetQuestionByIDUseCase(questionRepo),
-		SelectBestAnswerUseCase: questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		CancelBestAnswerUseCase: questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
-		DeleteQuestionUseCase:   questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
-		DeleteMyQuestionUseCase: questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
-		AnswerQuestionUseCase:   answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, ng),
-		DeleteAnswerUseCase:     answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		LikeAnswerUseCase:       answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
-		UnlikeAnswerUseCase:     answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		CreateQuestionUseCase:    questionusecase.NewCreateQuestionUseCase(events, uploads, questionRepo, mediaRepo, txManager, requireWritable, ng),
+		ListQuestionsUseCase:     questionusecase.NewListQuestionsUseCase(questionRepo),
+		GetQuestionByIDUseCase:   questionusecase.NewGetQuestionByIDUseCase(questionRepo),
+		SelectBestAnswerUseCase:  questionusecase.NewSelectBestAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		CancelBestAnswerUseCase:  questionusecase.NewCancelBestAnswerUseCase(events, questionRepo, requireWritable),
+		DeleteQuestionUseCase:    questionusecase.NewDeleteQuestionUseCase(events, questionRepo),
+		DeleteMyQuestionUseCase:  questionusecase.NewDeleteMyQuestionUseCase(events, questionRepo, requireWritable),
+		AnswerQuestionUseCase:    answerusecase.NewAnswerQuestionUseCase(events, uploads, questionRepo, answerRepo, mediaRepo, txManager, requireWritable, ng),
+		AdminDeleteAnswerUseCase: answerusecase.NewAdminDeleteAnswerUseCase(events, events, answerRepo, questionRepo),
+		DeleteAnswerUseCase:      answerusecase.NewDeleteAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		LikeAnswerUseCase:        answerusecase.NewLikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
+		UnlikeAnswerUseCase:      answerusecase.NewUnlikeAnswerUseCase(events, questionRepo, answerRepo, requireWritable),
 	}
 }
 

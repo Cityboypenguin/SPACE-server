@@ -215,6 +215,18 @@ func (r *mutationResolver) AdminSetUserTimetable(ctx context.Context, userID str
 	return result, nil
 }
 
+// AdminDeleteAnswer is the resolver for the adminDeleteAnswer field.
+func (r *mutationResolver) AdminDeleteAnswer(ctx context.Context, id string) (bool, error) {
+	if _, err := requireAdminAuth(ctx); err != nil {
+		return false, err
+	}
+	numericID, err := decodeGraphID(ctx, "answer", id)
+	if err != nil {
+		return false, fmt.Errorf("invalid answer id")
+	}
+	return r.AdminDeleteAnswerUseCase.Execute(ctx, numericID)
+}
+
 // AdminDeleteQuestion is the resolver for the adminDeleteQuestion field.
 func (r *mutationResolver) AdminDeleteQuestion(ctx context.Context, id string) (bool, error) {
 	if _, err := requireAdminAuth(ctx); err != nil {
