@@ -392,16 +392,16 @@ func (r *MySQLUserRepository) ListUserAccounts(ctx context.Context, q repository
 	return accounts, total, nil
 }
 
-// SearchUserAccountsByKeyword は管理画面の検索。絞り込み条件も並び順も
-// SearchUsersByKeyword と同じで、引く列だけが違う（email を足す）。
-// 条件が分かれると「管理画面と一般画面で検索結果が違う」という分かりにくい差になるので、
-// 変えるときは両方を揃えること。
+// SearchUserAccountsByKeyword は管理画面の検索。並び順は SearchUsersByKeyword と同じで、
+// 違うのは email を引くことと、email でも絞り込めること。
+// email での検索は管理画面だけに留めること。一般の検索に足すと、メールアドレスを
+// 知っていれば誰のアカウントかを引けてしまう。
 func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, keyword string, q repository.PageQuery) ([]*model.UserAccount, int, error) {
 	searchParam := "%" + keyword + "%"
 
 	total, err := countForPage(ctx, r.DB, q,
-		`SELECT COUNT(*) FROM `+userFrom+` WHERE a.name LIKE ? OR a.account_id LIKE ?`,
-		searchParam, searchParam,
+		`SELECT COUNT(*) FROM `+userFrom+` WHERE a.name LIKE ? OR a.account_id LIKE ? OR a.email LIKE ?`,
+		searchParam, searchParam, searchParam,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -410,10 +410,10 @@ func (r *MySQLUserRepository) SearchUserAccountsByKeyword(ctx context.Context, k
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT `+userAccountColumns+`
 		FROM `+userFrom+`
-		WHERE a.name LIKE ? OR a.account_id LIKE ?
+		WHERE a.name LIKE ? OR a.account_id LIKE ? OR a.email LIKE ?
 		ORDER BY a.name ASC, u.id ASC
 		LIMIT ? OFFSET ?
-	`, searchParam, searchParam, q.Limit, q.Offset)
+	`, searchParam, searchParam, searchParam, q.Limit, q.Offset)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -270,6 +270,16 @@ func TestUserProjection_DisplayPathsWorkWithoutCredentialColumns(t *testing.T) {
 		if err != nil || len(found) != 1 || found[0].Email != "taro@example.com" {
 			t.Fatalf("SearchUserAccountsByKeyword = %+v, %v", found, err)
 		}
+
+		byEmail, _, err := userRepo.SearchUserAccountsByKeyword(ctx, "taro@example", repository.PageQuery{Limit: 10})
+		if err != nil || len(byEmail) != 1 || byEmail[0].ID != creds.ID {
+			t.Fatalf("SearchUserAccountsByKeyword(email) = %+v, %v", byEmail, err)
+		}
+		// 一般の検索はメールアドレスでは引けない。
+		public, _, err := userRepo.SearchUsersByKeyword(ctx, "taro@example", repository.PageQuery{Limit: 10})
+		if err != nil || len(public) != 0 {
+			t.Fatalf("SearchUsersByKeyword(email) = %+v, %v", public, err)
+		}
 	})
 
 	// 認証情報の口だけがハッシュを返す。
