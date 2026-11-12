@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"errors"
+
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 
 	"github.com/Cityboypenguin/SPACE-server/model"
@@ -38,10 +39,10 @@ func (uc *createFavoriteUserInteractor) Execute(ctx context.Context, favoriteUse
 		return 0, err
 	}
 	if exists {
-		return 0, errors.New("ブロック関係が存在するため、お気に入り登録できません")
+		return 0, errors.New("ブロック関係が存在するため、フォローできません")
 	}
 	if userID == favoriteUserID {
-		return 0, errors.New("自分自身をお気に入りユーザーにすることはできません")
+		return 0, errors.New("自分自身をフォローすることはできません")
 	}
 
 	favoriteUser := &model.FavoriteUser{
