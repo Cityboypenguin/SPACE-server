@@ -43,7 +43,7 @@ func TestCommunityInvitationMigrationsPreserveExistingChatOnRoundTrip(t *testing
 	}
 	verifyChat()
 	if n := count(t, database, `SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()
-		AND TABLE_NAME IN ('community_invitations', 'community_join_stamp_settings')`); n != 0 {
+		AND TABLE_NAME IN ('community_invitations', 'community_join_stamp_settings', 'community_welcome_replies')`); n != 0 {
 		t.Fatal("rollback left invitation tables behind")
 	}
 	if err := RunMigrations(database); err != nil {

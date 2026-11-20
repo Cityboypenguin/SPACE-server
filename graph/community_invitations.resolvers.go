@@ -133,15 +133,15 @@ func (r *queryResolver) CommunityGreeting(ctx context.Context, roomID string) (*
 	if err != nil {
 		return nil, err
 	}
-	welcomeID, candidates, err := r.CommunityInvitations.Greeting(ctx, id)
-	if err != nil || welcomeID == nil {
+	target, candidates, err := r.CommunityInvitations.Greeting(ctx, id)
+	if err != nil || target == nil {
 		return nil, err
 	}
 	stamps := make([]*model.ChatStamp, 0, len(candidates))
 	for _, stamp := range candidates {
 		stamps = append(stamps, r.graphStamp(stamp))
 	}
-	return &model.CommunityGreeting{WelcomeMessageID: encodeGraphID("message", *welcomeID), Stamps: stamps}, nil
+	return &model.CommunityGreeting{WelcomeMessageID: encodeGraphID("message", target.MessageID), JoinedUserName: target.UserName, Stamps: stamps}, nil
 }
 
 func (r *queryResolver) AdminCommunityJoinStampSettings(ctx context.Context) (*model.CommunityJoinStampSettings, error) {

@@ -29,7 +29,6 @@ type Message struct {
 	ReplyToID *int64
 	Content   string
 	// StampID はスタンプだけを送ったメッセージのスタンプのID（"stamp:xxx"）。通常のメッセージは nil。
-	// 参加案内には案内文も保存する。
 	StampID *string
 	// Mentions は本文中のメンション。書き込み時に解決したものを保持し、
 	// 読み出し時は必要なときだけ（GraphQL の mentions フィールド解決時に）埋める。
@@ -102,8 +101,7 @@ type UpdateMessageParam struct {
 func NewMessage(param CreateMessageParam) (*Message, error) {
 	content := strings.TrimSpace(param.Content)
 	if param.StampID != nil {
-		// 本文を併記できるのは、システムが作る参加案内だけ。
-		if (content != "" && param.AuthorRole != AuthorRoleCommunityWelcome) || len(param.MediaKeys) > 0 {
+		if content != "" || len(param.MediaKeys) > 0 {
 			return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
 		}
 		if !IsValidMessageStampID(*param.StampID) {

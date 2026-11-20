@@ -32,9 +32,9 @@ type invitationStore interface {
 	AcceptReceived(context.Context, int64, int64, time.Time) error
 	JoinStampSettings(context.Context) (model.CommunityJoinStampSettings, error)
 	SaveJoinStampSettings(context.Context, model.CommunityJoinStampSettings) error
-	WelcomeMessage(context.Context, int64, int64) (*int64, error)
+	WelcomeTarget(context.Context, int64, int64) (*model.CommunityWelcomeTarget, error)
 	SetWelcomeMessage(context.Context, int64, int64, int64) error
-	MarkGreetingSent(context.Context, int64, int64) error
+	MarkWelcomeSent(context.Context, int64, int64) error
 }
 
 type InvitationService struct {
@@ -251,7 +251,7 @@ func (s *InvitationService) Respond(ctx context.Context, id int64, token string,
 	if err != nil {
 		return 0, err
 	}
-	room, roles, msg, err := s.withRoomMembership(ctx, i.RoomID, func(ctx context.Context, room *model.Room, roles map[int64]string) (*model.Message, error) {
+	room, roles, messages, err := s.withRoomMembership(ctx, i.RoomID, func(ctx context.Context, room *model.Room, roles map[int64]string) ([]*model.Message, error) {
 		current, err := s.Store.Get(ctx, i.ID, true)
 		if err != nil {
 			return nil, err
@@ -283,7 +283,7 @@ func (s *InvitationService) Respond(ctx context.Context, id int64, token string,
 	if err != nil {
 		return 0, err
 	}
-	s.publish(ctx, room, roles, msg)
+	s.publish(ctx, room, roles, messages...)
 	return room.ID, nil
 }
 
@@ -299,7 +299,7 @@ func (s *InvitationService) Revoke(ctx context.Context, id int64) error {
 	if i == nil {
 		return invitationUnavailable()
 	}
-	_, _, _, err = s.withRoomMembership(ctx, i.RoomID, func(ctx context.Context, _ *model.Room, roles map[int64]string) (*model.Message, error) {
+	_, _, _, err = s.withRoomMembership(ctx, i.RoomID, func(ctx context.Context, _ *model.Room, roles map[int64]string) ([]*model.Message, error) {
 		if roles[actor] == "" || (actor != i.SenderID && roles[actor] != model.RoomUserRoleOwner) {
 			return nil, invitationUnavailable()
 		}

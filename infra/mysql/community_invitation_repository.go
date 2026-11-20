@@ -161,16 +161,30 @@ func (r *CommunityInvitationRepository) SaveJoinStampSettings(ctx context.Contex
 	return err
 }
 
-func (r *CommunityInvitationRepository) WelcomeMessage(ctx context.Context, roomID, userID int64) (*int64, error) {
-	var id *int64
+func (r *CommunityInvitationRepository) WelcomeTarget(ctx context.Context, roomID, viewerID int64) (*model.CommunityWelcomeTarget, error) {
+	var target model.CommunityWelcomeTarget
+	var sent bool
 	err := extractDB(ctx, r.DB).QueryRowContext(ctx, `
-		SELECT ru.welcome_message_id FROM room_users ru
-		JOIN messages m ON m.id = ru.welcome_message_id AND m.deleted_at IS NULL
-		WHERE ru.room_id = ? AND ru.user_id = ? AND NOT ru.greeting_sent`, roomID, userID).Scan(&id)
+		SELECT m.id, a.name, replies.sender_id IS NOT NULL
+		FROM room_users viewer
+		JOIN room_users joined ON joined.room_id = viewer.room_id AND joined.id > viewer.id
+		JOIN user_accounts a ON a.user_id = joined.user_id
+		JOIN users u ON u.id = a.user_id AND u.status = 'active'
+		JOIN messages m ON m.id = joined.welcome_message_id AND m.deleted_at IS NULL
+		LEFT JOIN community_welcome_replies replies ON replies.notice_message_id = m.id AND replies.sender_id = viewer.user_id
+		WHERE viewer.room_id = ? AND viewer.user_id = ?
+		  AND NOT EXISTS (SELECT 1 FROM blocks b WHERE
+		    (b.user_id = viewer.user_id AND b.blocked_user_id = joined.user_id) OR
+		    (b.user_id = joined.user_id AND b.blocked_user_id = viewer.user_id))
+		ORDER BY m.id DESC
+		LIMIT 1`, roomID, viewerID).Scan(&target.MessageID, &target.UserName, &sent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-	return id, err
+	if err != nil || sent {
+		return nil, err
+	}
+	return &target, nil
 }
 
 func (r *CommunityInvitationRepository) SetWelcomeMessage(ctx context.Context, roomID, userID, messageID int64) error {
@@ -179,8 +193,8 @@ func (r *CommunityInvitationRepository) SetWelcomeMessage(ctx context.Context, r
 	return err
 }
 
-func (r *CommunityInvitationRepository) MarkGreetingSent(ctx context.Context, roomID, userID int64) error {
+func (r *CommunityInvitationRepository) MarkWelcomeSent(ctx context.Context, noticeID, userID int64) error {
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx,
-		"UPDATE room_users SET greeting_sent = TRUE WHERE room_id = ? AND user_id = ?", roomID, userID)
+		"INSERT INTO community_welcome_replies (notice_message_id, sender_id) VALUES (?, ?)", noticeID, userID)
 	return err
 }

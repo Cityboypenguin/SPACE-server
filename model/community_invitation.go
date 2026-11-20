@@ -32,3 +32,8 @@ type CommunityJoinStampSettings struct {
 	WelcomeIDs  []string
 	GreetingIDs []string
 }
+
+type CommunityWelcomeTarget struct {
+	MessageID int64
+	UserName  string
+}

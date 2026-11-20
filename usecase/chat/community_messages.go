@@ -6,11 +6,11 @@ import (
 	"github.com/Cityboypenguin/SPACE-server/model"
 )
 
-// SaveCommunityWelcome is called inside the transaction that creates a membership.
-func (w MessageWriters) SaveCommunityWelcome(ctx context.Context, roomID, memberID int64, stampID *string) (*model.Message, error) {
+// SaveCommunityJoinNotice is called inside the transaction that creates a membership.
+func (w MessageWriters) SaveCommunityJoinNotice(ctx context.Context, roomID, memberID int64) (*model.Message, error) {
 	msg, err := model.NewMessage(model.CreateMessageParam{
 		RoomID: roomID, UserID: memberID, Content: "メンバーが参加しました",
-		AuthorRole: model.AuthorRoleCommunityWelcome, StampID: stampID,
+		AuthorRole: model.AuthorRoleCommunityWelcome,
 	})
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func (w MessageWriters) SaveCommunityWelcome(ctx context.Context, roomID, member
 	return msg, w.system.SaveMessage(ctx, msg)
 }
 
-// SaveCommunityGreeting is called after the membership and selected stamp have been checked.
+// SaveCommunityGreeting saves a regular stamp sent by a community member.
 func (w MessageWriters) SaveCommunityGreeting(ctx context.Context, roomID, actorID int64, stampID string) (*model.Message, error) {
 	msg, err := model.NewMessage(model.CreateMessageParam{RoomID: roomID, UserID: actorID, StampID: &stampID})
 	if err != nil {

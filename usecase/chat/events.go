@@ -59,9 +59,11 @@ type EventPublisher interface {
 
 // MessageSentEvent はメッセージ1件が保存できたこと。
 type MessageSentEvent struct {
-	Room    *model.Room
-	Message *model.Message
-	ActorID int64
+	// TimelineOnly adds the item to the live timeline without updating the room preview.
+	TimelineOnly bool
+	Room         *model.Room
+	Message      *model.Message
+	ActorID      int64
 	// MemberIDs は非授業ルームのメンバー。room_changed の宛先と DM 通知の宛先に使う。
 	// 授業ルームは room_users を使わないため nil（授業ルームの宛先は履修者なので、
 	// 配信側が時間割から引き直す。graph/chat_events.go の roomChangedRecipients 参照）。

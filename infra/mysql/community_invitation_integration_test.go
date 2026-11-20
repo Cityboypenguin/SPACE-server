@@ -71,7 +71,7 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 	if err != nil || len(settings.GreetingIDs) != 0 || len(settings.WelcomeIDs) != 0 {
 		t.Fatalf("initial stamp settings: %+v, %v", settings, err)
 	}
-	for _, id := range []string{"stamp:wave", "stamp:hello"} {
+	for _, id := range []string{"stamp:wave", "stamp:hello", "stamp:auto"} {
 		if err := stamps.Create(ctx, &model.ChatStamp{
 			ID: id, Label: id, Status: "active", DisplaySize: "standard", AllowMessage: true, CreatedBy: 1, UpdatedBy: 1,
 		}); err != nil {
@@ -79,7 +79,7 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 		}
 	}
 	settings = model.CommunityJoinStampSettings{
-		WelcomeIDs: []string{"stamp:wave", "stamp:hello"}, GreetingIDs: []string{"stamp:hello", "stamp:wave"},
+		WelcomeIDs: []string{"stamp:wave", "stamp:hello"}, GreetingIDs: []string{"stamp:auto"},
 	}
 	if err := service.SaveSettings(member, settings); err == nil {
 		t.Fatal("non-admin updated the settings")
@@ -148,28 +148,39 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 		t.Fatalf("accepted invitation count=%d, err=%v", count, err)
 	}
 
-	welcome, options, err := service.Greeting(member, group.RoomID)
-	if err != nil || welcome == nil || len(options) != 2 || options[0].ID != "stamp:hello" {
-		t.Fatalf("greeting ID=%v options=%v err=%v", welcome, options, err)
+	target, options, err := service.Greeting(owner, group.RoomID)
+	if err != nil || target == nil || target.UserName != "test2" || len(options) != 2 || options[0].ID != "stamp:wave" {
+		t.Fatalf("welcome target=%+v options=%v err=%v", target, options, err)
 	}
-	welcomeMessage, err := messages.GetMessageByID(ctx, *welcome)
-	if err != nil || welcomeMessage == nil || welcomeMessage.StampID == nil ||
-		(*welcomeMessage.StampID != "stamp:wave" && *welcomeMessage.StampID != "stamp:hello") {
-		t.Fatalf("welcome message=%+v, err=%v", welcomeMessage, err)
-	}
-	if _, err := service.SendGreeting(other, group.RoomID, *welcome, options[0].ID); err == nil {
-		t.Fatal("another user sent the greeting")
-	}
-	if _, err := service.SendGreeting(member, group.RoomID, *welcome, "stamp:other"); err == nil {
-		t.Fatal("a greeting stamp outside the configured candidates was accepted")
-	}
-	if _, err := service.SendGreeting(member, group.RoomID, *welcome, options[1].ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.SendGreeting(member, group.RoomID, *welcome, options[1].ID); err == nil {
-		t.Fatal("the greeting was sent twice")
+	notice, err := messages.GetMessageByID(ctx, target.MessageID)
+	if err != nil || notice == nil || notice.StampID != nil || notice.AuthorRole != model.AuthorRoleCommunityWelcome {
+		t.Fatalf("join notice=%+v, err=%v", notice, err)
 	}
 	checkMessages(model.AuthorRoleStudent, 1)
+	var automaticStamp string
+	if err := db.QueryRow("SELECT stamp_id FROM messages WHERE room_id = ? AND user_id = 2 AND author_role = ? AND id > ?",
+		group.RoomID, model.AuthorRoleStudent, target.MessageID).Scan(&automaticStamp); err != nil || automaticStamp != "stamp:auto" {
+		t.Fatalf("separate automatic stamp=%q err=%v", automaticStamp, err)
+	}
+	if own, _, err := service.Greeting(member, group.RoomID); err != nil || own != nil {
+		t.Fatalf("new member sees their own welcome suggestions: %+v, %v", own, err)
+	}
+	if _, err := service.SendGreeting(other, group.RoomID, target.MessageID, options[0].ID); err == nil {
+		t.Fatal("a non-member sent a welcome stamp")
+	}
+	if _, err := service.SendGreeting(member, group.RoomID, target.MessageID, options[0].ID); err == nil {
+		t.Fatal("a new member welcomed themself")
+	}
+	if _, err := service.SendGreeting(owner, group.RoomID, target.MessageID, "stamp:auto"); err == nil {
+		t.Fatal("a stamp outside the configured welcome candidates was accepted")
+	}
+	reply, err := service.SendGreeting(owner, group.RoomID, target.MessageID, options[1].ID)
+	if err != nil || reply == nil || reply.UserID != 1 || reply.StampID == nil || *reply.StampID != options[1].ID {
+		t.Fatalf("welcome reply=%+v err=%v", reply, err)
+	}
+	if _, err := service.SendGreeting(owner, group.RoomID, target.MessageID, options[1].ID); err == nil {
+		t.Fatal("the welcome stamp was sent twice")
+	}
 
 	link, token, err := service.Send(member, group.ID, nil)
 	if err != nil || len(token) != 43 {

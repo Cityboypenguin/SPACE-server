@@ -261,6 +261,7 @@ type ComplexityRoot struct {
 	}
 
 	CommunityGreeting struct {
+		JoinedUserName   func(childComplexity int) int
 		Stamps           func(childComplexity int) int
 		WelcomeMessageID func(childComplexity int) int
 	}
@@ -2519,6 +2520,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Community.UpdatedAt(childComplexity), true
 
+	case "CommunityGreeting.joinedUserName":
+		if e.ComplexityRoot.CommunityGreeting.JoinedUserName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityGreeting.JoinedUserName(childComplexity), true
 	case "CommunityGreeting.stamps":
 		if e.ComplexityRoot.CommunityGreeting.Stamps == nil {
 			break
@@ -8498,6 +8505,8 @@ func (ec *executionContext) childFields_CommunityGreeting(ctx context.Context, f
 	switch field.Name {
 	case "welcomeMessageID":
 		return ec.fieldContext_CommunityGreeting_welcomeMessageID(ctx, field)
+	case "joinedUserName":
+		return ec.fieldContext_CommunityGreeting_joinedUserName(ctx, field)
 	case "stamps":
 		return ec.fieldContext_CommunityGreeting_stamps(ctx, field)
 	}
@@ -18517,6 +18526,29 @@ func (ec *executionContext) _CommunityGreeting_welcomeMessageID(ctx context.Cont
 }
 func (ec *executionContext) fieldContext_CommunityGreeting_welcomeMessageID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CommunityGreeting", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityGreeting_joinedUserName(ctx context.Context, field graphql.CollectedField, obj *model.CommunityGreeting) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityGreeting_joinedUserName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JoinedUserName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityGreeting_joinedUserName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityGreeting", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CommunityGreeting_stamps(ctx context.Context, field graphql.CollectedField, obj *model.CommunityGreeting) (ret graphql.Marshaler) {
@@ -44336,6 +44368,11 @@ func (ec *executionContext) _CommunityGreeting(ctx context.Context, sel ast.Sele
 			out.Values[i] = graphql.MarshalString("CommunityGreeting")
 		case "welcomeMessageID":
 			out.Values[i] = ec._CommunityGreeting_welcomeMessageID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "joinedUserName":
+			out.Values[i] = ec._CommunityGreeting_joinedUserName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

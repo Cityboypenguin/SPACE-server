@@ -18,17 +18,17 @@ func (s *InvitationService) Execute(ctx context.Context, roomID int64) (bool, er
 	if err != nil {
 		return false, err
 	}
-	room, roles, msg, err := s.withRoomMembership(ctx, roomID, func(ctx context.Context, room *model.Room, roles map[int64]string) (*model.Message, error) {
+	room, roles, messages, err := s.withRoomMembership(ctx, roomID, func(ctx context.Context, room *model.Room, roles map[int64]string) ([]*model.Message, error) {
 		return s.join(ctx, room, roles, actor)
 	})
 	if err != nil {
 		return false, err
 	}
-	s.publish(ctx, room, roles, msg)
+	s.publish(ctx, room, roles, messages...)
 	return true, nil
 }
 
-func (s *InvitationService) withRoomMembership(ctx context.Context, roomID int64, fn func(context.Context, *model.Room, map[int64]string) (*model.Message, error)) (room *model.Room, roles map[int64]string, msg *model.Message, err error) {
+func (s *InvitationService) withRoomMembership(ctx context.Context, roomID int64, fn func(context.Context, *model.Room, map[int64]string) ([]*model.Message, error)) (room *model.Room, roles map[int64]string, messages []*model.Message, err error) {
 	err = s.Tx.RunInTx(ctx, func(ctx context.Context) error {
 		var err error
 		roles, err = s.Members.LockRoomMemberRolesForUpdate(ctx, roomID)
@@ -42,13 +42,13 @@ func (s *InvitationService) withRoomMembership(ctx context.Context, roomID int64
 		if room == nil || room.Type != model.RoomTypeCommunity || room.ParentRoomID != nil {
 			return apperr.NotFound("コミュニティが見つかりません")
 		}
-		msg, err = fn(ctx, room, roles)
+		messages, err = fn(ctx, room, roles)
 		return err
 	})
-	return room, roles, msg, err
+	return room, roles, messages, err
 }
 
-func (s *InvitationService) join(ctx context.Context, room *model.Room, roles map[int64]string, actor int64) (*model.Message, error) {
+func (s *InvitationService) join(ctx context.Context, room *model.Room, roles map[int64]string, actor int64) ([]*model.Message, error) {
 	if err := s.Store.AcceptReceived(ctx, room.ID, actor, time.Now()); err != nil {
 		return nil, err
 	}
@@ -71,30 +71,43 @@ func (s *InvitationService) join(ctx context.Context, room *model.Room, roles ma
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := s.activeStamps(ctx, settings.WelcomeIDs)
+	candidates, err := s.activeStamps(ctx, settings.GreetingIDs)
 	if err != nil {
 		return nil, err
 	}
-	var stampID *string
+	notice, err := s.Messages.SaveCommunityJoinNotice(ctx, room.ID, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Store.SetWelcomeMessage(ctx, room.ID, actor, notice.ID); err != nil {
+		return nil, err
+	}
+	messages := []*model.Message{notice}
 	if len(candidates) > 0 {
-		stampID = &candidates[rand.IntN(len(candidates))].ID
+		stamp := candidates[rand.IntN(len(candidates))]
+		greeting, err := s.Messages.SaveCommunityGreeting(ctx, room.ID, actor, stamp.ID)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, greeting)
 	}
-	msg, err := s.Messages.SaveCommunityWelcome(ctx, room.ID, user.ID, stampID)
-	if err != nil {
-		return nil, err
-	}
-	return msg, s.Store.SetWelcomeMessage(ctx, room.ID, actor, msg.ID)
+	return messages, nil
 }
 
-func (s *InvitationService) publish(ctx context.Context, room *model.Room, roles map[int64]string, msg *model.Message) {
-	if msg == nil {
+func (s *InvitationService) publish(ctx context.Context, room *model.Room, roles map[int64]string, messages ...*model.Message) {
+	if len(messages) == 0 {
 		return
 	}
 	members := make([]int64, 0, len(roles))
 	for id := range roles {
 		members = append(members, id)
 	}
-	s.Events.MessageSent(ctx, chat.MessageSentEvent{Room: room, Message: msg, ActorID: msg.UserID, MemberIDs: members})
+	for i, msg := range messages {
+		s.Events.MessageSent(ctx, chat.MessageSentEvent{
+			Room: room, Message: msg, ActorID: msg.UserID, MemberIDs: members,
+			TimelineOnly: i+1 < len(messages),
+		})
+	}
 }
 
 func (s *InvitationService) activeStamps(ctx context.Context, ids []string) ([]*model.ChatStamp, error) {
@@ -153,24 +166,24 @@ func (s *InvitationService) SaveSettings(ctx context.Context, settings model.Com
 	return s.Store.SaveJoinStampSettings(ctx, settings)
 }
 
-func (s *InvitationService) Greeting(ctx context.Context, roomID int64) (*int64, []*model.ChatStamp, error) {
+func (s *InvitationService) Greeting(ctx context.Context, roomID int64) (*model.CommunityWelcomeTarget, []*model.ChatStamp, error) {
 	actor, err := authz.CallerID(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	welcomeID, err := s.Store.WelcomeMessage(ctx, roomID, actor)
-	if err != nil || welcomeID == nil {
+	target, err := s.Store.WelcomeTarget(ctx, roomID, actor)
+	if err != nil || target == nil {
 		return nil, nil, err
 	}
 	settings, err := s.Store.JoinStampSettings(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	options, err := s.activeStamps(ctx, settings.GreetingIDs)
+	options, err := s.activeStamps(ctx, settings.WelcomeIDs)
 	if err != nil || len(options) == 0 {
 		return nil, nil, err
 	}
-	return welcomeID, options, nil
+	return target, options, nil
 }
 
 func (s *InvitationService) SendGreeting(ctx context.Context, roomID, welcomeID int64, stampID string) (*model.Message, error) {
@@ -178,29 +191,29 @@ func (s *InvitationService) SendGreeting(ctx context.Context, roomID, welcomeID 
 	if err != nil {
 		return nil, err
 	}
-	room, roles, msg, err := s.withRoomMembership(ctx, roomID, func(ctx context.Context, room *model.Room, roles map[int64]string) (*model.Message, error) {
+	room, roles, messages, err := s.withRoomMembership(ctx, roomID, func(ctx context.Context, room *model.Room, roles map[int64]string) ([]*model.Message, error) {
 		if roles[actor] == "" {
 			return nil, apperr.Forbidden("コミュニティのメンバーのみ送信できます")
 		}
-		expectedID, options, err := s.Greeting(ctx, room.ID)
+		target, options, err := s.Greeting(ctx, room.ID)
 		if err != nil {
 			return nil, err
 		}
-		if expectedID == nil || *expectedID != welcomeID {
-			return nil, apperr.Conflict("この参加案内への挨拶は終了しました")
+		if target == nil || target.MessageID != welcomeID {
+			return nil, apperr.Conflict("この参加者への歓迎スタンプは送れません")
 		}
 		if !slices.ContainsFunc(options, func(stamp *model.ChatStamp) bool { return stamp.ID == stampID }) {
-			return nil, apperr.InvalidInput("現在使える「よろしく」スタンプを選択してください")
+			return nil, apperr.InvalidInput("現在使える歓迎スタンプを選択してください")
 		}
 		msg, err := s.Messages.SaveCommunityGreeting(ctx, room.ID, actor, stampID)
 		if err != nil {
 			return nil, err
 		}
-		return msg, s.Store.MarkGreetingSent(ctx, room.ID, actor)
+		return []*model.Message{msg}, s.Store.MarkWelcomeSent(ctx, welcomeID, actor)
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.publish(ctx, room, roles, msg)
-	return msg, nil
+	s.publish(ctx, room, roles, messages...)
+	return messages[0], nil
 }

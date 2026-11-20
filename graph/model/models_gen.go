@@ -255,6 +255,7 @@ type Community struct {
 
 type CommunityGreeting struct {
 	WelcomeMessageID string       `json:"welcomeMessageID"`
+	JoinedUserName   string       `json:"joinedUserName"`
 	Stamps           []*ChatStamp `json:"stamps"`
 }
 

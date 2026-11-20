@@ -51,5 +51,6 @@ type CommunityJoinStampSettings {
 
 type CommunityGreeting {
   welcomeMessageID: ID!
+  joinedUserName: String!
   stamps: [ChatStamp!]!
 }
