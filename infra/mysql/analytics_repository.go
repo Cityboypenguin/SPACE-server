@@ -58,6 +58,16 @@ const uniqueDMSendersQuery = `
 	INNER JOIN rooms r ON r.id = m.room_id
 	WHERE r.type = ? AND m.deleted_at IS NULL`
 
+// messagesByRoomTypeQuery は種類別（DM・コミュニティ・授業チャット）のメッセージ数。
+// 種類はメッセージを書いたルームの rooms.type で決める。スレッドのルームは親と同じ
+// type を持つので、スレッドの中の発言は親の種類に入る。メッセージには必ずルームが
+// ある（外部キー）ので、過去のメッセージもこの JOIN でそのまま分けられる。
+// 2つめの引数は「この時刻以降」（全期間なら 0）。
+const messagesByRoomTypeQuery = `
+	SELECT COUNT(*) FROM messages m
+	INNER JOIN rooms r ON r.id = m.room_id
+	WHERE r.type = ? AND m.deleted_at IS NULL AND m.created_at >= ?`
+
 type MySQLAnalyticsRepository struct {
 	DB *sql.DB
 }
@@ -195,6 +205,9 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 		{[]string{fieldTotalLikes, fieldAvgLikesPerPost}, &s.TotalLikes, `SELECT COUNT(*) FROM favorites`, nil},
 		{[]string{fieldTotalCommunities, fieldAvgCommunityMembers}, &s.TotalCommunities, `SELECT COUNT(*) FROM communities`, nil},
 		{[]string{"totalMessages"}, &s.TotalMessages, `SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL`, nil},
+		{[]string{"dmMessages"}, &s.DMMessages, messagesByRoomTypeQuery, []any{model.RoomTypeDM, 0}},
+		{[]string{"communityMessages"}, &s.CommunityMessages, messagesByRoomTypeQuery, []any{model.RoomTypeCommunity, 0}},
+		{[]string{"courseMessages"}, &s.CourseMessages, messagesByRoomTypeQuery, []any{model.RoomTypeCourse, 0}},
 		{[]string{"totalReports"}, &s.TotalReports, `SELECT COUNT(*) FROM user_reports`, nil},
 		{[]string{"totalBlocks"}, &s.TotalBlocks, `SELECT COUNT(*) FROM blocks`, nil},
 		{[]string{"totalInquiries"}, &s.TotalInquiries, `SELECT COUNT(*) FROM inquiries`, nil},
@@ -205,6 +218,9 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 		{[]string{"postsToday"}, &s.PostsToday, `SELECT COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"commentsToday"}, &s.CommentsToday, `SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
 		{[]string{"messagesToday"}, &s.MessagesToday, `SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL AND created_at >= ?`, []any{w.todayStart}},
+		{[]string{"dmMessagesToday"}, &s.DMMessagesToday, messagesByRoomTypeQuery, []any{model.RoomTypeDM, w.todayStart}},
+		{[]string{"communityMessagesToday"}, &s.CommunityMessagesToday, messagesByRoomTypeQuery, []any{model.RoomTypeCommunity, w.todayStart}},
+		{[]string{"courseMessagesToday"}, &s.CourseMessagesToday, messagesByRoomTypeQuery, []any{model.RoomTypeCourse, w.todayStart}},
 		{[]string{"activeCommunitiesLast30Days"}, &s.ActiveCommunitiesLast30Days, `
 			SELECT COUNT(*) FROM communities c
 			WHERE ` + existsRoomAndThreadsMessages("c.room_id", " AND m.deleted_at IS NULL AND m.created_at >= ?"), []any{w.days30Start, w.days30Start}},
@@ -480,18 +496,21 @@ func (r *MySQLAnalyticsRepository) GetCommunityAnalytics(ctx context.Context, q 
 // GROUP BY を投げていた。いまは要求された系列だけ引く。
 // label は SQL を伴わない（範囲から作るラベル）ので常に埋まる。
 const (
-	seriesPosts       = "posts"
-	seriesComments    = "comments"
-	seriesMessages    = "messages"
-	seriesNewUsers    = "newUsers"
-	seriesLikes       = "likes"
-	seriesActiveUsers = "activeUsers"
+	seriesPosts             = "posts"
+	seriesComments          = "comments"
+	seriesMessages          = "messages"
+	seriesDMMessages        = "dmMessages"
+	seriesCommunityMessages = "communityMessages"
+	seriesCourseMessages    = "courseMessages"
+	seriesNewUsers          = "newUsers"
+	seriesLikes             = "likes"
+	seriesActiveUsers       = "activeUsers"
 )
 
 // TimeSeriesFieldNames は TimeSeriesPoint の全フィールド名（スキーマとの
 // 突き合わせ用）。label を含む。
 func TimeSeriesFieldNames() []string {
-	return []string{"label", seriesPosts, seriesComments, seriesMessages, seriesNewUsers, seriesLikes, seriesActiveUsers}
+	return []string{"label", seriesPosts, seriesComments, seriesMessages, seriesDMMessages, seriesCommunityMessages, seriesCourseMessages, seriesNewUsers, seriesLikes, seriesActiveUsers}
 }
 
 // 時系列で使う時刻の書式。
@@ -551,6 +570,9 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	posts := map[string]int{}
 	comments := map[string]int{}
 	messages := map[string]int{}
+	dmMessages := map[string]int{}
+	communityMessages := map[string]int{}
+	courseMessages := map[string]int{}
 	newUsers := map[string]int{}
 	likes := map[string]int{}
 	wantActive := series.Wants(seriesActiveUsers)
@@ -662,6 +684,14 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	}
 
 	between := fmt.Sprintf("created_at >= %s AND created_at < %s", sinceExpr, untilExpr)
+	// messagesByTypeSeries は種類別のメッセージの系列（rooms を結合するので列名に m. を付ける）。
+	// roomType は model の定数だけを渡す（利用者の入力は入らない）。
+	messagesByTypeSeries := func(roomType string) string {
+		return fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(m.created_at + %d), '%s') as lbl, COUNT(*)
+			FROM messages m INNER JOIN rooms r ON r.id = m.room_id
+			WHERE r.type = '%s' AND m.deleted_at IS NULL AND m.created_at >= %s AND m.created_at < %s GROUP BY lbl`,
+			jstOffsetSec, labelFmt, roomType, sinceExpr, untilExpr)
+	}
 	// 系列名 → 引く SQL の対応。要求された系列だけを g へ積む。
 	all := []struct {
 		field string
@@ -670,6 +700,9 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 		{seriesPosts, metricQuery{posts, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)}},
 		{seriesComments, metricQuery{comments, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM posts WHERE parent_id IS NOT NULL AND deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)}},
 		{seriesMessages, metricQuery{messages, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM messages WHERE deleted_at IS NULL AND %s GROUP BY lbl`, localTS, labelFmt, between)}},
+		{seriesDMMessages, metricQuery{dmMessages, messagesByTypeSeries(model.RoomTypeDM)}},
+		{seriesCommunityMessages, metricQuery{communityMessages, messagesByTypeSeries(model.RoomTypeCommunity)}},
+		{seriesCourseMessages, metricQuery{courseMessages, messagesByTypeSeries(model.RoomTypeCourse)}},
 		{seriesNewUsers, metricQuery{newUsers, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM users WHERE %s GROUP BY lbl`, localTS, labelFmt, between)}},
 		{seriesLikes, metricQuery{likes, fmt.Sprintf(`SELECT DATE_FORMAT(FROM_UNIXTIME(%s), '%s') as lbl, COUNT(*) FROM favorites WHERE %s GROUP BY lbl`, localTS, labelFmt, between)}},
 	}
@@ -728,13 +761,16 @@ func (r *MySQLAnalyticsRepository) GetTimeSeries(ctx context.Context, granularit
 	points := make([]*model.TimeSeriesPoint, len(labels))
 	for i, l := range labels {
 		points[i] = &model.TimeSeriesPoint{
-			Label:       l,
-			Posts:       posts[l],
-			Comments:    comments[l],
-			Messages:    messages[l],
-			NewUsers:    newUsers[l],
-			Likes:       likes[l],
-			ActiveUsers: activeUsers[l],
+			Label:             l,
+			Posts:             posts[l],
+			Comments:          comments[l],
+			Messages:          messages[l],
+			DMMessages:        dmMessages[l],
+			CommunityMessages: communityMessages[l],
+			CourseMessages:    courseMessages[l],
+			NewUsers:          newUsers[l],
+			Likes:             likes[l],
+			ActiveUsers:       activeUsers[l],
 		}
 	}
 	return points, nil

@@ -616,13 +616,16 @@ func (r *queryResolver) AdminGetTimeSeries(ctx context.Context, granularity gqlm
 	gqlPoints := make([]*gqlmodel.TimeSeriesPoint, len(points))
 	for i, p := range points {
 		gqlPoints[i] = &gqlmodel.TimeSeriesPoint{
-			Label:       p.Label,
-			Posts:       int32(p.Posts),
-			Comments:    int32(p.Comments),
-			Messages:    int32(p.Messages),
-			NewUsers:    int32(p.NewUsers),
-			Likes:       int32(p.Likes),
-			ActiveUsers: int32(p.ActiveUsers),
+			Label:             p.Label,
+			Posts:             int32(p.Posts),
+			Comments:          int32(p.Comments),
+			Messages:          int32(p.Messages),
+			DmMessages:        int32(p.DMMessages),
+			CommunityMessages: int32(p.CommunityMessages),
+			CourseMessages:    int32(p.CourseMessages),
+			NewUsers:          int32(p.NewUsers),
+			Likes:             int32(p.Likes),
+			ActiveUsers:       int32(p.ActiveUsers),
 		}
 	}
 	return &gqlmodel.TimeSeriesData{Points: gqlPoints}, nil

@@ -12,6 +12,11 @@ type AnalyticsSummary struct {
 	TotalLikes        int
 	TotalCommunities  int
 	TotalMessages     int
+	// メッセージの種類別（ルームの種類で分ける。スレッドは親のルームの種類に入る）。
+	// 3つの合計は TotalMessages と一致する。
+	DMMessages        int
+	CommunityMessages int
+	CourseMessages    int
 	TotalReports      int
 	TotalBlocks       int
 	TotalInquiries    int
@@ -25,9 +30,12 @@ type AnalyticsSummary struct {
 	DAUMAURatio        float64
 
 	// コンテンツ（日次）
-	PostsToday    int
-	CommentsToday int
-	MessagesToday int
+	PostsToday             int
+	CommentsToday          int
+	MessagesToday          int
+	DMMessagesToday        int
+	CommunityMessagesToday int
+	CourseMessagesToday    int
 
 	// エンゲージメント
 	AvgLikesPerPost    float64
@@ -97,11 +105,15 @@ type CommunityStatItem struct {
 }
 
 type TimeSeriesPoint struct {
-	Label       string
-	Posts       int
-	Comments    int
-	Messages    int
-	NewUsers    int
-	Likes       int
-	ActiveUsers int
+	Label    string
+	Posts    int
+	Comments int
+	Messages int
+	// メッセージの種類別（DM・コミュニティ・授業チャット）。合計は Messages と一致する。
+	DMMessages        int
+	CommunityMessages int
+	CourseMessages    int
+	NewUsers          int
+	Likes             int
+	ActiveUsers       int
 }

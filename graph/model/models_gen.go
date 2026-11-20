@@ -110,6 +110,9 @@ type AnalyticsSummary struct {
 	TotalLikes                  int32           `json:"totalLikes"`
 	TotalCommunities            int32           `json:"totalCommunities"`
 	TotalMessages               int32           `json:"totalMessages"`
+	DmMessages                  int32           `json:"dmMessages"`
+	CommunityMessages           int32           `json:"communityMessages"`
+	CourseMessages              int32           `json:"courseMessages"`
 	TotalReports                int32           `json:"totalReports"`
 	TotalBlocks                 int32           `json:"totalBlocks"`
 	TotalInquiries              int32           `json:"totalInquiries"`
@@ -121,6 +124,9 @@ type AnalyticsSummary struct {
 	PostsToday                  int32           `json:"postsToday"`
 	CommentsToday               int32           `json:"commentsToday"`
 	MessagesToday               int32           `json:"messagesToday"`
+	DmMessagesToday             int32           `json:"dmMessagesToday"`
+	CommunityMessagesToday      int32           `json:"communityMessagesToday"`
+	CourseMessagesToday         int32           `json:"courseMessagesToday"`
 	AvgLikesPerPost             float64         `json:"avgLikesPerPost"`
 	AvgCommentsPerPost          float64         `json:"avgCommentsPerPost"`
 	PostsTextOnly               int32           `json:"postsTextOnly"`
@@ -904,13 +910,16 @@ type TimeSeriesData struct {
 }
 
 type TimeSeriesPoint struct {
-	Label       string `json:"label"`
-	Posts       int32  `json:"posts"`
-	Comments    int32  `json:"comments"`
-	Messages    int32  `json:"messages"`
-	NewUsers    int32  `json:"newUsers"`
-	Likes       int32  `json:"likes"`
-	ActiveUsers int32  `json:"activeUsers"`
+	Label             string `json:"label"`
+	Posts             int32  `json:"posts"`
+	Comments          int32  `json:"comments"`
+	Messages          int32  `json:"messages"`
+	DmMessages        int32  `json:"dmMessages"`
+	CommunityMessages int32  `json:"communityMessages"`
+	CourseMessages    int32  `json:"courseMessages"`
+	NewUsers          int32  `json:"newUsers"`
+	Likes             int32  `json:"likes"`
+	ActiveUsers       int32  `json:"activeUsers"`
 }
 
 type TimetableEntry struct {
