@@ -107,6 +107,7 @@ type Room {
 }
 
 type Message {
+  isCommunityWelcome: Boolean!
   # System announcement linking to a thread. Normal messages return null.
   thread: ChatThread
   ID: ID!

@@ -253,6 +253,44 @@ type Community struct {
 	UpdatedAt   string  `json:"updatedAt"`
 }
 
+type CommunityGreeting struct {
+	WelcomeMessageID string       `json:"welcomeMessageID"`
+	Stamps           []*ChatStamp `json:"stamps"`
+}
+
+type CommunityInvitation struct {
+	ID                   string  `json:"id"`
+	RoomID               string  `json:"roomID"`
+	CommunityName        string  `json:"communityName"`
+	CommunityDescription string  `json:"communityDescription"`
+	SenderName           *string `json:"senderName,omitempty"`
+	RecipientName        *string `json:"recipientName,omitempty"`
+	IsLink               bool    `json:"isLink"`
+	IsMember             bool    `json:"isMember"`
+	Status               string  `json:"status"`
+	ExpiresAt            string  `json:"expiresAt"`
+}
+
+type CommunityInvitationPage struct {
+	Items []*CommunityInvitation `json:"items"`
+	Total int32                  `json:"total"`
+}
+
+type CommunityInvitationReference struct {
+	ID    *string `json:"id,omitempty"`
+	Token *string `json:"token,omitempty"`
+}
+
+type CommunityInviteLink struct {
+	Invitation *CommunityInvitation `json:"invitation"`
+	Token      string               `json:"token"`
+}
+
+type CommunityJoinStampSettings struct {
+	WelcomeIDs  []string `json:"welcomeIDs"`
+	GreetingIDs []string `json:"greetingIDs"`
+}
+
 type CommunityMember struct {
 	User *User  `json:"user"`
 	Role string `json:"role"`
@@ -534,23 +572,24 @@ type Mention struct {
 }
 
 type Message struct {
-	Thread    *ChatThread        `json:"thread,omitempty"`
-	ID        string             `json:"ID"`
-	RoomID    string             `json:"roomID"`
-	Room      *Room              `json:"room"`
-	UserID    string             `json:"userID"`
-	User      *User              `json:"user"`
-	Content   string             `json:"content"`
-	StampID   *string            `json:"stampID,omitempty"`
-	Media     []*Media           `json:"media"`
-	Video     *Video             `json:"video,omitempty"`
-	CreatedAt string             `json:"createdAt"`
-	UpdatedAt string             `json:"updatedAt"`
-	IsMine    bool               `json:"isMine"`
-	ReplyToID *string            `json:"replyToID,omitempty"`
-	ReplyTo   *Message           `json:"replyTo,omitempty"`
-	Mentions  []*Mention         `json:"mentions"`
-	Reactions []*MessageReaction `json:"reactions"`
+	IsCommunityWelcome bool               `json:"isCommunityWelcome"`
+	Thread             *ChatThread        `json:"thread,omitempty"`
+	ID                 string             `json:"ID"`
+	RoomID             string             `json:"roomID"`
+	Room               *Room              `json:"room"`
+	UserID             string             `json:"userID"`
+	User               *User              `json:"user"`
+	Content            string             `json:"content"`
+	StampID            *string            `json:"stampID,omitempty"`
+	Media              []*Media           `json:"media"`
+	Video              *Video             `json:"video,omitempty"`
+	CreatedAt          string             `json:"createdAt"`
+	UpdatedAt          string             `json:"updatedAt"`
+	IsMine             bool               `json:"isMine"`
+	ReplyToID          *string            `json:"replyToID,omitempty"`
+	ReplyTo            *Message           `json:"replyTo,omitempty"`
+	Mentions           []*Mention         `json:"mentions"`
+	Reactions          []*MessageReaction `json:"reactions"`
 }
 
 type MessagePage struct {

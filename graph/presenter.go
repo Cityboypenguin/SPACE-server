@@ -386,13 +386,14 @@ func toGraphMessage(msg *model.Message) *gqlmodel.Message {
 		return nil
 	}
 	gql := &gqlmodel.Message{
-		ID:        encodeGraphID("message", msg.ID),
-		RoomID:    encodeGraphID("room", msg.RoomID),
-		UserID:    encodeGraphID("user", msg.UserID),
-		Content:   msg.Content,
-		StampID:   msg.StampID,
-		CreatedAt: msg.CreatedAt.Format(timeFormat),
-		UpdatedAt: msg.UpdatedAt.Format(timeFormat),
+		ID:                 encodeGraphID("message", msg.ID),
+		RoomID:             encodeGraphID("room", msg.RoomID),
+		UserID:             encodeGraphID("user", msg.UserID),
+		Content:            msg.Content,
+		StampID:            msg.StampID,
+		IsCommunityWelcome: msg.AuthorRole == model.AuthorRoleCommunityWelcome,
+		CreatedAt:          msg.CreatedAt.Format(timeFormat),
+		UpdatedAt:          msg.UpdatedAt.Format(timeFormat),
 	}
 	if msg.ThreadRoomID != nil {
 		gql.Thread = &gqlmodel.ChatThread{RoomID: encodeGraphID("room", *msg.ThreadRoomID)}

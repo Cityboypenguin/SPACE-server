@@ -121,7 +121,7 @@ func (r *Resolver) messageMediaURL(storageKey string) string {
 
 // IsMine is the resolver for the isMine field.
 func (r *messageResolver) IsMine(ctx context.Context, obj *gqlmodel.Message) (bool, error) {
-	return isCallerID(ctx, obj.UserID), nil
+	return !obj.IsCommunityWelcome && isCallerID(ctx, obj.UserID), nil
 }
 
 // ReplyTo is the resolver for the replyTo field.

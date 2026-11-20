@@ -1,0 +1,55 @@
+extend type Query {
+  receivedCommunityInvitations(limit: Int = 20, offset: Int = 0): CommunityInvitationPage!
+  communityInvitation(input: CommunityInvitationReference!): CommunityInvitation!
+  sentCommunityInvitations(roomID: ID!, limit: Int = 20, offset: Int = 0): [CommunityInvitation!]!
+  communityGreeting(roomID: ID!): CommunityGreeting
+  adminCommunityJoinStampSettings: CommunityJoinStampSettings!
+}
+
+extend type Mutation {
+  inviteCommunityUser(communityID: ID!, userID: ID!): CommunityInvitation!
+  createCommunityInviteLink(communityID: ID!): CommunityInviteLink!
+  acceptCommunityInvitation(input: CommunityInvitationReference!): ID!
+  declineCommunityInvitation(id: ID!): Boolean!
+  revokeCommunityInvitation(id: ID!): Boolean!
+  sendCommunityGreeting(roomID: ID!, welcomeMessageID: ID!, stampID: String!): Message!
+  adminSaveCommunityJoinStampSettings(welcomeIDs: [String!]!, greetingIDs: [String!]!): Boolean!
+}
+
+input CommunityInvitationReference {
+  id: ID
+  token: String
+}
+
+type CommunityInvitationPage {
+  items: [CommunityInvitation!]!
+  total: Int!
+}
+
+type CommunityInvitation {
+  id: ID!
+  roomID: ID!
+  communityName: String!
+  communityDescription: String!
+  senderName: String
+  recipientName: String
+  isLink: Boolean!
+  isMember: Boolean!
+  status: String!
+  expiresAt: String!
+}
+
+type CommunityInviteLink {
+  invitation: CommunityInvitation!
+  token: String!
+}
+
+type CommunityJoinStampSettings {
+  welcomeIDs: [String!]!
+  greetingIDs: [String!]!
+}
+
+type CommunityGreeting {
+  welcomeMessageID: ID!
+  stamps: [ChatStamp!]!
+}

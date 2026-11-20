@@ -56,6 +56,7 @@ import (
 	blusecase "github.com/Cityboypenguin/SPACE-server/usecase/block"
 	chatusecase "github.com/Cityboypenguin/SPACE-server/usecase/chat"
 	"github.com/Cityboypenguin/SPACE-server/usecase/chatstamp"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 	courseusecase "github.com/Cityboypenguin/SPACE-server/usecase/course"
 	courseimageusecase "github.com/Cityboypenguin/SPACE-server/usecase/courseimage"
 	favoriteusecase "github.com/Cityboypenguin/SPACE-server/usecase/favorite"
@@ -437,7 +438,6 @@ func main() {
 	getOrCreateDMRoomUseCase := roomusecase.NewGetOrCreateDMRoomUseCase(roomUserRepository, userRepository)
 	leaveCommunityUseCase := roomusecase.NewLeaveCommunityUseCase(roomRepository, roomUserRepository, txManager)
 	deleteOrphanedDMUseCase := roomusecase.NewDeleteOrphanedDMUseCase(roomRepository, roomUserRepository, txManager)
-	joinRoomUseCase := roomusecase.NewJoinRoomUseCase(roomRepository, roomUserRepository)
 	getRoomUserRoleUseCase := roomusecase.NewGetRoomUserRoleUseCase(roomUserRepository)
 	setRoomUserRoleUseCase := roomusecase.NewSetRoomUserRoleUseCase(roomUserRepository)
 	listRoomMembersWithRolesUseCase := roomusecase.NewListRoomMembersWithRolesUseCase(roomUserRepository)
@@ -634,6 +634,12 @@ func main() {
 	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
 	ngWordAdmin := ngwordusecase.NewAdminService(ngWordRepository, ngWordGuard)
 	stampService := &chatstamp.Service{Repo: &mysql.ChatStampRepository{DB: database}, Uploads: uploadAcceptor, Tx: txManager}
+	communityInvitations := &communityusecase.InvitationService{
+		Store: &mysql.CommunityInvitationRepository{DB: database},
+		Rooms: roomRepository, Members: roomUserRepository, Communities: communityRepository,
+		Users: userRepository, Blocks: blockRepository, Tx: txManager, Notifications: notificationPublisher,
+		Stamps: stampService.Repo, Messages: chatMessageWriters, Events: chatEventPublisher,
+	}
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
 		Stamps:           stampService,
 		NGWords:          ngWordGuard,
@@ -711,6 +717,7 @@ func main() {
 	}
 	resolver := &graph.Resolver{
 		StampService:             stampService,
+		CommunityInvitations:     communityInvitations,
 		StorageRepository:        storageRepository,
 		MessageStorageRepository: messageStorageRepository,
 		VideoStorageRepository:   videoStorageRepository,
@@ -809,7 +816,7 @@ func main() {
 			GetOrCreateDMRoomUseCase:            getOrCreateDMRoomUseCase,
 			LeaveCommunityUseCase:               leaveCommunityUseCase,
 			DeleteOrphanedDMUseCase:             deleteOrphanedDMUseCase,
-			JoinRoomUseCase:                     joinRoomUseCase,
+			JoinRoomUseCase:                     communityInvitations,
 			GetRoomUserRoleUseCase:              getRoomUserRoleUseCase,
 			SetRoomUserRoleUseCase:              setRoomUserRoleUseCase,
 			ListRoomMembersWithRolesUseCase:     listRoomMembersWithRolesUseCase,
