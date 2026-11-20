@@ -5,6 +5,7 @@ import (
 	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 
 	"fmt"
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ type CreatePostInteractor struct {
 	blockerRepo           repository.BlockerRepository
 	txManager             repository.TxManager
 	notificationPublisher notificationuc.NotificationPublisher
+	videos                VideoAttacher
 }
 
 func NewCreatePostUseCase(uploads uploadusecase.Acceptor,
@@ -38,8 +40,10 @@ func NewCreatePostUseCase(uploads uploadusecase.Acceptor,
 	blockerRepo repository.BlockerRepository,
 	txManager repository.TxManager,
 	notificationPublisher notificationuc.NotificationPublisher,
+	videos VideoAttacher,
 ) CreatePostUseCase {
 	return &CreatePostInteractor{
+		videos:                videos,
 		uploads:               uploads,
 		postRepo:              postRepo,
 		mediaRepo:             mediaRepo,
@@ -59,8 +63,14 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 	}
 	param.UserID = callerID
 
-	if strings.TrimSpace(param.Content) == "" && len(mediaInputs) == 0 {
+	if strings.TrimSpace(param.Content) == "" && len(mediaInputs) == 0 && param.Video == nil {
 		return nil, fmt.Errorf("content cannot be empty")
+	}
+	if param.Video != nil && len(mediaInputs) > 0 {
+		return nil, apperr.InvalidInput("動画と画像は同じ投稿に付けられません")
+	}
+	if param.Video != nil && uc.videos == nil {
+		return nil, apperr.InvalidInput("動画は投稿できません")
 	}
 	if err := validatePostContent(param.Content); err != nil {
 		return nil, err
@@ -77,6 +87,13 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 	mediaInputs, err = uploadusecase.AcceptAll(ctx, uploads, uploadusecase.Attachment, mediaInputs, func(m *model.MediaInput) *string { return &m.StorageKey })
 	if err != nil {
 		return nil, err
+	}
+	// 動画も同じ uploads で受け入れる。保存が失敗したら動画とサムネイルも消える。
+	var video *model.Video
+	if param.Video != nil {
+		if video, err = uc.videos.Accept(ctx, uploads, *param.Video); err != nil {
+			return nil, err
+		}
 	}
 
 	// メンション解決は参照のみなのでトランザクションの外で済ませる。
@@ -122,9 +139,17 @@ func (uc *CreatePostInteractor) Execute(ctx context.Context, param model.CreateP
 				return err
 			}
 		}
+		if video != nil {
+			if err := uc.videos.SaveForPost(ctx, post.ID, video); err != nil {
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if video != nil {
+		uc.videos.RecordSaved(ctx, video)
 	}
 
 	// 返信の場合、親投稿の投稿者へ通知する（自分自身への返信は除く）。

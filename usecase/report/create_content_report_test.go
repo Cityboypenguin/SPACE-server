@@ -383,3 +383,37 @@ func TestCreateContentReport_ThreadWithoutCreator(t *testing.T) {
 		t.Fatalf("author = %v %q, want none", s.AuthorID, s.AuthorName)
 	}
 }
+
+type fakeVideoSnapshotter struct {
+	gotID int64
+	video *model.ReportedContentVideo
+}
+
+func (f *fakeVideoSnapshotter) SnapshotVideo(_ context.Context, id int64) (*model.ReportedContentVideo, error) {
+	f.gotID = id
+	return f.video, nil
+}
+
+// メッセージの通報は、付いている動画のキーと実測値も写す。質問・回答には動画が付かないので引かない。
+func TestCreateContentReport_CopiesTheVideoOfAMessage(t *testing.T) {
+	f := newContentReportFixture(model.RoomTypeCommunity)
+	videos := &fakeVideoSnapshotter{video: &model.ReportedContentVideo{MediaID: 4, StorageKey: "videos/2/a.mp4", DurationMs: 3000}}
+	f.deps.Videos = videos
+	if _, err := f.execute(model.TargetMessage); err != nil {
+		t.Fatal(err)
+	}
+	got := f.repo.saved.ReportedContent.Video
+	if videos.gotID != 9 || got == nil || got.StorageKey != "videos/2/a.mp4" {
+		t.Errorf("video = %+v (looked up %d)", got, videos.gotID)
+	}
+
+	f = newContentReportFixture(model.RoomTypeCourse)
+	videos = &fakeVideoSnapshotter{video: &model.ReportedContentVideo{MediaID: 4}}
+	f.deps.Videos = videos
+	if _, err := f.execute(model.TargetQuestion); err != nil {
+		t.Fatal(err)
+	}
+	if videos.gotID != 0 || f.repo.saved.ReportedContent.Video != nil {
+		t.Errorf("question report looked up a video")
+	}
+}

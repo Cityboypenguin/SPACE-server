@@ -93,6 +93,8 @@ type SendMessageInput struct {
 	RoomID      int64
 	Content     string
 	MediaInputs []model.MediaInput
+	// Video は付ける動画（無ければ nil）。
+	Video *model.VideoInput
 	// MentionUserIDs はクライアントが申告したメンション先。ここでは検証せず、
 	// ResolveMentionsUseCase に渡して「そのルームでメンションが成立するか」
 	// （message.MentionsSupported: コミュニティのみ）から判定させる。
@@ -151,7 +153,7 @@ func (s *messageCommandService) SendMessage(ctx context.Context, in SendMessageI
 		return nil, err
 	}
 
-	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.ReplyToID, in.StampID, mentions)
+	msg, err := s.deps.Writers.send.Execute(ctx, in.RoomID, claims.ID, in.Content, in.MediaInputs, in.Video, in.ReplyToID, in.StampID, mentions)
 	if err != nil {
 		return nil, err
 	}

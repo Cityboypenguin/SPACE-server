@@ -1,6 +1,12 @@
 package post
 
-import "github.com/Cityboypenguin/SPACE-server/repository"
+import (
+	"context"
+
+	"github.com/Cityboypenguin/SPACE-server/model"
+	"github.com/Cityboypenguin/SPACE-server/repository"
+	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
+)
 
 // 投稿の書き込み系だけが、役割をまたいで広く触る。
 //
@@ -30,4 +36,13 @@ type postMediaRepository interface {
 	repository.MediaWriter
 	repository.MediaAttachmentWriter
 	repository.MediaDeleter
+}
+
+// VideoAttacher は投稿に動画を付ける・外す口（usecase/video.Service が満たす）。
+// nil のまま動画付きの投稿が来たら受け付けない。
+type VideoAttacher interface {
+	Accept(ctx context.Context, uploads *uploadusecase.Session, in model.VideoInput) (*model.Video, error)
+	SaveForPost(ctx context.Context, postID int64, v *model.Video) error
+	RecordSaved(ctx context.Context, v *model.Video)
+	RemoveFromPost(ctx context.Context, postID, userID int64) error
 }

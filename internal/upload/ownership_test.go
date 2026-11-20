@@ -107,8 +107,10 @@ func TestUsecaseKindsMapToRealKinds(t *testing.T) {
 		uploadusecase.CommunityIcon:     CommunityIcon,
 		uploadusecase.TermsDocument:     TermsDocument,
 		uploadusecase.ChatStamp:         ChatStamp,
+		uploadusecase.VideoThumbnail:    VideoThumbnail,
 	}
-	if len(cases) != len(kinds) {
+	// 動画そのものは名前ではなく AcceptVideo（VideoAcceptor）で受け入れるので、表に無い。
+	if len(cases)+1 != len(kinds) {
 		t.Fatalf("種別が %d 個あるのに、ユースケース側の名前は %d 個しかない", len(kinds), len(cases))
 	}
 	for name, want := range cases {
@@ -159,12 +161,14 @@ func TestDiscard_IgnoresKeysItDidNotIssue(t *testing.T) {
 // 静かに起きて気づけないので、表として明示しておく。
 func TestOnlyMessageMediaIsPrivate(t *testing.T) {
 	want := map[string]bool{
-		Media.Prefix:         false,
-		MessageMedia.Prefix:  true,
-		Avatar.Prefix:        false,
-		CommunityIcon.Prefix: false,
-		TermsDocument.Prefix: false,
-		ChatStamp.Prefix:     false,
+		Media.Prefix:          false,
+		MessageMedia.Prefix:   true,
+		Avatar.Prefix:         false,
+		CommunityIcon.Prefix:  false,
+		TermsDocument.Prefix:  false,
+		ChatStamp.Prefix:      false,
+		Video.Prefix:          false,
+		VideoThumbnail.Prefix: false,
 	}
 	if len(want) != len(kinds) {
 		t.Fatalf("種別が %d 個あるのに、表は %d 個しかない", len(kinds), len(want))
@@ -172,6 +176,23 @@ func TestOnlyMessageMediaIsPrivate(t *testing.T) {
 	for _, k := range kinds {
 		if k.Private != want[k.Prefix] {
 			t.Errorf("%s の Private = %v, want %v", k.Prefix, k.Private, want[k.Prefix])
+		}
+	}
+}
+
+// TestOnlyVideoKindsGoToTheVideoStore は「どの種別が動画の置き場へ行くか」を固定する。
+//
+// 動画を公開の置き場へ入れると、保存期間が過ぎても URL を知る人は実体が消えるまで
+// 見られる。逆に画像を動画の置き場へ入れると、表示URLが署名付きになって
+// キャッシュが効かなくなる。
+func TestOnlyVideoKindsGoToTheVideoStore(t *testing.T) {
+	for _, k := range kinds {
+		want := k.Prefix == Video.Prefix || k.Prefix == VideoThumbnail.Prefix
+		if k.Video != want {
+			t.Errorf("%s の Video = %v, want %v", k.Prefix, k.Video, want)
+		}
+		if k.Video && k.Private {
+			t.Errorf("%s が動画と非公開の両方になっている", k.Prefix)
 		}
 	}
 }

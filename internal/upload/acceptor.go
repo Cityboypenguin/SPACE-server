@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/authz"
+	"github.com/Cityboypenguin/SPACE-server/model"
 	uploadusecase "github.com/Cityboypenguin/SPACE-server/usecase/upload"
 )
 
@@ -22,20 +23,31 @@ import (
 type Acceptor struct {
 	public  ObjectStore
 	private ObjectStore
+	// video は動画とそのサムネイルの置き場（Kind.Video）。匿名読み取りを許さない。
+	video ObjectStore
 }
 
 var _ uploadusecase.Acceptor = (*Acceptor)(nil)
+var _ uploadusecase.VideoAcceptor = (*Acceptor)(nil)
 
 // NewAcceptor は公開・非公開の2つの置き場を束ねる。
 //
 // private が nil なら非公開の種別は受け入れない（黙って公開側へ落とさない）。
 // 配線の漏れを、DM の添付が公開されるという形で出さないため。
-func NewAcceptor(public, private ObjectStore) *Acceptor {
-	return &Acceptor{public: public, private: private}
+//
+// video も同じで、nil なら動画の種別は受け入れない。
+func NewAcceptor(public, private, video ObjectStore) *Acceptor {
+	return &Acceptor{public: public, private: private, video: video}
 }
 
 // storeFor は種別に対応する置き場を返す。
 func (a *Acceptor) storeFor(k Kind) (ObjectStore, error) {
+	if k.Video {
+		if a.video == nil {
+			return nil, fmt.Errorf("no video object store is configured for %s", k.Prefix)
+		}
+		return a.video, nil
+	}
 	if !k.Private {
 		return a.public, nil
 	}
@@ -69,6 +81,19 @@ func (a *Acceptor) Accept(ctx context.Context, kind uploadusecase.Kind, objectKe
 		return "", err
 	}
 	return Accept(ctx, store, objectKey, want, owner)
+}
+
+// AcceptVideo は動画を受け入れ、最終キーと実測値を返す。
+func (a *Acceptor) AcceptVideo(ctx context.Context, objectKey string) (string, model.VideoProbe, error) {
+	callerID, err := authz.CallerID(ctx)
+	if err != nil {
+		return "", model.VideoProbe{}, err
+	}
+	store, err := a.storeFor(Video)
+	if err != nil {
+		return "", model.VideoProbe{}, err
+	}
+	return AcceptVideo(ctx, store, objectKey, fmt.Sprintf("%d", callerID))
 }
 
 // Discard は受け入れで公開したオブジェクトを取り消す（保存に失敗したとき）。

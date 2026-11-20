@@ -224,6 +224,7 @@ func (r *Resolver) toGraphReportedContent(ctx context.Context, m *model.Reported
 		AuthorName:  m.AuthorName,
 		Content:     m.Content,
 		Media:       media,
+		Video:       toGraphReportedVideo(m.Video),
 		ParentBody:  m.ParentBody,
 		PollOptions: append([]string{}, m.PollOptions...),
 		StampID:     m.StampID,

@@ -73,6 +73,12 @@ services:
       # 表示は期限付きの署名付きURLで配られる（internal/upload.MessageMedia 参照）。
       # 公開側と同じ名前を入れると、DM の添付が匿名で読めるようになる。
       MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
+      # 動画とサムネイルの置き場。匿名読み取りを付けないコンテナーにすること
+      # （docs/video-posts.md）。保存期間が過ぎた動画を URL で見られないようにするため。
+      VIDEO_CONTAINER: ${VIDEO_CONTAINER:-space-videos}
+      # Azure のライフサイクル管理（安全網）が動画を消す日数。Azure 側の規則と同じ値にする。
+      # 管理画面で設定できる保存期間の上限はここから決まる。
+      VIDEO_LIFECYCLE_BACKSTOP_DAYS: ${VIDEO_LIFECYCLE_BACKSTOP_DAYS:-120}
       # 公開オブジェクトの URL に読み取りSASを付けるか。既定は付ける。
       #
       # コンテナーの匿名読み取りはストレージアカウントの allowBlobPublicAccess で

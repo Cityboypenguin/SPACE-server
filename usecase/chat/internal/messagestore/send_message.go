@@ -48,7 +48,15 @@ type SendMessageUseCase interface {
 	// 必要があり、そうでなければエラーになる。
 	// mentions は ResolveMentionsUseCase で検証済みのメンション（コミュニティのみ）。
 	// stampID を渡すとスタンプだけのメッセージになる（本文・添付・メンションとは同時に送れない）。
-	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error)
+	// video を渡すと動画を1本付ける（画像・スタンプとは同時に付けられない）。
+	Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, video *model.VideoInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error)
+}
+
+// VideoAttacher はメッセージに動画を付ける口（usecase/video.Service が満たす）。
+type VideoAttacher interface {
+	Accept(ctx context.Context, uploads *uploadusecase.Session, in model.VideoInput) (*model.Video, error)
+	SaveForMessage(ctx context.Context, messageID int64, v *model.Video) error
+	RecordSaved(ctx context.Context, v *model.Video)
 }
 
 var _ SendMessageUseCase = &SendMessageInteractor{}
@@ -64,6 +72,7 @@ type SendMessageInteractor struct {
 	mentionStore repository.MessageMentionStore
 	mediaRepo    mediaAttachRepository
 	txManager    repository.TxManager
+	videos       VideoAttacher
 }
 
 func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
@@ -72,8 +81,10 @@ func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
 	mentionStore repository.MessageMentionStore,
 	mediaRepo mediaAttachRepository,
 	txManager repository.TxManager,
+	videos VideoAttacher,
 ) SendMessageUseCase {
 	return &SendMessageInteractor{
+		videos:       videos,
 		uploads:      uploads,
 		reader:       reader,
 		writer:       writer,
@@ -83,17 +94,23 @@ func NewSendMessageUseCase(uploads uploadusecase.Acceptor,
 	}
 }
 
-func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (_ *model.Message, err error) {
+func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int64, content string, mediaInputs []model.MediaInput, video *model.VideoInput, replyToID *int64, stampID *string, mentions []*model.Mention) (_ *model.Message, err error) {
 	content = strings.TrimSpace(content)
 	if err := validateContent(content); err != nil {
 		return nil, err
 	}
 	// スタンプの検証は、添付のアップロードを受け入れる前に済ませる（受け入れた後で弾くと後始末が要る）。
-	if stampID != nil && (content != "" || len(mediaInputs) > 0 || len(mentions) > 0) {
+	if stampID != nil && (content != "" || len(mediaInputs) > 0 || video != nil || len(mentions) > 0) {
 		return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
 	}
 	if stampID != nil && !model.IsValidMessageStampID(*stampID) {
 		return nil, apperr.InvalidInput("このスタンプは使えません")
+	}
+	if video != nil && len(mediaInputs) > 0 {
+		return nil, apperr.InvalidInput("動画と画像は同じメッセージに付けられません")
+	}
+	if video != nil && uc.videos == nil {
+		return nil, apperr.InvalidInput("動画は送信できません")
 	}
 
 	// 添付の受け入れはここで通す（create_post と同じ理由・同じ後始末）。
@@ -105,9 +122,20 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 		return nil, err
 	}
 
-	mediaKeys := make([]string, 0, len(mediaInputs))
+	var accepted *model.Video
+	if video != nil {
+		if accepted, err = uc.videos.Accept(ctx, uploads, *video); err != nil {
+			return nil, err
+		}
+	}
+
+	mediaKeys := make([]string, 0, len(mediaInputs)+1)
 	for _, input := range mediaInputs {
 		mediaKeys = append(mediaKeys, input.StorageKey)
+	}
+	if accepted != nil {
+		// 「本文も添付も空」の検証に動画も数える。
+		mediaKeys = append(mediaKeys, accepted.StorageKey)
 	}
 
 	// 返信先は同じルームの、まだ削除されていないメッセージだけ許す。
@@ -159,9 +187,17 @@ func (uc *SendMessageInteractor) Execute(ctx context.Context, roomID, userID int
 				return err
 			}
 		}
+		if accepted != nil {
+			if err := uc.videos.SaveForMessage(ctx, m.ID, accepted); err != nil {
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if accepted != nil {
+		uc.videos.RecordSaved(ctx, accepted)
 	}
 
 	return m, nil

@@ -25,6 +25,7 @@ type UpdatePostInteractor struct {
 	blockerRepo           repository.BlockerRepository
 	txManager             repository.TxManager
 	notificationPublisher notificationuc.NotificationPublisher
+	videos                VideoAttacher
 }
 
 func NewUpdatePostUseCase(uploads uploadusecase.Acceptor,
@@ -34,8 +35,10 @@ func NewUpdatePostUseCase(uploads uploadusecase.Acceptor,
 	blockerRepo repository.BlockerRepository,
 	txManager repository.TxManager,
 	notificationPublisher notificationuc.NotificationPublisher,
+	videos VideoAttacher,
 ) *UpdatePostInteractor {
 	return &UpdatePostInteractor{
+		videos:                videos,
 		uploads:               uploads,
 		postRepo:              postRepo,
 		mediaRepo:             mediaRepo,
@@ -118,6 +121,16 @@ func (uc *UpdatePostInteractor) Execute(ctx context.Context, param model.UpdateP
 				if err := uc.postRepo.CreatePostMentions(ctx, post.ID, newMentions); err != nil {
 					return err
 				}
+			}
+		}
+
+		// 動画を外す。行は残して「外した」印を付け、実体は日次の処理で消す。
+		if param.RemoveVideo {
+			if uc.videos == nil {
+				return fmt.Errorf("video removal is not configured")
+			}
+			if err := uc.videos.RemoveFromPost(ctx, post.ID, param.UserID); err != nil {
+				return err
 			}
 		}
 

@@ -544,6 +544,31 @@ func (r *AzureBlobStorageRepository) PublicURL(objectKey string) string {
 	return base + "?" + queryParams.Encode()
 }
 
+// SignedReadURL は expiresAt まで1つの BLOB を読める署名付きURLを作る。
+// 動画の再生とサムネイルに使う（usecase/video）。
+//
+// PublicURL と違って失効時刻を呼び出し側が決める。動画は保存期間の期限を越えて
+// 読めてはいけないので、期限より先まで有効な URL を出さないため。
+// CDN の配信ホスト（publicEndpoint）は使わない。動画のコンテナーは匿名読み取りを
+// 許しておらず、CDN を通すと署名ごとキャッシュされうる。
+func (r *AzureBlobStorageRepository) SignedReadURL(ctx context.Context, objectKey string, expiresAt time.Time) (string, error) {
+	if !expiresAt.After(time.Now()) {
+		return "", fmt.Errorf("signed URL would already be expired")
+	}
+	queryParams, err := r.sign(ctx, sas.BlobSignatureValues{
+		Protocol:      sas.ProtocolHTTPS,
+		ExpiryTime:    expiresAt.UTC(),
+		ContainerName: r.containerName,
+		BlobName:      objectKey,
+		Permissions:   (&sas.BlobPermissions{Read: true}).String(),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate SAS token: %w", err)
+	}
+	return fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s?%s",
+		r.accountName, r.containerName, objectKey, queryParams.Encode()), nil
+}
+
 // publicBaseURL は署名を除いた公開 URL。CDN を前に置いたときだけ配信ホストを向く。
 func (r *AzureBlobStorageRepository) publicBaseURL(objectKey string) string {
 	if r.publicEndpoint != "" {

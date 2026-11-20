@@ -31,6 +31,8 @@ extend type Mutation {
     roomID: ID!
     content: String!
     mediaInputs: [MediaUploadInput!]
+    # 動画を1本付ける。mediaInputs（画像）・stampID とは同時に指定できない。
+    videoInput: VideoUploadInput
     # メンション先のユーザーID（コミュニティのみ）。サジェストから選んだ相手だけが
     # メンションとして成立する。サーバー側でルームのメンバーであることと、
     # 本文に "@表示名" が残っていることを検証してから保存する。
@@ -116,6 +118,8 @@ type Message {
   # スタンプだけのメッセージのとき、そのスタンプのID。通常のメッセージは null。
   stampID: String
   media: [Media!]!
+  # メッセージに付いた動画（1本まで）。無ければ null。
+  video: Video
   createdAt: String!
   updatedAt: String!
   isMine: Boolean!

@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	videousecase "github.com/Cityboypenguin/SPACE-server/usecase/video"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -102,6 +104,17 @@ const pubsubChannelPrefix = "space:pubsub:"
 
 // removedImagePurgeHourJST は外した画像の自動削除を走らせる時刻。利用の少ない時間帯にする。
 const removedImagePurgeHourJST = 5
+
+// videoPurgeHourJST は動画の実体を消す日次の処理を走らせる時刻。
+const videoPurgeHourJST = 4
+
+// 動画の署名付きURLを1人が出せる回数（1時間あたり）。圧縮のやり直しや失敗した
+// アップロードのやり直しには足り、機械的な取りすぎは止まる数にしてある。
+// 1日の本数の上限（system_settings）とは別物。
+const (
+	videoUploadURLLimit  = 20
+	videoUploadURLWindow = time.Hour
+)
 
 func main() {
 	isProd := os.Getenv("APP_ENV") == "production"
@@ -223,6 +236,10 @@ func main() {
 	var storageRepository repository.StorageRepository
 	var messageStorageRepository repository.StorageRepository
 	var privateStorageRepository repository.PrivateStorageRepository
+	// videoStorageRepository は動画とサムネイルの置き場（匿名読み取りなし）。
+	// videoStore は同じものを、期限付きの再生用URLを出す口として持つ。
+	var videoStorageRepository repository.StorageRepository
+	var videoStore videousecase.Store
 	if os.Getenv("STORAGE_PROVIDER") == "azure" {
 		storage, storageErr := azurerepo.New(context.Background())
 		err = storageErr
@@ -232,6 +249,8 @@ func main() {
 		storageRepository = storage
 		privateStorageRepository = storage
 		messageStorageRepository = storage.ForContainer(messageMediaContainer(), true)
+		videos := storage.ForContainer(videoContainer(), true)
+		videoStorageRepository, videoStore = videos, videos
 	} else {
 		storage, storageErr := miniorepo.New()
 		err = storageErr
@@ -241,6 +260,8 @@ func main() {
 		storageRepository = storage
 		privateStorageRepository = storage
 		messageStorageRepository = storage.ForBucket(messageMediaContainer(), true)
+		videos := storage.ForBucket(videoContainer(), true)
+		videoStorageRepository, videoStore = videos, videos
 	}
 	activityArchiveRepository := mysql.NewMySQLActivityArchiveRepository(database)
 	activityArchiver, err := activityarchive.New(activityArchiveRepository, privateStorageRepository, config.ActivityArchiveHMACKey(isProd))
@@ -269,7 +290,38 @@ func main() {
 	updateMyProfileUseCase := profileusecase.NewUpdateMyProfileUseCase(userRepository, profileRepository, txManager)
 	// アップロードの受け入れ（上限・種別の検査と、署名付きURLの及ばないキーへの移送）。
 	// 1つ作って、オブジェクトキーを保存するユースケース全部へ配る。
-	uploadAcceptor := upload.NewAcceptor(storageRepository, messageStorageRepository)
+	uploadAcceptor := upload.NewAcceptor(storageRepository, messageStorageRepository, videoStorageRepository)
+
+	// 動画（受け入れ・再生・保存期間・実体の削除・集計）。再生の可否は投稿・メッセージを
+	// 見てよいかに従う。メッセージの判定（chatAccessPolicy）は下で作るので、ここでは
+	// 後から入る変数を参照する。
+	var videoMessageAccess chatusecase.AccessPolicy
+	videoService := videousecase.NewService(videousecase.Deps{
+		Videos:   mysql.NewMySQLVideoRepository(database),
+		Settings: mysql.NewMySQLSystemSettingRepository(database),
+		Store:    videoStore,
+		CanViewPost: func(ctx context.Context, postID int64) (bool, error) {
+			// GetPostByID は削除済み・ブロック関係・退会手続き中の投稿者を除いて返す。
+			p, err := postRepository.GetPostByID(ctx, postID)
+			return p != nil, err
+		},
+		CanViewMessage: func(ctx context.Context, messageID int64) (bool, error) {
+			m, err := messageRepository.GetMessageByID(ctx, messageID)
+			if err != nil || m == nil || m.IsDeleted() || videoMessageAccess == nil {
+				return false, err
+			}
+			if _, err := videoMessageAccess.EnsureReadAccess(ctx, m.RoomID); err != nil {
+				switch apperr.CodeOf(err) {
+				case apperr.CodeForbidden, apperr.CodeNotFound, apperr.CodeUnauthorized:
+					return false, nil
+				}
+				return false, err
+			}
+			return true, nil
+		},
+		UploadRate:   infraredis.NewVideoUploadLimiter(redisClient, videoUploadURLLimit, videoUploadURLWindow),
+		BackstopDays: videoLifecycleBackstopDays(),
+	})
 
 	// 退会（本人・管理者・猶予切れ）。添付の実体の後片付けは受け入れと同じ置き場で行う。
 	accountPurgeCtx, stopAccountPurge := context.WithCancel(context.Background())
@@ -370,7 +422,7 @@ func main() {
 	// メッセージの保存処理（送信・編集・削除）は usecase/chat/internal/messagestore に
 	// あり、ここから直接は組み立てられない。認可を通さず保存を叩ける口を作らないための
 	// 構造なので、束ごと受け取ってチャットサービスへ渡す（usecase/chat/writers.go 参照）。
-	chatMessageWriters := chatusecase.NewMessageWriters(uploadAcceptor, messageRepository, messageRepository, messageRepository, mediaRepository, txManager)
+	chatMessageWriters := chatusecase.NewMessageWriters(uploadAcceptor, messageRepository, messageRepository, messageRepository, mediaRepository, txManager, videoService)
 	resolveMessageMentionsUseCase := messageusecase.NewResolveMentionsUseCase(userRepository, roomRepository, roomUserRepository, blockRepository)
 	listMessageMentionsUseCase := messageusecase.NewListMentionsByMessageIDsUseCase(messageRepository)
 	getLastMessagesByRoomIDsUseCase := messageusecase.NewGetLastMessagesByRoomIDsUseCase(messageRepository)
@@ -473,17 +525,20 @@ func main() {
 		Notifier:      notificationPublisher,
 		Media:         mediaRepository,
 		ReportedMedia: reportedmediausecase.New(reportRepository, storageRepository, messageStorageRepository),
-		Objects:       uploadAcceptor,
-		TxManager:     txManager,
+		// 通報中のメッセージの動画は、通報への対応が終わるまで残す。
+		ReportedVideos: videoService,
+		Objects:        uploadAcceptor,
+		TxManager:      txManager,
 	}
 	deleteUserUseCase := userusecase.NewDeleteUserUseCase(accountDeletionDeps)
 	deleteMyAccountUseCase := userusecase.NewDeleteMyAccountUseCase(accountDeletionDeps)
 	removedImagePurgeDone := make(chan struct{})
+	videoPurgeDone := make(chan struct{})
 	accountPurger := accountpurge.New(userusecase.NewPurgeExpiredAccountsUseCase(accountDeletionDeps))
 
 	// 通知発行を伴うユースケースは publisher を注入して生成する。
-	createPostUseCase := postusecase.NewCreatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
-	updatePostUseCase := postusecase.NewUpdatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher)
+	createPostUseCase := postusecase.NewCreatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher, videoService)
+	updatePostUseCase := postusecase.NewUpdatePostUseCase(uploadAcceptor, postRepository, mediaRepository, userRepository, blockRepository, txManager, notificationPublisher, videoService)
 	listPostMentionsUseCase := postusecase.NewListMentionsByPostIDsUseCase(postRepository)
 
 	// DataLoader からしか使わないバッチ取得の口。リゾルバは dataloader.For(ctx) 経由で
@@ -573,6 +628,7 @@ func main() {
 		CheckBlockRelation: checkBlockRelationUseCase,
 		GetUser:            getUserByIDUseCase,
 	})
+	videoMessageAccess = chatAccessPolicy
 	// NGワード。授業内チャットのメッセージ・質問・回答を、投稿の前に検査する。
 	ngWordRepository := mysql.NewMySQLNGWordRepository(database)
 	ngWordGuard := ngwordusecase.NewGuard(ngWordRepository)
@@ -654,9 +710,11 @@ func main() {
 		Events: chatEventPublisher, NGWords: ngWordGuard,
 	}
 	resolver := &graph.Resolver{
-		StampService: stampService,
+		StampService:             stampService,
 		StorageRepository:        storageRepository,
 		MessageStorageRepository: messageStorageRepository,
+		VideoStorageRepository:   videoStorageRepository,
+		VideoService:             videoService,
 		MaintenanceRepository:    maintenanceRepository,
 		MaintenanceFlag:          maintenanceFlag,
 
@@ -776,6 +834,7 @@ func main() {
 			Addenda:   addendumRepository,
 			Media:     mediaRepository,
 			Users:     getUserByIDUseCase,
+			Videos:    videoService,
 		}),
 		ManageReportUsecase:                *manageReportUseCase,
 		CourseImages:                       courseImageService,
@@ -903,6 +962,8 @@ func main() {
 		ListMediaByMessageIDs:          listMediaByMessageIDsUseCase,
 		ListMediaByQuestionIDs:         listMediaByQuestionIDsUseCase,
 		ListMediaByAnswerIDs:           listMediaByAnswerIDsUseCase,
+		ListVideosByPostIDs:            videoService.ListByPostIDs,
+		ListVideosByMessageIDs:         videoService.ListByMessageIDs,
 		GetRepliesByPostIDs:            getRepliesByPostIDsUseCase,
 		GetRepliesByPostIDsIncludeDel:  getRepliesByPostIDsIncludeDeletedUseCase,
 		GetFavoritesByPostIDs:          getFavoritesByPostIDsUseCase,
@@ -1083,6 +1144,15 @@ func main() {
 			DoneMessage: "purged the removed course chat images past their retention",
 		}).Run(accountPurgeCtx)
 	}()
+	go func() {
+		defer close(videoPurgeDone)
+		(&dailyjob.Runner{
+			Name:        "video_purge",
+			HourJST:     videoPurgeHourJST,
+			Exec:        videoService.PurgeDue,
+			DoneMessage: "deleted the video files past their retention",
+		}).Run(accountPurgeCtx)
+	}()
 
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
@@ -1113,6 +1183,11 @@ func main() {
 	case <-removedImagePurgeDone:
 	case <-shutdownCtx.Done():
 		logger.Log.Error().Err(shutdownCtx.Err()).Msg("removed image purge did not stop before shutdown")
+	}
+	select {
+	case <-videoPurgeDone:
+	case <-shutdownCtx.Done():
+		logger.Log.Error().Err(shutdownCtx.Err()).Msg("video purge did not stop before shutdown")
 	}
 	select {
 	case <-accountPurgeDone:
@@ -1188,6 +1263,32 @@ func messageMediaContainer() string {
 		return v
 	}
 	return "space-message-media"
+}
+
+// videoContainer は動画とサムネイルを入れるコンテナー（バケット）名。
+//
+// 匿名読み取りを許さないコンテナーにすること。動画は保存期間の期限を越えて
+// 見られてはいけないので、表示は期限付きの署名付きURLだけで配る。
+func videoContainer() string {
+	if v := strings.TrimSpace(os.Getenv("VIDEO_CONTAINER")); v != "" {
+		return v
+	}
+	return "space-videos"
+}
+
+// videoLifecycleBackstopDays は Azure のライフサイクル管理が動画を消す日数
+// （VIDEO_LIFECYCLE_BACKSTOP_DAYS）。Azure 側の規則と同じ値を入れる。
+// 未設定なら 0（安全網なし）で、保存期間の上限を設けない。
+func videoLifecycleBackstopDays() int {
+	raw := strings.TrimSpace(os.Getenv("VIDEO_LIFECYCLE_BACKSTOP_DAYS"))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		logger.Log.Fatal().Str("value", raw).Msg("VIDEO_LIFECYCLE_BACKSTOP_DAYS must be a non-negative integer")
+	}
+	return n
 }
 
 // If ALLOWED_ORIGINS is not set, it falls back to wildcard (dev-friendly).

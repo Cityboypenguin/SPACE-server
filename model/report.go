@@ -67,6 +67,8 @@ type ReportedContent struct {
 	// Content はメッセージ・質問・回答の本文、または投票の設問。
 	Content string                 `json:"content"`
 	Media   []ReportedContentMedia `json:"media"`
+	// Video はメッセージに付いていた動画。通報の時点のキーを持つ（ReportedContentVideo 参照）。
+	Video *ReportedContentVideo `json:"video,omitempty"`
 	// StampID はスタンプだけのメッセージのスタンプのID。Content は空になる。
 	StampID *string `json:"stampId,omitempty"`
 	// Addenda は質問・回答への追記（古い順）。通報の時点までに足されたもの。
@@ -87,6 +89,23 @@ type ReportedContentMedia struct {
 	Width       *int      `json:"width,omitempty"`
 	Height      *int      `json:"height,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// ReportedContentVideo は通報を受けた時点の動画。
+//
+// 画像と違って写し取らない（動画は大きく、保存期間の決まりもある）。ファイルは元の
+// キーのまま、未対応・確認中の通報が付いている間は日次の削除から外し、退会のときも
+// 消さずに残す（usecase/video）。通報への対応が終わったら通常の決まりで消える。
+type ReportedContentVideo struct {
+	MediaID      int64     `json:"mediaId"`
+	StorageKey   string    `json:"storageKey"`
+	ThumbnailKey string    `json:"thumbnailKey"`
+	SizeBytes    int64     `json:"sizeBytes"`
+	DurationMs   int64     `json:"durationMs"`
+	Width        int       `json:"width"`
+	Height       int       `json:"height"`
+	HasAudio     bool      `json:"hasAudio"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type ReportSearchFilter struct {

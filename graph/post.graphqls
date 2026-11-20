@@ -81,6 +81,9 @@ type Post {
   parent: Post
   replies(limit: Int = 50, offset: Int = 0): [Post!]!
   media: [Media!]!
+  # 投稿に付いた動画（1本まで）。動画が無ければ null。投稿者が外した動画も null。
+  # 画像（media）とは別にしてあるのは、動画を知らない古いクライアントに渡さないため。
+  video: Video
   # 本文中のメンション。表示側はここに載っている text を本文と突き合わせて着色・リンク化する。
   mentions: [Mention!]!
 }
@@ -96,6 +99,8 @@ input CreatePostInput {
   content: String!
   parent_id: ID
   mediaInputs: [MediaUploadInput!]
+  # 動画を1本付ける。mediaInputs（画像）とは同時に指定できない。
+  videoInput: VideoUploadInput
 }
 
 input UpdatePostInput {
@@ -103,6 +108,8 @@ input UpdatePostInput {
   content: String!
   newMediaInputs: [MediaUploadInput!]
   deletedMediaIDs: [ID!]
+  # true なら付いている動画を外す。編集で動画を後から足すことはできない。
+  removeVideo: Boolean
 }
 
 input CreateFavoriteInput {

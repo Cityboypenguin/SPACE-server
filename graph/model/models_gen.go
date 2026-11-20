@@ -429,6 +429,7 @@ type CreatePostInput struct {
 	Content     string              `json:"content"`
 	ParentID    *string             `json:"parent_id,omitempty"`
 	MediaInputs []*MediaUploadInput `json:"mediaInputs,omitempty"`
+	VideoInput  *VideoUploadInput   `json:"videoInput,omitempty"`
 }
 
 type CreateReportInput struct {
@@ -542,6 +543,7 @@ type Message struct {
 	Content   string             `json:"content"`
 	StampID   *string            `json:"stampID,omitempty"`
 	Media     []*Media           `json:"media"`
+	Video     *Video             `json:"video,omitempty"`
 	CreatedAt string             `json:"createdAt"`
 	UpdatedAt string             `json:"updatedAt"`
 	IsMine    bool               `json:"isMine"`
@@ -685,6 +687,7 @@ type Post struct {
 	Parent          *Post       `json:"parent,omitempty"`
 	Replies         []*Post     `json:"replies"`
 	Media           []*Media    `json:"media"`
+	Video           *Video      `json:"video,omitempty"`
 	Mentions        []*Mention  `json:"mentions"`
 }
 
@@ -760,21 +763,22 @@ type ReportSearchFilter struct {
 }
 
 type ReportedContent struct {
-	RoomID          string   `json:"roomID"`
-	RoomType        string   `json:"roomType"`
-	RoomName        string   `json:"roomName"`
-	ThreadTitle     *string  `json:"threadTitle,omitempty"`
-	AuthorID        *string  `json:"authorID,omitempty"`
-	AuthorName      string   `json:"authorName"`
-	AuthorAccountID *string  `json:"authorAccountID,omitempty"`
-	Content         string   `json:"content"`
-	Media           []*Media `json:"media"`
-	StampID         *string  `json:"stampID,omitempty"`
-	Addenda         []string `json:"addenda"`
-	ParentBody      *string  `json:"parentBody,omitempty"`
-	PollOptions     []string `json:"pollOptions"`
-	CreatedAt       string   `json:"createdAt"`
-	UpdatedAt       string   `json:"updatedAt"`
+	RoomID          string         `json:"roomID"`
+	RoomType        string         `json:"roomType"`
+	RoomName        string         `json:"roomName"`
+	ThreadTitle     *string        `json:"threadTitle,omitempty"`
+	AuthorID        *string        `json:"authorID,omitempty"`
+	AuthorName      string         `json:"authorName"`
+	AuthorAccountID *string        `json:"authorAccountID,omitempty"`
+	Content         string         `json:"content"`
+	Media           []*Media       `json:"media"`
+	StampID         *string        `json:"stampID,omitempty"`
+	Addenda         []string       `json:"addenda"`
+	ParentBody      *string        `json:"parentBody,omitempty"`
+	PollOptions     []string       `json:"pollOptions"`
+	CreatedAt       string         `json:"createdAt"`
+	UpdatedAt       string         `json:"updatedAt"`
+	Video           *ReportedVideo `json:"video,omitempty"`
 }
 
 type Room struct {
@@ -879,6 +883,7 @@ type UpdatePostInput struct {
 	Content         string              `json:"content"`
 	NewMediaInputs  []*MediaUploadInput `json:"newMediaInputs,omitempty"`
 	DeletedMediaIDs []string            `json:"deletedMediaIDs,omitempty"`
+	RemoveVideo     *bool               `json:"removeVideo,omitempty"`
 }
 
 type UpdateProfileInput struct {
@@ -959,6 +964,84 @@ type UserReport struct {
 type UserTimetableProfile struct {
 	Visible bool              `json:"visible"`
 	Entries []*TimetableEntry `json:"entries"`
+}
+
+type Video struct {
+	ID            string      `json:"ID"`
+	Status        VideoStatus `json:"status"`
+	ThumbnailURL  *string     `json:"thumbnailUrl,omitempty"`
+	DurationMs    int32       `json:"durationMs"`
+	Width         int32       `json:"width"`
+	Height        int32       `json:"height"`
+	SizeBytes     float64     `json:"sizeBytes"`
+	HasAudio      bool        `json:"hasAudio"`
+	ExpiresAt     string      `json:"expiresAt"`
+	RetentionDays int32       `json:"retentionDays"`
+	CreatedAt     string      `json:"createdAt"`
+}
+
+type VideoDailyStat struct {
+	Day              string  `json:"day"`
+	Uploads          float64 `json:"uploads"`
+	UploadBytes      float64 `json:"uploadBytes"`
+	UploadFailures   float64 `json:"uploadFailures"`
+	PlaybackRequests float64 `json:"playbackRequests"`
+	PlaybackBytes    float64 `json:"playbackBytes"`
+	Purged           float64 `json:"purged"`
+	PurgeFailures    float64 `json:"purgeFailures"`
+}
+
+type VideoLimitsInput struct {
+	PurgeGraceDays          int32   `json:"purgeGraceDays"`
+	PurgeBatchSize          int32   `json:"purgeBatchSize"`
+	DailyUploadLimitPerUser float64 `json:"dailyUploadLimitPerUser"`
+	DailyBytesLimitPerUser  float64 `json:"dailyBytesLimitPerUser"`
+	TotalBytesLimit         float64 `json:"totalBytesLimit"`
+}
+
+type VideoPlayback struct {
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type VideoRetentionPreview struct {
+	CurrentDays        int32       `json:"currentDays"`
+	NewDays            int32       `json:"newDays"`
+	MaxDays            int32       `json:"maxDays"`
+	NewlyExpired       *VideoUsage `json:"newlyExpired"`
+	ExpiringWithinWeek *VideoUsage `json:"expiringWithinWeek"`
+}
+
+type VideoSettings struct {
+	RetentionDays           int32   `json:"retentionDays"`
+	PurgeGraceDays          int32   `json:"purgeGraceDays"`
+	PurgeBatchSize          int32   `json:"purgeBatchSize"`
+	DailyUploadLimitPerUser float64 `json:"dailyUploadLimitPerUser"`
+	DailyBytesLimitPerUser  float64 `json:"dailyBytesLimitPerUser"`
+	TotalBytesLimit         float64 `json:"totalBytesLimit"`
+	MaxRetentionDays        int32   `json:"maxRetentionDays"`
+	LifecycleBackstopDays   int32   `json:"lifecycleBackstopDays"`
+	MaxFileBytes            float64 `json:"maxFileBytes"`
+	MaxDurationSeconds      int32   `json:"maxDurationSeconds"`
+}
+
+type VideoStorageStats struct {
+	Settings     *VideoSettings    `json:"settings"`
+	Stored       *VideoUsage       `json:"stored"`
+	PurgeFailing float64           `json:"purgeFailing"`
+	Today        *VideoDailyStat   `json:"today"`
+	ThisMonth    *VideoDailyStat   `json:"thisMonth"`
+	Daily        []*VideoDailyStat `json:"daily"`
+}
+
+type VideoUploadInput struct {
+	ObjectKey          string `json:"objectKey"`
+	ThumbnailObjectKey string `json:"thumbnailObjectKey"`
+}
+
+type VideoUsage struct {
+	Count float64 `json:"count"`
+	Bytes float64 `json:"bytes"`
 }
 
 type AdminCommunitySortField string
@@ -2070,6 +2153,63 @@ func (e *TimetableEntryColor) UnmarshalJSON(b []byte) error {
 }
 
 func (e TimetableEntryColor) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type VideoStatus string
+
+const (
+	VideoStatusAvailable VideoStatus = "AVAILABLE"
+	VideoStatusExpired   VideoStatus = "EXPIRED"
+	VideoStatusRemoved   VideoStatus = "REMOVED"
+)
+
+var AllVideoStatus = []VideoStatus{
+	VideoStatusAvailable,
+	VideoStatusExpired,
+	VideoStatusRemoved,
+}
+
+func (e VideoStatus) IsValid() bool {
+	switch e {
+	case VideoStatusAvailable, VideoStatusExpired, VideoStatusRemoved:
+		return true
+	}
+	return false
+}
+
+func (e VideoStatus) String() string {
+	return string(e)
+}
+
+func (e *VideoStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = VideoStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid VideoStatus", str)
+	}
+	return nil
+}
+
+func (e VideoStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *VideoStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e VideoStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

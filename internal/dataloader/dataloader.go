@@ -31,6 +31,11 @@ type ListMediaByQuestionIDsUseCase interface {
 type ListMediaByAnswerIDsUseCase interface {
 	Execute(ctx context.Context, answerIDs []int64) (map[int64][]*model.Media, error)
 }
+
+// ListVideosByParentIDsUseCase は投稿・メッセージに付いた動画を一括で引く
+// （repository.VideoReader の ListVideosByPostIDs / ListVideosByMessageIDs がそのまま満たす形）。
+type ListVideosByParentIDsUseCase func(ctx context.Context, parentIDs []int64) (map[int64]*model.Video, error)
+
 type GetRepliesByPostIDsUseCase interface {
 	Execute(ctx context.Context, parentIDs []int64, q repository.PageQuery) (map[int64][]*model.Post, error)
 }
@@ -131,8 +136,12 @@ type Loaders struct {
 	MessageMediaLoader  *dataloadgen.Loader[int64, []*model.Media]
 	QuestionMediaLoader *dataloadgen.Loader[int64, []*model.Media]
 	AnswerMediaLoader   *dataloadgen.Loader[int64, []*model.Media]
-	ReplyLoader         *dataloadgen.Loader[ReplyPageKey, []*model.Post]
-	AdminReplyLoader    *dataloadgen.Loader[ReplyPageKey, []*model.Post]
+	// PostVideoLoader / MessageVideoLoader は Post.video / Message.video 用。
+	// 動画が無ければ nil が返る。
+	PostVideoLoader    *dataloadgen.Loader[int64, *model.Video]
+	MessageVideoLoader *dataloadgen.Loader[int64, *model.Video]
+	ReplyLoader        *dataloadgen.Loader[ReplyPageKey, []*model.Post]
+	AdminReplyLoader   *dataloadgen.Loader[ReplyPageKey, []*model.Post]
 	// FavoriteLoader は Post.favorites 用。limit/offset も鍵に含める
 	// （同じ投稿でも窓が違えば別の結果なので、ID だけを鍵にすると先に来た方の
 	// ページを使い回す。ReplyLoader と同じ理由）。
@@ -397,6 +406,8 @@ type UseCases struct {
 	ListMediaByMessageIDs          ListMediaByMessageIDsUseCase
 	ListMediaByQuestionIDs         ListMediaByQuestionIDsUseCase
 	ListMediaByAnswerIDs           ListMediaByAnswerIDsUseCase
+	ListVideosByPostIDs            ListVideosByParentIDsUseCase
+	ListVideosByMessageIDs         ListVideosByParentIDsUseCase
 	GetRepliesByPostIDs            GetRepliesByPostIDsUseCase
 	GetRepliesByPostIDsIncludeDel  GetRepliesByPostIDsIncludeDeletedUseCase
 	GetFavoritesByPostIDs          GetFavoritesByPostIDsUseCase
@@ -461,6 +472,8 @@ func New(uc UseCases) *Loaders {
 		MessageMediaLoader:  dataloadgen.NewLoader(batchFromMap(uc.ListMediaByMessageIDs.Execute), loaderOptions...),
 		QuestionMediaLoader: dataloadgen.NewLoader(batchFromMap(uc.ListMediaByQuestionIDs.Execute), loaderOptions...),
 		AnswerMediaLoader:   dataloadgen.NewLoader(batchFromMap(uc.ListMediaByAnswerIDs.Execute), loaderOptions...),
+		PostVideoLoader:     dataloadgen.NewLoader(batchFromMap(videoFetch(uc.ListVideosByPostIDs)), loaderOptions...),
+		MessageVideoLoader:  dataloadgen.NewLoader(batchFromMap(videoFetch(uc.ListVideosByMessageIDs)), loaderOptions...),
 		ReplyLoader:         dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDs.Execute), loaderOptions...),
 		AdminReplyLoader:    dataloadgen.NewLoader(batchReplyPages(uc.GetRepliesByPostIDsIncludeDel.Execute), loaderOptions...),
 		FavoriteLoader:      dataloadgen.NewLoader(batchFavoritePages(uc.GetFavoritesByPostIDs.Execute), loaderOptions...),
@@ -539,4 +552,13 @@ func FirstError(err error) error {
 		}
 	}
 	return err
+}
+
+// videoFetch は未配線（nil）のときに「動画なし」を返す。動画の機能を配線していない
+// テストや環境で、投稿の取得ごと落とさないため。
+func videoFetch(f ListVideosByParentIDsUseCase) func(context.Context, []int64) (map[int64]*model.Video, error) {
+	if f == nil {
+		return func(context.Context, []int64) (map[int64]*model.Video, error) { return nil, nil }
+	}
+	return f
 }
