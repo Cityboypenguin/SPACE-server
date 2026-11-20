@@ -230,13 +230,15 @@ func (r *MySQLAnalyticsRepository) summaryIntQueries(s *model.AnalyticsSummary, 
 			INNER JOIN media m ON m.id = pm.media_id
 			WHERE p.parent_id IS NULL AND p.deleted_at IS NULL
 			AND m.content_type LIKE 'image/%'`, nil},
-		// 動画付き投稿
+		// 動画付き投稿。動画は画像の添付（post_media）ではなく post_videos に入る
+		// （docs/video-posts.md）。投稿者が編集で外した動画は数えない。保存期間が過ぎた
+		// 動画は、動画付きで投稿されたことに変わりはないので数える。
 		{[]string{"postsWithVideo"}, &s.PostsWithVideo, `
 			SELECT COUNT(DISTINCT p.id) FROM posts p
-			INNER JOIN post_media pm ON pm.post_id = p.id
-			INNER JOIN media m ON m.id = pm.media_id
+			INNER JOIN post_videos pv ON pv.post_id = p.id
+			INNER JOIN video_assets va ON va.media_id = pv.media_id
 			WHERE p.parent_id IS NULL AND p.deleted_at IS NULL
-			AND m.content_type LIKE 'video/%'`, nil},
+			AND (va.removed_reason IS NULL OR va.removed_reason <> 'author')`, nil},
 	}
 }
 
