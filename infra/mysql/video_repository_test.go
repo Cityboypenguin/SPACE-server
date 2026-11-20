@@ -267,7 +267,7 @@ func TestMediaRepository_DoesNotDeleteVideoRows(t *testing.T) {
 	}
 }
 
-// マイグレーション 130〜135 が最新まで通り、戻して入れ直せること。
+// マイグレーション 130〜136 が最新まで通り、戻して入れ直せること。
 func TestVideoMigrations(t *testing.T) {
 	database, cleanup := throwawaySchemaDB(t, "space_video_migrations", nil)
 	defer cleanup()
@@ -275,7 +275,7 @@ func TestVideoMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	var retention string
-	if err := database.QueryRow("SELECT value FROM system_settings WHERE `key` = 'video_retention_days'").Scan(&retention); err != nil || retention != "90" {
+	if err := database.QueryRow("SELECT value FROM system_settings WHERE `key` = 'video_retention_days'").Scan(&retention); err != nil || retention != "60" {
 		t.Fatalf("video_retention_days = %q, %v", retention, err)
 	}
 	// 本物の表（照合順序・外部キー込み）で、動画のクエリがそのまま通ること。
@@ -313,10 +313,10 @@ func TestVideoMigrations(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
-	for _, n := range []string{"135_create_reported_video_retentions", "134_create_video_daily_stats", "133_insert_default_video_settings", "132_create_message_videos", "131_create_post_videos", "130_create_video_assets"} {
+	for _, n := range []string{"136_set_video_retention_to_60_days", "135_create_reported_video_retentions", "134_create_video_daily_stats", "133_insert_default_video_settings", "132_create_message_videos", "131_create_post_videos", "130_create_video_assets"} {
 		apply(n + ".down.sql")
 	}
-	for _, n := range []string{"130_create_video_assets", "131_create_post_videos", "132_create_message_videos", "133_insert_default_video_settings", "134_create_video_daily_stats", "135_create_reported_video_retentions"} {
+	for _, n := range []string{"130_create_video_assets", "131_create_post_videos", "132_create_message_videos", "133_insert_default_video_settings", "134_create_video_daily_stats", "135_create_reported_video_retentions", "136_set_video_retention_to_60_days"} {
 		apply(n + ".up.sql")
 	}
 }
