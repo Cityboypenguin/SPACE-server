@@ -652,6 +652,7 @@ type ComplexityRoot struct {
 		RevokeCommunityInvitation           func(childComplexity int, id string) int
 		SelectBestAnswer                    func(childComplexity int, questionID string, answerID string) int
 		SendCommunityGreeting               func(childComplexity int, roomID string, welcomeMessageID string, stampID string) int
+		SendCommunityJoinGreeting           func(childComplexity int, roomID string, stampID string) int
 		SendEmailOtp                        func(childComplexity int, email string) int
 		SendMessage                         func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, videoInput *model.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) int
 		SetAvatar                           func(childComplexity int, objectKey string) int
@@ -660,6 +661,7 @@ type ComplexityRoot struct {
 		SetThemePreference                  func(childComplexity int, theme model.ThemePreference) int
 		SetTimetableEntryColor              func(childComplexity int, id string, color model.TimetableEntryColor) int
 		SetTimetableProfileVisibility       func(childComplexity int, visible bool) int
+		SkipCommunityJoinGreeting           func(childComplexity int, roomID string) int
 		ToggleCourseChat                    func(childComplexity int, enabled bool) int
 		ToggleMaintenanceMode               func(childComplexity int, enabled bool) int
 		UnfreezeUser                        func(childComplexity int, id string) int
@@ -861,6 +863,7 @@ type ComplexityRoot struct {
 		CommunityGreeting                func(childComplexity int, roomID string) int
 		CommunityInvitation              func(childComplexity int, input model.CommunityInvitationReference) int
 		CommunityInviteCandidates        func(childComplexity int, communityID string, keyword string, limit *int32, offset *int32) int
+		CommunityJoinGreeting            func(childComplexity int, roomID string) int
 		CommunityMembers                 func(childComplexity int, communityID string, limit *int32, offset *int32) int
 		CourseChatEnabled                func(childComplexity int) int
 		CourseYears                      func(childComplexity int) int
@@ -1331,6 +1334,8 @@ type MutationResolver interface {
 	DeclineCommunityInvitation(ctx context.Context, id string) (bool, error)
 	RevokeCommunityInvitation(ctx context.Context, id string) (bool, error)
 	SendCommunityGreeting(ctx context.Context, roomID string, welcomeMessageID string, stampID string) (*model.Message, error)
+	SendCommunityJoinGreeting(ctx context.Context, roomID string, stampID string) (*model.Message, error)
+	SkipCommunityJoinGreeting(ctx context.Context, roomID string) (bool, error)
 	AdminSaveCommunityJoinStampSettings(ctx context.Context, welcomeIDs []string, greetingIDs []string) (bool, error)
 	RegisterTimetableEntry(ctx context.Context, courseID string) (*model.TimetableEntry, error)
 	RemoveTimetableEntry(ctx context.Context, id string) (bool, error)
@@ -1473,6 +1478,7 @@ type QueryResolver interface {
 	SentCommunityInvitations(ctx context.Context, roomID string, history *bool, limit *int32, offset *int32) ([]*model.CommunityInvitation, error)
 	CommunityInviteCandidates(ctx context.Context, communityID string, keyword string, limit *int32, offset *int32) (*model.CommunityInviteCandidatePage, error)
 	CommunityGreeting(ctx context.Context, roomID string) (*model.CommunityGreeting, error)
+	CommunityJoinGreeting(ctx context.Context, roomID string) ([]*model.ChatStamp, error)
 	AdminCommunityJoinStampSettings(ctx context.Context) (*model.CommunityJoinStampSettings, error)
 	SearchCourses(ctx context.Context, dayOfWeek string, period int32, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
 	MyTimetable(ctx context.Context, year *int32, semester *string) ([]*model.TimetableEntry, error)
@@ -4771,6 +4777,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SendCommunityGreeting(childComplexity, args["roomID"].(string), args["welcomeMessageID"].(string), args["stampID"].(string)), true
+	case "Mutation.sendCommunityJoinGreeting":
+		if e.ComplexityRoot.Mutation.SendCommunityJoinGreeting == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_sendCommunityJoinGreeting_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SendCommunityJoinGreeting(childComplexity, args["roomID"].(string), args["stampID"].(string)), true
 	case "Mutation.sendEmailOTP":
 		if e.ComplexityRoot.Mutation.SendEmailOtp == nil {
 			break
@@ -4859,6 +4876,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetTimetableProfileVisibility(childComplexity, args["visible"].(bool)), true
+	case "Mutation.skipCommunityJoinGreeting":
+		if e.ComplexityRoot.Mutation.SkipCommunityJoinGreeting == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_skipCommunityJoinGreeting_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SkipCommunityJoinGreeting(childComplexity, args["roomID"].(string)), true
 	case "Mutation.toggleCourseChat":
 		if e.ComplexityRoot.Mutation.ToggleCourseChat == nil {
 			break
@@ -6051,6 +6079,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.CommunityInviteCandidates(childComplexity, args["communityID"].(string), args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.communityJoinGreeting":
+		if e.ComplexityRoot.Query.CommunityJoinGreeting == nil {
+			break
+		}
+
+		args, err := ec.field_Query_communityJoinGreeting_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.CommunityJoinGreeting(childComplexity, args["roomID"].(string)), true
 	case "Query.communityMembers":
 		if e.ComplexityRoot.Query.CommunityMembers == nil {
 			break
@@ -11913,6 +11952,28 @@ func (ec *executionContext) field_Mutation_sendCommunityGreeting_args(ctx contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_sendCommunityJoinGreeting_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "stampID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["stampID"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_sendEmailOTP_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12102,6 +12163,20 @@ func (ec *executionContext) field_Mutation_setTimetableProfileVisibility_args(ct
 		return nil, err
 	}
 	args["visible"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_skipCommunityJoinGreeting_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
 	return args, nil
 }
 
@@ -13514,6 +13589,20 @@ func (ec *executionContext) field_Query_communityInviteCandidates_args(ctx conte
 		return nil, err
 	}
 	args["offset"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_communityJoinGreeting_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
 	return args, nil
 }
 
@@ -26427,6 +26516,94 @@ func (ec *executionContext) fieldContext_Mutation_sendCommunityGreeting(ctx cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_sendCommunityJoinGreeting(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_sendCommunityJoinGreeting(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SendCommunityJoinGreeting(ctx, fc.Args["roomID"].(string), fc.Args["stampID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
+			return ec.marshalNMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_sendCommunityJoinGreeting(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Message(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_sendCommunityJoinGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_skipCommunityJoinGreeting(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_skipCommunityJoinGreeting(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SkipCommunityJoinGreeting(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_skipCommunityJoinGreeting(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_skipCommunityJoinGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_adminSaveCommunityJoinStampSettings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33326,6 +33503,50 @@ func (ec *executionContext) fieldContext_Query_communityGreeting(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_communityGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_communityJoinGreeting(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_communityJoinGreeting(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().CommunityJoinGreeting(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.ChatStamp) graphql.Marshaler {
+			return ec.marshalNChatStamp2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐChatStampᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_communityJoinGreeting(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatStamp(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_communityJoinGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -48088,6 +48309,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "sendCommunityJoinGreeting":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_sendCommunityJoinGreeting(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "skipCommunityJoinGreeting":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_skipCommunityJoinGreeting(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "adminSaveCommunityJoinStampSettings":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_adminSaveCommunityJoinStampSettings(ctx, field)
@@ -51222,6 +51457,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_communityGreeting(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "communityJoinGreeting":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_communityJoinGreeting(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res

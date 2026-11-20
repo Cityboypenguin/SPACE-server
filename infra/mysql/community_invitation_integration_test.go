@@ -182,12 +182,29 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 	if err != nil || notice == nil || notice.StampID != nil || notice.AuthorRole != model.AuthorRoleCommunityWelcome {
 		t.Fatalf("join notice=%+v, err=%v", notice, err)
 	}
-	checkMessages(model.AuthorRoleStudent, 1)
-	var automaticStamp string
-	if err := db.QueryRow("SELECT stamp_id FROM messages WHERE room_id = ? AND user_id = 2 AND author_role = ? AND id > ?",
-		group.RoomID, model.AuthorRoleStudent, target.MessageID).Scan(&automaticStamp); err != nil || automaticStamp != "stamp:auto" {
-		t.Fatalf("separate automatic stamp=%q err=%v", automaticStamp, err)
+	// 参加しただけではスタンプは送られない。参加した本人が候補から選んで1回だけ送る。
+	checkMessages(model.AuthorRoleStudent, 0)
+	if options, err := service.JoinGreeting(owner, group.RoomID); err != nil || options != nil {
+		t.Fatalf("an existing member got join greeting options: %v, %v", options, err)
 	}
+	joinOptions, err := service.JoinGreeting(member, group.RoomID)
+	if err != nil || len(joinOptions) != 1 || joinOptions[0].ID != "stamp:auto" {
+		t.Fatalf("join greeting options: %v, %v", joinOptions, err)
+	}
+	if _, err := service.SendJoinGreeting(member, group.RoomID, "stamp:wave"); err == nil {
+		t.Fatal("a stamp outside the greeting candidates was sent")
+	}
+	greeting, err := service.SendJoinGreeting(member, group.RoomID, "stamp:auto")
+	if err != nil || greeting.UserID != 2 || greeting.StampID == nil || *greeting.StampID != "stamp:auto" {
+		t.Fatalf("join greeting=%+v err=%v", greeting, err)
+	}
+	if _, err := service.SendJoinGreeting(member, group.RoomID, "stamp:auto"); err == nil {
+		t.Fatal("the join greeting was sent twice")
+	}
+	if options, err := service.JoinGreeting(member, group.RoomID); err != nil || options != nil {
+		t.Fatalf("join greeting offered again after sending: %v, %v", options, err)
+	}
+	checkMessages(model.AuthorRoleStudent, 1)
 	if own, _, err := service.Greeting(member, group.RoomID); err != nil || own != nil {
 		t.Fatalf("new member sees their own welcome suggestions: %+v, %v", own, err)
 	}
@@ -217,6 +234,15 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 		if err != nil || roomID != group.RoomID {
 			t.Fatalf("redeem link as %d: room=%d err=%v", id, roomID, err)
 		}
+	}
+	if err := service.SkipJoinGreeting(as(3, "student"), group.RoomID); err != nil {
+		t.Fatal(err)
+	}
+	if options, err := service.JoinGreeting(as(3, "student"), group.RoomID); err != nil || options != nil {
+		t.Fatalf("join greeting offered after skipping: %v, %v", options, err)
+	}
+	if options, err := service.JoinGreeting(as(4, "student"), group.RoomID); err != nil || len(options) != 1 {
+		t.Fatalf("link joiner join greeting: %v, %v", options, err)
 	}
 	if stored, err := service.Preview(as(5, "student"), 0, token); err != nil || stored.UseCount != 2 {
 		t.Fatalf("link use count: %+v, %v", stored, err)

@@ -274,3 +274,27 @@ func (r *CommunityInvitationRepository) MarkWelcomeSent(ctx context.Context, not
 		"INSERT INTO community_welcome_replies (notice_message_id, sender_id) VALUES (?, ?)", noticeID, userID)
 	return err
 }
+
+// JoinGreetingPending は、userID が参加してからまだ「よろしくスタンプ」を送っていない（スキップもしていない）か。
+// 参加案内のない参加（このしくみより前の参加）は対象にしない。
+func (r *CommunityInvitationRepository) JoinGreetingPending(ctx context.Context, roomID, userID int64) (bool, error) {
+	var pending bool
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM room_users
+		WHERE room_id = ? AND user_id = ? AND welcome_message_id IS NOT NULL AND NOT greeting_sent)`,
+		roomID, userID).Scan(&pending)
+	return pending, err
+}
+
+// MarkJoinGreetingDone は「よろしくスタンプ」を済ませた（送った・スキップした）ことを残す。
+// まだ済んでいなかったときだけ true を返す（同時に2回押されても1回だけ送るため）。
+func (r *CommunityInvitationRepository) MarkJoinGreetingDone(ctx context.Context, roomID, userID int64) (bool, error) {
+	result, err := extractDB(ctx, r.DB).ExecContext(ctx, `
+		UPDATE room_users SET greeting_sent = TRUE
+		WHERE room_id = ? AND user_id = ? AND welcome_message_id IS NOT NULL AND NOT greeting_sent`, roomID, userID)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n > 0, err
+}

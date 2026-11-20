@@ -52,6 +52,8 @@ type invitationStore interface {
 	WelcomeTarget(context.Context, int64, int64) (*model.CommunityWelcomeTarget, error)
 	SetWelcomeMessage(context.Context, int64, int64, int64) error
 	MarkWelcomeSent(context.Context, int64, int64) error
+	JoinGreetingPending(context.Context, int64, int64) (bool, error)
+	MarkJoinGreetingDone(context.Context, int64, int64) (bool, error)
 }
 
 type InvitationService struct {

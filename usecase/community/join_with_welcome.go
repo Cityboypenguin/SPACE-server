@@ -2,7 +2,6 @@ package community
 
 import (
 	"context"
-	"math/rand/v2"
 	"slices"
 	"time"
 
@@ -67,14 +66,7 @@ func (s *InvitationService) join(ctx context.Context, room *model.Room, roles ma
 	}
 	roles[actor] = model.RoomUserRoleMember
 
-	settings, err := s.Store.JoinStampSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	candidates, err := s.activeStamps(ctx, settings.GreetingIDs)
-	if err != nil {
-		return nil, err
-	}
+	// 参加案内だけを流す。「よろしくスタンプ」は参加した本人が選んで送る（JoinGreeting / SendJoinGreeting）。
 	notice, err := s.Messages.SaveCommunityJoinNotice(ctx, room.ID, user.ID)
 	if err != nil {
 		return nil, err
@@ -82,16 +74,7 @@ func (s *InvitationService) join(ctx context.Context, room *model.Room, roles ma
 	if err := s.Store.SetWelcomeMessage(ctx, room.ID, actor, notice.ID); err != nil {
 		return nil, err
 	}
-	messages := []*model.Message{notice}
-	if len(candidates) > 0 {
-		stamp := candidates[rand.IntN(len(candidates))]
-		greeting, err := s.Messages.SaveCommunityGreeting(ctx, room.ID, actor, stamp.ID)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, greeting)
-	}
-	return messages, nil
+	return []*model.Message{notice}, nil
 }
 
 func (s *InvitationService) publish(ctx context.Context, room *model.Room, roles map[int64]string, messages ...*model.Message) {
@@ -216,4 +199,73 @@ func (s *InvitationService) SendGreeting(ctx context.Context, roomID, welcomeID 
 	}
 	s.publish(ctx, room, roles, messages...)
 	return messages[0], nil
+}
+
+// JoinGreeting は、参加した本人がまだ「よろしくスタンプ」を送っていなければ、その候補を返す。
+// 送った・スキップした・候補が設定されていないときは nil。
+func (s *InvitationService) JoinGreeting(ctx context.Context, roomID int64) ([]*model.ChatStamp, error) {
+	actor, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := s.Store.JoinGreetingPending(ctx, roomID, actor)
+	if err != nil || !pending {
+		return nil, err
+	}
+	settings, err := s.Store.JoinStampSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	options, err := s.activeStamps(ctx, settings.GreetingIDs)
+	if err != nil || len(options) == 0 {
+		return nil, err
+	}
+	return options, nil
+}
+
+// SendJoinGreeting は、参加した本人が候補から選んだ「よろしくスタンプ」を送る（1回だけ）。
+func (s *InvitationService) SendJoinGreeting(ctx context.Context, roomID int64, stampID string) (*model.Message, error) {
+	actor, err := authz.CallerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	options, err := s.JoinGreeting(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.ContainsFunc(options, func(stamp *model.ChatStamp) bool { return stamp.ID == stampID }) {
+		return nil, apperr.InvalidInput("現在使えるあいさつのスタンプを選択してください")
+	}
+	room, roles, messages, err := s.withRoomMembership(ctx, roomID, func(ctx context.Context, room *model.Room, roles map[int64]string) ([]*model.Message, error) {
+		if roles[actor] == "" {
+			return nil, apperr.Forbidden("コミュニティのメンバーのみ送信できます")
+		}
+		first, err := s.Store.MarkJoinGreetingDone(ctx, room.ID, actor)
+		if err != nil {
+			return nil, err
+		}
+		if !first {
+			return nil, apperr.Conflict("あいさつのスタンプはもう送っています")
+		}
+		msg, err := s.Messages.SaveCommunityGreeting(ctx, room.ID, actor, stampID)
+		if err != nil {
+			return nil, err
+		}
+		return []*model.Message{msg}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.publish(ctx, room, roles, messages...)
+	return messages[0], nil
+}
+
+// SkipJoinGreeting は「よろしくスタンプ」を送らずに閉じる。もう候補は出さない。
+func (s *InvitationService) SkipJoinGreeting(ctx context.Context, roomID int64) error {
+	actor, err := authz.CallerID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = s.Store.MarkJoinGreetingDone(ctx, roomID, actor)
+	return err
 }

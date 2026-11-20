@@ -129,6 +129,27 @@ func (r *mutationResolver) SendCommunityGreeting(ctx context.Context, roomID str
 	return toGraphMessage(msg), nil
 }
 
+func (r *mutationResolver) SendCommunityJoinGreeting(ctx context.Context, roomID string, stampID string) (*model.Message, error) {
+	room, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, err
+	}
+	msg, err := r.CommunityInvitations.SendJoinGreeting(ctx, room, stampID)
+	if err != nil {
+		return nil, err
+	}
+	return toGraphMessage(msg), nil
+}
+
+func (r *mutationResolver) SkipCommunityJoinGreeting(ctx context.Context, roomID string) (bool, error) {
+	room, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return false, err
+	}
+	err = r.CommunityInvitations.SkipJoinGreeting(ctx, room)
+	return err == nil, err
+}
+
 func (r *mutationResolver) AdminSaveCommunityJoinStampSettings(ctx context.Context, welcomeIDs []string, greetingIDs []string) (bool, error) {
 	err := r.CommunityInvitations.SaveSettings(ctx, domain.CommunityJoinStampSettings{WelcomeIDs: welcomeIDs, GreetingIDs: greetingIDs})
 	return err == nil, err
@@ -206,6 +227,22 @@ func (r *queryResolver) CommunityGreeting(ctx context.Context, roomID string) (*
 		stamps = append(stamps, r.graphStamp(stamp))
 	}
 	return &model.CommunityGreeting{WelcomeMessageID: encodeGraphID("message", target.MessageID), JoinedUserName: target.UserName, Stamps: stamps}, nil
+}
+
+func (r *queryResolver) CommunityJoinGreeting(ctx context.Context, roomID string) ([]*model.ChatStamp, error) {
+	id, err := decodeGraphID(ctx, "room", roomID)
+	if err != nil {
+		return nil, err
+	}
+	options, err := r.CommunityInvitations.JoinGreeting(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	stamps := make([]*model.ChatStamp, 0, len(options))
+	for _, stamp := range options {
+		stamps = append(stamps, r.graphStamp(stamp))
+	}
+	return stamps, nil
 }
 
 func (r *queryResolver) AdminCommunityJoinStampSettings(ctx context.Context) (*model.CommunityJoinStampSettings, error) {
