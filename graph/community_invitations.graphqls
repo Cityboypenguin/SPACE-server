@@ -10,6 +10,10 @@ extend type Query {
   """
   communityInviteCandidates(communityID: ID!, keyword: String!, limit: Int = 20, offset: Int = 0): CommunityInviteCandidatePage!
   communityGreeting(roomID: ID!): CommunityGreeting
+  """
+  参加した本人がまだ「よろしくスタンプ」を送っていなければ、その候補。送った・スキップした後は空。
+  """
+  communityJoinGreeting(roomID: ID!): [ChatStamp!]!
   adminCommunityJoinStampSettings: CommunityJoinStampSettings!
 }
 
@@ -27,6 +31,11 @@ extend type Mutation {
   declineCommunityInvitation(id: ID!): Boolean!
   revokeCommunityInvitation(id: ID!): Boolean!
   sendCommunityGreeting(roomID: ID!, welcomeMessageID: ID!, stampID: String!): Message!
+  """
+  参加した本人が「よろしくスタンプ」を送る（1回だけ）。
+  """
+  sendCommunityJoinGreeting(roomID: ID!, stampID: String!): Message!
+  skipCommunityJoinGreeting(roomID: ID!): Boolean!
   adminSaveCommunityJoinStampSettings(welcomeIDs: [String!]!, greetingIDs: [String!]!): Boolean!
 }
 

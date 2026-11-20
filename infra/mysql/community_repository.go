@@ -206,6 +206,9 @@ func (r *MySQLCommunityRepository) UpdateCommunity(ctx context.Context, c *model
 	return tx.Commit()
 }
 
+// ListCommunitiesByUserID は参加しているコミュニティを、最後に動きがあった順（LINE のトーク一覧と同じ）に返す。
+// 動きは最後のメッセージ（参加案内を含む）の時刻で、まだ無ければ自分が参加した時刻。
+// 既読の状態は並びに使わないので、読んでも位置は変わらない。MAX は (room_id, created_at) の索引で引ける。
 func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Community, int, error) {
 	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM communities c JOIN room_users ru ON c.room_id = ru.room_id WHERE ru.user_id = ?`,
 		userID)
@@ -221,7 +224,8 @@ func (r *MySQLCommunityRepository) ListCommunitiesByUserID(ctx context.Context, 
 		LEFT JOIN media m ON m.id = c.avatar_media_id
 		JOIN room_users ru ON c.room_id = ru.room_id
 		WHERE ru.user_id = ?
-		ORDER BY ru.created_at DESC, c.id DESC
+		ORDER BY GREATEST(ru.created_at, COALESCE(
+			(SELECT MAX(lm.created_at) FROM messages lm WHERE lm.room_id = c.room_id), 0)) DESC, c.id DESC
 		LIMIT ? OFFSET ?`,
 		userID, q.Limit, q.Offset,
 	)
