@@ -130,6 +130,9 @@ func (p *chatEventPublisher) MessageSent(ctx context.Context, ev chatusecase.Mes
 	// 購読中の画面へのメッセージ配信だけは同期。インメモリの publish なので安価な一方、
 	// 順序が入れ替わるとチャット本体のメッセージが入れ替わって表示されるため。
 	p.deps.PubSub.Publish(roomGraphID+":message:added", toGraphMessage(ev.Message))
+	if ev.TimelineOnly {
+		return
+	}
 	// スレッドの新着は、親ルームでスレッド一覧を開いている画面にも知らせる（件数が変わる）。
 	publishChatThreadChanged(p.deps.PubSub, ev.Room)
 

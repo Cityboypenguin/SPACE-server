@@ -260,6 +260,63 @@ type ComplexityRoot struct {
 		UpdatedAt   func(childComplexity int) int
 	}
 
+	CommunityGreeting struct {
+		JoinedUserName   func(childComplexity int) int
+		Stamps           func(childComplexity int) int
+		WelcomeMessageID func(childComplexity int) int
+	}
+
+	CommunityInvitation struct {
+		CommunityAvatarURL   func(childComplexity int) int
+		CommunityDescription func(childComplexity int) int
+		CommunityName        func(childComplexity int) int
+		CreatedAt            func(childComplexity int) int
+		ExpiresAt            func(childComplexity int) int
+		ID                   func(childComplexity int) int
+		IsLink               func(childComplexity int) int
+		IsMember             func(childComplexity int) int
+		MemberCount          func(childComplexity int) int
+		Message              func(childComplexity int) int
+		RecipientAccountID   func(childComplexity int) int
+		RecipientName        func(childComplexity int) int
+		RespondedAt          func(childComplexity int) int
+		RoomID               func(childComplexity int) int
+		SenderName           func(childComplexity int) int
+		Status               func(childComplexity int) int
+		UseCount             func(childComplexity int) int
+	}
+
+	CommunityInvitationPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
+	CommunityInviteCandidate struct {
+		Status func(childComplexity int) int
+		User   func(childComplexity int) int
+	}
+
+	CommunityInviteCandidatePage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
+	CommunityInviteLink struct {
+		Invitation func(childComplexity int) int
+		Token      func(childComplexity int) int
+	}
+
+	CommunityInviteResult struct {
+		Error      func(childComplexity int) int
+		Invitation func(childComplexity int) int
+		UserID     func(childComplexity int) int
+	}
+
+	CommunityJoinStampSettings struct {
+		GreetingIDs func(childComplexity int) int
+		WelcomeIDs  func(childComplexity int) int
+	}
+
 	CommunityMember struct {
 		Role func(childComplexity int) int
 		User func(childComplexity int) int
@@ -459,23 +516,24 @@ type ComplexityRoot struct {
 	}
 
 	Message struct {
-		Content   func(childComplexity int) int
-		CreatedAt func(childComplexity int) int
-		ID        func(childComplexity int) int
-		IsMine    func(childComplexity int) int
-		Media     func(childComplexity int) int
-		Mentions  func(childComplexity int) int
-		Reactions func(childComplexity int) int
-		ReplyTo   func(childComplexity int) int
-		ReplyToID func(childComplexity int) int
-		Room      func(childComplexity int) int
-		RoomID    func(childComplexity int) int
-		StampID   func(childComplexity int) int
-		Thread    func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
-		User      func(childComplexity int) int
-		UserID    func(childComplexity int) int
-		Video     func(childComplexity int) int
+		Content            func(childComplexity int) int
+		CreatedAt          func(childComplexity int) int
+		ID                 func(childComplexity int) int
+		IsCommunityWelcome func(childComplexity int) int
+		IsMine             func(childComplexity int) int
+		Media              func(childComplexity int) int
+		Mentions           func(childComplexity int) int
+		Reactions          func(childComplexity int) int
+		ReplyTo            func(childComplexity int) int
+		ReplyToID          func(childComplexity int) int
+		Room               func(childComplexity int) int
+		RoomID             func(childComplexity int) int
+		StampID            func(childComplexity int) int
+		Thread             func(childComplexity int) int
+		UpdatedAt          func(childComplexity int) int
+		User               func(childComplexity int) int
+		UserID             func(childComplexity int) int
+		Video              func(childComplexity int) int
 	}
 
 	MessagePage struct {
@@ -491,131 +549,139 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddAnswerAddendum                 func(childComplexity int, answerID string, body string) int
-		AddMessageReaction                func(childComplexity int, roomID string, messageID string, emoji string) int
-		AddQuestionAddendum               func(childComplexity int, questionID string, body string) int
-		AddReportNotificationRecipient    func(childComplexity int, email string) int
-		AddUserToRoom                     func(childComplexity int, input model.AddUserToRoomInput) int
-		AdminCreateCourse                 func(childComplexity int, input model.AdminCreateCourseInput) int
-		AdminCreateNGWord                 func(childComplexity int, pattern string, matchType model.NGWordMatchType) int
-		AdminDeleteAnswer                 func(childComplexity int, id string) int
-		AdminDeleteAnswerAddendum         func(childComplexity int, id string) int
-		AdminDeleteCourse                 func(childComplexity int, id string) int
-		AdminDeleteCourseChatImage        func(childComplexity int, mediaID string) int
-		AdminDeleteNGWord                 func(childComplexity int, id string) int
-		AdminDeletePost                   func(childComplexity int, id string) int
-		AdminDeleteQuestion               func(childComplexity int, id string) int
-		AdminDeleteQuestionAddendum       func(childComplexity int, id string) int
-		AdminRegisterTimetableEntry       func(childComplexity int, userID string, courseID string) int
-		AdminRemoveTimetableEntry         func(childComplexity int, id string, userID string) int
-		AdminRemoveVideo                  func(childComplexity int, videoID string) int
-		AdminReorderChatStamps            func(childComplexity int, items []*model.ChatStampOrderInput, reaction bool) int
-		AdminRequestReportedVideoPlayback func(childComplexity int, reportID string) int
-		AdminResolveCourseSyncReview      func(childComplexity int, id string, decision model.CourseSyncReviewDecision) int
-		AdminRestoreCourseChatImage       func(childComplexity int, mediaID string) int
-		AdminSaveChatStamp                func(childComplexity int, input model.ChatStampInput) int
-		AdminSetTimetableEntryColor       func(childComplexity int, id string, userID string, color model.TimetableEntryColor) int
-		AdminSetUserTimetable             func(childComplexity int, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
-		AdminTriggerCourseImport          func(childComplexity int, year int32, dryRun *bool) int
-		AdminUpdateProfile                func(childComplexity int, userID string, input model.UpdateProfileInput) int
-		AdminUpdateUser                   func(childComplexity int, id string, input model.UpdateUserInput) int
-		AdminUpdateVideoLimits            func(childComplexity int, input model.VideoLimitsInput) int
-		AdminUpdateVideoRetention         func(childComplexity int, days int32, expectedNewlyExpiredCount int32) int
-		AnswerQuestion                    func(childComplexity int, questionID string, body string, mediaInputs []*model.MediaUploadInput) int
-		CancelBestAnswer                  func(childComplexity int, questionID string) int
-		ConsentToTerms                    func(childComplexity int, termsID string) int
-		CreateAdministrator               func(childComplexity int, input model.CreateAdministratorInput) int
-		CreateAnnouncement                func(childComplexity int, input model.CreateAnnouncementInput) int
-		CreateBlocker                     func(childComplexity int, blockedUserID string) int
-		CreateChatThread                  func(childComplexity int, parentRoomID string, title string) int
-		CreateCommunity                   func(childComplexity int, input model.CreateCommunityInput) int
-		CreateFavorite                    func(childComplexity int, input model.CreateFavoriteInput) int
-		CreateFavoriteUser                func(childComplexity int, favoriteUserID string) int
-		CreateInquiry                     func(childComplexity int, input model.CreateInquiryInput) int
-		CreatePoll                        func(childComplexity int, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) int
-		CreatePost                        func(childComplexity int, input model.CreatePostInput) int
-		CreateQuestion                    func(childComplexity int, roomID string, body string, mediaInputs []*model.MediaUploadInput) int
-		CreateReport                      func(childComplexity int, input model.CreateReportInput) int
-		CreateRoom                        func(childComplexity int, input model.CreateRoomInput) int
-		CreateTermsOfService              func(childComplexity int, input model.CreateTermsOfServiceInput) int
-		CreateUser                        func(childComplexity int, input model.CreateUserInput) int
-		DeleteAdministrator               func(childComplexity int, id string) int
-		DeleteAnnouncement                func(childComplexity int, id string) int
-		DeleteAnswer                      func(childComplexity int, id string) int
-		DeleteAvatar                      func(childComplexity int) int
-		DeleteBlocker                     func(childComplexity int, blockedUserID string) int
-		DeleteChatThread                  func(childComplexity int, roomID string) int
-		DeleteFavorite                    func(childComplexity int, input model.DeleteFavoriteInput) int
-		DeleteFavoriteUser                func(childComplexity int, favoriteUserID string) int
-		DeleteMessage                     func(childComplexity int, roomID string, id string) int
-		DeleteMyAccount                   func(childComplexity int) int
-		DeleteNotifications               func(childComplexity int, ids []string) int
-		DeletePoll                        func(childComplexity int, pollID string) int
-		DeletePost                        func(childComplexity int, id string) int
-		DeleteQuestion                    func(childComplexity int, id string) int
-		DeleteReadNotifications           func(childComplexity int) int
-		DeleteReadNotificationsByActor    func(childComplexity int, typeArg string, actorID string) int
-		DeleteRoom                        func(childComplexity int, roomID string) int
-		DeleteUser                        func(childComplexity int, id string) int
-		DemoteFromCommunityOwner          func(childComplexity int, communityID string, userID string) int
-		FreezeUser                        func(childComplexity int, id string) int
-		GetOrCreateDMRoom                 func(childComplexity int, targetUserID string) int
-		IssueNotificationStreamTicket     func(childComplexity int) int
-		JoinRoom                          func(childComplexity int, roomID string) int
-		KickUserFromCommunity             func(childComplexity int, communityID string, userID string) int
-		LikeAnswer                        func(childComplexity int, id string) int
-		LoginAdministrator                func(childComplexity int, input model.LoginInput) int
-		LoginUser                         func(childComplexity int, input model.LoginInput) int
-		LogoutAdministrator               func(childComplexity int, token string, refreshToken *string) int
-		LogoutUser                        func(childComplexity int, token string, refreshToken *string) int
-		MarkAllNotificationsAsRead        func(childComplexity int) int
-		MarkAllNotificationsAsReadByActor func(childComplexity int, typeArg string, actorID string) int
-		MarkNotificationAsRead            func(childComplexity int, id string) int
-		MarkRoomAsRead                    func(childComplexity int, roomID string, lastReadMessageID *string) int
-		PromoteToCommunityOwner           func(childComplexity int, communityID string, userID string) int
-		RecordSessionData                 func(childComplexity int, input model.RecordSessionDataInput) int
-		RefreshAdministratorToken         func(childComplexity int, refreshToken string) int
-		RefreshUserToken                  func(childComplexity int, refreshToken string) int
-		RegisterTimetableEntry            func(childComplexity int, courseID string) int
-		RemoveMessageReaction             func(childComplexity int, roomID string, messageID string, emoji string) int
-		RemoveReportNotificationRecipient func(childComplexity int, id string) int
-		RemoveTimetableEntry              func(childComplexity int, id string) int
-		RemoveUserFromRoom                func(childComplexity int, input model.RemoveUserFromRoomInput) int
-		ReportMediaDimensions             func(childComplexity int, mediaID string, width int32, height int32) int
-		RequestPasswordReset              func(childComplexity int, email string) int
-		RequestVideoPlayback              func(childComplexity int, videoID string) int
-		ResetPassword                     func(childComplexity int, resetToken string, newPassword string) int
-		SelectBestAnswer                  func(childComplexity int, questionID string, answerID string) int
-		SendEmailOtp                      func(childComplexity int, email string) int
-		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, videoInput *model.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) int
-		SetAvatar                         func(childComplexity int, objectKey string) int
-		SetMyTimetable                    func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
-		SetReportServiceStatus            func(childComplexity int, enabled bool) int
-		SetThemePreference                func(childComplexity int, theme model.ThemePreference) int
-		SetTimetableEntryColor            func(childComplexity int, id string, color model.TimetableEntryColor) int
-		SetTimetableProfileVisibility     func(childComplexity int, visible bool) int
-		ToggleCourseChat                  func(childComplexity int, enabled bool) int
-		ToggleMaintenanceMode             func(childComplexity int, enabled bool) int
-		UnfreezeUser                      func(childComplexity int, id string) int
-		UnlikeAnswer                      func(childComplexity int, id string) int
-		UpdateAdministrator               func(childComplexity int, id string, input model.UpdateAdministratorInput) int
-		UpdateAnnouncement                func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
-		UpdateAnswer                      func(childComplexity int, id string, body string, deletedMediaIDs []string) int
-		UpdateChatThread                  func(childComplexity int, roomID string, title *string, closed *bool) int
-		UpdateCommunity                   func(childComplexity int, id string, input model.UpdateCommunityInput) int
-		UpdateCommunityMembers            func(childComplexity int, communityID string, updates []*model.CommunityMemberUpdateInput) int
-		UpdateCurrentSemester             func(childComplexity int, year int32, semester string) int
-		UpdateInquiryStatus               func(childComplexity int, id string, status model.InquiryStatus) int
-		UpdateMessage                     func(childComplexity int, roomID string, id string, content string, mentionUserIDs []string) int
-		UpdateMyProfile                   func(childComplexity int, input model.UpdateMyProfileInput) int
-		UpdatePost                        func(childComplexity int, input model.UpdatePostInput) int
-		UpdateProfile                     func(childComplexity int, input model.UpdateProfileInput) int
-		UpdateQuestion                    func(childComplexity int, id string, body string, deletedMediaIDs []string) int
-		UpdateReportStatus                func(childComplexity int, id string, status model.ReportStatus) int
-		UpdateUser                        func(childComplexity int, input model.UpdateUserInput) int
-		VerifyEmailOtp                    func(childComplexity int, email string, otp string) int
-		VerifyPasswordResetOtp            func(childComplexity int, email string, otp string) int
-		VotePoll                          func(childComplexity int, pollID string, optionIDs []string) int
+		AcceptCommunityInvitation           func(childComplexity int, input model.CommunityInvitationReference) int
+		AddAnswerAddendum                   func(childComplexity int, answerID string, body string) int
+		AddMessageReaction                  func(childComplexity int, roomID string, messageID string, emoji string) int
+		AddQuestionAddendum                 func(childComplexity int, questionID string, body string) int
+		AddReportNotificationRecipient      func(childComplexity int, email string) int
+		AddUserToRoom                       func(childComplexity int, input model.AddUserToRoomInput) int
+		AdminCreateCourse                   func(childComplexity int, input model.AdminCreateCourseInput) int
+		AdminCreateNGWord                   func(childComplexity int, pattern string, matchType model.NGWordMatchType) int
+		AdminDeleteAnswer                   func(childComplexity int, id string) int
+		AdminDeleteAnswerAddendum           func(childComplexity int, id string) int
+		AdminDeleteCourse                   func(childComplexity int, id string) int
+		AdminDeleteCourseChatImage          func(childComplexity int, mediaID string) int
+		AdminDeleteNGWord                   func(childComplexity int, id string) int
+		AdminDeletePost                     func(childComplexity int, id string) int
+		AdminDeleteQuestion                 func(childComplexity int, id string) int
+		AdminDeleteQuestionAddendum         func(childComplexity int, id string) int
+		AdminRegisterTimetableEntry         func(childComplexity int, userID string, courseID string) int
+		AdminRemoveTimetableEntry           func(childComplexity int, id string, userID string) int
+		AdminRemoveVideo                    func(childComplexity int, videoID string) int
+		AdminReorderChatStamps              func(childComplexity int, items []*model.ChatStampOrderInput, reaction bool) int
+		AdminRequestReportedVideoPlayback   func(childComplexity int, reportID string) int
+		AdminResolveCourseSyncReview        func(childComplexity int, id string, decision model.CourseSyncReviewDecision) int
+		AdminRestoreCourseChatImage         func(childComplexity int, mediaID string) int
+		AdminSaveChatStamp                  func(childComplexity int, input model.ChatStampInput) int
+		AdminSaveCommunityJoinStampSettings func(childComplexity int, welcomeIDs []string, greetingIDs []string) int
+		AdminSetTimetableEntryColor         func(childComplexity int, id string, userID string, color model.TimetableEntryColor) int
+		AdminSetUserTimetable               func(childComplexity int, userID string, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
+		AdminTriggerCourseImport            func(childComplexity int, year int32, dryRun *bool) int
+		AdminUpdateProfile                  func(childComplexity int, userID string, input model.UpdateProfileInput) int
+		AdminUpdateUser                     func(childComplexity int, id string, input model.UpdateUserInput) int
+		AdminUpdateVideoLimits              func(childComplexity int, input model.VideoLimitsInput) int
+		AdminUpdateVideoRetention           func(childComplexity int, days int32, expectedNewlyExpiredCount int32) int
+		AnswerQuestion                      func(childComplexity int, questionID string, body string, mediaInputs []*model.MediaUploadInput) int
+		CancelBestAnswer                    func(childComplexity int, questionID string) int
+		ConsentToTerms                      func(childComplexity int, termsID string) int
+		CreateAdministrator                 func(childComplexity int, input model.CreateAdministratorInput) int
+		CreateAnnouncement                  func(childComplexity int, input model.CreateAnnouncementInput) int
+		CreateBlocker                       func(childComplexity int, blockedUserID string) int
+		CreateChatThread                    func(childComplexity int, parentRoomID string, title string) int
+		CreateCommunity                     func(childComplexity int, input model.CreateCommunityInput) int
+		CreateCommunityInviteLink           func(childComplexity int, communityID string, expiresInHours *int32, message *string) int
+		CreateFavorite                      func(childComplexity int, input model.CreateFavoriteInput) int
+		CreateFavoriteUser                  func(childComplexity int, favoriteUserID string) int
+		CreateInquiry                       func(childComplexity int, input model.CreateInquiryInput) int
+		CreatePoll                          func(childComplexity int, roomID string, question string, options []string, allowMultipleChoice *bool, deadline *string) int
+		CreatePost                          func(childComplexity int, input model.CreatePostInput) int
+		CreateQuestion                      func(childComplexity int, roomID string, body string, mediaInputs []*model.MediaUploadInput) int
+		CreateReport                        func(childComplexity int, input model.CreateReportInput) int
+		CreateRoom                          func(childComplexity int, input model.CreateRoomInput) int
+		CreateTermsOfService                func(childComplexity int, input model.CreateTermsOfServiceInput) int
+		CreateUser                          func(childComplexity int, input model.CreateUserInput) int
+		DeclineCommunityInvitation          func(childComplexity int, id string) int
+		DeleteAdministrator                 func(childComplexity int, id string) int
+		DeleteAnnouncement                  func(childComplexity int, id string) int
+		DeleteAnswer                        func(childComplexity int, id string) int
+		DeleteAvatar                        func(childComplexity int) int
+		DeleteBlocker                       func(childComplexity int, blockedUserID string) int
+		DeleteChatThread                    func(childComplexity int, roomID string) int
+		DeleteFavorite                      func(childComplexity int, input model.DeleteFavoriteInput) int
+		DeleteFavoriteUser                  func(childComplexity int, favoriteUserID string) int
+		DeleteMessage                       func(childComplexity int, roomID string, id string) int
+		DeleteMyAccount                     func(childComplexity int) int
+		DeleteNotifications                 func(childComplexity int, ids []string) int
+		DeletePoll                          func(childComplexity int, pollID string) int
+		DeletePost                          func(childComplexity int, id string) int
+		DeleteQuestion                      func(childComplexity int, id string) int
+		DeleteReadNotifications             func(childComplexity int) int
+		DeleteReadNotificationsByActor      func(childComplexity int, typeArg string, actorID string) int
+		DeleteRoom                          func(childComplexity int, roomID string) int
+		DeleteUser                          func(childComplexity int, id string) int
+		DemoteFromCommunityOwner            func(childComplexity int, communityID string, userID string) int
+		FreezeUser                          func(childComplexity int, id string) int
+		GetOrCreateDMRoom                   func(childComplexity int, targetUserID string) int
+		InviteCommunityUser                 func(childComplexity int, communityID string, userID string, message *string) int
+		InviteCommunityUsers                func(childComplexity int, communityID string, userIDs []string, message *string) int
+		IssueNotificationStreamTicket       func(childComplexity int) int
+		JoinRoom                            func(childComplexity int, roomID string) int
+		KickUserFromCommunity               func(childComplexity int, communityID string, userID string) int
+		LikeAnswer                          func(childComplexity int, id string) int
+		LoginAdministrator                  func(childComplexity int, input model.LoginInput) int
+		LoginUser                           func(childComplexity int, input model.LoginInput) int
+		LogoutAdministrator                 func(childComplexity int, token string, refreshToken *string) int
+		LogoutUser                          func(childComplexity int, token string, refreshToken *string) int
+		MarkAllNotificationsAsRead          func(childComplexity int) int
+		MarkAllNotificationsAsReadByActor   func(childComplexity int, typeArg string, actorID string) int
+		MarkNotificationAsRead              func(childComplexity int, id string) int
+		MarkRoomAsRead                      func(childComplexity int, roomID string, lastReadMessageID *string) int
+		PromoteToCommunityOwner             func(childComplexity int, communityID string, userID string) int
+		RecordSessionData                   func(childComplexity int, input model.RecordSessionDataInput) int
+		RefreshAdministratorToken           func(childComplexity int, refreshToken string) int
+		RefreshUserToken                    func(childComplexity int, refreshToken string) int
+		RegisterTimetableEntry              func(childComplexity int, courseID string) int
+		RemoveMessageReaction               func(childComplexity int, roomID string, messageID string, emoji string) int
+		RemoveReportNotificationRecipient   func(childComplexity int, id string) int
+		RemoveTimetableEntry                func(childComplexity int, id string) int
+		RemoveUserFromRoom                  func(childComplexity int, input model.RemoveUserFromRoomInput) int
+		ReportMediaDimensions               func(childComplexity int, mediaID string, width int32, height int32) int
+		RequestPasswordReset                func(childComplexity int, email string) int
+		RequestVideoPlayback                func(childComplexity int, videoID string) int
+		ResetPassword                       func(childComplexity int, resetToken string, newPassword string) int
+		RevokeCommunityInvitation           func(childComplexity int, id string) int
+		SelectBestAnswer                    func(childComplexity int, questionID string, answerID string) int
+		SendCommunityGreeting               func(childComplexity int, roomID string, welcomeMessageID string, stampID string) int
+		SendEmailOtp                        func(childComplexity int, email string) int
+		SendMessage                         func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, videoInput *model.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) int
+		SetAvatar                           func(childComplexity int, objectKey string) int
+		SetMyTimetable                      func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
+		SetReportServiceStatus              func(childComplexity int, enabled bool) int
+		SetThemePreference                  func(childComplexity int, theme model.ThemePreference) int
+		SetTimetableEntryColor              func(childComplexity int, id string, color model.TimetableEntryColor) int
+		SetTimetableProfileVisibility       func(childComplexity int, visible bool) int
+		ToggleCourseChat                    func(childComplexity int, enabled bool) int
+		ToggleMaintenanceMode               func(childComplexity int, enabled bool) int
+		UnfreezeUser                        func(childComplexity int, id string) int
+		UnlikeAnswer                        func(childComplexity int, id string) int
+		UpdateAdministrator                 func(childComplexity int, id string, input model.UpdateAdministratorInput) int
+		UpdateAnnouncement                  func(childComplexity int, id string, input model.UpdateAnnouncementInput) int
+		UpdateAnswer                        func(childComplexity int, id string, body string, deletedMediaIDs []string) int
+		UpdateChatThread                    func(childComplexity int, roomID string, title *string, closed *bool) int
+		UpdateCommunity                     func(childComplexity int, id string, input model.UpdateCommunityInput) int
+		UpdateCommunityMembers              func(childComplexity int, communityID string, updates []*model.CommunityMemberUpdateInput) int
+		UpdateCurrentSemester               func(childComplexity int, year int32, semester string) int
+		UpdateInquiryStatus                 func(childComplexity int, id string, status model.InquiryStatus) int
+		UpdateMessage                       func(childComplexity int, roomID string, id string, content string, mentionUserIDs []string) int
+		UpdateMyProfile                     func(childComplexity int, input model.UpdateMyProfileInput) int
+		UpdatePost                          func(childComplexity int, input model.UpdatePostInput) int
+		UpdateProfile                       func(childComplexity int, input model.UpdateProfileInput) int
+		UpdateQuestion                      func(childComplexity int, id string, body string, deletedMediaIDs []string) int
+		UpdateReportStatus                  func(childComplexity int, id string, status model.ReportStatus) int
+		UpdateUser                          func(childComplexity int, input model.UpdateUserInput) int
+		VerifyEmailOtp                      func(childComplexity int, email string, otp string) int
+		VerifyPasswordResetOtp              func(childComplexity int, email string, otp string) int
+		VotePoll                            func(childComplexity int, pollID string, optionIDs []string) int
 	}
 
 	NGWord struct {
@@ -756,6 +822,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		AdminChatStamps                  func(childComplexity int) int
+		AdminCommunityJoinStampSettings  func(childComplexity int) int
 		AdminCourseImportStatus          func(childComplexity int) int
 		AdminCourseSyncChanges           func(childComplexity int, runID string, kind *model.CourseSyncChangeKind, limit *int32, offset *int32) int
 		AdminCourseSyncReviews           func(childComplexity int, year *int32, status *model.CourseSyncReviewStatus, limit *int32, offset *int32) int
@@ -791,6 +858,9 @@ type ComplexityRoot struct {
 		ChatThread                       func(childComplexity int, roomID string) int
 		ChatThreads                      func(childComplexity int, parentRoomID string, limit *int32, offset *int32) int
 		Communities                      func(childComplexity int, limit *int32, offset *int32) int
+		CommunityGreeting                func(childComplexity int, roomID string) int
+		CommunityInvitation              func(childComplexity int, input model.CommunityInvitationReference) int
+		CommunityInviteCandidates        func(childComplexity int, communityID string, keyword string, limit *int32, offset *int32) int
 		CommunityMembers                 func(childComplexity int, communityID string, limit *int32, offset *int32) int
 		CourseChatEnabled                func(childComplexity int) int
 		CourseYears                      func(childComplexity int) int
@@ -849,6 +919,7 @@ type ComplexityRoot struct {
 		Question                         func(childComplexity int, id string) int
 		Questions                        func(childComplexity int, roomID string, limit *int32, offset *int32) int
 		RandomCommunities                func(childComplexity int, limit int32) int
+		ReceivedCommunityInvitations     func(childComplexity int, limit *int32, offset *int32) int
 		ReportNotificationRecipients     func(childComplexity int) int
 		Room                             func(childComplexity int, id string) int
 		SearchAdministrators             func(childComplexity int, name string) int
@@ -861,6 +932,7 @@ type ComplexityRoot struct {
 		SearchPostsByHashtag             func(childComplexity int, tag string, limit *int32, offset *int32) int
 		SearchReports                    func(childComplexity int, filter *model.ReportSearchFilter, limit *int32, offset *int32) int
 		SearchUsers                      func(childComplexity int, keyword string, limit *int32, offset *int32) int
+		SentCommunityInvitations         func(childComplexity int, roomID string, history *bool, limit *int32, offset *int32) int
 		SuggestHashtags                  func(childComplexity int, prefix string, limit *int32) int
 		SuggestUsers                     func(childComplexity int, prefix string, limit *int32) int
 		ThemePreference                  func(childComplexity int) int
@@ -1252,6 +1324,14 @@ type MutationResolver interface {
 	PromoteToCommunityOwner(ctx context.Context, communityID string, userID string) (bool, error)
 	DemoteFromCommunityOwner(ctx context.Context, communityID string, userID string) (bool, error)
 	UpdateCommunityMembers(ctx context.Context, communityID string, updates []*model.CommunityMemberUpdateInput) (bool, error)
+	InviteCommunityUser(ctx context.Context, communityID string, userID string, message *string) (*model.CommunityInvitation, error)
+	InviteCommunityUsers(ctx context.Context, communityID string, userIDs []string, message *string) ([]*model.CommunityInviteResult, error)
+	CreateCommunityInviteLink(ctx context.Context, communityID string, expiresInHours *int32, message *string) (*model.CommunityInviteLink, error)
+	AcceptCommunityInvitation(ctx context.Context, input model.CommunityInvitationReference) (string, error)
+	DeclineCommunityInvitation(ctx context.Context, id string) (bool, error)
+	RevokeCommunityInvitation(ctx context.Context, id string) (bool, error)
+	SendCommunityGreeting(ctx context.Context, roomID string, welcomeMessageID string, stampID string) (*model.Message, error)
+	AdminSaveCommunityJoinStampSettings(ctx context.Context, welcomeIDs []string, greetingIDs []string) (bool, error)
 	RegisterTimetableEntry(ctx context.Context, courseID string) (*model.TimetableEntry, error)
 	RemoveTimetableEntry(ctx context.Context, id string) (bool, error)
 	SetTimetableEntryColor(ctx context.Context, id string, color model.TimetableEntryColor) (*model.TimetableEntry, error)
@@ -1388,6 +1468,12 @@ type QueryResolver interface {
 	RandomCommunities(ctx context.Context, limit int32) ([]*model.Community, error)
 	GetMyRoleInCommunity(ctx context.Context, communityID string) (string, error)
 	CommunityMembers(ctx context.Context, communityID string, limit *int32, offset *int32) (*model.CommunityMemberPage, error)
+	ReceivedCommunityInvitations(ctx context.Context, limit *int32, offset *int32) (*model.CommunityInvitationPage, error)
+	CommunityInvitation(ctx context.Context, input model.CommunityInvitationReference) (*model.CommunityInvitation, error)
+	SentCommunityInvitations(ctx context.Context, roomID string, history *bool, limit *int32, offset *int32) ([]*model.CommunityInvitation, error)
+	CommunityInviteCandidates(ctx context.Context, communityID string, keyword string, limit *int32, offset *int32) (*model.CommunityInviteCandidatePage, error)
+	CommunityGreeting(ctx context.Context, roomID string) (*model.CommunityGreeting, error)
+	AdminCommunityJoinStampSettings(ctx context.Context) (*model.CommunityJoinStampSettings, error)
 	SearchCourses(ctx context.Context, dayOfWeek string, period int32, keyword *string, limit *int32, offset *int32) (*model.CoursePage, error)
 	MyTimetable(ctx context.Context, year *int32, semester *string) ([]*model.TimetableEntry, error)
 	UserTimetable(ctx context.Context, userID string, year *int32, semester *string) ([]*model.TimetableEntry, error)
@@ -2461,6 +2547,212 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Community.UpdatedAt(childComplexity), true
 
+	case "CommunityGreeting.joinedUserName":
+		if e.ComplexityRoot.CommunityGreeting.JoinedUserName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityGreeting.JoinedUserName(childComplexity), true
+	case "CommunityGreeting.stamps":
+		if e.ComplexityRoot.CommunityGreeting.Stamps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityGreeting.Stamps(childComplexity), true
+	case "CommunityGreeting.welcomeMessageID":
+		if e.ComplexityRoot.CommunityGreeting.WelcomeMessageID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityGreeting.WelcomeMessageID(childComplexity), true
+
+	case "CommunityInvitation.communityAvatarURL":
+		if e.ComplexityRoot.CommunityInvitation.CommunityAvatarURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.CommunityAvatarURL(childComplexity), true
+	case "CommunityInvitation.communityDescription":
+		if e.ComplexityRoot.CommunityInvitation.CommunityDescription == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.CommunityDescription(childComplexity), true
+	case "CommunityInvitation.communityName":
+		if e.ComplexityRoot.CommunityInvitation.CommunityName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.CommunityName(childComplexity), true
+	case "CommunityInvitation.createdAt":
+		if e.ComplexityRoot.CommunityInvitation.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.CreatedAt(childComplexity), true
+	case "CommunityInvitation.expiresAt":
+		if e.ComplexityRoot.CommunityInvitation.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.ExpiresAt(childComplexity), true
+	case "CommunityInvitation.id":
+		if e.ComplexityRoot.CommunityInvitation.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.ID(childComplexity), true
+	case "CommunityInvitation.isLink":
+		if e.ComplexityRoot.CommunityInvitation.IsLink == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.IsLink(childComplexity), true
+	case "CommunityInvitation.isMember":
+		if e.ComplexityRoot.CommunityInvitation.IsMember == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.IsMember(childComplexity), true
+	case "CommunityInvitation.memberCount":
+		if e.ComplexityRoot.CommunityInvitation.MemberCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.MemberCount(childComplexity), true
+	case "CommunityInvitation.message":
+		if e.ComplexityRoot.CommunityInvitation.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.Message(childComplexity), true
+	case "CommunityInvitation.recipientAccountID":
+		if e.ComplexityRoot.CommunityInvitation.RecipientAccountID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.RecipientAccountID(childComplexity), true
+	case "CommunityInvitation.recipientName":
+		if e.ComplexityRoot.CommunityInvitation.RecipientName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.RecipientName(childComplexity), true
+	case "CommunityInvitation.respondedAt":
+		if e.ComplexityRoot.CommunityInvitation.RespondedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.RespondedAt(childComplexity), true
+	case "CommunityInvitation.roomID":
+		if e.ComplexityRoot.CommunityInvitation.RoomID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.RoomID(childComplexity), true
+	case "CommunityInvitation.senderName":
+		if e.ComplexityRoot.CommunityInvitation.SenderName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.SenderName(childComplexity), true
+	case "CommunityInvitation.status":
+		if e.ComplexityRoot.CommunityInvitation.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.Status(childComplexity), true
+	case "CommunityInvitation.useCount":
+		if e.ComplexityRoot.CommunityInvitation.UseCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitation.UseCount(childComplexity), true
+
+	case "CommunityInvitationPage.items":
+		if e.ComplexityRoot.CommunityInvitationPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitationPage.Items(childComplexity), true
+	case "CommunityInvitationPage.total":
+		if e.ComplexityRoot.CommunityInvitationPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInvitationPage.Total(childComplexity), true
+
+	case "CommunityInviteCandidate.status":
+		if e.ComplexityRoot.CommunityInviteCandidate.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteCandidate.Status(childComplexity), true
+	case "CommunityInviteCandidate.user":
+		if e.ComplexityRoot.CommunityInviteCandidate.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteCandidate.User(childComplexity), true
+
+	case "CommunityInviteCandidatePage.items":
+		if e.ComplexityRoot.CommunityInviteCandidatePage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteCandidatePage.Items(childComplexity), true
+	case "CommunityInviteCandidatePage.total":
+		if e.ComplexityRoot.CommunityInviteCandidatePage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteCandidatePage.Total(childComplexity), true
+
+	case "CommunityInviteLink.invitation":
+		if e.ComplexityRoot.CommunityInviteLink.Invitation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteLink.Invitation(childComplexity), true
+	case "CommunityInviteLink.token":
+		if e.ComplexityRoot.CommunityInviteLink.Token == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteLink.Token(childComplexity), true
+
+	case "CommunityInviteResult.error":
+		if e.ComplexityRoot.CommunityInviteResult.Error == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteResult.Error(childComplexity), true
+	case "CommunityInviteResult.invitation":
+		if e.ComplexityRoot.CommunityInviteResult.Invitation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteResult.Invitation(childComplexity), true
+	case "CommunityInviteResult.userID":
+		if e.ComplexityRoot.CommunityInviteResult.UserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityInviteResult.UserID(childComplexity), true
+
+	case "CommunityJoinStampSettings.greetingIDs":
+		if e.ComplexityRoot.CommunityJoinStampSettings.GreetingIDs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityJoinStampSettings.GreetingIDs(childComplexity), true
+	case "CommunityJoinStampSettings.welcomeIDs":
+		if e.ComplexityRoot.CommunityJoinStampSettings.WelcomeIDs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommunityJoinStampSettings.WelcomeIDs(childComplexity), true
+
 	case "CommunityMember.role":
 		if e.ComplexityRoot.CommunityMember.Role == nil {
 			break
@@ -3242,6 +3534,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.ID(childComplexity), true
+	case "Message.isCommunityWelcome":
+		if e.ComplexityRoot.Message.IsCommunityWelcome == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.IsCommunityWelcome(childComplexity), true
 	case "Message.isMine":
 		if e.ComplexityRoot.Message.IsMine == nil {
 			break
@@ -3365,6 +3663,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MessageReaction.ReactedByMe(childComplexity), true
 
+	case "Mutation.acceptCommunityInvitation":
+		if e.ComplexityRoot.Mutation.AcceptCommunityInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_acceptCommunityInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AcceptCommunityInvitation(childComplexity, args["input"].(model.CommunityInvitationReference)), true
 	case "Mutation.addAnswerAddendum":
 		if e.ComplexityRoot.Mutation.AddAnswerAddendum == nil {
 			break
@@ -3618,6 +3927,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminSaveChatStamp(childComplexity, args["input"].(model.ChatStampInput)), true
+	case "Mutation.adminSaveCommunityJoinStampSettings":
+		if e.ComplexityRoot.Mutation.AdminSaveCommunityJoinStampSettings == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminSaveCommunityJoinStampSettings_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminSaveCommunityJoinStampSettings(childComplexity, args["welcomeIDs"].([]string), args["greetingIDs"].([]string)), true
 	case "Mutation.adminSetTimetableEntryColor":
 		if e.ComplexityRoot.Mutation.AdminSetTimetableEntryColor == nil {
 			break
@@ -3783,6 +4103,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateCommunity(childComplexity, args["input"].(model.CreateCommunityInput)), true
+	case "Mutation.createCommunityInviteLink":
+		if e.ComplexityRoot.Mutation.CreateCommunityInviteLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createCommunityInviteLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateCommunityInviteLink(childComplexity, args["communityID"].(string), args["expiresInHours"].(*int32), args["message"].(*string)), true
 	case "Mutation.createFavorite":
 		if e.ComplexityRoot.Mutation.CreateFavorite == nil {
 			break
@@ -3893,6 +4224,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateUser(childComplexity, args["input"].(model.CreateUserInput)), true
+	case "Mutation.declineCommunityInvitation":
+		if e.ComplexityRoot.Mutation.DeclineCommunityInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_declineCommunityInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeclineCommunityInvitation(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteAdministrator":
 		if e.ComplexityRoot.Mutation.DeleteAdministrator == nil {
 			break
@@ -4109,6 +4451,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.GetOrCreateDMRoom(childComplexity, args["targetUserID"].(string)), true
+	case "Mutation.inviteCommunityUser":
+		if e.ComplexityRoot.Mutation.InviteCommunityUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_inviteCommunityUser_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.InviteCommunityUser(childComplexity, args["communityID"].(string), args["userID"].(string), args["message"].(*string)), true
+	case "Mutation.inviteCommunityUsers":
+		if e.ComplexityRoot.Mutation.InviteCommunityUsers == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_inviteCommunityUsers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.InviteCommunityUsers(childComplexity, args["communityID"].(string), args["userIDs"].([]string), args["message"].(*string)), true
 	case "Mutation.issueNotificationStreamTicket":
 		if e.ComplexityRoot.Mutation.IssueNotificationStreamTicket == nil {
 			break
@@ -4374,6 +4738,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResetPassword(childComplexity, args["resetToken"].(string), args["newPassword"].(string)), true
+	case "Mutation.revokeCommunityInvitation":
+		if e.ComplexityRoot.Mutation.RevokeCommunityInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeCommunityInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeCommunityInvitation(childComplexity, args["id"].(string)), true
 	case "Mutation.selectBestAnswer":
 		if e.ComplexityRoot.Mutation.SelectBestAnswer == nil {
 			break
@@ -4385,6 +4760,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SelectBestAnswer(childComplexity, args["questionID"].(string), args["answerID"].(string)), true
+	case "Mutation.sendCommunityGreeting":
+		if e.ComplexityRoot.Mutation.SendCommunityGreeting == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_sendCommunityGreeting_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SendCommunityGreeting(childComplexity, args["roomID"].(string), args["welcomeMessageID"].(string), args["stampID"].(string)), true
 	case "Mutation.sendEmailOTP":
 		if e.ComplexityRoot.Mutation.SendEmailOtp == nil {
 			break
@@ -5276,6 +5662,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminChatStamps(childComplexity), true
+	case "Query.adminCommunityJoinStampSettings":
+		if e.ComplexityRoot.Query.AdminCommunityJoinStampSettings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminCommunityJoinStampSettings(childComplexity), true
 	case "Query.adminCourseImportStatus":
 		if e.ComplexityRoot.Query.AdminCourseImportStatus == nil {
 			break
@@ -5626,6 +6018,39 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Communities(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.communityGreeting":
+		if e.ComplexityRoot.Query.CommunityGreeting == nil {
+			break
+		}
+
+		args, err := ec.field_Query_communityGreeting_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.CommunityGreeting(childComplexity, args["roomID"].(string)), true
+	case "Query.communityInvitation":
+		if e.ComplexityRoot.Query.CommunityInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Query_communityInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.CommunityInvitation(childComplexity, args["input"].(model.CommunityInvitationReference)), true
+	case "Query.communityInviteCandidates":
+		if e.ComplexityRoot.Query.CommunityInviteCandidates == nil {
+			break
+		}
+
+		args, err := ec.field_Query_communityInviteCandidates_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.CommunityInviteCandidates(childComplexity, args["communityID"].(string), args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.communityMembers":
 		if e.ComplexityRoot.Query.CommunityMembers == nil {
 			break
@@ -6175,6 +6600,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.RandomCommunities(childComplexity, args["limit"].(int32)), true
+	case "Query.receivedCommunityInvitations":
+		if e.ComplexityRoot.Query.ReceivedCommunityInvitations == nil {
+			break
+		}
+
+		args, err := ec.field_Query_receivedCommunityInvitations_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ReceivedCommunityInvitations(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.reportNotificationRecipients":
 		if e.ComplexityRoot.Query.ReportNotificationRecipients == nil {
 			break
@@ -6302,6 +6738,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchUsers(childComplexity, args["keyword"].(string), args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.sentCommunityInvitations":
+		if e.ComplexityRoot.Query.SentCommunityInvitations == nil {
+			break
+		}
+
+		args, err := ec.field_Query_sentCommunityInvitations_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SentCommunityInvitations(childComplexity, args["roomID"].(string), args["history"].(*bool), args["limit"].(*int32), args["offset"].(*int32)), true
 	case "Query.suggestHashtags":
 		if e.ComplexityRoot.Query.SuggestHashtags == nil {
 			break
@@ -7610,6 +8057,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputAdminCreateCourseInput,
 		ec.unmarshalInputChatStampInput,
 		ec.unmarshalInputChatStampOrderInput,
+		ec.unmarshalInputCommunityInvitationReference,
 		ec.unmarshalInputCommunityMemberUpdateInput,
 		ec.unmarshalInputCreateAdministratorInput,
 		ec.unmarshalInputCreateAnnouncementInput,
@@ -7729,7 +8177,7 @@ func newExecutionContext(
 	}
 }
 
-//go:embed "admin.graphqls" "announcement.graphqls" "chat.graphqls" "chat_stamps.graphqls" "classroom.graphqls" "community.graphqls" "course.graphqls" "media.graphqls" "moderation.graphqls" "notification.graphqls" "post.graphqls" "schema.graphqls" "terms.graphqls" "threads.graphqls" "user.graphqls" "video.graphqls"
+//go:embed "admin.graphqls" "announcement.graphqls" "chat.graphqls" "chat_stamps.graphqls" "classroom.graphqls" "community.graphqls" "community_invitations.graphqls" "course.graphqls" "media.graphqls" "moderation.graphqls" "notification.graphqls" "post.graphqls" "schema.graphqls" "terms.graphqls" "threads.graphqls" "user.graphqls" "video.graphqls"
 var sourcesFS embed.FS
 
 func sourceData(filename string) string {
@@ -7747,6 +8195,7 @@ var sources = []*ast.Source{
 	{Name: "chat_stamps.graphqls", Input: sourceData("chat_stamps.graphqls"), BuiltIn: false},
 	{Name: "classroom.graphqls", Input: sourceData("classroom.graphqls"), BuiltIn: false},
 	{Name: "community.graphqls", Input: sourceData("community.graphqls"), BuiltIn: false},
+	{Name: "community_invitations.graphqls", Input: sourceData("community_invitations.graphqls"), BuiltIn: false},
 	{Name: "course.graphqls", Input: sourceData("course.graphqls"), BuiltIn: false},
 	{Name: "media.graphqls", Input: sourceData("media.graphqls"), BuiltIn: false},
 	{Name: "moderation.graphqls", Input: sourceData("moderation.graphqls"), BuiltIn: false},
@@ -8188,6 +8637,120 @@ func (ec *executionContext) childFields_Community(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type Community", field.Name)
 }
 
+func (ec *executionContext) childFields_CommunityGreeting(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "welcomeMessageID":
+		return ec.fieldContext_CommunityGreeting_welcomeMessageID(ctx, field)
+	case "joinedUserName":
+		return ec.fieldContext_CommunityGreeting_joinedUserName(ctx, field)
+	case "stamps":
+		return ec.fieldContext_CommunityGreeting_stamps(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityGreeting", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInvitation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_CommunityInvitation_id(ctx, field)
+	case "roomID":
+		return ec.fieldContext_CommunityInvitation_roomID(ctx, field)
+	case "communityName":
+		return ec.fieldContext_CommunityInvitation_communityName(ctx, field)
+	case "communityDescription":
+		return ec.fieldContext_CommunityInvitation_communityDescription(ctx, field)
+	case "communityAvatarURL":
+		return ec.fieldContext_CommunityInvitation_communityAvatarURL(ctx, field)
+	case "memberCount":
+		return ec.fieldContext_CommunityInvitation_memberCount(ctx, field)
+	case "senderName":
+		return ec.fieldContext_CommunityInvitation_senderName(ctx, field)
+	case "recipientName":
+		return ec.fieldContext_CommunityInvitation_recipientName(ctx, field)
+	case "recipientAccountID":
+		return ec.fieldContext_CommunityInvitation_recipientAccountID(ctx, field)
+	case "isLink":
+		return ec.fieldContext_CommunityInvitation_isLink(ctx, field)
+	case "isMember":
+		return ec.fieldContext_CommunityInvitation_isMember(ctx, field)
+	case "status":
+		return ec.fieldContext_CommunityInvitation_status(ctx, field)
+	case "message":
+		return ec.fieldContext_CommunityInvitation_message(ctx, field)
+	case "useCount":
+		return ec.fieldContext_CommunityInvitation_useCount(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_CommunityInvitation_createdAt(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_CommunityInvitation_expiresAt(ctx, field)
+	case "respondedAt":
+		return ec.fieldContext_CommunityInvitation_respondedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInvitation", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInvitationPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_CommunityInvitationPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_CommunityInvitationPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInvitationPage", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInviteCandidate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "user":
+		return ec.fieldContext_CommunityInviteCandidate_user(ctx, field)
+	case "status":
+		return ec.fieldContext_CommunityInviteCandidate_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInviteCandidate", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInviteCandidatePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_CommunityInviteCandidatePage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_CommunityInviteCandidatePage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInviteCandidatePage", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInviteLink(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "invitation":
+		return ec.fieldContext_CommunityInviteLink_invitation(ctx, field)
+	case "token":
+		return ec.fieldContext_CommunityInviteLink_token(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInviteLink", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityInviteResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "userID":
+		return ec.fieldContext_CommunityInviteResult_userID(ctx, field)
+	case "invitation":
+		return ec.fieldContext_CommunityInviteResult_invitation(ctx, field)
+	case "error":
+		return ec.fieldContext_CommunityInviteResult_error(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityInviteResult", field.Name)
+}
+
+func (ec *executionContext) childFields_CommunityJoinStampSettings(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "welcomeIDs":
+		return ec.fieldContext_CommunityJoinStampSettings_welcomeIDs(ctx, field)
+	case "greetingIDs":
+		return ec.fieldContext_CommunityJoinStampSettings_greetingIDs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommunityJoinStampSettings", field.Name)
+}
+
 func (ec *executionContext) childFields_CommunityMember(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "user":
@@ -8586,6 +9149,8 @@ func (ec *executionContext) childFields_Mention(ctx context.Context, field graph
 
 func (ec *executionContext) childFields_Message(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
+	case "isCommunityWelcome":
+		return ec.fieldContext_Message_isCommunityWelcome(ctx, field)
 	case "thread":
 		return ec.fieldContext_Message_thread(ctx, field)
 	case "ID":
@@ -9560,6 +10125,20 @@ func (ec *executionContext) childFields___Type(ctx context.Context, field graphq
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_acceptCommunityInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.CommunityInvitationReference, error) {
+			return ec.unmarshalNCommunityInvitationReference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationReference(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addAnswerAddendum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9954,6 +10533,28 @@ func (ec *executionContext) field_Mutation_adminSaveChatStamp_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_adminSaveCommunityJoinStampSettings_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "welcomeIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["welcomeIDs"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "greetingIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["greetingIDs"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_adminSetTimetableEntryColor_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10254,6 +10855,36 @@ func (ec *executionContext) field_Mutation_createChatThread_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createCommunityInviteLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "communityID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["communityID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "expiresInHours",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expiresInHours"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "message",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["message"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createCommunity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10453,6 +11084,20 @@ func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_declineCommunityInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -10729,6 +11374,66 @@ func (ec *executionContext) field_Mutation_getOrCreateDMRoom_args(ctx context.Co
 		return nil, err
 	}
 	args["targetUserID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_inviteCommunityUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "communityID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["communityID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "userID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "message",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["message"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_inviteCommunityUsers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "communityID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["communityID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "userIDs",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["userIDs"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "message",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["message"] = arg2
 	return args, nil
 }
 
@@ -11142,6 +11847,20 @@ func (ec *executionContext) field_Mutation_resetPassword_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_revokeCommunityInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_selectBestAnswer_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11161,6 +11880,36 @@ func (ec *executionContext) field_Mutation_selectBestAnswer_args(ctx context.Con
 		return nil, err
 	}
 	args["answerID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_sendCommunityGreeting_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "welcomeMessageID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["welcomeMessageID"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "stampID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["stampID"] = arg2
 	return args, nil
 }
 
@@ -12702,6 +13451,72 @@ func (ec *executionContext) field_Query_communities_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_communityGreeting_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_communityInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.CommunityInvitationReference, error) {
+			return ec.unmarshalNCommunityInvitationReference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationReference(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_communityInviteCandidates_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "communityID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["communityID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "keyword",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["keyword"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_communityMembers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13490,6 +14305,28 @@ func (ec *executionContext) field_Query_randomCommunities_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_receivedCommunityInvitations_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_room_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13801,6 +14638,44 @@ func (ec *executionContext) field_Query_searchUsers_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["offset"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_sentCommunityInvitations_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "roomID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roomID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "history",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["history"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (*int32, error) {
+			return ec.unmarshalOInt2ᚖint32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg3
 	return args, nil
 }
 
@@ -17912,6 +18787,819 @@ func (ec *executionContext) fieldContext_Community_updatedAt(_ context.Context, 
 	return graphql.NewScalarFieldContext("Community", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _CommunityGreeting_welcomeMessageID(ctx context.Context, field graphql.CollectedField, obj *model.CommunityGreeting) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityGreeting_welcomeMessageID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WelcomeMessageID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityGreeting_welcomeMessageID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityGreeting", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityGreeting_joinedUserName(ctx context.Context, field graphql.CollectedField, obj *model.CommunityGreeting) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityGreeting_joinedUserName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JoinedUserName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityGreeting_joinedUserName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityGreeting", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityGreeting_stamps(ctx context.Context, field graphql.CollectedField, obj *model.CommunityGreeting) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityGreeting_stamps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Stamps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.ChatStamp) graphql.Marshaler {
+			return ec.marshalNChatStamp2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐChatStampᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityGreeting_stamps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityGreeting",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatStamp(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInvitation_id(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_roomID(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_roomID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoomID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_roomID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_communityName(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_communityName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_communityName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_communityDescription(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_communityDescription(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityDescription, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_communityDescription(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_communityAvatarURL(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_communityAvatarURL(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityAvatarURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_communityAvatarURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_memberCount(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_memberCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MemberCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_memberCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_senderName(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_senderName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SenderName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_senderName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_recipientName(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_recipientName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RecipientName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_recipientName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_recipientAccountID(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_recipientAccountID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RecipientAccountID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_recipientAccountID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_isLink(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_isLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsLink, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_isLink(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_isMember(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_isMember(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsMember, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_isMember(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_status(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_message(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_useCount(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_useCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UseCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_useCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitation_respondedAt(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitation_respondedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RespondedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitation_respondedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInvitationPage_items(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitationPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalNCommunityInvitation2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitationPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityInvitationPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInvitationPage_total(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInvitationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInvitationPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInvitationPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInvitationPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInviteCandidate_user(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteCandidate_user(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐUser(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteCandidate_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityInviteCandidate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInviteCandidate_status(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteCandidate_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteCandidate_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInviteCandidate", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInviteCandidatePage_items(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteCandidatePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteCandidatePage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityInviteCandidate) graphql.Marshaler {
+			return ec.marshalNCommunityInviteCandidate2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidateᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteCandidatePage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityInviteCandidatePage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInviteCandidate(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInviteCandidatePage_total(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteCandidatePage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteCandidatePage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteCandidatePage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInviteCandidatePage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInviteLink_invitation(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteLink_invitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Invitation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalNCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteLink_invitation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityInviteLink",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInviteLink_token(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteLink_token(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteLink_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInviteLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInviteResult_userID(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteResult_userID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteResult_userID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInviteResult", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityInviteResult_invitation(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteResult_invitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Invitation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalOCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteResult_invitation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommunityInviteResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommunityInviteResult_error(ctx context.Context, field graphql.CollectedField, obj *model.CommunityInviteResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityInviteResult_error(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Error, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityInviteResult_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityInviteResult", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityJoinStampSettings_welcomeIDs(ctx context.Context, field graphql.CollectedField, obj *model.CommunityJoinStampSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityJoinStampSettings_welcomeIDs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WelcomeIDs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityJoinStampSettings_welcomeIDs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityJoinStampSettings", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CommunityJoinStampSettings_greetingIDs(ctx context.Context, field graphql.CollectedField, obj *model.CommunityJoinStampSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommunityJoinStampSettings_greetingIDs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GreetingIDs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommunityJoinStampSettings_greetingIDs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommunityJoinStampSettings", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CommunityMember_user(ctx context.Context, field graphql.CollectedField, obj *model.CommunityMember) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20892,6 +22580,29 @@ func (ec *executionContext) _Mention_text(ctx context.Context, field graphql.Col
 }
 func (ec *executionContext) fieldContext_Mention_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Mention", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Message_isCommunityWelcome(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_isCommunityWelcome(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsCommunityWelcome, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Message_isCommunityWelcome(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Message", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Message_thread(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
@@ -24402,6 +26113,358 @@ func (ec *executionContext) fieldContext_Mutation_updateCommunityMembers(ctx con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateCommunityMembers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_inviteCommunityUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_inviteCommunityUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().InviteCommunityUser(ctx, fc.Args["communityID"].(string), fc.Args["userID"].(string), fc.Args["message"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalNCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_inviteCommunityUser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_inviteCommunityUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_inviteCommunityUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_inviteCommunityUsers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().InviteCommunityUsers(ctx, fc.Args["communityID"].(string), fc.Args["userIDs"].([]string), fc.Args["message"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityInviteResult) graphql.Marshaler {
+			return ec.marshalNCommunityInviteResult2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteResultᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_inviteCommunityUsers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInviteResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_inviteCommunityUsers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createCommunityInviteLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createCommunityInviteLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateCommunityInviteLink(ctx, fc.Args["communityID"].(string), fc.Args["expiresInHours"].(*int32), fc.Args["message"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInviteLink) graphql.Marshaler {
+			return ec.marshalNCommunityInviteLink2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteLink(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createCommunityInviteLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInviteLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createCommunityInviteLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_acceptCommunityInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_acceptCommunityInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AcceptCommunityInvitation(ctx, fc.Args["input"].(model.CommunityInvitationReference))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_acceptCommunityInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_acceptCommunityInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_declineCommunityInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_declineCommunityInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeclineCommunityInvitation(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_declineCommunityInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_declineCommunityInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeCommunityInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeCommunityInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeCommunityInvitation(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeCommunityInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeCommunityInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_sendCommunityGreeting(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_sendCommunityGreeting(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SendCommunityGreeting(ctx, fc.Args["roomID"].(string), fc.Args["welcomeMessageID"].(string), fc.Args["stampID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
+			return ec.marshalNMessage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐMessage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_sendCommunityGreeting(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Message(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_sendCommunityGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminSaveCommunityJoinStampSettings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminSaveCommunityJoinStampSettings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminSaveCommunityJoinStampSettings(ctx, fc.Args["welcomeIDs"].([]string), fc.Args["greetingIDs"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminSaveCommunityJoinStampSettings(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminSaveCommunityJoinStampSettings_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -31045,6 +33108,258 @@ func (ec *executionContext) fieldContext_Query_communityMembers(ctx context.Cont
 	if fc.Args, err = ec.field_Query_communityMembers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_receivedCommunityInvitations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_receivedCommunityInvitations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ReceivedCommunityInvitations(ctx, fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInvitationPage) graphql.Marshaler {
+			return ec.marshalNCommunityInvitationPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_receivedCommunityInvitations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitationPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_receivedCommunityInvitations_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_communityInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_communityInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().CommunityInvitation(ctx, fc.Args["input"].(model.CommunityInvitationReference))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalNCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_communityInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_communityInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_sentCommunityInvitations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_sentCommunityInvitations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SentCommunityInvitations(ctx, fc.Args["roomID"].(string), fc.Args["history"].(*bool), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CommunityInvitation) graphql.Marshaler {
+			return ec.marshalNCommunityInvitation2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_sentCommunityInvitations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInvitation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_sentCommunityInvitations_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_communityInviteCandidates(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_communityInviteCandidates(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().CommunityInviteCandidates(ctx, fc.Args["communityID"].(string), fc.Args["keyword"].(string), fc.Args["limit"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityInviteCandidatePage) graphql.Marshaler {
+			return ec.marshalNCommunityInviteCandidatePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidatePage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_communityInviteCandidates(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityInviteCandidatePage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_communityInviteCandidates_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_communityGreeting(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_communityGreeting(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().CommunityGreeting(ctx, fc.Args["roomID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityGreeting) graphql.Marshaler {
+			return ec.marshalOCommunityGreeting2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityGreeting(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_communityGreeting(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityGreeting(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_communityGreeting_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminCommunityJoinStampSettings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminCommunityJoinStampSettings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminCommunityJoinStampSettings(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CommunityJoinStampSettings) graphql.Marshaler {
+			return ec.marshalNCommunityJoinStampSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityJoinStampSettings(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminCommunityJoinStampSettings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommunityJoinStampSettings(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -39957,6 +42272,43 @@ func (ec *executionContext) unmarshalInputChatStampOrderInput(ctx context.Contex
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCommunityInvitationReference(ctx context.Context, obj any) (model.CommunityInvitationReference, error) {
+	var it model.CommunityInvitationReference
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "token"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "token":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("token"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Token = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCommunityMemberUpdateInput(ctx context.Context, obj any) (model.CommunityMemberUpdateInput, error) {
 	var it model.CommunityMemberUpdateInput
 	if obj == nil {
@@ -42721,6 +45073,435 @@ func (ec *executionContext) _Community(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var communityGreetingImplementors = []string{"CommunityGreeting"}
+
+func (ec *executionContext) _CommunityGreeting(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityGreeting) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityGreetingImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityGreeting")
+		case "welcomeMessageID":
+			out.Values[i] = ec._CommunityGreeting_welcomeMessageID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "joinedUserName":
+			out.Values[i] = ec._CommunityGreeting_joinedUserName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stamps":
+			out.Values[i] = ec._CommunityGreeting_stamps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInvitationImplementors = []string{"CommunityInvitation"}
+
+func (ec *executionContext) _CommunityInvitation(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInvitation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInvitationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInvitation")
+		case "id":
+			out.Values[i] = ec._CommunityInvitation_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roomID":
+			out.Values[i] = ec._CommunityInvitation_roomID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityName":
+			out.Values[i] = ec._CommunityInvitation_communityName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityDescription":
+			out.Values[i] = ec._CommunityInvitation_communityDescription(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityAvatarURL":
+			out.Values[i] = ec._CommunityInvitation_communityAvatarURL(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "memberCount":
+			out.Values[i] = ec._CommunityInvitation_memberCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "senderName":
+			out.Values[i] = ec._CommunityInvitation_senderName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "recipientName":
+			out.Values[i] = ec._CommunityInvitation_recipientName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "recipientAccountID":
+			out.Values[i] = ec._CommunityInvitation_recipientAccountID(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "isLink":
+			out.Values[i] = ec._CommunityInvitation_isLink(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isMember":
+			out.Values[i] = ec._CommunityInvitation_isMember(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CommunityInvitation_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._CommunityInvitation_message(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "useCount":
+			out.Values[i] = ec._CommunityInvitation_useCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._CommunityInvitation_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._CommunityInvitation_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "respondedAt":
+			out.Values[i] = ec._CommunityInvitation_respondedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInvitationPageImplementors = []string{"CommunityInvitationPage"}
+
+func (ec *executionContext) _CommunityInvitationPage(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInvitationPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInvitationPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInvitationPage")
+		case "items":
+			out.Values[i] = ec._CommunityInvitationPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._CommunityInvitationPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInviteCandidateImplementors = []string{"CommunityInviteCandidate"}
+
+func (ec *executionContext) _CommunityInviteCandidate(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInviteCandidate) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInviteCandidateImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInviteCandidate")
+		case "user":
+			out.Values[i] = ec._CommunityInviteCandidate_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CommunityInviteCandidate_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInviteCandidatePageImplementors = []string{"CommunityInviteCandidatePage"}
+
+func (ec *executionContext) _CommunityInviteCandidatePage(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInviteCandidatePage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInviteCandidatePageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInviteCandidatePage")
+		case "items":
+			out.Values[i] = ec._CommunityInviteCandidatePage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._CommunityInviteCandidatePage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInviteLinkImplementors = []string{"CommunityInviteLink"}
+
+func (ec *executionContext) _CommunityInviteLink(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInviteLink) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInviteLinkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInviteLink")
+		case "invitation":
+			out.Values[i] = ec._CommunityInviteLink_invitation(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "token":
+			out.Values[i] = ec._CommunityInviteLink_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityInviteResultImplementors = []string{"CommunityInviteResult"}
+
+func (ec *executionContext) _CommunityInviteResult(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityInviteResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityInviteResultImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityInviteResult")
+		case "userID":
+			out.Values[i] = ec._CommunityInviteResult_userID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "invitation":
+			out.Values[i] = ec._CommunityInviteResult_invitation(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "error":
+			out.Values[i] = ec._CommunityInviteResult_error(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var communityJoinStampSettingsImplementors = []string{"CommunityJoinStampSettings"}
+
+func (ec *executionContext) _CommunityJoinStampSettings(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityJoinStampSettings) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, communityJoinStampSettingsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommunityJoinStampSettings")
+		case "welcomeIDs":
+			out.Values[i] = ec._CommunityJoinStampSettings_welcomeIDs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "greetingIDs":
+			out.Values[i] = ec._CommunityJoinStampSettings_greetingIDs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var communityMemberImplementors = []string{"CommunityMember"}
 
 func (ec *executionContext) _CommunityMember(ctx context.Context, sel ast.SelectionSet, obj *model.CommunityMember) graphql.Marshaler {
@@ -44239,6 +47020,11 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Message")
+		case "isCommunityWelcome":
+			out.Values[i] = ec._Message_isCommunityWelcome(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "thread":
 			field := field
 
@@ -45249,6 +48035,62 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateCommunityMembers":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateCommunityMembers(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inviteCommunityUser":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_inviteCommunityUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inviteCommunityUsers":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_inviteCommunityUsers(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createCommunityInviteLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createCommunityInviteLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "acceptCommunityInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_acceptCommunityInvitation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "declineCommunityInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_declineCommunityInvitation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeCommunityInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeCommunityInvitation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sendCommunityGreeting":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_sendCommunityGreeting(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminSaveCommunityJoinStampSettings":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminSaveCommunityJoinStampSettings(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -48269,6 +51111,138 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_communityMembers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "receivedCommunityInvitations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_receivedCommunityInvitations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "communityInvitation":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_communityInvitation(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "sentCommunityInvitations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_sentCommunityInvitations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "communityInviteCandidates":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_communityInviteCandidates(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "communityGreeting":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_communityGreeting(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminCommunityJoinStampSettings":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminCommunityJoinStampSettings(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -52872,6 +55846,129 @@ func (ec *executionContext) marshalNCommunity2ᚖgithubᚗcomᚋCityboypenguin�
 	return ec._Community(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNCommunityInvitation2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CommunityInvitation) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInvitation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityInvitationPage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationPage(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInvitationPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInvitationPage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCommunityInvitationReference2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitationReference(ctx context.Context, v any) (model.CommunityInvitationReference, error) {
+	res, err := ec.unmarshalInputCommunityInvitationReference(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCommunityInviteCandidate2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidateᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CommunityInviteCandidate) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommunityInviteCandidate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidate(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommunityInviteCandidate2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidate(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInviteCandidate) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInviteCandidate(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityInviteCandidatePage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteCandidatePage(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInviteCandidatePage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInviteCandidatePage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityInviteLink2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteLink(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInviteLink) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInviteLink(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityInviteResult2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteResultᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CommunityInviteResult) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommunityInviteResult2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteResult(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommunityInviteResult2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInviteResult(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInviteResult) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityInviteResult(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommunityJoinStampSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityJoinStampSettings(ctx context.Context, sel ast.SelectionSet, v *model.CommunityJoinStampSettings) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CommunityJoinStampSettings(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCommunityMember2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityMemberᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CommunityMember) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -54860,6 +57957,20 @@ func (ec *executionContext) marshalOChatThread2ᚖgithubᚗcomᚋCityboypenguin�
 		return graphql.Null
 	}
 	return ec._ChatThread(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCommunityGreeting2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityGreeting(ctx context.Context, sel ast.SelectionSet, v *model.CommunityGreeting) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CommunityGreeting(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCommunityInvitation2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCommunityInvitation(ctx context.Context, sel ast.SelectionSet, v *model.CommunityInvitation) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CommunityInvitation(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOCourse2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐCourse(ctx context.Context, sel ast.SelectionSet, v *model.Course) graphql.Marshaler {

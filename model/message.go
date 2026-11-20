@@ -19,7 +19,7 @@ type Message struct {
 	ID           int64
 	RoomID       int64
 	UserID       int64
-	// AuthorRole は投稿時点での投稿者の立場（STUDENT / TEACHER）。
+	// AuthorRole は投稿時点での投稿者の立場、または参加案内を示すシステム種別。
 	// 質問・回答・投票と同じく、あとから利用者の属性が変わっても
 	// 「そのとき誰として書いたか」が変わらないよう行に焼き付ける。
 	AuthorRole string
@@ -29,7 +29,6 @@ type Message struct {
 	ReplyToID *int64
 	Content   string
 	// StampID はスタンプだけを送ったメッセージのスタンプのID（"stamp:xxx"）。通常のメッセージは nil。
-	// スタンプのメッセージは本文・添付・メンションを持たない。
 	StampID *string
 	// Mentions は本文中のメンション。書き込み時に解決したものを保持し、
 	// 読み出し時は必要なときだけ（GraphQL の mentions フィールド解決時に）埋める。
@@ -61,7 +60,7 @@ func (m *Message) CanBeEditedBy(userID int64, isAdmin bool) bool {
 	if m.IsDeleted() {
 		return false
 	}
-	return m.ThreadRoomID == nil && (m.UserID == userID || isAdmin)
+	return m.AuthorRole != AuthorRoleCommunityWelcome && m.ThreadRoomID == nil && (m.UserID == userID || isAdmin)
 }
 
 // CanBeDeletedBy は userID がこのメッセージを削除してよいかを返す。
@@ -69,6 +68,9 @@ func (m *Message) CanBeEditedBy(userID int64, isAdmin bool) bool {
 // コミュニティのオーナーによる他人のメッセージ削除は room のメンバー役割を
 // 見ないと決まらないため、ここでは扱わず呼び出し側で重ねて確認する。
 func (m *Message) CanBeDeletedBy(userID int64, isAdmin bool) bool {
+	if m.AuthorRole == AuthorRoleCommunityWelcome {
+		return isAdmin && !m.IsDeleted()
+	}
 	return m.CanBeEditedBy(userID, isAdmin)
 }
 
@@ -99,8 +101,6 @@ type UpdateMessageParam struct {
 func NewMessage(param CreateMessageParam) (*Message, error) {
 	content := strings.TrimSpace(param.Content)
 	if param.StampID != nil {
-		// スタンプのメッセージは、スタンプ1つだけで成り立つ。本文や添付が混ざると、
-		// 表示（スタンプだけを大きく出す）とプレビュー文言の前提が崩れる。
 		if content != "" || len(param.MediaKeys) > 0 {
 			return nil, apperr.InvalidInput("スタンプは本文や添付と一緒に送れません")
 		}

@@ -71,6 +71,8 @@ const CourseImportStatusTopic = "course_import:status"
 // favorite、block、terms など）は空行で区切ってあるだけにしてある。構造体に
 // しても増えるのは名前だけで、探しにくくなるぶん損になる。
 type Resolver struct {
+	CommunityInvitations *communityusecase.InvitationService
+
 	StampService      *chatstamp.Service
 	StorageRepository repository.StorageRepository
 	// MessageStorageRepository は DM の添付だけを見る置き場。非公開のコンテナーを

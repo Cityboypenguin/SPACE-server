@@ -170,7 +170,7 @@ func (r *MySQLBlockRepository) ExistsBlockRelation(ctx context.Context, userA in
 		LIMIT 1
 	`
 	var dummy int
-	err := r.DB.QueryRowContext(ctx, query, userA, userB, userB, userA).Scan(&dummy)
+	err := extractDB(ctx, r.DB).QueryRowContext(ctx, query, userA, userB, userB, userA).Scan(&dummy)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil

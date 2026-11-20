@@ -48,7 +48,7 @@ const roomMemberListCap = 500
 func (r *MySQLRoomUserRepository) AddUserToRoom(ctx context.Context, roomID, userID int64) error {
 	now := time.Now().Unix()
 	query := "INSERT IGNORE INTO room_users (room_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-	_, err := r.DB.ExecContext(ctx, query, roomID, userID, model.RoomUserRoleMember, now, now)
+	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, roomID, userID, model.RoomUserRoleMember, now, now)
 	return err
 }
 

@@ -1,0 +1,1 @@
+DROP TABLE community_join_stamp_settings;

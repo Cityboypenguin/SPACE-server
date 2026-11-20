@@ -1,0 +1,99 @@
+extend type Query {
+  receivedCommunityInvitations(limit: Int = 20, offset: Int = 0): CommunityInvitationPage!
+  communityInvitation(input: CommunityInvitationReference!): CommunityInvitation!
+  """
+  history: false なら使える招待、true なら使い終わった招待（参加済み・辞退・取り消し・期限切れ）。
+  """
+  sentCommunityInvitations(roomID: ID!, history: Boolean = false, limit: Int = 20, offset: Int = 0): [CommunityInvitation!]!
+  """
+  ユーザー検索の結果に、このコミュニティへ招待できるかを添えて返す。
+  """
+  communityInviteCandidates(communityID: ID!, keyword: String!, limit: Int = 20, offset: Int = 0): CommunityInviteCandidatePage!
+  communityGreeting(roomID: ID!): CommunityGreeting
+  adminCommunityJoinStampSettings: CommunityJoinStampSettings!
+}
+
+extend type Mutation {
+  inviteCommunityUser(communityID: ID!, userID: ID!, message: String): CommunityInvitation!
+  """
+  複数の人へまとめて招待する（20人まで）。1人の失敗で他の人の招待は止めない。
+  """
+  inviteCommunityUsers(communityID: ID!, userIDs: [ID!]!, message: String): [CommunityInviteResult!]!
+  """
+  expiresInHours: 1 / 24 / 72 / 168 / 720（省略時 168）。
+  """
+  createCommunityInviteLink(communityID: ID!, expiresInHours: Int, message: String): CommunityInviteLink!
+  acceptCommunityInvitation(input: CommunityInvitationReference!): ID!
+  declineCommunityInvitation(id: ID!): Boolean!
+  revokeCommunityInvitation(id: ID!): Boolean!
+  sendCommunityGreeting(roomID: ID!, welcomeMessageID: ID!, stampID: String!): Message!
+  adminSaveCommunityJoinStampSettings(welcomeIDs: [String!]!, greetingIDs: [String!]!): Boolean!
+}
+
+input CommunityInvitationReference {
+  id: ID
+  token: String
+}
+
+type CommunityInvitationPage {
+  items: [CommunityInvitation!]!
+  total: Int!
+}
+
+type CommunityInvitation {
+  id: ID!
+  roomID: ID!
+  communityName: String!
+  communityDescription: String!
+  communityAvatarURL: String!
+  memberCount: Int!
+  senderName: String
+  recipientName: String
+  recipientAccountID: String
+  isLink: Boolean!
+  isMember: Boolean!
+  """
+  pending / accepted / declined / revoked / expired
+  """
+  status: String!
+  message: String
+  useCount: Int!
+  createdAt: String!
+  expiresAt: String!
+  respondedAt: String
+}
+
+type CommunityInviteResult {
+  userID: ID!
+  invitation: CommunityInvitation
+  error: String
+}
+
+type CommunityInviteCandidate {
+  user: User!
+  """
+  available / member / invited（招待中）/ unavailable（ブロック・辞退直後など）
+  """
+  status: String!
+}
+
+type CommunityInviteCandidatePage {
+  items: [CommunityInviteCandidate!]!
+  total: Int!
+}
+
+type CommunityInviteLink {
+  invitation: CommunityInvitation!
+  token: String!
+}
+
+type CommunityJoinStampSettings {
+  welcomeIDs: [String!]!
+  greetingIDs: [String!]!
+}
+
+type CommunityGreeting {
+  welcomeMessageID: ID!
+  joinedUserName: String!
+  stamps: [ChatStamp!]!
+}

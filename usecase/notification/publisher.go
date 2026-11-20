@@ -13,13 +13,16 @@ import (
 type NotificationType string
 
 const (
-	TypeFavorite      NotificationType = "favorite"
-	TypeReply         NotificationType = "reply"
-	TypeDM            NotificationType = "dm"
-	TypeCommunityKick NotificationType = "community_kick"
-	TypeCommunityRole NotificationType = "community_role"
-	TypeAnnouncement  NotificationType = "announcement"
-	TypeFollow        NotificationType = "follow"
+	TypeFavorite            NotificationType = "favorite"
+	TypeReply               NotificationType = "reply"
+	TypeDM                  NotificationType = "dm"
+	TypeCommunityInvitation NotificationType = "community_invitation"
+	// TypeCommunityInvitationAccepted は自分の招待（個別・リンク）から誰かが参加したこと。遷移先はルーム。
+	TypeCommunityInvitationAccepted NotificationType = "community_invitation_accepted"
+	TypeCommunityKick               NotificationType = "community_kick"
+	TypeCommunityRole               NotificationType = "community_role"
+	TypeAnnouncement                NotificationType = "announcement"
+	TypeFollow                      NotificationType = "follow"
 	// TypeMessageReply はチャット内の引用返信。投稿への返信 (TypeReply) とは
 	// 遷移先が異なる（ルームを開いて該当メッセージへジャンプする）ため別タイプにしている。
 	TypeMessageReply NotificationType = "message_reply"
@@ -40,12 +43,13 @@ const (
 type TargetType string
 
 const (
-	TargetPost         TargetType = "post"
-	TargetRoom         TargetType = "room"
-	TargetCommunity    TargetType = "community"
-	TargetAnnouncement TargetType = "announcement"
-	TargetMessage      TargetType = "message"
-	TargetCourse       TargetType = "course"
+	TargetPost                TargetType = "post"
+	TargetRoom                TargetType = "room"
+	TargetCommunityInvitation TargetType = "communityInvitation"
+	TargetCommunity           TargetType = "community"
+	TargetAnnouncement        TargetType = "announcement"
+	TargetMessage             TargetType = "message"
+	TargetCourse              TargetType = "course"
 	// TargetQuestion は授業内チャットの質問（追記の通知の遷移先）。
 	TargetQuestion TargetType = "question"
 )
