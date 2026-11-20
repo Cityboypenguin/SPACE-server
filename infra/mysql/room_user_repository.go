@@ -331,6 +331,8 @@ func (r *MySQLRoomUserRepository) GetUserIDsByRoomID(ctx context.Context, roomID
 	return ids, nil
 }
 
+// ListDMRoomsByUserID は DM を、最後にメッセージが来た順（まだ無ければ作った順）に返す。
+// rooms.updated_at はメッセージでは更新されないので使わない。既読の状態は並びに関係しない。
 func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userID int64, q repository.PageQuery) ([]*model.Room, int, error) {
 	total, err := countForPage(ctx, r.DB, q, `SELECT COUNT(*) FROM rooms r JOIN room_users ru ON r.id = ru.room_id WHERE ru.user_id = ? AND r.type = 'dm'`,
 		userID)
@@ -343,7 +345,8 @@ func (r *MySQLRoomUserRepository) ListDMRoomsByUserID(ctx context.Context, userI
 		FROM rooms r
 		JOIN room_users ru ON r.id = ru.room_id
 		WHERE ru.user_id = ? AND r.type = 'dm'
-		ORDER BY r.updated_at DESC, r.id DESC
+		ORDER BY GREATEST(r.created_at, COALESCE(
+			(SELECT MAX(lm.created_at) FROM messages lm WHERE lm.room_id = r.id), 0)) DESC, r.id DESC
 		LIMIT ? OFFSET ?
 	`, userID, q.Limit, q.Offset)
 	if err != nil {
