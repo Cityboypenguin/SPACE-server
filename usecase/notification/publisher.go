@@ -17,10 +17,12 @@ const (
 	TypeReply               NotificationType = "reply"
 	TypeDM                  NotificationType = "dm"
 	TypeCommunityInvitation NotificationType = "community_invitation"
-	TypeCommunityKick       NotificationType = "community_kick"
-	TypeCommunityRole       NotificationType = "community_role"
-	TypeAnnouncement        NotificationType = "announcement"
-	TypeFollow              NotificationType = "follow"
+	// TypeCommunityInvitationAccepted は自分の招待（個別・リンク）から誰かが参加したこと。遷移先はルーム。
+	TypeCommunityInvitationAccepted NotificationType = "community_invitation_accepted"
+	TypeCommunityKick               NotificationType = "community_kick"
+	TypeCommunityRole               NotificationType = "community_role"
+	TypeAnnouncement                NotificationType = "announcement"
+	TypeFollow                      NotificationType = "follow"
 	// TypeMessageReply はチャット内の引用返信。投稿への返信 (TypeReply) とは
 	// 遷移先が異なる（ルームを開いて該当メッセージへジャンプする）ため別タイプにしている。
 	TypeMessageReply NotificationType = "message_reply"

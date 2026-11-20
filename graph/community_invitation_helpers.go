@@ -69,8 +69,14 @@ func (r *Resolver) graphInvitations(ctx context.Context, rows []*model.Community
 		return nil, err
 	}
 	names := make(map[int64]*string, len(users))
+	accountIDs := make(map[int64]*string, len(users))
 	for _, user := range users {
 		names[user.ID] = &user.Name
+		accountIDs[user.ID] = &user.AccountID
+	}
+	counts, err := r.CountUsersByRoomIDsUseCase.Execute(ctx, roomIDs)
+	if err != nil {
+		return nil, err
 	}
 	memberships, err := service.Members.ListJoinedRoomIDs(ctx, claims.ID, roomIDs)
 	if err != nil {
@@ -97,13 +103,33 @@ func (r *Resolver) graphInvitations(ctx context.Context, rows []*model.Community
 		}
 		invite := &gql.CommunityInvitation{
 			ID: encodeGraphID("communityInvitation", row.ID), RoomID: encodeGraphID("room", row.RoomID),
-			CommunityName: c.Name, CommunityDescription: c.Description, SenderName: names[row.SenderID],
-			IsLink: row.RecipientID == nil, IsMember: memberships[row.RoomID], Status: row.Status(time.Now()), ExpiresAt: row.ExpiresAt.Format(timeFormat),
+			CommunityName: c.Name, CommunityDescription: c.Description, CommunityAvatarURL: r.communityAvatarURL(c),
+			MemberCount: int32(counts[row.RoomID]), SenderName: names[row.SenderID],
+			IsLink: row.RecipientID == nil, IsMember: memberships[row.RoomID], Status: row.Status(time.Now()),
+			Message: row.Message, UseCount: int32(row.UseCount),
+			CreatedAt: row.CreatedAt.Format(timeFormat), ExpiresAt: row.ExpiresAt.Format(timeFormat),
+		}
+		if row.RespondedAt != nil {
+			t := row.RespondedAt.Format(timeFormat)
+			invite.RespondedAt = &t
 		}
 		if row.RecipientID != nil {
 			invite.RecipientName = names[*row.RecipientID]
+			invite.RecipientAccountID = accountIDs[*row.RecipientID]
 		}
 		result = append(result, invite)
 	}
 	return result, nil
+}
+
+// inviteOptions は GraphQL の引数を招待の設定に変換する。
+func inviteOptions(message *string, expiresInHours *int32) model.CommunityInviteOptions {
+	opts := model.CommunityInviteOptions{Message: message}
+	if expiresInHours != nil {
+		opts.ExpiresIn = time.Duration(*expiresInHours) * time.Hour
+		if opts.ExpiresIn == 0 {
+			opts.ExpiresIn = -1 // 0 は「既定」と区別できないので、不正な値として弾かせる
+		}
+	}
+	return opts
 }

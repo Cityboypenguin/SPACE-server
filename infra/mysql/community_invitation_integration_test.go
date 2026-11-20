@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -89,19 +90,37 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 	}
 
 	recipient := int64(2)
-	if _, _, err := service.Send(other, group.ID, &recipient); err == nil {
+	if _, _, err := service.Send(other, group.ID, &recipient, model.CommunityInviteOptions{}); err == nil {
 		t.Fatal("non-member sent an invitation")
 	}
 	exec("INSERT INTO blocks (user_id, blocked_user_id, created_at) VALUES (2, 1, 0)")
-	if _, _, err := service.Send(owner, group.ID, &recipient); err == nil {
+	if _, _, err := service.Send(owner, group.ID, &recipient, model.CommunityInviteOptions{}); err == nil {
 		t.Fatal("a blocked invitation was sent")
 	}
 	exec("DELETE FROM blocks")
-	invitation, _, err := service.Send(owner, group.ID, &recipient)
+	if states, err := service.Candidates(owner, group.ID, []*model.User{{ID: 1}, {ID: 2}}); err != nil ||
+		states[0].State != model.CommunityCandidateMember || states[1].State != model.CommunityCandidateAvailable {
+		t.Fatalf("candidates before invite: %+v, %v", states, err)
+	}
+	long := strings.Repeat("あ", 201)
+	if _, _, err := service.Send(owner, group.ID, &recipient, model.CommunityInviteOptions{Message: &long}); err == nil {
+		t.Fatal("an over-long message was accepted")
+	}
+	note := "  一緒に話しましょう  "
+	invitation, _, err := service.Send(owner, group.ID, &recipient, model.CommunityInviteOptions{Message: &note})
 	if err != nil {
 		t.Fatal(err)
 	}
-	retry, _, err := service.Send(owner, group.ID, &recipient)
+	if stored, err := service.Preview(member, invitation.ID, ""); err != nil || stored.Message == nil || *stored.Message != "一緒に話しましょう" {
+		t.Fatalf("invitation message: %+v, %v", stored, err)
+	}
+	if states, err := service.Candidates(owner, group.ID, []*model.User{{ID: 2}}); err != nil || states[0].State != model.CommunityCandidateInvited {
+		t.Fatalf("candidates after invite: %+v, %v", states, err)
+	}
+	if _, err := service.Candidates(other, group.ID, []*model.User{{ID: 2}}); err == nil {
+		t.Fatal("a non-member listed invite candidates")
+	}
+	retry, _, err := service.Send(owner, group.ID, &recipient, model.CommunityInviteOptions{})
 	if err != nil || retry.ID != invitation.ID {
 		t.Fatalf("individual invite retry: %+v, %v", retry, err)
 	}
@@ -147,6 +166,13 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 	if _, count, err := service.Received(member, 0, 0); err != nil || count != 0 {
 		t.Fatalf("accepted invitation count=%d, err=%v", count, err)
 	}
+	if active, err := service.Sent(owner, group.RoomID, false, 20, 0); err != nil || len(active) != 0 {
+		t.Fatalf("active after accept: %v, %v", active, err)
+	}
+	if history, err := service.Sent(owner, group.RoomID, true, 20, 0); err != nil || len(history) != 1 ||
+		history[0].Status(time.Now()) != model.CommunityInvitationAccepted || history[0].RespondedAt == nil {
+		t.Fatalf("history after accept: %+v, %v", history, err)
+	}
 
 	target, options, err := service.Greeting(owner, group.RoomID)
 	if err != nil || target == nil || target.UserName != "test2" || len(options) != 2 || options[0].ID != "stamp:wave" {
@@ -182,7 +208,7 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 		t.Fatal("the welcome stamp was sent twice")
 	}
 
-	link, token, err := service.Send(member, group.ID, nil)
+	link, token, err := service.Send(member, group.ID, nil, model.CommunityInviteOptions{})
 	if err != nil || len(token) != 43 {
 		t.Fatalf("create link: id=%v err=%v", link, err)
 	}
@@ -192,13 +218,39 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 			t.Fatalf("redeem link as %d: room=%d err=%v", id, roomID, err)
 		}
 	}
+	if stored, err := service.Preview(as(5, "student"), 0, token); err != nil || stored.UseCount != 2 {
+		t.Fatalf("link use count: %+v, %v", stored, err)
+	}
+	var accepted int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = 2 AND type = 'community_invitation_accepted'").Scan(&accepted); err != nil || accepted != 2 {
+		t.Fatalf("accepted notifications to the link creator=%d, err=%v", accepted, err)
+	}
 	if err := service.Revoke(owner, link.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Respond(as(5, "student"), 0, token, true); err == nil {
 		t.Fatal("revoked link was redeemed")
 	}
-	_, expiredToken, err := service.Send(member, group.ID, nil)
+	if _, _, err := service.Send(member, group.ID, nil, model.CommunityInviteOptions{ExpiresIn: 5 * time.Minute}); err == nil {
+		t.Fatal("an unsupported lifetime was accepted")
+	}
+	short, shortToken, err := service.Send(member, group.ID, nil, model.CommunityInviteOptions{ExpiresIn: time.Hour})
+	if err != nil || short.ExpiresAt.Sub(short.CreatedAt) != time.Hour {
+		t.Fatalf("short link: %+v, %v", short, err)
+	}
+	if _, err := service.Respond(as(5, "student"), 0, shortToken, true); err != nil {
+		t.Fatal(err)
+	}
+	if history, err := service.Sent(member, group.RoomID, true, 20, 0); err != nil || len(history) != 1 ||
+		history[0].Status(time.Now()) != model.CommunityInvitationRevoked || history[0].UseCount != 2 {
+		t.Fatalf("link history: %+v, %v", history, err)
+	}
+	exec("DELETE FROM room_users WHERE room_id = ? AND user_id = 5", group.RoomID)
+	results, err := service.SendMany(owner, group.ID, []int64{5, 6, 3, 5}, model.CommunityInviteOptions{Message: &note})
+	if err != nil || len(results) != 3 || results[0].Err != nil || results[1].Err != nil || results[2].Err == nil {
+		t.Fatalf("batch invite: %+v, %v", results, err)
+	}
+	_, expiredToken, err := service.Send(member, group.ID, nil, model.CommunityInviteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

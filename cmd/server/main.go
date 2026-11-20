@@ -639,6 +639,7 @@ func main() {
 		Rooms: roomRepository, Members: roomUserRepository, Communities: communityRepository,
 		Users: userRepository, Blocks: blockRepository, Tx: txManager, Notifications: notificationPublisher,
 		Stamps: stampService.Repo, Messages: chatMessageWriters, Events: chatEventPublisher,
+		Delivery: sseBroker,
 	}
 	chatCommandService := chatusecase.NewMessageCommandService(chatusecase.MessageCommandDeps{
 		Stamps:           stampService,

@@ -264,12 +264,20 @@ type CommunityInvitation struct {
 	RoomID               string  `json:"roomID"`
 	CommunityName        string  `json:"communityName"`
 	CommunityDescription string  `json:"communityDescription"`
+	CommunityAvatarURL   string  `json:"communityAvatarURL"`
+	MemberCount          int32   `json:"memberCount"`
 	SenderName           *string `json:"senderName,omitempty"`
 	RecipientName        *string `json:"recipientName,omitempty"`
+	RecipientAccountID   *string `json:"recipientAccountID,omitempty"`
 	IsLink               bool    `json:"isLink"`
 	IsMember             bool    `json:"isMember"`
-	Status               string  `json:"status"`
-	ExpiresAt            string  `json:"expiresAt"`
+	// pending / accepted / declined / revoked / expired
+	Status      string  `json:"status"`
+	Message     *string `json:"message,omitempty"`
+	UseCount    int32   `json:"useCount"`
+	CreatedAt   string  `json:"createdAt"`
+	ExpiresAt   string  `json:"expiresAt"`
+	RespondedAt *string `json:"respondedAt,omitempty"`
 }
 
 type CommunityInvitationPage struct {
@@ -282,9 +290,26 @@ type CommunityInvitationReference struct {
 	Token *string `json:"token,omitempty"`
 }
 
+type CommunityInviteCandidate struct {
+	User *User `json:"user"`
+	// available / member / invited（招待中）/ unavailable（ブロック・辞退直後など）
+	Status string `json:"status"`
+}
+
+type CommunityInviteCandidatePage struct {
+	Items []*CommunityInviteCandidate `json:"items"`
+	Total int32                       `json:"total"`
+}
+
 type CommunityInviteLink struct {
 	Invitation *CommunityInvitation `json:"invitation"`
 	Token      string               `json:"token"`
+}
+
+type CommunityInviteResult struct {
+	UserID     string               `json:"userID"`
+	Invitation *CommunityInvitation `json:"invitation,omitempty"`
+	Error      *string              `json:"error,omitempty"`
 }
 
 type CommunityJoinStampSettings struct {

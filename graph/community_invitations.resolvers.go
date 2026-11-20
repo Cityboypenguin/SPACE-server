@@ -2,12 +2,16 @@ package graph
 
 import (
 	"context"
+	"errors"
+
+	"github.com/Cityboypenguin/SPACE-server/internal/apperr"
+	communityusecase "github.com/Cityboypenguin/SPACE-server/usecase/community"
 
 	"github.com/Cityboypenguin/SPACE-server/graph/model"
 	domain "github.com/Cityboypenguin/SPACE-server/model"
 )
 
-func (r *mutationResolver) InviteCommunityUser(ctx context.Context, communityID string, userID string) (*model.CommunityInvitation, error) {
+func (r *mutationResolver) InviteCommunityUser(ctx context.Context, communityID string, userID string, message *string) (*model.CommunityInvitation, error) {
 	community, err := decodeGraphID(ctx, "community", communityID)
 	if err != nil {
 		return nil, err
@@ -16,19 +20,59 @@ func (r *mutationResolver) InviteCommunityUser(ctx context.Context, communityID 
 	if err != nil {
 		return nil, err
 	}
-	i, _, err := r.CommunityInvitations.Send(ctx, community, &user)
+	i, _, err := r.CommunityInvitations.Send(ctx, community, &user, inviteOptions(message, nil))
 	if err != nil {
 		return nil, err
 	}
 	return r.graphInvitation(ctx, i)
 }
 
-func (r *mutationResolver) CreateCommunityInviteLink(ctx context.Context, communityID string) (*model.CommunityInviteLink, error) {
+func (r *mutationResolver) InviteCommunityUsers(ctx context.Context, communityID string, userIDs []string, message *string) ([]*model.CommunityInviteResult, error) {
+	community, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return nil, err
+	}
+	if len(userIDs) > communityusecase.InvitationBatchLimit {
+		return nil, apperr.InvalidInput("一度に招待できるのは20人までです")
+	}
+	ids := make([]int64, 0, len(userIDs))
+	opaque := make(map[int64]string, len(userIDs))
+	for _, raw := range userIDs {
+		id, err := decodeGraphID(ctx, "user", raw)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+		opaque[id] = raw
+	}
+	results, err := r.CommunityInvitations.SendMany(ctx, community, ids, inviteOptions(message, nil))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.CommunityInviteResult, 0, len(results))
+	for _, result := range results {
+		item := &model.CommunityInviteResult{UserID: opaque[result.RecipientID]}
+		if result.Err != nil {
+			msg := "招待を送れませんでした"
+			var appErr *apperr.Error
+			if errors.As(result.Err, &appErr) && appErr.Message != "" {
+				msg = appErr.Message
+			}
+			item.Error = &msg
+		} else if item.Invitation, err = r.graphInvitation(ctx, result.Invitation); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (r *mutationResolver) CreateCommunityInviteLink(ctx context.Context, communityID string, expiresInHours *int32, message *string) (*model.CommunityInviteLink, error) {
 	id, err := decodeGraphID(ctx, "community", communityID)
 	if err != nil {
 		return nil, err
 	}
-	i, token, err := r.CommunityInvitations.Send(ctx, id, nil)
+	i, token, err := r.CommunityInvitations.Send(ctx, id, nil, inviteOptions(message, expiresInHours))
 	if err != nil {
 		return nil, err
 	}
@@ -115,17 +159,37 @@ func (r *queryResolver) CommunityInvitation(ctx context.Context, input model.Com
 	return r.graphInvitation(ctx, i)
 }
 
-func (r *queryResolver) SentCommunityInvitations(ctx context.Context, roomID string, limit *int32, offset *int32) ([]*model.CommunityInvitation, error) {
+func (r *queryResolver) SentCommunityInvitations(ctx context.Context, roomID string, history *bool, limit *int32, offset *int32) ([]*model.CommunityInvitation, error) {
 	id, err := decodeGraphID(ctx, "room", roomID)
 	if err != nil {
 		return nil, err
 	}
 	size, start := invitationPage(limit, offset)
-	rows, err := r.CommunityInvitations.Sent(ctx, id, size, start)
+	rows, err := r.CommunityInvitations.Sent(ctx, id, history != nil && *history, size, start)
 	if err != nil {
 		return nil, err
 	}
 	return r.graphInvitations(ctx, rows)
+}
+
+func (r *queryResolver) CommunityInviteCandidates(ctx context.Context, communityID string, keyword string, limit *int32, offset *int32) (*model.CommunityInviteCandidatePage, error) {
+	id, err := decodeGraphID(ctx, "community", communityID)
+	if err != nil {
+		return nil, err
+	}
+	users, total, err := r.SearchUsersUseCase.Execute(ctx, keyword, resolvePageQuery(ctx, limit, offset, defaultPageSize))
+	if err != nil {
+		return nil, err
+	}
+	candidates, err := r.CommunityInvitations.Candidates(ctx, id, users)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*model.CommunityInviteCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		items = append(items, &model.CommunityInviteCandidate{User: toGraphUser(candidate.User), Status: candidate.State})
+	}
+	return &model.CommunityInviteCandidatePage{Items: items, Total: int32(total)}, nil
 }
 
 func (r *queryResolver) CommunityGreeting(ctx context.Context, roomID string) (*model.CommunityGreeting, error) {
