@@ -195,4 +195,11 @@ func TestCommunityInvitationParticipation(t *testing.T) {
 	if _, err := service.Respond(as(6, "student"), 0, expiredToken, true); err == nil {
 		t.Fatal("expired link was redeemed")
 	}
+	exec("DELETE FROM user_accounts WHERE user_id = ?", recipient)
+	var remaining int
+	if err := db.QueryRow("SELECT COUNT(*) FROM community_invitations WHERE sender_id = ? OR recipient_id = ?", recipient, recipient).Scan(&remaining); err != nil || remaining != 0 {
+		t.Fatalf("invitations after account purge=%d, err=%v", remaining, err)
+	}
+	checkMessages(model.AuthorRoleCommunityWelcome, 1)
+
 }

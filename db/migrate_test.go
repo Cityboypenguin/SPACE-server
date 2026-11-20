@@ -235,8 +235,8 @@ func TestAccountSplitMigration(t *testing.T) {
 		if len(stray) > 0 {
 			t.Errorf("want user_accounts CASCADE, got:\n%s", strings.Join(stray, "\n"))
 		}
-		if len(fks) != 19 {
-			t.Errorf("account-bound foreign keys = %d, want 19", len(fks))
+		if len(fks) != 21 {
+			t.Errorf("account-bound foreign keys = %d, want 21", len(fks))
 		}
 	})
 

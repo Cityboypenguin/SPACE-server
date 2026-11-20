@@ -59,7 +59,6 @@ func (r *CommunityInvitationRepository) Pending(ctx context.Context, roomID, rec
 func (r *CommunityInvitationRepository) ListReceived(ctx context.Context, recipientID int64, now time.Time, limit, offset int32) ([]*model.CommunityInvitation, int32, error) {
 	const filter = ` FROM community_invitations i
 		JOIN users sender ON sender.id = i.sender_id
-		JOIN user_accounts account ON account.user_id = sender.id
 		WHERE sender.status <> 'deactivated' AND i.recipient_id = ? AND i.state = 'pending' AND i.expires_at > ?
 		AND EXISTS (SELECT 1 FROM room_users WHERE room_id = i.room_id AND user_id = i.sender_id)
 		AND NOT EXISTS (SELECT 1 FROM room_users WHERE room_id = i.room_id AND user_id = i.recipient_id)

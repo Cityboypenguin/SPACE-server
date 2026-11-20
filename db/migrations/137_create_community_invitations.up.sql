@@ -12,6 +12,6 @@ CREATE TABLE community_invitations (
     KEY invitation_room (room_id, recipient_id, state, expires_at),
     KEY invitation_sender (sender_id, room_id, created_at),
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
-    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (sender_id) REFERENCES user_accounts(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES user_accounts(user_id) ON DELETE CASCADE
 );
