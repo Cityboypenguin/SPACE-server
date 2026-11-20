@@ -39,6 +39,7 @@ type ResolverRoot interface {
 	Post() PostResolver
 	Query() QueryResolver
 	Question() QuestionResolver
+	ReportedVideo() ReportedVideoResolver
 	Subscription() SubscriptionResolver
 	User() UserResolver
 }
@@ -474,6 +475,7 @@ type ComplexityRoot struct {
 		UpdatedAt func(childComplexity int) int
 		User      func(childComplexity int) int
 		UserID    func(childComplexity int) int
+		Video     func(childComplexity int) int
 	}
 
 	MessagePage struct {
@@ -506,7 +508,9 @@ type ComplexityRoot struct {
 		AdminDeleteQuestionAddendum       func(childComplexity int, id string) int
 		AdminRegisterTimetableEntry       func(childComplexity int, userID string, courseID string) int
 		AdminRemoveTimetableEntry         func(childComplexity int, id string, userID string) int
+		AdminRemoveVideo                  func(childComplexity int, videoID string) int
 		AdminReorderChatStamps            func(childComplexity int, items []*model.ChatStampOrderInput, reaction bool) int
+		AdminRequestReportedVideoPlayback func(childComplexity int, reportID string) int
 		AdminResolveCourseSyncReview      func(childComplexity int, id string, decision model.CourseSyncReviewDecision) int
 		AdminRestoreCourseChatImage       func(childComplexity int, mediaID string) int
 		AdminSaveChatStamp                func(childComplexity int, input model.ChatStampInput) int
@@ -515,6 +519,8 @@ type ComplexityRoot struct {
 		AdminTriggerCourseImport          func(childComplexity int, year int32, dryRun *bool) int
 		AdminUpdateProfile                func(childComplexity int, userID string, input model.UpdateProfileInput) int
 		AdminUpdateUser                   func(childComplexity int, id string, input model.UpdateUserInput) int
+		AdminUpdateVideoLimits            func(childComplexity int, input model.VideoLimitsInput) int
+		AdminUpdateVideoRetention         func(childComplexity int, days int32, expectedNewlyExpiredCount int32) int
 		AnswerQuestion                    func(childComplexity int, questionID string, body string, mediaInputs []*model.MediaUploadInput) int
 		CancelBestAnswer                  func(childComplexity int, questionID string) int
 		ConsentToTerms                    func(childComplexity int, termsID string) int
@@ -577,10 +583,11 @@ type ComplexityRoot struct {
 		RemoveUserFromRoom                func(childComplexity int, input model.RemoveUserFromRoomInput) int
 		ReportMediaDimensions             func(childComplexity int, mediaID string, width int32, height int32) int
 		RequestPasswordReset              func(childComplexity int, email string) int
+		RequestVideoPlayback              func(childComplexity int, videoID string) int
 		ResetPassword                     func(childComplexity int, resetToken string, newPassword string) int
 		SelectBestAnswer                  func(childComplexity int, questionID string, answerID string) int
 		SendEmailOtp                      func(childComplexity int, email string) int
-		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) int
+		SendMessage                       func(childComplexity int, roomID string, content string, mediaInputs []*model.MediaUploadInput, videoInput *model.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) int
 		SetAvatar                         func(childComplexity int, objectKey string) int
 		SetMyTimetable                    func(childComplexity int, year int32, semester string, baselineEntryIDs []string, courseIDs []string) int
 		SetReportServiceStatus            func(childComplexity int, enabled bool) int
@@ -724,6 +731,7 @@ type ComplexityRoot struct {
 		RootPost        func(childComplexity int) int
 		UpdatedAt       func(childComplexity int) int
 		User            func(childComplexity int) int
+		Video           func(childComplexity int) int
 	}
 
 	PostPage struct {
@@ -772,8 +780,10 @@ type ComplexityRoot struct {
 		AdminListTerms                   func(childComplexity int, limit *int32, offset *int32) int
 		AdminNGWordStats                 func(childComplexity int) int
 		AdminNGWords                     func(childComplexity int) int
+		AdminPreviewVideoRetention       func(childComplexity int, days int32) int
 		AdminSearchUsers                 func(childComplexity int, keyword string, limit *int32, offset *int32) int
 		AdminStampUploadURL              func(childComplexity int, contentType string) int
+		AdminVideoStorageStats           func(childComplexity int) int
 		Administrators                   func(childComplexity int, limit *int32, offset *int32) int
 		Announcement                     func(childComplexity int, id string) int
 		Announcements                    func(childComplexity int, limit *int32, offset *int32) int
@@ -834,6 +844,8 @@ type ComplexityRoot struct {
 		PresignedMediaUploadURL          func(childComplexity int, contentType string) int
 		PresignedMessageMediaUploadURL   func(childComplexity int, contentType string) int
 		PresignedTermsDocumentUploadURL  func(childComplexity int) int
+		PresignedVideoThumbnailUploadURL func(childComplexity int) int
+		PresignedVideoUploadURL          func(childComplexity int) int
 		Question                         func(childComplexity int, id string) int
 		Questions                        func(childComplexity int, roomID string, limit *int32, offset *int32) int
 		RandomCommunities                func(childComplexity int, limit int32) int
@@ -857,6 +869,7 @@ type ComplexityRoot struct {
 		UserTimetable                    func(childComplexity int, userID string, year *int32, semester *string) int
 		UserTimetableProfile             func(childComplexity int, userID string, year *int32, semester *string) int
 		Users                            func(childComplexity int, limit *int32, offset *int32) int
+		VideoSettings                    func(childComplexity int) int
 	}
 
 	Question struct {
@@ -907,6 +920,19 @@ type ComplexityRoot struct {
 		StampID         func(childComplexity int) int
 		ThreadTitle     func(childComplexity int) int
 		UpdatedAt       func(childComplexity int) int
+		Video           func(childComplexity int) int
+	}
+
+	ReportedVideo struct {
+		Available    func(childComplexity int) int
+		CreatedAt    func(childComplexity int) int
+		DurationMs   func(childComplexity int) int
+		HasAudio     func(childComplexity int) int
+		Height       func(childComplexity int) int
+		ID           func(childComplexity int) int
+		SizeBytes    func(childComplexity int) int
+		ThumbnailURL func(childComplexity int) int
+		Width        func(childComplexity int) int
 	}
 
 	Room struct {
@@ -1060,6 +1086,71 @@ type ComplexityRoot struct {
 		Entries func(childComplexity int) int
 		Visible func(childComplexity int) int
 	}
+
+	Video struct {
+		CreatedAt     func(childComplexity int) int
+		DurationMs    func(childComplexity int) int
+		ExpiresAt     func(childComplexity int) int
+		HasAudio      func(childComplexity int) int
+		Height        func(childComplexity int) int
+		ID            func(childComplexity int) int
+		RetentionDays func(childComplexity int) int
+		SizeBytes     func(childComplexity int) int
+		Status        func(childComplexity int) int
+		ThumbnailURL  func(childComplexity int) int
+		Width         func(childComplexity int) int
+	}
+
+	VideoDailyStat struct {
+		Day              func(childComplexity int) int
+		PlaybackBytes    func(childComplexity int) int
+		PlaybackRequests func(childComplexity int) int
+		PurgeFailures    func(childComplexity int) int
+		Purged           func(childComplexity int) int
+		UploadBytes      func(childComplexity int) int
+		UploadFailures   func(childComplexity int) int
+		Uploads          func(childComplexity int) int
+	}
+
+	VideoPlayback struct {
+		ExpiresAt func(childComplexity int) int
+		URL       func(childComplexity int) int
+	}
+
+	VideoRetentionPreview struct {
+		CurrentDays        func(childComplexity int) int
+		ExpiringWithinWeek func(childComplexity int) int
+		MaxDays            func(childComplexity int) int
+		NewDays            func(childComplexity int) int
+		NewlyExpired       func(childComplexity int) int
+	}
+
+	VideoSettings struct {
+		DailyBytesLimitPerUser  func(childComplexity int) int
+		DailyUploadLimitPerUser func(childComplexity int) int
+		LifecycleBackstopDays   func(childComplexity int) int
+		MaxDurationSeconds      func(childComplexity int) int
+		MaxFileBytes            func(childComplexity int) int
+		MaxRetentionDays        func(childComplexity int) int
+		PurgeBatchSize          func(childComplexity int) int
+		PurgeGraceDays          func(childComplexity int) int
+		RetentionDays           func(childComplexity int) int
+		TotalBytesLimit         func(childComplexity int) int
+	}
+
+	VideoStorageStats struct {
+		Daily        func(childComplexity int) int
+		PurgeFailing func(childComplexity int) int
+		Settings     func(childComplexity int) int
+		Stored       func(childComplexity int) int
+		ThisMonth    func(childComplexity int) int
+		Today        func(childComplexity int) int
+	}
+
+	VideoUsage struct {
+		Bytes func(childComplexity int) int
+		Count func(childComplexity int) int
+	}
 }
 
 // endregion ***************************** api!.gotpl *****************************
@@ -1086,6 +1177,7 @@ type MessageResolver interface {
 	User(ctx context.Context, obj *model.Message) (*model.User, error)
 
 	Media(ctx context.Context, obj *model.Message) ([]*model.Media, error)
+	Video(ctx context.Context, obj *model.Message) (*model.Video, error)
 
 	IsMine(ctx context.Context, obj *model.Message) (bool, error)
 
@@ -1131,7 +1223,7 @@ type MutationResolver interface {
 	RemoveUserFromRoom(ctx context.Context, input model.RemoveUserFromRoomInput) (bool, error)
 	DeleteRoom(ctx context.Context, roomID string) (bool, error)
 	JoinRoom(ctx context.Context, roomID string) (bool, error)
-	SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*model.MediaUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*model.Message, error)
+	SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*model.MediaUploadInput, videoInput *model.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*model.Message, error)
 	DeleteMessage(ctx context.Context, roomID string, id string) (bool, error)
 	AddMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*model.Message, error)
 	RemoveMessageReaction(ctx context.Context, roomID string, messageID string, emoji string) (*model.Message, error)
@@ -1214,6 +1306,11 @@ type MutationResolver interface {
 	DeleteBlocker(ctx context.Context, blockedUserID string) (bool, error)
 	SetThemePreference(ctx context.Context, theme model.ThemePreference) (model.ThemePreference, error)
 	SetTimetableProfileVisibility(ctx context.Context, visible bool) (bool, error)
+	RequestVideoPlayback(ctx context.Context, videoID string) (*model.VideoPlayback, error)
+	AdminUpdateVideoRetention(ctx context.Context, days int32, expectedNewlyExpiredCount int32) (*model.VideoRetentionPreview, error)
+	AdminUpdateVideoLimits(ctx context.Context, input model.VideoLimitsInput) (*model.VideoSettings, error)
+	AdminRemoveVideo(ctx context.Context, videoID string) (bool, error)
+	AdminRequestReportedVideoPlayback(ctx context.Context, reportID string) (*model.VideoPlayback, error)
 }
 type NotificationResolver interface {
 	Actor(ctx context.Context, obj *model.Notification) (*model.User, error)
@@ -1241,6 +1338,7 @@ type PostResolver interface {
 	Parent(ctx context.Context, obj *model.Post) (*model.Post, error)
 	Replies(ctx context.Context, obj *model.Post, limit *int32, offset *int32) ([]*model.Post, error)
 	Media(ctx context.Context, obj *model.Post) ([]*model.Media, error)
+	Video(ctx context.Context, obj *model.Post) (*model.Video, error)
 	Mentions(ctx context.Context, obj *model.Post) ([]*model.Mention, error)
 }
 type QueryResolver interface {
@@ -1354,6 +1452,11 @@ type QueryResolver interface {
 	ListBlockedUsers(ctx context.Context, limit *int32, offset *int32) (*model.UserPage, error)
 	SearchBlockedUsers(ctx context.Context, keyword string, limit *int32, offset *int32) ([]*model.User, error)
 	GetBlockersByUserID(ctx context.Context, userID string, limit *int32, offset *int32) ([]*model.User, error)
+	PresignedVideoUploadURL(ctx context.Context) (*model.PresignedUploadURL, error)
+	PresignedVideoThumbnailUploadURL(ctx context.Context) (*model.PresignedUploadURL, error)
+	VideoSettings(ctx context.Context) (*model.VideoSettings, error)
+	AdminVideoStorageStats(ctx context.Context) (*model.VideoStorageStats, error)
+	AdminPreviewVideoRetention(ctx context.Context, days int32) (*model.VideoRetentionPreview, error)
 }
 type QuestionResolver interface {
 	User(ctx context.Context, obj *model.Question) (*model.User, error)
@@ -1365,6 +1468,10 @@ type QuestionResolver interface {
 	Addenda(ctx context.Context, obj *model.Question) ([]*model.Addendum, error)
 
 	IsMine(ctx context.Context, obj *model.Question) (bool, error)
+}
+type ReportedVideoResolver interface {
+	Available(ctx context.Context, obj *model.ReportedVideo) (bool, error)
+	ThumbnailURL(ctx context.Context, obj *model.ReportedVideo) (*string, error)
 }
 type SubscriptionResolver interface {
 	AdminCourseImportStatusUpdated(ctx context.Context) (<-chan *model.CourseImportStatus, error)
@@ -3213,6 +3320,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Message.UserID(childComplexity), true
+	case "Message.video":
+		if e.ComplexityRoot.Message.Video == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Message.Video(childComplexity), true
 
 	case "MessagePage.hasMoreAfter":
 		if e.ComplexityRoot.MessagePage.HasMoreAfter == nil {
@@ -3439,6 +3552,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminRemoveTimetableEntry(childComplexity, args["id"].(string), args["userID"].(string)), true
+	case "Mutation.adminRemoveVideo":
+		if e.ComplexityRoot.Mutation.AdminRemoveVideo == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminRemoveVideo_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminRemoveVideo(childComplexity, args["videoID"].(string)), true
 	case "Mutation.adminReorderChatStamps":
 		if e.ComplexityRoot.Mutation.AdminReorderChatStamps == nil {
 			break
@@ -3450,6 +3574,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminReorderChatStamps(childComplexity, args["items"].([]*model.ChatStampOrderInput), args["reaction"].(bool)), true
+	case "Mutation.adminRequestReportedVideoPlayback":
+		if e.ComplexityRoot.Mutation.AdminRequestReportedVideoPlayback == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminRequestReportedVideoPlayback_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminRequestReportedVideoPlayback(childComplexity, args["reportID"].(string)), true
 	case "Mutation.adminResolveCourseSyncReview":
 		if e.ComplexityRoot.Mutation.AdminResolveCourseSyncReview == nil {
 			break
@@ -3538,6 +3673,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminUpdateUser(childComplexity, args["id"].(string), args["input"].(model.UpdateUserInput)), true
+	case "Mutation.adminUpdateVideoLimits":
+		if e.ComplexityRoot.Mutation.AdminUpdateVideoLimits == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminUpdateVideoLimits_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminUpdateVideoLimits(childComplexity, args["input"].(model.VideoLimitsInput)), true
+	case "Mutation.adminUpdateVideoRetention":
+		if e.ComplexityRoot.Mutation.AdminUpdateVideoRetention == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminUpdateVideoRetention_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminUpdateVideoRetention(childComplexity, args["days"].(int32), args["expectedNewlyExpiredCount"].(int32)), true
 	case "Mutation.answerQuestion":
 		if e.ComplexityRoot.Mutation.AnswerQuestion == nil {
 			break
@@ -4195,6 +4352,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestPasswordReset(childComplexity, args["email"].(string)), true
+	case "Mutation.requestVideoPlayback":
+		if e.ComplexityRoot.Mutation.RequestVideoPlayback == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestVideoPlayback_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestVideoPlayback(childComplexity, args["videoID"].(string)), true
 	case "Mutation.resetPassword":
 		if e.ComplexityRoot.Mutation.ResetPassword == nil {
 			break
@@ -4238,7 +4406,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["mediaInputs"].([]*model.MediaUploadInput), args["mentionUserIDs"].([]string), args["replyToID"].(*string), args["stampID"].(*string)), true
+		return e.ComplexityRoot.Mutation.SendMessage(childComplexity, args["roomID"].(string), args["content"].(string), args["mediaInputs"].([]*model.MediaUploadInput), args["videoInput"].(*model.VideoUploadInput), args["mentionUserIDs"].([]string), args["replyToID"].(*string), args["stampID"].(*string)), true
 	case "Mutation.setAvatar":
 		if e.ComplexityRoot.Mutation.SetAvatar == nil {
 			break
@@ -5026,6 +5194,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Post.User(childComplexity), true
+	case "Post.video":
+		if e.ComplexityRoot.Post.Video == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Post.Video(childComplexity), true
 
 	case "PostPage.items":
 		if e.ComplexityRoot.PostPage.Items == nil {
@@ -5341,6 +5515,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminNGWords(childComplexity), true
+	case "Query.adminPreviewVideoRetention":
+		if e.ComplexityRoot.Query.AdminPreviewVideoRetention == nil {
+			break
+		}
+
+		args, err := ec.field_Query_adminPreviewVideoRetention_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AdminPreviewVideoRetention(childComplexity, args["days"].(int32)), true
 	case "Query.adminSearchUsers":
 		if e.ComplexityRoot.Query.AdminSearchUsers == nil {
 			break
@@ -5363,6 +5548,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminStampUploadURL(childComplexity, args["contentType"].(string)), true
+	case "Query.adminVideoStorageStats":
+		if e.ComplexityRoot.Query.AdminVideoStorageStats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminVideoStorageStats(childComplexity), true
 	case "Query.administrators":
 		if e.ComplexityRoot.Query.Administrators == nil {
 			break
@@ -5939,6 +6130,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.PresignedTermsDocumentUploadURL(childComplexity), true
+	case "Query.presignedVideoThumbnailUploadUrl":
+		if e.ComplexityRoot.Query.PresignedVideoThumbnailUploadURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PresignedVideoThumbnailUploadURL(childComplexity), true
+	case "Query.presignedVideoUploadUrl":
+		if e.ComplexityRoot.Query.PresignedVideoUploadURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PresignedVideoUploadURL(childComplexity), true
 	case "Query.question":
 		if e.ComplexityRoot.Query.Question == nil {
 			break
@@ -6177,6 +6380,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Users(childComplexity, args["limit"].(*int32), args["offset"].(*int32)), true
+	case "Query.videoSettings":
+		if e.ComplexityRoot.Query.VideoSettings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.VideoSettings(childComplexity), true
 
 	case "Question.addenda":
 		if e.ComplexityRoot.Question.Addenda == nil {
@@ -6397,6 +6606,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportedContent.UpdatedAt(childComplexity), true
+	case "ReportedContent.video":
+		if e.ComplexityRoot.ReportedContent.Video == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedContent.Video(childComplexity), true
+
+	case "ReportedVideo.available":
+		if e.ComplexityRoot.ReportedVideo.Available == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.Available(childComplexity), true
+	case "ReportedVideo.createdAt":
+		if e.ComplexityRoot.ReportedVideo.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.CreatedAt(childComplexity), true
+	case "ReportedVideo.durationMs":
+		if e.ComplexityRoot.ReportedVideo.DurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.DurationMs(childComplexity), true
+	case "ReportedVideo.hasAudio":
+		if e.ComplexityRoot.ReportedVideo.HasAudio == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.HasAudio(childComplexity), true
+	case "ReportedVideo.height":
+		if e.ComplexityRoot.ReportedVideo.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.Height(childComplexity), true
+	case "ReportedVideo.ID":
+		if e.ComplexityRoot.ReportedVideo.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.ID(childComplexity), true
+	case "ReportedVideo.sizeBytes":
+		if e.ComplexityRoot.ReportedVideo.SizeBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.SizeBytes(childComplexity), true
+	case "ReportedVideo.thumbnailURL":
+		if e.ComplexityRoot.ReportedVideo.ThumbnailURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.ThumbnailURL(childComplexity), true
+	case "ReportedVideo.width":
+		if e.ComplexityRoot.ReportedVideo.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportedVideo.Width(childComplexity), true
 
 	case "Room.content":
 		if e.ComplexityRoot.Room.Content == nil {
@@ -7057,6 +7327,277 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.UserTimetableProfile.Visible(childComplexity), true
 
+	case "Video.createdAt":
+		if e.ComplexityRoot.Video.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.CreatedAt(childComplexity), true
+	case "Video.durationMs":
+		if e.ComplexityRoot.Video.DurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.DurationMs(childComplexity), true
+	case "Video.expiresAt":
+		if e.ComplexityRoot.Video.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.ExpiresAt(childComplexity), true
+	case "Video.hasAudio":
+		if e.ComplexityRoot.Video.HasAudio == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.HasAudio(childComplexity), true
+	case "Video.height":
+		if e.ComplexityRoot.Video.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.Height(childComplexity), true
+	case "Video.ID":
+		if e.ComplexityRoot.Video.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.ID(childComplexity), true
+	case "Video.retentionDays":
+		if e.ComplexityRoot.Video.RetentionDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.RetentionDays(childComplexity), true
+	case "Video.sizeBytes":
+		if e.ComplexityRoot.Video.SizeBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.SizeBytes(childComplexity), true
+	case "Video.status":
+		if e.ComplexityRoot.Video.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.Status(childComplexity), true
+	case "Video.thumbnailUrl":
+		if e.ComplexityRoot.Video.ThumbnailURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.ThumbnailURL(childComplexity), true
+	case "Video.width":
+		if e.ComplexityRoot.Video.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Video.Width(childComplexity), true
+
+	case "VideoDailyStat.day":
+		if e.ComplexityRoot.VideoDailyStat.Day == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.Day(childComplexity), true
+	case "VideoDailyStat.playbackBytes":
+		if e.ComplexityRoot.VideoDailyStat.PlaybackBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.PlaybackBytes(childComplexity), true
+	case "VideoDailyStat.playbackRequests":
+		if e.ComplexityRoot.VideoDailyStat.PlaybackRequests == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.PlaybackRequests(childComplexity), true
+	case "VideoDailyStat.purgeFailures":
+		if e.ComplexityRoot.VideoDailyStat.PurgeFailures == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.PurgeFailures(childComplexity), true
+	case "VideoDailyStat.purged":
+		if e.ComplexityRoot.VideoDailyStat.Purged == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.Purged(childComplexity), true
+	case "VideoDailyStat.uploadBytes":
+		if e.ComplexityRoot.VideoDailyStat.UploadBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.UploadBytes(childComplexity), true
+	case "VideoDailyStat.uploadFailures":
+		if e.ComplexityRoot.VideoDailyStat.UploadFailures == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.UploadFailures(childComplexity), true
+	case "VideoDailyStat.uploads":
+		if e.ComplexityRoot.VideoDailyStat.Uploads == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoDailyStat.Uploads(childComplexity), true
+
+	case "VideoPlayback.expiresAt":
+		if e.ComplexityRoot.VideoPlayback.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPlayback.ExpiresAt(childComplexity), true
+	case "VideoPlayback.url":
+		if e.ComplexityRoot.VideoPlayback.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPlayback.URL(childComplexity), true
+
+	case "VideoRetentionPreview.currentDays":
+		if e.ComplexityRoot.VideoRetentionPreview.CurrentDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoRetentionPreview.CurrentDays(childComplexity), true
+	case "VideoRetentionPreview.expiringWithinWeek":
+		if e.ComplexityRoot.VideoRetentionPreview.ExpiringWithinWeek == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoRetentionPreview.ExpiringWithinWeek(childComplexity), true
+	case "VideoRetentionPreview.maxDays":
+		if e.ComplexityRoot.VideoRetentionPreview.MaxDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoRetentionPreview.MaxDays(childComplexity), true
+	case "VideoRetentionPreview.newDays":
+		if e.ComplexityRoot.VideoRetentionPreview.NewDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoRetentionPreview.NewDays(childComplexity), true
+	case "VideoRetentionPreview.newlyExpired":
+		if e.ComplexityRoot.VideoRetentionPreview.NewlyExpired == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoRetentionPreview.NewlyExpired(childComplexity), true
+
+	case "VideoSettings.dailyBytesLimitPerUser":
+		if e.ComplexityRoot.VideoSettings.DailyBytesLimitPerUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.DailyBytesLimitPerUser(childComplexity), true
+	case "VideoSettings.dailyUploadLimitPerUser":
+		if e.ComplexityRoot.VideoSettings.DailyUploadLimitPerUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.DailyUploadLimitPerUser(childComplexity), true
+	case "VideoSettings.lifecycleBackstopDays":
+		if e.ComplexityRoot.VideoSettings.LifecycleBackstopDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.LifecycleBackstopDays(childComplexity), true
+	case "VideoSettings.maxDurationSeconds":
+		if e.ComplexityRoot.VideoSettings.MaxDurationSeconds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.MaxDurationSeconds(childComplexity), true
+	case "VideoSettings.maxFileBytes":
+		if e.ComplexityRoot.VideoSettings.MaxFileBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.MaxFileBytes(childComplexity), true
+	case "VideoSettings.maxRetentionDays":
+		if e.ComplexityRoot.VideoSettings.MaxRetentionDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.MaxRetentionDays(childComplexity), true
+	case "VideoSettings.purgeBatchSize":
+		if e.ComplexityRoot.VideoSettings.PurgeBatchSize == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.PurgeBatchSize(childComplexity), true
+	case "VideoSettings.purgeGraceDays":
+		if e.ComplexityRoot.VideoSettings.PurgeGraceDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.PurgeGraceDays(childComplexity), true
+	case "VideoSettings.retentionDays":
+		if e.ComplexityRoot.VideoSettings.RetentionDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.RetentionDays(childComplexity), true
+	case "VideoSettings.totalBytesLimit":
+		if e.ComplexityRoot.VideoSettings.TotalBytesLimit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoSettings.TotalBytesLimit(childComplexity), true
+
+	case "VideoStorageStats.daily":
+		if e.ComplexityRoot.VideoStorageStats.Daily == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.Daily(childComplexity), true
+	case "VideoStorageStats.purgeFailing":
+		if e.ComplexityRoot.VideoStorageStats.PurgeFailing == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.PurgeFailing(childComplexity), true
+	case "VideoStorageStats.settings":
+		if e.ComplexityRoot.VideoStorageStats.Settings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.Settings(childComplexity), true
+	case "VideoStorageStats.stored":
+		if e.ComplexityRoot.VideoStorageStats.Stored == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.Stored(childComplexity), true
+	case "VideoStorageStats.thisMonth":
+		if e.ComplexityRoot.VideoStorageStats.ThisMonth == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.ThisMonth(childComplexity), true
+	case "VideoStorageStats.today":
+		if e.ComplexityRoot.VideoStorageStats.Today == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoStorageStats.Today(childComplexity), true
+
+	case "VideoUsage.bytes":
+		if e.ComplexityRoot.VideoUsage.Bytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoUsage.Bytes(childComplexity), true
+	case "VideoUsage.count":
+		if e.ComplexityRoot.VideoUsage.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoUsage.Count(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -7095,6 +7636,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputUpdateProfileInput,
 		ec.unmarshalInputUpdateRoomInput,
 		ec.unmarshalInputUpdateUserInput,
+		ec.unmarshalInputVideoLimitsInput,
+		ec.unmarshalInputVideoUploadInput,
 	)
 	first := true
 
@@ -7186,7 +7729,7 @@ func newExecutionContext(
 	}
 }
 
-//go:embed "admin.graphqls" "announcement.graphqls" "chat.graphqls" "chat_stamps.graphqls" "classroom.graphqls" "community.graphqls" "course.graphqls" "media.graphqls" "moderation.graphqls" "notification.graphqls" "post.graphqls" "schema.graphqls" "terms.graphqls" "threads.graphqls" "user.graphqls"
+//go:embed "admin.graphqls" "announcement.graphqls" "chat.graphqls" "chat_stamps.graphqls" "classroom.graphqls" "community.graphqls" "course.graphqls" "media.graphqls" "moderation.graphqls" "notification.graphqls" "post.graphqls" "schema.graphqls" "terms.graphqls" "threads.graphqls" "user.graphqls" "video.graphqls"
 var sourcesFS embed.FS
 
 func sourceData(filename string) string {
@@ -7213,6 +7756,7 @@ var sources = []*ast.Source{
 	{Name: "terms.graphqls", Input: sourceData("terms.graphqls"), BuiltIn: false},
 	{Name: "threads.graphqls", Input: sourceData("threads.graphqls"), BuiltIn: false},
 	{Name: "user.graphqls", Input: sourceData("user.graphqls"), BuiltIn: false},
+	{Name: "video.graphqls", Input: sourceData("video.graphqls"), BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -8060,6 +8604,8 @@ func (ec *executionContext) childFields_Message(ctx context.Context, field graph
 		return ec.fieldContext_Message_stampID(ctx, field)
 	case "media":
 		return ec.fieldContext_Message_media(ctx, field)
+	case "video":
+		return ec.fieldContext_Message_video(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Message_createdAt(ctx, field)
 	case "updatedAt":
@@ -8326,6 +8872,8 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 		return ec.fieldContext_Post_replies(ctx, field)
 	case "media":
 		return ec.fieldContext_Post_media(ctx, field)
+	case "video":
+		return ec.fieldContext_Post_video(ctx, field)
 	case "mentions":
 		return ec.fieldContext_Post_mentions(ctx, field)
 	}
@@ -8468,8 +9016,34 @@ func (ec *executionContext) childFields_ReportedContent(ctx context.Context, fie
 		return ec.fieldContext_ReportedContent_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_ReportedContent_updatedAt(ctx, field)
+	case "video":
+		return ec.fieldContext_ReportedContent_video(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportedContent", field.Name)
+}
+
+func (ec *executionContext) childFields_ReportedVideo(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_ReportedVideo_ID(ctx, field)
+	case "durationMs":
+		return ec.fieldContext_ReportedVideo_durationMs(ctx, field)
+	case "width":
+		return ec.fieldContext_ReportedVideo_width(ctx, field)
+	case "height":
+		return ec.fieldContext_ReportedVideo_height(ctx, field)
+	case "hasAudio":
+		return ec.fieldContext_ReportedVideo_hasAudio(ctx, field)
+	case "sizeBytes":
+		return ec.fieldContext_ReportedVideo_sizeBytes(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ReportedVideo_createdAt(ctx, field)
+	case "available":
+		return ec.fieldContext_ReportedVideo_available(ctx, field)
+	case "thumbnailURL":
+		return ec.fieldContext_ReportedVideo_thumbnailURL(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportedVideo", field.Name)
 }
 
 func (ec *executionContext) childFields_Room(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -8738,6 +9312,136 @@ func (ec *executionContext) childFields_UserTimetableProfile(ctx context.Context
 		return ec.fieldContext_UserTimetableProfile_entries(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserTimetableProfile", field.Name)
+}
+
+func (ec *executionContext) childFields_Video(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "ID":
+		return ec.fieldContext_Video_ID(ctx, field)
+	case "status":
+		return ec.fieldContext_Video_status(ctx, field)
+	case "thumbnailUrl":
+		return ec.fieldContext_Video_thumbnailUrl(ctx, field)
+	case "durationMs":
+		return ec.fieldContext_Video_durationMs(ctx, field)
+	case "width":
+		return ec.fieldContext_Video_width(ctx, field)
+	case "height":
+		return ec.fieldContext_Video_height(ctx, field)
+	case "sizeBytes":
+		return ec.fieldContext_Video_sizeBytes(ctx, field)
+	case "hasAudio":
+		return ec.fieldContext_Video_hasAudio(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_Video_expiresAt(ctx, field)
+	case "retentionDays":
+		return ec.fieldContext_Video_retentionDays(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Video_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Video", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoDailyStat(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "day":
+		return ec.fieldContext_VideoDailyStat_day(ctx, field)
+	case "uploads":
+		return ec.fieldContext_VideoDailyStat_uploads(ctx, field)
+	case "uploadBytes":
+		return ec.fieldContext_VideoDailyStat_uploadBytes(ctx, field)
+	case "uploadFailures":
+		return ec.fieldContext_VideoDailyStat_uploadFailures(ctx, field)
+	case "playbackRequests":
+		return ec.fieldContext_VideoDailyStat_playbackRequests(ctx, field)
+	case "playbackBytes":
+		return ec.fieldContext_VideoDailyStat_playbackBytes(ctx, field)
+	case "purged":
+		return ec.fieldContext_VideoDailyStat_purged(ctx, field)
+	case "purgeFailures":
+		return ec.fieldContext_VideoDailyStat_purgeFailures(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoDailyStat", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoPlayback(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "url":
+		return ec.fieldContext_VideoPlayback_url(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_VideoPlayback_expiresAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoPlayback", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoRetentionPreview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "currentDays":
+		return ec.fieldContext_VideoRetentionPreview_currentDays(ctx, field)
+	case "newDays":
+		return ec.fieldContext_VideoRetentionPreview_newDays(ctx, field)
+	case "maxDays":
+		return ec.fieldContext_VideoRetentionPreview_maxDays(ctx, field)
+	case "newlyExpired":
+		return ec.fieldContext_VideoRetentionPreview_newlyExpired(ctx, field)
+	case "expiringWithinWeek":
+		return ec.fieldContext_VideoRetentionPreview_expiringWithinWeek(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoRetentionPreview", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoSettings(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "retentionDays":
+		return ec.fieldContext_VideoSettings_retentionDays(ctx, field)
+	case "purgeGraceDays":
+		return ec.fieldContext_VideoSettings_purgeGraceDays(ctx, field)
+	case "purgeBatchSize":
+		return ec.fieldContext_VideoSettings_purgeBatchSize(ctx, field)
+	case "dailyUploadLimitPerUser":
+		return ec.fieldContext_VideoSettings_dailyUploadLimitPerUser(ctx, field)
+	case "dailyBytesLimitPerUser":
+		return ec.fieldContext_VideoSettings_dailyBytesLimitPerUser(ctx, field)
+	case "totalBytesLimit":
+		return ec.fieldContext_VideoSettings_totalBytesLimit(ctx, field)
+	case "maxRetentionDays":
+		return ec.fieldContext_VideoSettings_maxRetentionDays(ctx, field)
+	case "lifecycleBackstopDays":
+		return ec.fieldContext_VideoSettings_lifecycleBackstopDays(ctx, field)
+	case "maxFileBytes":
+		return ec.fieldContext_VideoSettings_maxFileBytes(ctx, field)
+	case "maxDurationSeconds":
+		return ec.fieldContext_VideoSettings_maxDurationSeconds(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoSettings", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoStorageStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "settings":
+		return ec.fieldContext_VideoStorageStats_settings(ctx, field)
+	case "stored":
+		return ec.fieldContext_VideoStorageStats_stored(ctx, field)
+	case "purgeFailing":
+		return ec.fieldContext_VideoStorageStats_purgeFailing(ctx, field)
+	case "today":
+		return ec.fieldContext_VideoStorageStats_today(ctx, field)
+	case "thisMonth":
+		return ec.fieldContext_VideoStorageStats_thisMonth(ctx, field)
+	case "daily":
+		return ec.fieldContext_VideoStorageStats_daily(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoStorageStats", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "count":
+		return ec.fieldContext_VideoUsage_count(ctx, field)
+	case "bytes":
+		return ec.fieldContext_VideoUsage_bytes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoUsage", field.Name)
 }
 
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9150,6 +9854,20 @@ func (ec *executionContext) field_Mutation_adminRemoveTimetableEntry_args(ctx co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_adminRemoveVideo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "videoID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["videoID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_adminReorderChatStamps_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9169,6 +9887,20 @@ func (ec *executionContext) field_Mutation_adminReorderChatStamps_args(ctx conte
 		return nil, err
 	}
 	args["reaction"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminRequestReportedVideoPlayback_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "reportID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["reportID"] = arg0
 	return args, nil
 }
 
@@ -9361,6 +10093,42 @@ func (ec *executionContext) field_Mutation_adminUpdateUser_args(ctx context.Cont
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminUpdateVideoLimits_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.VideoLimitsInput, error) {
+			return ec.unmarshalNVideoLimitsInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoLimitsInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminUpdateVideoRetention_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "days",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["days"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "expectedNewlyExpiredCount",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedNewlyExpiredCount"] = arg1
 	return args, nil
 }
 
@@ -10338,6 +11106,20 @@ func (ec *executionContext) field_Mutation_requestPasswordReset_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_requestVideoPlayback_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "videoID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["videoID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_resetPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10423,30 +11205,38 @@ func (ec *executionContext) field_Mutation_sendMessage_args(ctx context.Context,
 		return nil, err
 	}
 	args["mediaInputs"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "mentionUserIDs",
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "videoInput",
+		func(ctx context.Context, v any) (*model.VideoUploadInput, error) {
+			return ec.unmarshalOVideoUploadInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUploadInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["videoInput"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "mentionUserIDs",
 		func(ctx context.Context, v any) ([]string, error) {
 			return ec.unmarshalOID2ᚕstringᚄ(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["mentionUserIDs"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "replyToID",
+	args["mentionUserIDs"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "replyToID",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOID2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["replyToID"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "stampID",
+	args["replyToID"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "stampID",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["stampID"] = arg5
+	args["stampID"] = arg6
 	return args, nil
 }
 
@@ -11727,6 +12517,20 @@ func (ec *executionContext) field_Query_adminListTerms_args(ctx context.Context,
 		return nil, err
 	}
 	args["offset"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_adminPreviewVideoRetention_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "days",
+		func(ctx context.Context, v any) (int32, error) {
+			return ec.unmarshalNInt2int32(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["days"] = arg0
 	return args, nil
 }
 
@@ -20333,6 +21137,38 @@ func (ec *executionContext) fieldContext_Message_media(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Message_video(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Message_video(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Message().Video(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Video) graphql.Marshaler {
+			return ec.marshalOVideo2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideo(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Message_video(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Message",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Video(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Message_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Message) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22306,7 +23142,7 @@ func (ec *executionContext) _Mutation_sendMessage(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput), fc.Args["mentionUserIDs"].([]string), fc.Args["replyToID"].(*string), fc.Args["stampID"].(*string))
+			return ec.Resolvers.Mutation().SendMessage(ctx, fc.Args["roomID"].(string), fc.Args["content"].(string), fc.Args["mediaInputs"].([]*model.MediaUploadInput), fc.Args["videoInput"].(*model.VideoUploadInput), fc.Args["mentionUserIDs"].([]string), fc.Args["replyToID"].(*string), fc.Args["stampID"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.Message) graphql.Marshaler {
@@ -25852,6 +26688,226 @@ func (ec *executionContext) fieldContext_Mutation_setTimetableProfileVisibility(
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_requestVideoPlayback(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestVideoPlayback(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestVideoPlayback(ctx, fc.Args["videoID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoPlayback) graphql.Marshaler {
+			return ec.marshalNVideoPlayback2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoPlayback(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestVideoPlayback(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoPlayback(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestVideoPlayback_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminUpdateVideoRetention(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminUpdateVideoRetention(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminUpdateVideoRetention(ctx, fc.Args["days"].(int32), fc.Args["expectedNewlyExpiredCount"].(int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoRetentionPreview) graphql.Marshaler {
+			return ec.marshalNVideoRetentionPreview2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoRetentionPreview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminUpdateVideoRetention(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoRetentionPreview(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminUpdateVideoRetention_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminUpdateVideoLimits(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminUpdateVideoLimits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminUpdateVideoLimits(ctx, fc.Args["input"].(model.VideoLimitsInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoSettings) graphql.Marshaler {
+			return ec.marshalNVideoSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoSettings(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminUpdateVideoLimits(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoSettings(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminUpdateVideoLimits_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminRemoveVideo(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminRemoveVideo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminRemoveVideo(ctx, fc.Args["videoID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminRemoveVideo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminRemoveVideo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminRequestReportedVideoPlayback(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminRequestReportedVideoPlayback(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminRequestReportedVideoPlayback(ctx, fc.Args["reportID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoPlayback) graphql.Marshaler {
+			return ec.marshalNVideoPlayback2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoPlayback(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminRequestReportedVideoPlayback(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoPlayback(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminRequestReportedVideoPlayback_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _NGWord_ID(ctx context.Context, field graphql.CollectedField, obj *model.NGWord) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27776,6 +28832,38 @@ func (ec *executionContext) fieldContext_Post_media(_ context.Context, field gra
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Media(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Post_video(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Post_video(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Post().Video(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Video) graphql.Marshaler {
+			return ec.marshalOVideo2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideo(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Post_video(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Video(ctx, field)
 		},
 	}
 	return fc, nil
@@ -32522,6 +33610,178 @@ func (ec *executionContext) fieldContext_Query_GetBlockersByUserID(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_presignedVideoUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_presignedVideoUploadUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PresignedVideoUploadURL(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PresignedUploadURL) graphql.Marshaler {
+			return ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_presignedVideoUploadUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PresignedUploadUrl(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_presignedVideoThumbnailUploadUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_presignedVideoThumbnailUploadUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PresignedVideoThumbnailUploadURL(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PresignedUploadURL) graphql.Marshaler {
+			return ec.marshalNPresignedUploadUrl2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐPresignedUploadURL(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_presignedVideoThumbnailUploadUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PresignedUploadUrl(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_videoSettings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_videoSettings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().VideoSettings(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoSettings) graphql.Marshaler {
+			return ec.marshalNVideoSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoSettings(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_videoSettings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoSettings(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminVideoStorageStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminVideoStorageStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminVideoStorageStats(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoStorageStats) graphql.Marshaler {
+			return ec.marshalNVideoStorageStats2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoStorageStats(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminVideoStorageStats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoStorageStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminPreviewVideoRetention(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminPreviewVideoRetention(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AdminPreviewVideoRetention(ctx, fc.Args["days"].(int32))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoRetentionPreview) graphql.Marshaler {
+			return ec.marshalNVideoRetentionPreview2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoRetentionPreview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminPreviewVideoRetention(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoRetentionPreview(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_adminPreviewVideoRetention_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33485,6 +34745,245 @@ func (ec *executionContext) _ReportedContent_updatedAt(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_ReportedContent_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportedContent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedContent_video(ctx context.Context, field graphql.CollectedField, obj *model.ReportedContent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedContent_video(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Video, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ReportedVideo) graphql.Marshaler {
+			return ec.marshalOReportedVideo2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportedVideo(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedContent_video(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportedContent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportedVideo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReportedVideo_ID(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_durationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_width(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_width(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_height(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_height(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_hasAudio(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_hasAudio(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasAudio, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_hasAudio(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_sizeBytes(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_sizeBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SizeBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_sizeBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_available(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_available(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.ReportedVideo().Available(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_available(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ReportedVideo_thumbnailURL(ctx context.Context, field graphql.CollectedField, obj *model.ReportedVideo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportedVideo_thumbnailURL(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.ReportedVideo().ThumbnailURL(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportedVideo_thumbnailURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportedVideo", field, true, true, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Room_ID(ctx context.Context, field graphql.CollectedField, obj *model.Room) (ret graphql.Marshaler) {
@@ -36092,6 +37591,1081 @@ func (ec *executionContext) fieldContext_UserTimetableProfile_entries(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Video_ID(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_ID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_ID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Video_status(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.VideoStatus) graphql.Marshaler {
+			return ec.marshalNVideoStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type VideoStatus does not have child fields"))
+}
+
+func (ec *executionContext) _Video_thumbnailUrl(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_thumbnailUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ThumbnailURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Video_thumbnailUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Video_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_durationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Video_width(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_width(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Video_height(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_height(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Video_sizeBytes(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_sizeBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SizeBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_sizeBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _Video_hasAudio(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_hasAudio(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasAudio, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_hasAudio(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Video_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Video_retentionDays(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_retentionDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RetentionDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_retentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Video_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Video) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Video_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Video_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Video", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_day(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_day(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Day, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_day(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_uploads(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_uploads(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Uploads, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_uploads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_uploadBytes(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_uploadBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploadBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_uploadBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_uploadFailures(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_uploadFailures(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploadFailures, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_uploadFailures(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_playbackRequests(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_playbackRequests(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PlaybackRequests, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_playbackRequests(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_playbackBytes(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_playbackBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PlaybackBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_playbackBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_purged(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_purged(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purged, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_purged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoDailyStat_purgeFailures(ctx context.Context, field graphql.CollectedField, obj *model.VideoDailyStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoDailyStat_purgeFailures(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PurgeFailures, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoDailyStat_purgeFailures(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoDailyStat", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPlayback_url(ctx context.Context, field graphql.CollectedField, obj *model.VideoPlayback) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPlayback_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPlayback_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPlayback", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPlayback_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.VideoPlayback) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPlayback_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPlayback_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPlayback", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoRetentionPreview_currentDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoRetentionPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoRetentionPreview_currentDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoRetentionPreview_currentDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoRetentionPreview", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoRetentionPreview_newDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoRetentionPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoRetentionPreview_newDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoRetentionPreview_newDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoRetentionPreview", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoRetentionPreview_maxDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoRetentionPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoRetentionPreview_maxDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MaxDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoRetentionPreview_maxDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoRetentionPreview", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoRetentionPreview_newlyExpired(ctx context.Context, field graphql.CollectedField, obj *model.VideoRetentionPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoRetentionPreview_newlyExpired(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewlyExpired, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoUsage) graphql.Marshaler {
+			return ec.marshalNVideoUsage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoRetentionPreview_newlyExpired(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoRetentionPreview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoRetentionPreview_expiringWithinWeek(ctx context.Context, field graphql.CollectedField, obj *model.VideoRetentionPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoRetentionPreview_expiringWithinWeek(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiringWithinWeek, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoUsage) graphql.Marshaler {
+			return ec.marshalNVideoUsage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoRetentionPreview_expiringWithinWeek(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoRetentionPreview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoSettings_retentionDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_retentionDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RetentionDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_retentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_purgeGraceDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_purgeGraceDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PurgeGraceDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_purgeGraceDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_purgeBatchSize(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_purgeBatchSize(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PurgeBatchSize, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_purgeBatchSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_dailyUploadLimitPerUser(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_dailyUploadLimitPerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DailyUploadLimitPerUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_dailyUploadLimitPerUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_dailyBytesLimitPerUser(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_dailyBytesLimitPerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DailyBytesLimitPerUser, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_dailyBytesLimitPerUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_totalBytesLimit(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_totalBytesLimit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TotalBytesLimit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_totalBytesLimit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_maxRetentionDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_maxRetentionDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MaxRetentionDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_maxRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_lifecycleBackstopDays(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_lifecycleBackstopDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LifecycleBackstopDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_lifecycleBackstopDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_maxFileBytes(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_maxFileBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MaxFileBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_maxFileBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoSettings_maxDurationSeconds(ctx context.Context, field graphql.CollectedField, obj *model.VideoSettings) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoSettings_maxDurationSeconds(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MaxDurationSeconds, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoSettings_maxDurationSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoSettings", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoStorageStats_settings(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_settings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Settings, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoSettings) graphql.Marshaler {
+			return ec.marshalNVideoSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoSettings(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_settings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoStorageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoSettings(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoStorageStats_stored(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_stored(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Stored, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoUsage) graphql.Marshaler {
+			return ec.marshalNVideoUsage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_stored(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoStorageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoStorageStats_purgeFailing(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_purgeFailing(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PurgeFailing, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_purgeFailing(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoStorageStats", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoStorageStats_today(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_today(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Today, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoDailyStat) graphql.Marshaler {
+			return ec.marshalNVideoDailyStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStat(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_today(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoStorageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoDailyStat(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoStorageStats_thisMonth(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_thisMonth(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ThisMonth, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.VideoDailyStat) graphql.Marshaler {
+			return ec.marshalNVideoDailyStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStat(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_thisMonth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoStorageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoDailyStat(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoStorageStats_daily(ctx context.Context, field graphql.CollectedField, obj *model.VideoStorageStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoStorageStats_daily(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Daily, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.VideoDailyStat) graphql.Marshaler {
+			return ec.marshalNVideoDailyStat2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStatᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoStorageStats_daily(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoStorageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoDailyStat(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoUsage_count(ctx context.Context, field graphql.CollectedField, obj *model.VideoUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoUsage_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoUsage_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoUsage", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _VideoUsage_bytes(ctx context.Context, field graphql.CollectedField, obj *model.VideoUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoUsage_bytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Bytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoUsage_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoUsage", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37644,7 +40218,7 @@ func (ec *executionContext) unmarshalInputCreatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"content", "parent_id", "mediaInputs"}
+	fieldsInOrder := [...]string{"content", "parent_id", "mediaInputs", "videoInput"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -37672,6 +40246,13 @@ func (ec *executionContext) unmarshalInputCreatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.MediaInputs = data
+		case "videoInput":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("videoInput"))
+			data, err := ec.unmarshalOVideoUploadInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUploadInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.VideoInput = data
 		}
 	}
 	return it, nil
@@ -38331,7 +40912,7 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "content", "newMediaInputs", "deletedMediaIDs"}
+	fieldsInOrder := [...]string{"id", "content", "newMediaInputs", "deletedMediaIDs", "removeVideo"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -38366,6 +40947,13 @@ func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, o
 				return it, err
 			}
 			it.DeletedMediaIDs = data
+		case "removeVideo":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeVideo"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RemoveVideo = data
 		}
 	}
 	return it, nil
@@ -38491,6 +41079,101 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 				return it, err
 			}
 			it.CurrentPassword = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputVideoLimitsInput(ctx context.Context, obj any) (model.VideoLimitsInput, error) {
+	var it model.VideoLimitsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"purgeGraceDays", "purgeBatchSize", "dailyUploadLimitPerUser", "dailyBytesLimitPerUser", "totalBytesLimit"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "purgeGraceDays":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("purgeGraceDays"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PurgeGraceDays = data
+		case "purgeBatchSize":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("purgeBatchSize"))
+			data, err := ec.unmarshalNInt2int32(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PurgeBatchSize = data
+		case "dailyUploadLimitPerUser":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dailyUploadLimitPerUser"))
+			data, err := ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DailyUploadLimitPerUser = data
+		case "dailyBytesLimitPerUser":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dailyBytesLimitPerUser"))
+			data, err := ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DailyBytesLimitPerUser = data
+		case "totalBytesLimit":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("totalBytesLimit"))
+			data, err := ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TotalBytesLimit = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputVideoUploadInput(ctx context.Context, obj any) (model.VideoUploadInput, error) {
+	var it model.VideoUploadInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"objectKey", "thumbnailObjectKey"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "objectKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("objectKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ObjectKey = data
+		case "thumbnailObjectKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("thumbnailObjectKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ThumbnailObjectKey = data
 		}
 	}
 	return it, nil
@@ -41766,6 +44449,44 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "video":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Message_video(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			out.Values[i] = ec._Message_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -42906,6 +45627,41 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setTimetableProfileVisibility":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setTimetableProfileVisibility(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requestVideoPlayback":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestVideoPlayback(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminUpdateVideoRetention":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminUpdateVideoRetention(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminUpdateVideoLimits":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminUpdateVideoLimits(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminRemoveVideo":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminRemoveVideo(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminRequestReportedVideoPlayback":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminRequestReportedVideoPlayback(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -44215,6 +46971,44 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 				}()
 				res = ec._Post_media(ctx, field, obj)
 				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "video":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_video(ctx, field, obj)
+				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -46895,6 +49689,116 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedVideoUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedVideoUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "presignedVideoThumbnailUploadUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_presignedVideoThumbnailUploadUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "videoSettings":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_videoSettings(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminVideoStorageStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminVideoStorageStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminPreviewVideoRetention":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminPreviewVideoRetention(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -47480,6 +50384,155 @@ func (ec *executionContext) _ReportedContent(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "video":
+			out.Values[i] = ec._ReportedContent_video(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reportedVideoImplementors = []string{"ReportedVideo"}
+
+func (ec *executionContext) _ReportedVideo(ctx context.Context, sel ast.SelectionSet, obj *model.ReportedVideo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportedVideoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportedVideo")
+		case "ID":
+			out.Values[i] = ec._ReportedVideo_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "durationMs":
+			out.Values[i] = ec._ReportedVideo_durationMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "width":
+			out.Values[i] = ec._ReportedVideo_width(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "height":
+			out.Values[i] = ec._ReportedVideo_height(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "hasAudio":
+			out.Values[i] = ec._ReportedVideo_hasAudio(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "sizeBytes":
+			out.Values[i] = ec._ReportedVideo_sizeBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdAt":
+			out.Values[i] = ec._ReportedVideo_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "available":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._ReportedVideo_available(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "thumbnailURL":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._ReportedVideo_thumbnailURL(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -48552,6 +51605,457 @@ func (ec *executionContext) _UserTimetableProfile(ctx context.Context, sel ast.S
 			}
 		case "entries":
 			out.Values[i] = ec._UserTimetableProfile_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoImplementors = []string{"Video"}
+
+func (ec *executionContext) _Video(ctx context.Context, sel ast.SelectionSet, obj *model.Video) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Video")
+		case "ID":
+			out.Values[i] = ec._Video_ID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._Video_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "thumbnailUrl":
+			out.Values[i] = ec._Video_thumbnailUrl(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "durationMs":
+			out.Values[i] = ec._Video_durationMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "width":
+			out.Values[i] = ec._Video_width(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "height":
+			out.Values[i] = ec._Video_height(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sizeBytes":
+			out.Values[i] = ec._Video_sizeBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasAudio":
+			out.Values[i] = ec._Video_hasAudio(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._Video_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "retentionDays":
+			out.Values[i] = ec._Video_retentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Video_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoDailyStatImplementors = []string{"VideoDailyStat"}
+
+func (ec *executionContext) _VideoDailyStat(ctx context.Context, sel ast.SelectionSet, obj *model.VideoDailyStat) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoDailyStatImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoDailyStat")
+		case "day":
+			out.Values[i] = ec._VideoDailyStat_day(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploads":
+			out.Values[i] = ec._VideoDailyStat_uploads(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploadBytes":
+			out.Values[i] = ec._VideoDailyStat_uploadBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploadFailures":
+			out.Values[i] = ec._VideoDailyStat_uploadFailures(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "playbackRequests":
+			out.Values[i] = ec._VideoDailyStat_playbackRequests(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "playbackBytes":
+			out.Values[i] = ec._VideoDailyStat_playbackBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purged":
+			out.Values[i] = ec._VideoDailyStat_purged(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purgeFailures":
+			out.Values[i] = ec._VideoDailyStat_purgeFailures(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoPlaybackImplementors = []string{"VideoPlayback"}
+
+func (ec *executionContext) _VideoPlayback(ctx context.Context, sel ast.SelectionSet, obj *model.VideoPlayback) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoPlaybackImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoPlayback")
+		case "url":
+			out.Values[i] = ec._VideoPlayback_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._VideoPlayback_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoRetentionPreviewImplementors = []string{"VideoRetentionPreview"}
+
+func (ec *executionContext) _VideoRetentionPreview(ctx context.Context, sel ast.SelectionSet, obj *model.VideoRetentionPreview) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoRetentionPreviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoRetentionPreview")
+		case "currentDays":
+			out.Values[i] = ec._VideoRetentionPreview_currentDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newDays":
+			out.Values[i] = ec._VideoRetentionPreview_newDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "maxDays":
+			out.Values[i] = ec._VideoRetentionPreview_maxDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newlyExpired":
+			out.Values[i] = ec._VideoRetentionPreview_newlyExpired(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiringWithinWeek":
+			out.Values[i] = ec._VideoRetentionPreview_expiringWithinWeek(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoSettingsImplementors = []string{"VideoSettings"}
+
+func (ec *executionContext) _VideoSettings(ctx context.Context, sel ast.SelectionSet, obj *model.VideoSettings) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoSettingsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoSettings")
+		case "retentionDays":
+			out.Values[i] = ec._VideoSettings_retentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purgeGraceDays":
+			out.Values[i] = ec._VideoSettings_purgeGraceDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purgeBatchSize":
+			out.Values[i] = ec._VideoSettings_purgeBatchSize(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dailyUploadLimitPerUser":
+			out.Values[i] = ec._VideoSettings_dailyUploadLimitPerUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dailyBytesLimitPerUser":
+			out.Values[i] = ec._VideoSettings_dailyBytesLimitPerUser(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalBytesLimit":
+			out.Values[i] = ec._VideoSettings_totalBytesLimit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "maxRetentionDays":
+			out.Values[i] = ec._VideoSettings_maxRetentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lifecycleBackstopDays":
+			out.Values[i] = ec._VideoSettings_lifecycleBackstopDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "maxFileBytes":
+			out.Values[i] = ec._VideoSettings_maxFileBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "maxDurationSeconds":
+			out.Values[i] = ec._VideoSettings_maxDurationSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoStorageStatsImplementors = []string{"VideoStorageStats"}
+
+func (ec *executionContext) _VideoStorageStats(ctx context.Context, sel ast.SelectionSet, obj *model.VideoStorageStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoStorageStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoStorageStats")
+		case "settings":
+			out.Values[i] = ec._VideoStorageStats_settings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stored":
+			out.Values[i] = ec._VideoStorageStats_stored(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purgeFailing":
+			out.Values[i] = ec._VideoStorageStats_purgeFailing(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "today":
+			out.Values[i] = ec._VideoStorageStats_today(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "thisMonth":
+			out.Values[i] = ec._VideoStorageStats_thisMonth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "daily":
+			out.Values[i] = ec._VideoStorageStats_daily(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoUsageImplementors = []string{"VideoUsage"}
+
+func (ec *executionContext) _VideoUsage(ctx context.Context, sel ast.SelectionSet, obj *model.VideoUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoUsage")
+		case "count":
+			out.Values[i] = ec._VideoUsage_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytes":
+			out.Values[i] = ec._VideoUsage_bytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -51037,6 +54541,97 @@ func (ec *executionContext) marshalNUserTimetableProfile2ᚖgithubᚗcomᚋCityb
 	return ec._UserTimetableProfile(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNVideoDailyStat2ᚕᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStatᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.VideoDailyStat) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNVideoDailyStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStat(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNVideoDailyStat2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoDailyStat(ctx context.Context, sel ast.SelectionSet, v *model.VideoDailyStat) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoDailyStat(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNVideoLimitsInput2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoLimitsInput(ctx context.Context, v any) (model.VideoLimitsInput, error) {
+	res, err := ec.unmarshalInputVideoLimitsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNVideoPlayback2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoPlayback(ctx context.Context, sel ast.SelectionSet, v *model.VideoPlayback) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoPlayback(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVideoRetentionPreview2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoRetentionPreview(ctx context.Context, sel ast.SelectionSet, v *model.VideoRetentionPreview) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoRetentionPreview(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVideoSettings2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoSettings(ctx context.Context, sel ast.SelectionSet, v *model.VideoSettings) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoSettings(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNVideoStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoStatus(ctx context.Context, v any) (model.VideoStatus, error) {
+	var res model.VideoStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNVideoStatus2githubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoStatus(ctx context.Context, sel ast.SelectionSet, v model.VideoStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNVideoStorageStats2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoStorageStats(ctx context.Context, sel ast.SelectionSet, v *model.VideoStorageStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoStorageStats(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVideoUsage2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUsage(ctx context.Context, sel ast.SelectionSet, v *model.VideoUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoUsage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
 	return ec.___Directive(ctx, sel, &v)
 }
@@ -51543,6 +55138,13 @@ func (ec *executionContext) marshalOReportedContent2ᚖgithubᚗcomᚋCityboypen
 	return ec._ReportedContent(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOReportedVideo2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐReportedVideo(ctx context.Context, sel ast.SelectionSet, v *model.ReportedVideo) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ReportedVideo(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalORoom2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐRoom(ctx context.Context, sel ast.SelectionSet, v *model.Room) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -51626,6 +55228,21 @@ func (ec *executionContext) marshalOUserReport2ᚖgithubᚗcomᚋCityboypenguin�
 		return graphql.Null
 	}
 	return ec._UserReport(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOVideo2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideo(ctx context.Context, sel ast.SelectionSet, v *model.Video) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Video(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOVideoUploadInput2ᚖgithubᚗcomᚋCityboypenguinᚋSPACEᚑserverᚋgraphᚋmodelᚐVideoUploadInput(ctx context.Context, v any) (*model.VideoUploadInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputVideoUploadInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

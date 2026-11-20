@@ -105,9 +105,20 @@ func (r *MySQLMediaRepository) CreateAnswerMediaBatch(ctx context.Context, answe
 
 // ListStorageKeysByUploader はその利用者がアップロードした全メディアの保存先キー。
 // トランザクションの中で呼ばれる（退会者の削除）ので extractDB を通す。
+//
+// 動画のサムネイルは media の行を持たない（video_assets.thumbnail_key）ので、
+// ここで一緒に挙げる。挙げ損ねると、退会で行が消えたあとサムネイルだけが残る。
+// 実体を消し終えた動画（purged_at あり）のキーも挙がるが、無いものを消すのは
+// 置き場の側で成功として扱われる。
 func (r *MySQLMediaRepository) ListStorageKeysByUploader(ctx context.Context, userID int64) ([]string, error) {
-	rows, err := extractDB(ctx, r.DB).QueryContext(ctx,
-		`SELECT storage_key FROM media WHERE uploader_user_id = ? ORDER BY id`, userID)
+	rows, err := extractDB(ctx, r.DB).QueryContext(ctx, `
+		SELECT storage_key FROM (
+			SELECT m.id, 0 AS ord, m.storage_key FROM media m WHERE m.uploader_user_id = ?
+			UNION ALL
+			SELECT m.id, 1 AS ord, va.thumbnail_key FROM media m
+			JOIN video_assets va ON va.media_id = m.id
+			WHERE m.uploader_user_id = ?
+		) k ORDER BY id, ord`, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,8 +192,13 @@ func (r *MySQLMediaRepository) ListByPostID(ctx context.Context, postID int64) (
 // DeleteMediaByIDAndUserID は添付を1件消す。投稿の編集（usecase/post）が
 // 本文更新と同じ RunInTx の中から呼ぶので、extractDB を通す。
 // ここだけ r.DB を直に叩くと、後続が失敗して巻き戻っても添付だけ消えたままになる。
+//
+// 動画の行は消さない。消すと video_assets ごと CASCADE で消え、実体を消す日次の処理が
+// その動画を見つけられなくなる（ファイルだけが残り続ける）。動画を外すのは
+// UpdatePostParam.RemoveVideo の経路で、行は残したまま「外した」印を付ける。
 func (r *MySQLMediaRepository) DeleteMediaByIDAndUserID(ctx context.Context, mediaID, userID int64) error {
-	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?`
+	query := `DELETE FROM media WHERE id = ? AND uploader_user_id = ?
+		AND NOT EXISTS (SELECT 1 FROM video_assets va WHERE va.media_id = media.id)`
 	_, err := extractDB(ctx, r.DB).ExecContext(ctx, query, mediaID, userID)
 	return err
 }

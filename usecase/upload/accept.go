@@ -12,7 +12,9 @@ package upload
 
 import (
 	"context"
+
 	"errors"
+	"github.com/Cityboypenguin/SPACE-server/model"
 	"time"
 )
 
@@ -50,6 +52,9 @@ const (
 	Avatar            Kind = "avatars"
 	CommunityIcon     Kind = "community-icons"
 	TermsDocument     Kind = "terms"
+	// VideoThumbnail は動画のサムネイル。動画と同じ置き場に入る。
+	// 動画そのものは Kind ではなく VideoAcceptor.AcceptVideo で受け入れる。
+	VideoThumbnail Kind = "video-thumbnails"
 )
 
 // Acceptor は申告されたオブジェクトキーを受け入れ、保存してよいキーを返す。
@@ -85,6 +90,15 @@ type Acceptor interface {
 // 素通しだったキー（編集で送り返された、既に公開済みのもの）は覚えない。
 // 見分けは「受け入れがキーを変えたかどうか」で付く。変わっていないキーは他の行が
 // 参照している可能性があるので、消してはいけない。
+// VideoAcceptor は動画を受け入れ、最終キーと中身から読んだ実測値を返す。
+//
+// Acceptor と分けてあるのは、既存の Acceptor の実装（テストの偽物を含む）を
+// 動画のために全部書き換えずに済ませるため。動画を受け取るユースケースだけが
+// この口を要求する。
+type VideoAcceptor interface {
+	AcceptVideo(ctx context.Context, objectKey string) (string, model.VideoProbe, error)
+}
+
 type Session struct {
 	a Acceptor
 	// created はこの操作で新しく公開したキー。
@@ -107,6 +121,26 @@ func (s *Session) Accept(ctx context.Context, kind Kind, objectKey string) (stri
 		s.created = append(s.created, accepted)
 	}
 	return accepted, nil
+}
+
+// AcceptVideo は動画を受け入れる。公開したキーは覚えておき、操作が失敗したら
+// DiscardOnError で取り消す（Accept と同じ）。
+func (s *Session) AcceptVideo(ctx context.Context, objectKey string) (string, model.VideoProbe, error) {
+	if s == nil || s.a == nil {
+		return "", model.VideoProbe{}, ErrNoAcceptor
+	}
+	va, ok := s.a.(VideoAcceptor)
+	if !ok {
+		return "", model.VideoProbe{}, ErrNoAcceptor
+	}
+	accepted, probe, err := va.AcceptVideo(ctx, objectKey)
+	if err != nil {
+		return "", model.VideoProbe{}, err
+	}
+	if accepted != objectKey {
+		s.created = append(s.created, accepted)
+	}
+	return accepted, probe, nil
 }
 
 func (s *Session) Discard(ctx context.Context, objectKey string) {

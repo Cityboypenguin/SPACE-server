@@ -40,6 +40,12 @@ type reportedMediaRetainer interface {
 	Retain(ctx context.Context, media []repository.ReportableMedia) error
 }
 
+// reportedVideoRetainer は、通報中のメッセージの動画を退会のあとも残す口
+// （実体は usecase/video.Service）。残したファイルのキーを返し、それらは消さない。
+type reportedVideoRetainer interface {
+	RetainReportedVideos(ctx context.Context, userID int64) ([]string, error)
+}
+
 // objectDiscarder はストレージ上の実体を消す口。キーから公開・非公開の置き場を
 // 選ぶのは実装（internal/upload.Acceptor）の仕事で、ここは知らない。
 // 消せなくても退会は成立している（DB からはもう参照されない）ので、結果は返さない。
@@ -68,6 +74,7 @@ type accountDeletion struct {
 	media       uploadedMediaLister
 	objects     objectDiscarder
 	reported    reportedMediaRetainer
+	videos      reportedVideoRetainer
 	txManager   repository.TxManager
 	now         func() time.Time
 }
@@ -85,7 +92,9 @@ type AccountDeletionDeps struct {
 	Objects     objectDiscarder
 	// ReportedMedia は通報の写しが指している添付を残す。
 	ReportedMedia reportedMediaRetainer
-	TxManager     repository.TxManager
+	// ReportedVideos は通報中のメッセージの動画を残す。nil なら残さない（動画が無い構成）。
+	ReportedVideos reportedVideoRetainer
+	TxManager      repository.TxManager
 	// Now は現在時刻。nil なら time.Now（テストから差し替えるための口）。
 	Now func() time.Time
 }
@@ -105,6 +114,7 @@ func newAccountDeletion(deps AccountDeletionDeps) *accountDeletion {
 		media:       deps.Media,
 		objects:     deps.Objects,
 		reported:    deps.ReportedMedia,
+		videos:      deps.ReportedVideos,
 		txManager:   deps.TxManager,
 		now:         now,
 	}
@@ -277,6 +287,16 @@ func (d *accountDeletion) purge(ctx context.Context, userID int64, allow func(*m
 		if err := d.reported.Retain(ctx, reportable); err != nil {
 			return err
 		}
+		// 動画は写し取らず、元のファイルを残して通報への対応が終わったら消す
+		// （usecase/video の reported.go）。記録はこのトランザクションの中で作るので、
+		// ロールバックすれば一緒に消え、次のやり直しでまた作られる。
+		if d.videos != nil {
+			kept, err := d.videos.RetainReportedVideos(ctx, userID)
+			if err != nil {
+				return err
+			}
+			keys = withoutKeys(keys, kept)
+		}
 		if purged, err = d.users.PurgeUser(ctx, userID, d.now()); err != nil || !purged {
 			return err
 		}
@@ -292,6 +312,24 @@ func (d *accountDeletion) purge(ctx context.Context, userID int64, allow func(*m
 		d.notifyNewOwners(ctx, handovers)
 	}
 	return purged, nil
+}
+
+// withoutKeys は keys から drop に含まれるものを除く。
+func withoutKeys(keys, drop []string) []string {
+	if len(drop) == 0 {
+		return keys
+	}
+	skip := make(map[string]bool, len(drop))
+	for _, k := range drop {
+		skip[k] = true
+	}
+	out := keys[:0:0]
+	for _, k := range keys {
+		if !skip[k] {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // --- 本人の退会 ---------------------------------------------------------------

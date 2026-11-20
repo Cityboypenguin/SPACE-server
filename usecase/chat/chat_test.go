@@ -120,7 +120,7 @@ type fakeSendMessage struct {
 	savedStampID  *string
 }
 
-func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error) {
+func (f *fakeSendMessage) Execute(_ context.Context, roomID, userID int64, content string, _ []model.MediaInput, _ *model.VideoInput, replyToID *int64, stampID *string, mentions []*model.Mention) (*model.Message, error) {
 	f.calls++
 	f.savedMentions = mentions
 	f.savedStampID = stampID

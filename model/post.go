@@ -22,12 +22,17 @@ type CreatePostParam struct {
 	UserID    int64
 	ParentID  *int64
 	MediaKeys []string
+	// Video は付ける動画（無ければ nil）。画像（MediaKeys）とは同時に付けられない。
+	Video *VideoInput
 }
 
 type UpdatePostParam struct {
 	PostID  int64
 	UserID  int64
 	Content *string
+	// RemoveVideo は付いている動画を外す。編集で動画を後から足すことはできない
+	// （保存期間の数え始めが投稿の時刻とずれるため）。
+	RemoveVideo bool
 }
 
 func CreatePost(param CreatePostParam) *Post {

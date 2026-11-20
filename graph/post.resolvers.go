@@ -85,6 +85,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input gqlmodel.Create
 		UserID:   claims.ID,
 		Content:  trimmedContent,
 		ParentID: numericParentID,
+		Video:    toVideoInput(input.VideoInput),
 	}, ucMediaInputs)
 	if err != nil {
 		return nil, err
@@ -136,9 +137,10 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, input gqlmodel.Update
 	ucMediaInputs := r.toMediaInputs(input.NewMediaInputs)
 
 	post, err := r.UpdatePostUseCase.Execute(ctx, model.UpdatePostParam{
-		PostID:  numericID,
-		UserID:  claims.ID,
-		Content: &trimmedContent,
+		PostID:      numericID,
+		UserID:      claims.ID,
+		Content:     &trimmedContent,
+		RemoveVideo: input.RemoveVideo != nil && *input.RemoveVideo,
 	}, ucMediaInputs, deletedMediaIDs)
 	if err != nil {
 		return nil, err
@@ -400,6 +402,19 @@ func (r *postResolver) Media(ctx context.Context, obj *gqlmodel.Post) ([]*gqlmod
 		result = append(result, toGraphMedia(m, r.StorageRepository.PublicURL(m.StorageKey)))
 	}
 	return result, nil
+}
+
+// Video is the resolver for the video field.
+func (r *postResolver) Video(ctx context.Context, obj *gqlmodel.Post) (*gqlmodel.Video, error) {
+	numericID, err := decodeGraphID(ctx, "post", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	v, err := dataloader.For(ctx).PostVideoLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return r.videoField(ctx, v)
 }
 
 // Mentions is the resolver for the mentions field.

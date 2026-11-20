@@ -250,6 +250,20 @@ func (r *MinIOStorageRepository) signedReadURL(objectKey string) string {
 	return u.String()
 }
 
+// SignedReadURL は expiresAt まで1つのオブジェクトを読める署名付きURLを作る
+// （動画の再生とサムネイル用。Azure 側の同名メソッドと同じ契約）。
+func (r *MinIOStorageRepository) SignedReadURL(ctx context.Context, objectKey string, expiresAt time.Time) (string, error) {
+	ttl := time.Until(expiresAt)
+	if ttl < time.Second {
+		return "", fmt.Errorf("signed URL would already be expired")
+	}
+	u, err := r.presignClient.PresignedGetObject(ctx, r.bucket, objectKey, ttl, nil)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
 // ForBucket は同じ資格情報のまま、別のバケットを見る写しを返す。
 //
 // DM の添付だけを非公開のバケットへ入れるために使う。バケット名以外は何も

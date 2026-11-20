@@ -52,7 +52,7 @@ func TestAcceptor_RoutesEachKindToItsOwnStore(t *testing.T) {
 				public = store
 			}
 
-			a := NewAcceptor(public, private)
+			a := NewAcceptor(public, private, nil)
 			accepted, err := a.Accept(ctxAs(testOwner), tt.ucKind, key)
 			if err != nil {
 				t.Fatalf("Accept: %v", err)
@@ -81,7 +81,7 @@ func TestAcceptor_RefusesPrivateKindsWithoutAPrivateStore(t *testing.T) {
 	key, _ := stagedIn(t, MessageMedia)
 	public := newFakeStore(okInfo, key)
 
-	a := NewAcceptor(public, nil)
+	a := NewAcceptor(public, nil, nil)
 	if _, err := a.Accept(ctxAs(testOwner), uploadusecase.MessageAttachment, key); err == nil {
 		t.Fatal("非公開の置き場が無いのに受け入れられた")
 	}
@@ -96,7 +96,7 @@ func TestAcceptor_DiscardUsesTheStoreThatHoldsTheKey(t *testing.T) {
 	publicKey, public := stagedIn(t, Media)
 	privateKey, private := stagedIn(t, MessageMedia)
 
-	a := NewAcceptor(public, private)
+	a := NewAcceptor(public, private, nil)
 	a.Discard(context.Background(), publicKey)
 	a.Discard(context.Background(), privateKey)
 
@@ -111,7 +111,7 @@ func TestAcceptor_DiscardUsesTheStoreThatHoldsTheKey(t *testing.T) {
 // こちらが払い出した形でないキーは、どちらの置き場にも触らないこと。
 func TestAcceptor_DiscardIgnoresForeignKeys(t *testing.T) {
 	public, private := newFakeStore(okInfo), newFakeStore(okInfo)
-	a := NewAcceptor(public, private)
+	a := NewAcceptor(public, private, nil)
 
 	a.Discard(context.Background(), "../../etc/passwd")
 	a.Discard(context.Background(), "unknown-prefix/1/x.png")

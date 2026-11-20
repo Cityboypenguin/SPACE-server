@@ -2,6 +2,7 @@ package graph
 
 import (
 	"github.com/Cityboypenguin/SPACE-server/usecase/chatstamp"
+	videousecase "github.com/Cityboypenguin/SPACE-server/usecase/video"
 	"sync/atomic"
 
 	"github.com/Cityboypenguin/SPACE-server/internal/courseimport"
@@ -78,8 +79,13 @@ type Resolver struct {
 	// StorageRepository と同じ型なので、取り違えても型では気づけない。DM に
 	// 関わる経路（送信の受け入れと、Message.media の表示URL）でだけこちらを使う。
 	MessageStorageRepository repository.StorageRepository
-	MaintenanceRepository    repository.MaintenanceRepository
-	MaintenanceFlag          *atomic.Bool
+	// VideoStorageRepository は動画とそのサムネイルの置き場。匿名読み取りを許さない
+	// コンテナーを指す。署名付きURLの発行（アップロード用）にだけ使い、表示用の
+	// URL は VideoService が保存期間に合わせた期限で作る。
+	VideoStorageRepository repository.StorageRepository
+	VideoService           *videousecase.Service
+	MaintenanceRepository  repository.MaintenanceRepository
+	MaintenanceFlag        *atomic.Bool
 
 	UserUseCases
 	PostUseCases

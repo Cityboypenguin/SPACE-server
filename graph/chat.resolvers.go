@@ -94,6 +94,19 @@ func (r *messageResolver) Media(ctx context.Context, obj *gqlmodel.Message) ([]*
 	return result, nil
 }
 
+// Video is the resolver for the video field.
+func (r *messageResolver) Video(ctx context.Context, obj *gqlmodel.Message) (*gqlmodel.Video, error) {
+	numericID, err := decodeGraphID(ctx, "message", obj.ID)
+	if err != nil {
+		return nil, nil
+	}
+	v, err := dataloader.For(ctx).MessageVideoLoader.Load(ctx, numericID)
+	if err != nil {
+		return nil, err
+	}
+	return r.videoField(ctx, v)
+}
+
 // messageMediaURL は DM の添付の表示URLを作る。
 //
 // 分離前に保存された添付は公開側のコンテナーに残っており、キーの先頭が "media/"
@@ -327,7 +340,7 @@ func (r *mutationResolver) JoinRoom(ctx context.Context, roomID string) (bool, e
 // 権限判定（授業の学期・履修 / membership / ブロック）、メンションの検証、
 // 保存後の配信・通知は全て ChatCommands 側にある。ここは GraphQL ID のデコードと
 // GraphQL 型への変換だけを行う。
-func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*gqlmodel.Message, error) {
+func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, content string, mediaInputs []*gqlmodel.MediaUploadInput, videoInput *gqlmodel.VideoUploadInput, mentionUserIDs []string, replyToID *string, stampID *string) (*gqlmodel.Message, error) {
 	if _, err := requireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -364,6 +377,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, roomID string, conte
 		StampID:        stamp,
 		Content:        content,
 		MediaInputs:    ucMediaInputs,
+		Video:          toVideoInput(videoInput),
 		MentionUserIDs: mentionIDs,
 		ReplyToID:      replyTo,
 	})

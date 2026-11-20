@@ -165,7 +165,19 @@ models:
         resolver: true
       media:
         resolver: true
+      # 動画は選ばれたときだけ DataLoader で引く（一覧の全投稿ぶん引かない）。
+      video:
+        resolver: true
       rootPost:
+        resolver: true
+  # 通報の写しの動画。ファイルが残っているかとサムネイルは、選ばれたときだけ調べる
+  # （通報の一覧で1件ずつ DB と署名を使わないため）。
+  ReportedVideo:
+    model: github.com/Cityboypenguin/SPACE-server/graph/model.ReportedVideo
+    fields:
+      available:
+        resolver: true
+      thumbnailURL:
         resolver: true
   Message:
     fields:
@@ -184,6 +196,8 @@ models:
       room:
         resolver: true
       media:
+        resolver: true
+      video:
         resolver: true
       isMine:
         resolver: true

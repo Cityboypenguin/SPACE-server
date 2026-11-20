@@ -34,6 +34,8 @@ services:
       # DM の添付だけを入れる置き場。匿名読み取りを付けないので、表示は
       # 署名付きURLで配られる（internal/upload.MessageMedia 参照）。
       MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
+      # 動画とサムネイルの置き場。匿名読み取りを付けない（再生は期限付きの署名付きURL）。
+      VIDEO_CONTAINER: ${VIDEO_CONTAINER:-space-videos}
       MINIO_USE_SSL: "false"
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
@@ -81,12 +83,14 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-space-storage}
       MINIO_PRIVATE_BUCKET: ${MINIO_PRIVATE_BUCKET:-space-storage-private}
       MESSAGE_MEDIA_CONTAINER: ${MESSAGE_MEDIA_CONTAINER:-space-message-media}
+      VIDEO_CONTAINER: ${VIDEO_CONTAINER:-space-videos}
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
       mc mb local/$${MINIO_BUCKET:-space-storage} --ignore-existing;
       mc mb local/$${MINIO_PRIVATE_BUCKET:-space-storage-private} --ignore-existing;
       mc mb local/$${MESSAGE_MEDIA_CONTAINER:-space-message-media} --ignore-existing;
+      mc mb local/$${VIDEO_CONTAINER:-space-videos} --ignore-existing;
       mc anonymous set download local/$${MINIO_BUCKET:-space-storage};
       exit 0;
       "

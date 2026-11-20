@@ -75,6 +75,13 @@ type Kind struct {
 	// どの置き場を使うかは呼び出し側が選ぶ。この型は判断の材料を持つだけで、
 	// 置き場そのものは知らない（internal/upload は保管先の実装に依らない）。
 	Private bool
+	// Video は「動画用の置き場へ入れる種別か」。
+	//
+	// 動画の置き場は匿名読み取りを許さず、再生は期限付きの署名付きURLで配る。
+	// 公開の置き場に入れると、保存期間が過ぎて再生させたくなくなった後も、URL を
+	// 知っている人は実体が消えるまで見られてしまう（docs/video-posts.md 参照）。
+	// 動画のサムネイルも同じ期限で消すので、同じ置き場に入れる。
+	Video bool
 }
 
 const (
@@ -108,9 +115,17 @@ var (
 	TermsDocument = Kind{Prefix: "terms", MaxBytes: 5 * mb, Exts: map[string]string{"text/markdown": ".md"}, Label: "規約ドキュメント"}
 )
 
+// Video は投稿・メッセージに付ける動画。動画用の置き場に入る。中身の検査は
+// InspectMP4 が行い、受け入れは AcceptVideo を通す（実測値を記録するため）。
+var Video = Kind{Prefix: "videos", MaxBytes: VideoMaxBytes, Exts: map[string]string{"video/mp4": ".mp4"}, Label: "動画", Owned: true, Video: true}
+
+// VideoThumbnail は動画のサムネイル。端末が動画から切り出した JPEG。
+// 一覧に並ぶ画像なので小さく抑える（端末は 720px・品質0.8程度で書き出し、数十KBになる）。
+var VideoThumbnail = Kind{Prefix: "video-thumbnails", MaxBytes: 512 * 1024, Exts: map[string]string{"image/jpeg": ".jpg"}, Label: "動画のサムネイル", Owned: true, Video: true}
+
 var ChatStamp = Kind{Prefix: "chat-stamps", MaxBytes: maxStampSourceBytes, Exts: map[string]string{"image/png": ".png", "image/svg+xml": ".svg"}, Label: "スタンプ画像", Owned: true}
 
-var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument, ChatStamp}
+var kinds = []Kind{Avatar, Media, MessageMedia, CommunityIcon, TermsDocument, ChatStamp, Video, VideoThumbnail}
 
 // StagingPrefix は署名付きURLが書き込める唯一の場所。
 //
@@ -377,6 +392,10 @@ type ObjectStore interface {
 // 保存失敗か）。ここを「Azure でも ErrObjectChanged が返る」前提で書き直すと、
 // サーバー側の不調を利用者の操作ミスとして表示することになる。
 func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind, owner string) (string, error) {
+	if want.Prefix == Video.Prefix {
+		// 動画は実測値を記録する必要があるので AcceptVideo を通す。
+		return "", fmt.Errorf("videos must be accepted with AcceptVideo")
+	}
 	if err := CheckKey(objectKey, want, owner); err != nil {
 		return "", fmt.Errorf("invalid object key")
 	}
@@ -448,6 +467,46 @@ func Accept(ctx context.Context, store ObjectStore, objectKey string, want Kind,
 	return finalKey, nil
 }
 
+// AcceptVideo は動画を受け入れ、最終キーと中身から読んだ実測値を返す。
+//
+// 手順は Accept と同じ（誰のキーかを先に見る・測ったものと同じものを写す・
+// 写し先を毎回引き直す）。違うのは次の2点。
+//
+//   - staging のキーしか受け付けない。動画は投稿の編集で後から足せず、
+//     受け入れ済みのキーを送り返す経路が無い。素通しを許すと、他の投稿の動画を
+//     自分の投稿へ付け直せてしまう（実測値もそこでは測れない）。
+//   - 中身の検査に InspectMP4 を使い、その結果を返す。
+func AcceptVideo(ctx context.Context, store ObjectStore, objectKey string, owner string) (string, VideoInfo, error) {
+	if err := CheckKey(objectKey, Video, owner); err != nil {
+		return "", VideoInfo{}, fmt.Errorf("invalid object key")
+	}
+	parsed, err := parseKey(objectKey)
+	if err != nil || !parsed.staging {
+		return "", VideoInfo{}, fmt.Errorf("invalid object key")
+	}
+	info, probe, err := verifyObjectDetailed(ctx, store, objectKey)
+	if err != nil {
+		return "", VideoInfo{}, err
+	}
+	if info.ETag == "" || probe == nil {
+		return "", VideoInfo{}, fmt.Errorf("failed to verify the uploaded file")
+	}
+	finalKey, err := acceptedKeyFor(objectKey)
+	if err != nil {
+		return "", VideoInfo{}, fmt.Errorf("invalid object key")
+	}
+	// Content-Type は申告値ではなく、中身を確かめた種別を付ける。
+	if err := store.CopyObject(ctx, objectKey, finalKey, info.ETag, "video/mp4"); err != nil {
+		if errors.Is(err, repository.ErrObjectChanged) {
+			return "", VideoInfo{}, errNotUploaded
+		}
+		return "", VideoInfo{}, fmt.Errorf("failed to store the uploaded file")
+	}
+	_ = store.DeleteObject(ctx, objectKey)
+	probe.SizeBytes = info.Size
+	return finalKey, *probe, nil
+}
+
 // Discard は受け入れで公開したオブジェクトを取り消す。
 //
 // 受け入れは1回ごとに新しい最終キーへ写す。その後の保存（DBへの書き込み）が
@@ -491,39 +550,49 @@ func Verify(ctx context.Context, store ObjectStore, objectKey string) error {
 // verifyObject は Verify の本体で、測った結果も返す。
 // Accept が「測ったものと同じものを写す」条件（ETag）に使う。
 func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (repository.ObjectInfo, error) {
+	info, _, err := verifyObjectDetailed(ctx, store, objectKey)
+	return info, err
+}
+
+// verifyObjectDetailed は verifyObject の本体。動画の種別では InspectMP4 の結果も返す。
+func verifyObjectDetailed(ctx context.Context, store ObjectStore, objectKey string) (repository.ObjectInfo, *VideoInfo, error) {
 	parsed, err := parseKey(objectKey)
 	if err != nil {
-		return repository.ObjectInfo{}, fmt.Errorf("invalid object key")
+		return repository.ObjectInfo{}, nil, fmt.Errorf("invalid object key")
 	}
 	kind := parsed.kind
 
 	info, err := store.StatObject(ctx, objectKey)
 	if err != nil {
 		if errors.Is(err, repository.ErrObjectNotFound) {
-			return repository.ObjectInfo{}, errNotUploaded
+			return repository.ObjectInfo{}, nil, errNotUploaded
 		}
 		// ストレージ障害と「上限超過」を言い分けない理由は無いので、ここは素直に
 		// 失敗として返す。通ってしまうと検査そのものが素通しになる。
-		return repository.ObjectInfo{}, fmt.Errorf("failed to verify the uploaded file")
+		return repository.ObjectInfo{}, nil, fmt.Errorf("failed to verify the uploaded file")
 	}
 
 	if info.Size > kind.MaxBytes {
+		if kind.Prefix == Video.Prefix {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, nil, apperr.InvalidInput("動画のサイズが上限（25MB）を超えています")
+		}
 		if kind.Prefix == ChatStamp.Prefix {
 			_ = store.DeleteObject(ctx, objectKey)
-			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプの元画像は20MiB以下にしてください")
+			return repository.ObjectInfo{}, nil, apperr.InvalidInput("スタンプの元画像は20MiB以下にしてください")
 		}
 		_ = store.DeleteObject(ctx, objectKey)
-		return repository.ObjectInfo{}, fmt.Errorf("%sのサイズが上限（%dMB）を超えています", kind.Label, kind.MaxBytes/mb)
+		return repository.ObjectInfo{}, nil, fmt.Errorf("%sのサイズが上限（%dMB）を超えています", kind.Label, kind.MaxBytes/mb)
 	}
 	// Content-Type も見る。サイズだけ見ても、画像のつもりの口へ実行可能ファイルを
 	// 置かれると、そのまま公開URLから配られる。空は「申告が無い」なので弾く。
 	if _, ok := kind.Ext(info.ContentType); !ok {
 		if kind.Prefix == ChatStamp.Prefix {
 			_ = store.DeleteObject(ctx, objectKey)
-			return repository.ObjectInfo{}, apperr.InvalidInput("スタンプ画像はPNGまたはSVGを指定してください")
+			return repository.ObjectInfo{}, nil, apperr.InvalidInput("スタンプ画像はPNGまたはSVGを指定してください")
 		}
 		_ = store.DeleteObject(ctx, objectKey)
-		return repository.ObjectInfo{}, fmt.Errorf("%sの形式が受け付けられません: %s", kind.Label, info.ContentType)
+		return repository.ObjectInfo{}, nil, fmt.Errorf("%sの形式が受け付けられません: %s", kind.Label, info.ContentType)
 	}
 
 	// ここまでで見たのは「利用者がそう名乗った」という記録だけ。署名付き PUT では
@@ -533,35 +602,50 @@ func verifyObject(ctx context.Context, store ObjectStore, objectKey string) (rep
 	if kind.Prefix == ChatStamp.Prefix {
 		readLimit = kind.MaxBytes + 1
 	}
+	if kind.Prefix == Video.Prefix {
+		// 表（moov）を全部読むため、先頭を多めに読む（InspectMP4 参照）。
+		// ファイル全体は読まない。
+		readLimit = videoHeadLimit
+	}
 	head, headETag, err := store.ObjectHead(ctx, objectKey, readLimit)
 	if err != nil {
 		// 置き場の不調と「形式が違う」を言い分けない理由は無いので、素直に失敗を返す。
 		// 通すと検査が素通しになる。消さないのは、こちらの不調で利用者の
 		// アップロードを捨てないため。
-		return repository.ObjectInfo{}, fmt.Errorf("failed to verify the uploaded file")
+		return repository.ObjectInfo{}, nil, fmt.Errorf("failed to verify the uploaded file")
 	}
 	// 大きさを測った要求と先頭を読んだ要求は別の往復なので、その間に置き直されて
 	// いれば「測ったもの」と「中身を確かめたもの」が別になる。写しは info.ETag を
 	// 条件に行うので、確かめたのが別物なら受け付けてはいけない。
 	if headETag != info.ETag {
-		return repository.ObjectInfo{}, errNotUploaded
+		return repository.ObjectInfo{}, nil, errNotUploaded
 	}
 	if kind.Prefix == ChatStamp.Prefix {
 		if int64(len(head)) != info.Size {
-			return repository.ObjectInfo{}, fmt.Errorf("画像全体を検証できません")
+			return repository.ObjectInfo{}, nil, fmt.Errorf("画像全体を検証できません")
 		}
 		if err := ValidateStampImage(info.ContentType, head); err != nil {
 			_ = store.DeleteObject(ctx, objectKey)
-			return repository.ObjectInfo{}, err
+			return repository.ObjectInfo{}, nil, err
 		}
-		return info, nil
+		return info, nil, nil
+	}
+	if kind.Prefix == Video.Prefix {
+		// 動画は名乗りとの一致（ブラウザーと同じ判定）では足りない。H.264/AAC か、
+		// 長さ・解像度・fps が上限内か、表が壊れていないかまで見る。
+		probe, err := InspectMP4(head, info.Size)
+		if err != nil {
+			_ = store.DeleteObject(ctx, objectKey)
+			return repository.ObjectInfo{}, nil, err
+		}
+		return info, &probe, nil
 	}
 	if !contentTypeMatchesBytes(info.ContentType, head) {
 		_ = store.DeleteObject(ctx, objectKey)
-		return repository.ObjectInfo{}, fmt.Errorf("%sの中身が %s ではありません", kind.Label, info.ContentType)
+		return repository.ObjectInfo{}, nil, fmt.Errorf("%sの中身が %s ではありません", kind.Label, info.ContentType)
 	}
 
-	return info, nil
+	return info, nil, nil
 }
 
 // errNotUploaded は「そのキーに実体が無い」。Accept が「写し終えた後の2回目の

@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -472,6 +473,47 @@ func TestDeleteUserStopsWhenReportedMediaCannotBeRetained(t *testing.T) {
 	f.media.keys[5] = []string{"media/a.png"}
 	f.reported.err = errors.New("storage down")
 	if _, err := NewDeleteUserUseCase(f.deps()).Execute(adminCtxFor(), 5); err == nil {
+		t.Fatal("want an error")
+	}
+	if len(f.users.purged) != 0 || len(f.objects.discarded) != 0 {
+		t.Errorf("purged=%v discarded=%v", f.users.purged, f.objects.discarded)
+	}
+}
+
+// deleteUserVideos は、通報中のメッセージの動画を残す口の代役。
+type deleteUserVideos struct {
+	kept []string
+	err  error
+}
+
+func (v *deleteUserVideos) RetainReportedVideos(context.Context, int64) ([]string, error) {
+	return v.kept, v.err
+}
+
+// 通報中のメッセージの動画は、退会でも消さずに残す（ほかの添付は消す）。
+func TestDeleteUserKeepsReportedVideoFiles(t *testing.T) {
+	f := newDeletionFixture()
+	f.addUser(5, model.UserStatusFrozen, nil)
+	f.media.keys[5] = []string{"media/a.png", "videos/5/v.mp4", "video-thumbnails/5/v.jpg", "videos/5/other.mp4", "video-thumbnails/5/other.jpg"}
+	deps := f.deps()
+	deps.ReportedVideos = &deleteUserVideos{kept: []string{"videos/5/v.mp4", "video-thumbnails/5/v.jpg"}}
+	if _, err := NewDeleteUserUseCase(deps).Execute(adminCtxFor(), 5); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"media/a.png", "videos/5/other.mp4", "video-thumbnails/5/other.jpg"}
+	if fmt.Sprint(f.objects.discarded) != fmt.Sprint(want) {
+		t.Errorf("discarded = %v, want %v", f.objects.discarded, want)
+	}
+}
+
+// 動画を残す記録が作れなければ、退会の処理ごとやり直す（先へ進むと通報の動画が消える）。
+func TestDeleteUserStopsWhenReportedVideosCannotBeRetained(t *testing.T) {
+	f := newDeletionFixture()
+	f.addUser(5, model.UserStatusFrozen, nil)
+	f.media.keys[5] = []string{"videos/5/v.mp4"}
+	deps := f.deps()
+	deps.ReportedVideos = &deleteUserVideos{err: errors.New("db down")}
+	if _, err := NewDeleteUserUseCase(deps).Execute(adminCtxFor(), 5); err == nil {
 		t.Fatal("want an error")
 	}
 	if len(f.users.purged) != 0 || len(f.objects.discarded) != 0 {

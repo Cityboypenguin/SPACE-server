@@ -59,10 +59,11 @@ func NewMessageWriters(
 	mentionStore repository.MessageMentionStore,
 	mediaRepo chatMediaRepository,
 	txManager repository.TxManager,
+	videos messagestore.VideoAttacher,
 ) MessageWriters {
 	return MessageWriters{
 		system: writer,
-		send:   messagestore.NewSendMessageUseCase(uploads, reader, writer, mentionStore, mediaRepo, txManager),
+		send:   messagestore.NewSendMessageUseCase(uploads, reader, writer, mentionStore, mediaRepo, txManager, videos),
 		update: messagestore.NewUpdateMessageUseCase(reader, writer, mentionStore, txManager),
 		delete: messagestore.NewDeleteMessageUseCase(writer),
 	}

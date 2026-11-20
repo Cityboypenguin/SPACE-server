@@ -35,6 +35,12 @@ func (r *queryResolver) presignedUploadURL(ctx context.Context, kind upload.Kind
 	if kind.Private {
 		store = r.MessageStorageRepository
 	}
+	if kind.Video {
+		store = r.VideoStorageRepository
+		if store == nil {
+			return nil, fmt.Errorf("video storage is not configured")
+		}
+	}
 	uploadURL, err := store.PresignedPutURL(ctx, objectKey, contentType, 15*time.Minute, kind.MaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload url")
@@ -89,4 +95,12 @@ func (r *Resolver) toMediaInputs(inputs []*gqlmodel.MediaUploadInput) []model.Me
 		})
 	}
 	return result
+}
+
+// toVideoInput は GraphQL の動画入力をユースケース層の形へ変換する（受け入れはしない）。
+func toVideoInput(in *gqlmodel.VideoUploadInput) *model.VideoInput {
+	if in == nil {
+		return nil
+	}
+	return &model.VideoInput{StorageKey: in.ObjectKey, ThumbnailKey: in.ThumbnailObjectKey}
 }

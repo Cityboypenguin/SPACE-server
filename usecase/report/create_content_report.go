@@ -39,6 +39,11 @@ type AddendumReader interface {
 	ListAnswerAddenda(ctx context.Context, answerIDs []int64) (map[int64][]*model.Addendum, error)
 }
 
+// VideoSnapshotter はメッセージの動画を通報の写しの形で返す（実体は usecase/video.Service）。
+type VideoSnapshotter interface {
+	SnapshotVideo(ctx context.Context, messageID int64) (*model.ReportedContentVideo, error)
+}
+
 // CreateContentReportDeps は通報時点の内容を写すのに要るものだけ。
 type CreateContentReportDeps struct {
 	Reports *CreateReportUsecase
@@ -51,6 +56,8 @@ type CreateContentReportDeps struct {
 	Addenda   AddendumReader
 	Media     repository.MediaReader
 	Users     userusecase.GetUserByIDUseCase
+	// Videos は nil なら動画を写さない（動画が無い構成）。
+	Videos VideoSnapshotter
 }
 
 // CreateContentReportUsecase はメッセージ・質問・回答・投票・スレッドの通報を受け付け、
@@ -139,7 +146,7 @@ func (u *CreateContentReportUsecase) loadTarget(ctx context.Context, input Creat
 			stampID:    msg.StampID,
 			createdAt:  msg.CreatedAt,
 			updatedAt:  msg.UpdatedAt,
-			loadExtras: u.attachMedia(input.TargetID, u.deps.Media.ListByMessageIDs),
+			loadExtras: u.attachMediaAndVideo(input.TargetID),
 		}, nil
 	case model.TargetQuestion:
 		question, err := u.deps.Questions.GetQuestionByID(ctx, input.TargetID)
@@ -241,6 +248,25 @@ func (u *CreateContentReportUsecase) attachMedia(
 				CreatedAt:   m.CreatedAt,
 			})
 		}
+		return nil
+	}
+}
+
+// attachMediaAndVideo はメッセージの添付と動画を写す。
+func (u *CreateContentReportUsecase) attachMediaAndVideo(id int64) func(context.Context, *model.ReportedContent) error {
+	attachMedia := u.attachMedia(id, u.deps.Media.ListByMessageIDs)
+	return func(ctx context.Context, snapshot *model.ReportedContent) error {
+		if err := attachMedia(ctx, snapshot); err != nil {
+			return err
+		}
+		if u.deps.Videos == nil {
+			return nil
+		}
+		video, err := u.deps.Videos.SnapshotVideo(ctx, id)
+		if err != nil {
+			return err
+		}
+		snapshot.Video = video
 		return nil
 	}
 }

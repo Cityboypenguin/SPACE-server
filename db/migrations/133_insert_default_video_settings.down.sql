@@ -1,0 +1,1 @@
+DELETE FROM system_settings WHERE `key` IN ('video_retention_days', 'video_purge_grace_days', 'video_purge_batch_size', 'video_daily_upload_limit_per_user', 'video_daily_bytes_limit_per_user', 'video_total_bytes_limit');

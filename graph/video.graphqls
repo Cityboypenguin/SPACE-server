@@ -1,0 +1,147 @@
+# 投稿・メッセージに付ける動画。方針は docs/video-posts.md。
+
+extend type Query {
+  # 動画本体（MP4）を置く署名付きURL。1日の本数などの上限に当たっていればエラー。
+  presignedVideoUploadUrl: PresignedUploadUrl!
+  # 動画のサムネイル（JPEG）を置く署名付きURL。
+  presignedVideoThumbnailUploadUrl: PresignedUploadUrl!
+  # 投稿画面に出す設定（保存期間など）。
+  videoSettings: VideoSettings!
+  adminVideoStorageStats: VideoStorageStats!
+  # 保存期間を days にしたときの影響。何も変えない。
+  adminPreviewVideoRetention(days: Int!): VideoRetentionPreview!
+}
+
+extend type Mutation {
+  # 動画を再生するための期限付きURLを出す。URL は保存期間の期限を越えて有効にならない。
+  # 期限が過ぎた・外された動画、見られない投稿・メッセージの動画は NOT_FOUND。
+  requestVideoPlayback(videoID: ID!): VideoPlayback!
+  # 保存期間を変える。expectedNewlyExpiredCount には直前の adminPreviewVideoRetention の
+  # newlyExpired.count を渡す。件数が変わっていたら CONFLICT で何も変えない。
+  adminUpdateVideoRetention(days: Int!, expectedNewlyExpiredCount: Int!): VideoRetentionPreview!
+  adminUpdateVideoLimits(input: VideoLimitsInput!): VideoSettings!
+  # 動画を見えなくする（実体は猶予の後に消える）。
+  adminRemoveVideo(videoID: ID!): Boolean!
+  # 通報の写しの動画を再生するためのURL。投稿者が退会していても、通報への対応が
+  # 終わるまでは再生できる。ファイルが消えていれば NOT_FOUND。
+  adminRequestReportedVideoPlayback(reportID: ID!): VideoPlayback!
+}
+
+extend type ReportedContent {
+  # 通報を受けた時点でメッセージに付いていた動画。無ければ null。
+  video: ReportedVideo
+}
+
+# 通報の写しの動画。ファイルは写し取らず、通報への対応が終わるまで元のまま残す。
+type ReportedVideo {
+  ID: ID!
+  durationMs: Int!
+  width: Int!
+  height: Int!
+  hasAudio: Boolean!
+  sizeBytes: Float!
+  createdAt: String!
+  # ファイルが残っていて再生できるか。対応が終わって消えたら false。
+  available: Boolean!
+  thumbnailURL: String
+}
+
+input VideoUploadInput {
+  objectKey: String!
+  thumbnailObjectKey: String!
+}
+
+enum VideoStatus {
+  # 再生できる。
+  AVAILABLE
+  # 保存期間が終了した。
+  EXPIRED
+  # 期限より前に外された（管理者・投稿の削除）。
+  REMOVED
+}
+
+type Video {
+  ID: ID!
+  status: VideoStatus!
+  # 再生できる状態のときだけ入る（期限付きの署名付きURL）。
+  thumbnailUrl: String
+  durationMs: Int!
+  width: Int!
+  height: Int!
+  # バイト数。
+  sizeBytes: Float!
+  hasAudio: Boolean!
+  # 保存期間の期限（RFC3339）。現在の保存期間の設定で計算する。
+  expiresAt: String!
+  retentionDays: Int!
+  createdAt: String!
+}
+
+type VideoPlayback {
+  url: String!
+  expiresAt: String!
+}
+
+type VideoSettings {
+  retentionDays: Int!
+  purgeGraceDays: Int!
+  purgeBatchSize: Int!
+  # 以下の上限は 0 なら無制限。容量はバイト。
+  dailyUploadLimitPerUser: Float!
+  dailyBytesLimitPerUser: Float!
+  totalBytesLimit: Float!
+  # 設定できる保存期間の上限（Azure のライフサイクル管理の日数から決まる）。
+  maxRetentionDays: Int!
+  # Azure のライフサイクル管理が動画を消す日数。0 は未設定。
+  lifecycleBackstopDays: Int!
+  # 圧縮後の動画の上限（バイト）と長さの上限（秒）。
+  maxFileBytes: Float!
+  maxDurationSeconds: Int!
+}
+
+input VideoLimitsInput {
+  purgeGraceDays: Int!
+  purgeBatchSize: Int!
+  dailyUploadLimitPerUser: Float!
+  dailyBytesLimitPerUser: Float!
+  totalBytesLimit: Float!
+}
+
+type VideoUsage {
+  count: Float!
+  bytes: Float!
+}
+
+type VideoDailyStat {
+  # JST の日付（YYYY-MM-DD）。
+  day: String!
+  uploads: Float!
+  uploadBytes: Float!
+  uploadFailures: Float!
+  playbackRequests: Float!
+  # 再生用URLを出した回数 × 動画の大きさ（実際の転送量ではない目安）。
+  playbackBytes: Float!
+  purged: Float!
+  purgeFailures: Float!
+}
+
+type VideoStorageStats {
+  settings: VideoSettings!
+  # 実体が残っている動画。
+  stored: VideoUsage!
+  # 実体の削除に失敗して、やり直し待ちの本数。
+  purgeFailing: Float!
+  today: VideoDailyStat!
+  thisMonth: VideoDailyStat!
+  daily: [VideoDailyStat!]!
+}
+
+type VideoRetentionPreview {
+  currentDays: Int!
+  newDays: Int!
+  maxDays: Int!
+  # 変更した瞬間に見えなくなる動画。
+  newlyExpired: VideoUsage!
+  # 変更後7日以内に期限が来る動画（newlyExpired を除く）。
+  expiringWithinWeek: VideoUsage!
+}
