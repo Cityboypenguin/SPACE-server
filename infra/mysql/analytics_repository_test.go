@@ -131,6 +131,9 @@ func analyticsSchemaDDL() []string {
 		)`,
 		`CREATE TABLE post_media (post_id BIGINT NOT NULL, media_id BIGINT NOT NULL)`,
 		`CREATE TABLE media (id BIGINT NOT NULL, content_type VARCHAR(100) NOT NULL, PRIMARY KEY (id))`,
+		// 動画は post_media ではなく post_videos に入る（db/migrations/130・131）。
+		`CREATE TABLE post_videos (post_id BIGINT NOT NULL, media_id BIGINT NOT NULL, PRIMARY KEY (post_id))`,
+		`CREATE TABLE video_assets (media_id BIGINT NOT NULL, removed_reason VARCHAR(20) NULL, PRIMARY KEY (media_id))`,
 		`CREATE TABLE favorites (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE favorite_users (id BIGINT NOT NULL AUTO_INCREMENT, created_at BIGINT NOT NULL, PRIMARY KEY (id))`,
 		`CREATE TABLE rooms (id BIGINT NOT NULL AUTO_INCREMENT, type VARCHAR(50) NOT NULL, parent_room_id BIGINT NULL, PRIMARY KEY (id))`,
@@ -839,5 +842,38 @@ func TestTimeSeriesDailyActiveUsersAcrossARange(t *testing.T) {
 		if want[p.Label] != p.ActiveUsers {
 			t.Errorf("activeUsers[%s] = %d, want %d", p.Label, p.ActiveUsers, want[p.Label])
 		}
+	}
+}
+
+// 動画付き投稿は post_videos から数える（動画は post_media に入らない）。
+// 投稿者が編集で外した動画・削除された投稿・返信は数えず、管理者が外した動画と
+// 画像だけの投稿は動画付きに入れない／入れる、をここで固定する。
+func TestAnalyticsCountsPostsWithVideo(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+	now := time.Now().Unix()
+
+	mustExec(t, db, `INSERT INTO posts (id, user_id, parent_id, created_at, deleted_at) VALUES
+		(1, 10, NULL, ?, NULL),
+		(2, 10, NULL, ?, NULL),
+		(3, 10, NULL, ?, ?),
+		(4, 10, 1, ?, NULL),
+		(5, 10, NULL, ?, NULL),
+		(6, 10, NULL, ?, NULL)`, now, now, now, now, now, now, now)
+	// 1: 動画あり / 2: 投稿者が外した / 3: 投稿ごと削除 / 4: 返信 / 5: 管理者が外した / 6: 画像だけ
+	mustExec(t, db, `INSERT INTO post_videos (post_id, media_id) VALUES (1, 101), (2, 102), (3, 103), (4, 104), (5, 105)`)
+	mustExec(t, db, `INSERT INTO video_assets (media_id, removed_reason) VALUES (101, NULL), (102, 'author'), (103, NULL), (104, NULL), (105, 'admin')`)
+	mustExec(t, db, `INSERT INTO media (id, content_type) VALUES (106, 'image/png')`)
+	mustExec(t, db, `INSERT INTO post_media (post_id, media_id) VALUES (6, 106)`)
+
+	s, err := NewMySQLAnalyticsRepository(db).GetAnalyticsSummary(context.Background(), repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetAnalyticsSummary failed: %v", err)
+	}
+	if s.PostsWithVideo != 2 {
+		t.Errorf("PostsWithVideo = %d, want 2 (投稿1と、管理者が外した投稿5)", s.PostsWithVideo)
+	}
+	if s.PostsWithImage != 1 {
+		t.Errorf("PostsWithImage = %d, want 1", s.PostsWithImage)
 	}
 }
