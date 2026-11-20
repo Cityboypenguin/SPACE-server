@@ -136,9 +136,15 @@ type ComplexityRoot struct {
 		AvgSessionsPerDay           func(childComplexity int) int
 		AvgTimeToFirstPostMinutes   func(childComplexity int) int
 		CommentsToday               func(childComplexity int) int
+		CommunityMessages           func(childComplexity int) int
+		CommunityMessagesToday      func(childComplexity int) int
+		CourseMessages              func(childComplexity int) int
+		CourseMessagesToday         func(childComplexity int) int
 		CurrentActiveUsers          func(childComplexity int) int
 		Dau                         func(childComplexity int) int
 		DauMauRatio                 func(childComplexity int) int
+		DmMessages                  func(childComplexity int) int
+		DmMessagesToday             func(childComplexity int) int
 		ErrorRate5xx                func(childComplexity int) int
 		FrozenUsersCount            func(childComplexity int) int
 		Mau                         func(childComplexity int) int
@@ -1083,13 +1089,16 @@ type ComplexityRoot struct {
 	}
 
 	TimeSeriesPoint struct {
-		ActiveUsers func(childComplexity int) int
-		Comments    func(childComplexity int) int
-		Label       func(childComplexity int) int
-		Likes       func(childComplexity int) int
-		Messages    func(childComplexity int) int
-		NewUsers    func(childComplexity int) int
-		Posts       func(childComplexity int) int
+		ActiveUsers       func(childComplexity int) int
+		Comments          func(childComplexity int) int
+		CommunityMessages func(childComplexity int) int
+		CourseMessages    func(childComplexity int) int
+		DmMessages        func(childComplexity int) int
+		Label             func(childComplexity int) int
+		Likes             func(childComplexity int) int
+		Messages          func(childComplexity int) int
+		NewUsers          func(childComplexity int) int
+		Posts             func(childComplexity int) int
 	}
 
 	TimetableEntry struct {
@@ -1956,6 +1965,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AnalyticsSummary.CommentsToday(childComplexity), true
+	case "AnalyticsSummary.communityMessages":
+		if e.ComplexityRoot.AnalyticsSummary.CommunityMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CommunityMessages(childComplexity), true
+	case "AnalyticsSummary.communityMessagesToday":
+		if e.ComplexityRoot.AnalyticsSummary.CommunityMessagesToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CommunityMessagesToday(childComplexity), true
+	case "AnalyticsSummary.courseMessages":
+		if e.ComplexityRoot.AnalyticsSummary.CourseMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CourseMessages(childComplexity), true
+	case "AnalyticsSummary.courseMessagesToday":
+		if e.ComplexityRoot.AnalyticsSummary.CourseMessagesToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.CourseMessagesToday(childComplexity), true
 	case "AnalyticsSummary.currentActiveUsers":
 		if e.ComplexityRoot.AnalyticsSummary.CurrentActiveUsers == nil {
 			break
@@ -1974,6 +2007,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AnalyticsSummary.DauMauRatio(childComplexity), true
+	case "AnalyticsSummary.dmMessages":
+		if e.ComplexityRoot.AnalyticsSummary.DmMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.DmMessages(childComplexity), true
+	case "AnalyticsSummary.dmMessagesToday":
+		if e.ComplexityRoot.AnalyticsSummary.DmMessagesToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalyticsSummary.DmMessagesToday(childComplexity), true
 	case "AnalyticsSummary.errorRate5xx":
 		if e.ComplexityRoot.AnalyticsSummary.ErrorRate5xx == nil {
 			break
@@ -7515,6 +7560,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TimeSeriesPoint.Comments(childComplexity), true
+	case "TimeSeriesPoint.communityMessages":
+		if e.ComplexityRoot.TimeSeriesPoint.CommunityMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.CommunityMessages(childComplexity), true
+	case "TimeSeriesPoint.courseMessages":
+		if e.ComplexityRoot.TimeSeriesPoint.CourseMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.CourseMessages(childComplexity), true
+	case "TimeSeriesPoint.dmMessages":
+		if e.ComplexityRoot.TimeSeriesPoint.DmMessages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TimeSeriesPoint.DmMessages(childComplexity), true
 	case "TimeSeriesPoint.label":
 		if e.ComplexityRoot.TimeSeriesPoint.Label == nil {
 			break
@@ -8426,6 +8489,12 @@ func (ec *executionContext) childFields_AnalyticsSummary(ctx context.Context, fi
 		return ec.fieldContext_AnalyticsSummary_totalCommunities(ctx, field)
 	case "totalMessages":
 		return ec.fieldContext_AnalyticsSummary_totalMessages(ctx, field)
+	case "dmMessages":
+		return ec.fieldContext_AnalyticsSummary_dmMessages(ctx, field)
+	case "communityMessages":
+		return ec.fieldContext_AnalyticsSummary_communityMessages(ctx, field)
+	case "courseMessages":
+		return ec.fieldContext_AnalyticsSummary_courseMessages(ctx, field)
 	case "totalReports":
 		return ec.fieldContext_AnalyticsSummary_totalReports(ctx, field)
 	case "totalBlocks":
@@ -8448,6 +8517,12 @@ func (ec *executionContext) childFields_AnalyticsSummary(ctx context.Context, fi
 		return ec.fieldContext_AnalyticsSummary_commentsToday(ctx, field)
 	case "messagesToday":
 		return ec.fieldContext_AnalyticsSummary_messagesToday(ctx, field)
+	case "dmMessagesToday":
+		return ec.fieldContext_AnalyticsSummary_dmMessagesToday(ctx, field)
+	case "communityMessagesToday":
+		return ec.fieldContext_AnalyticsSummary_communityMessagesToday(ctx, field)
+	case "courseMessagesToday":
+		return ec.fieldContext_AnalyticsSummary_courseMessagesToday(ctx, field)
 	case "avgLikesPerPost":
 		return ec.fieldContext_AnalyticsSummary_avgLikesPerPost(ctx, field)
 	case "avgCommentsPerPost":
@@ -9768,6 +9843,12 @@ func (ec *executionContext) childFields_TimeSeriesPoint(ctx context.Context, fie
 		return ec.fieldContext_TimeSeriesPoint_comments(ctx, field)
 	case "messages":
 		return ec.fieldContext_TimeSeriesPoint_messages(ctx, field)
+	case "dmMessages":
+		return ec.fieldContext_TimeSeriesPoint_dmMessages(ctx, field)
+	case "communityMessages":
+		return ec.fieldContext_TimeSeriesPoint_communityMessages(ctx, field)
+	case "courseMessages":
+		return ec.fieldContext_TimeSeriesPoint_courseMessages(ctx, field)
 	case "newUsers":
 		return ec.fieldContext_TimeSeriesPoint_newUsers(ctx, field)
 	case "likes":
@@ -16545,6 +16626,75 @@ func (ec *executionContext) fieldContext_AnalyticsSummary_totalMessages(_ contex
 	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _AnalyticsSummary_dmMessages(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_dmMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DmMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_dmMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_communityMessages(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_communityMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_communityMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_courseMessages(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_courseMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CourseMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_courseMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _AnalyticsSummary_totalReports(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16795,6 +16945,75 @@ func (ec *executionContext) _AnalyticsSummary_messagesToday(ctx context.Context,
 	)
 }
 func (ec *executionContext) fieldContext_AnalyticsSummary_messagesToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_dmMessagesToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_dmMessagesToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DmMessagesToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_dmMessagesToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_communityMessagesToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_communityMessagesToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityMessagesToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_communityMessagesToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalyticsSummary_courseMessagesToday(ctx context.Context, field graphql.CollectedField, obj *model.AnalyticsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalyticsSummary_courseMessagesToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CourseMessagesToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalyticsSummary_courseMessagesToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AnalyticsSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -39006,6 +39225,75 @@ func (ec *executionContext) fieldContext_TimeSeriesPoint_messages(_ context.Cont
 	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _TimeSeriesPoint_dmMessages(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_dmMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DmMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_dmMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_communityMessages(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_communityMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommunityMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_communityMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TimeSeriesPoint_courseMessages(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TimeSeriesPoint_courseMessages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CourseMessages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TimeSeriesPoint_courseMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TimeSeriesPoint", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _TimeSeriesPoint_newUsers(ctx context.Context, field graphql.CollectedField, obj *model.TimeSeriesPoint) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44382,6 +44670,21 @@ func (ec *executionContext) _AnalyticsSummary(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "dmMessages":
+			out.Values[i] = ec._AnalyticsSummary_dmMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityMessages":
+			out.Values[i] = ec._AnalyticsSummary_communityMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "courseMessages":
+			out.Values[i] = ec._AnalyticsSummary_courseMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "totalReports":
 			out.Values[i] = ec._AnalyticsSummary_totalReports(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -44434,6 +44737,21 @@ func (ec *executionContext) _AnalyticsSummary(ctx context.Context, sel ast.Selec
 			}
 		case "messagesToday":
 			out.Values[i] = ec._AnalyticsSummary_messagesToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dmMessagesToday":
+			out.Values[i] = ec._AnalyticsSummary_dmMessagesToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityMessagesToday":
+			out.Values[i] = ec._AnalyticsSummary_communityMessagesToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "courseMessagesToday":
+			out.Values[i] = ec._AnalyticsSummary_courseMessagesToday(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -54276,6 +54594,21 @@ func (ec *executionContext) _TimeSeriesPoint(ctx context.Context, sel ast.Select
 			}
 		case "messages":
 			out.Values[i] = ec._TimeSeriesPoint_messages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dmMessages":
+			out.Values[i] = ec._TimeSeriesPoint_dmMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "communityMessages":
+			out.Values[i] = ec._TimeSeriesPoint_communityMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "courseMessages":
+			out.Values[i] = ec._TimeSeriesPoint_courseMessages(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

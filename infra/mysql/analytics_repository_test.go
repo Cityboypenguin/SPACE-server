@@ -443,8 +443,9 @@ func TestTimeSeriesRunsOnlyRequestedSeries(t *testing.T) {
 		return c.selects
 	}
 
-	if got := run(repository.AllFields()); got != 6 {
-		t.Fatalf("全系列で SELECT %d 本、期待 6 本", got)
+	// 系列は posts・comments・messages・dm/community/course の3つ・newUsers・likes・activeUsers。
+	if got := run(repository.AllFields()); got != 9 {
+		t.Fatalf("全系列で SELECT %d 本、期待 9 本", got)
 	}
 	if got := run(repository.NewFieldSet([]string{"label", "posts"})); got != 1 {
 		t.Fatalf("posts だけで SELECT %d 本、期待 1 本（label は SQL を伴わない）", got)
@@ -638,8 +639,9 @@ func TestTimeSeriesHourlyRunsOnlyRequestedSeries(t *testing.T) {
 		return c.selects
 	}
 
-	if got := run(repository.AllFields()); got != 6 {
-		t.Fatalf("全系列で SELECT %d 本、期待 6 本", got)
+	// 系列は posts・comments・messages・dm/community/course の3つ・newUsers・likes・activeUsers。
+	if got := run(repository.AllFields()); got != 9 {
+		t.Fatalf("全系列で SELECT %d 本、期待 9 本", got)
 	}
 	if got := run(repository.NewFieldSet([]string{"label", "activeUsers"})); got != 1 {
 		t.Fatalf("activeUsers だけで SELECT %d 本、期待 1 本", got)
@@ -875,5 +877,58 @@ func TestAnalyticsCountsPostsWithVideo(t *testing.T) {
 	}
 	if s.PostsWithImage != 1 {
 		t.Errorf("PostsWithImage = %d, want 1", s.PostsWithImage)
+	}
+}
+
+// メッセージ数を DM・コミュニティ・授業チャットに分ける。スレッドの中の発言は親の種類に入り、
+// 削除済みは数えない。3つの合計は総数と一致する（サマリー・本日・時系列のどれでも）。
+func TestAnalyticsSplitsMessagesByRoomType(t *testing.T) {
+	db, cleanup := analyticsTestDB(t)
+	defer cleanup()
+	now := time.Now()
+	today := now.Unix()
+	old := now.AddDate(0, 0, -3).Unix()
+
+	mustExec(t, db, `INSERT INTO rooms (id, type, parent_room_id) VALUES
+		(1, 'dm', NULL), (2, 'community', NULL), (3, 'community', 2), (4, 'course', NULL), (5, 'course', 4)`)
+	mustExec(t, db, `INSERT INTO messages (room_id, user_id, created_at, deleted_at) VALUES
+		(1, 10, ?, NULL), (1, 10, ?, NULL), (1, 10, ?, ?),
+		(2, 10, ?, NULL), (3, 10, ?, NULL), (3, 10, ?, NULL),
+		(4, 10, ?, NULL), (5, 10, ?, NULL), (5, 10, ?, NULL), (4, 10, ?, ?)`,
+		today, old, today, today, // DM: 本日1・3日前1・削除1
+		today, today, old, // コミュニティ: 本体1・スレッド2（うち1件は3日前）
+		old, today, today, today, today) // 授業: 本体1（3日前）・スレッド2・削除1
+
+	s, err := NewMySQLAnalyticsRepository(db).GetAnalyticsSummary(context.Background(), repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetAnalyticsSummary failed: %v", err)
+	}
+	got := [...]int{s.TotalMessages, s.DMMessages, s.CommunityMessages, s.CourseMessages}
+	if got != [...]int{8, 2, 3, 3} {
+		t.Errorf("total/dm/community/course = %v, want [8 2 3 3]", got)
+	}
+	gotToday := [...]int{s.MessagesToday, s.DMMessagesToday, s.CommunityMessagesToday, s.CourseMessagesToday}
+	if gotToday != [...]int{5, 1, 2, 2} {
+		t.Errorf("today total/dm/community/course = %v, want [5 1 2 2]", gotToday)
+	}
+
+	from := now.AddDate(0, 0, -5).In(appJST).Format("2006-01-02")
+	to := now.In(appJST).Format("2006-01-02")
+	points, err := NewMySQLAnalyticsRepository(db).GetTimeSeries(context.Background(), "day", from, to, repository.AllFields())
+	if err != nil {
+		t.Fatalf("GetTimeSeries failed: %v", err)
+	}
+	var sum [4]int
+	for _, p := range points {
+		if p.DMMessages+p.CommunityMessages+p.CourseMessages != p.Messages {
+			t.Errorf("%s: dm+community+course = %d, messages = %d", p.Label, p.DMMessages+p.CommunityMessages+p.CourseMessages, p.Messages)
+		}
+		sum[0] += p.Messages
+		sum[1] += p.DMMessages
+		sum[2] += p.CommunityMessages
+		sum[3] += p.CourseMessages
+	}
+	if sum != [4]int{8, 2, 3, 3} {
+		t.Errorf("time series sums = %v, want [8 2 3 3]", sum)
 	}
 }
