@@ -18,12 +18,35 @@ type graphqlRequestPayload struct {
 	Variables     map[string]any `json:"variables"`
 }
 
+const maskedValue = "***"
+
 // sensitivePattern はログ出力時にマスクするフィールド名（大文字小文字・部分一致）。
 // otp はメール認証やパスワード再設定のワンタイムパスワード。
+// ここに当たる項目は、値が文字列でなくても丸ごと伏せる。
 var sensitivePattern = regexp.MustCompile(`(?i)password|passwd|secret|token|otp|passcode|credential`)
+
+// idKeyPattern は値を残してよい ID の項目名（id、roomID、user_id、mentionUserIDs など）。
+var idKeyPattern = regexp.MustCompile(`^ids?$|_ids?$|I[Dd]s?$`)
+
+// keptStringKeys は ID 以外で、文字列の値を残してよい項目名。調査に要り、
+// 利用者が書いた文章を含まないものだけを並べる。
+//
+// ここに無い文字列の項目はすべて伏せる。DM・投稿の本文（content）、自己紹介（bio）、
+// 表示名（name）、検索語（keyword、tag）などが平文でログに残っていたため、
+// 「伏せる項目を並べる」のではなく「残す項目を並べる」形にしている。
+// 項目を足すときは、利用者の書いた文章が入らないことを確かめてから足すこと。
+var keptStringKeys = map[string]bool{
+	"after": true, "before": true, "since": true, "from": true, "to": true,
+	"granularity": true, "semester": true,
+	"status": true, "type": true, "sortBy": true, "sortOrder": true,
+	"contentType": true, "objectKey": true, "emoji": true,
+	"path":  true, // 閲覧記録の画面のパス
+	"email": true, // ログインできない問い合わせの調査に使う
+}
 
 // maskVariables は入れ子の input オブジェクトや配列の中まで見てマスクする。
 // ログインや登録はパスワードを variables.input の下に入れて送ってくるため。
+// 数値・真偽値・null はそのまま残し、文字列は項目名で残すかを決める。
 func maskVariables(vars map[string]any) map[string]any {
 	if len(vars) == 0 {
 		return vars
@@ -31,24 +54,30 @@ func maskVariables(vars map[string]any) map[string]any {
 	masked := make(map[string]any, len(vars))
 	for k, v := range vars {
 		if sensitivePattern.MatchString(k) {
-			masked[k] = "***"
+			masked[k] = maskedValue
 		} else {
-			masked[k] = maskValue(v)
+			masked[k] = maskValue(k, v)
 		}
 	}
 	return masked
 }
 
-func maskValue(v any) any {
+// maskValue は key の値 v を伏せる。配列の要素は親の項目名で判断する。
+func maskValue(key string, v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		return maskVariables(t)
 	case []any:
 		out := make([]any, len(t))
 		for i, item := range t {
-			out[i] = maskValue(item)
+			out[i] = maskValue(key, item)
 		}
 		return out
+	case string:
+		if keptStringKeys[key] || idKeyPattern.MatchString(key) {
+			return t
+		}
+		return maskedValue
 	default:
 		return v
 	}
