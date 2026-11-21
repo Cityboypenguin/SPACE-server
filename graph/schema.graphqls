@@ -16,11 +16,14 @@ type Query {
   # 授業チャットが一括停止されていないか。利用者の画面も停止中の表示に使うので、
   # ログインしていれば誰でも読める。切り替えは SSE の course_chat_status で届く。
   courseChatEnabled: Boolean!
+  # 時間割を利用できるか。時間割ルートの表示切り替えに使う。
+  timetableEnabled: Boolean!
 }
 
 type Mutation {
   toggleMaintenanceMode(enabled: Boolean!): Boolean!
   toggleCourseChat(enabled: Boolean!): Boolean!
+  toggleTimetableEnabled(enabled: Boolean!): Boolean!
 }
 
 type Subscription {

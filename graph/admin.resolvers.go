@@ -436,6 +436,17 @@ func (r *mutationResolver) ToggleCourseChat(ctx context.Context, enabled bool) (
 	return enabled, nil
 }
 
+// ToggleTimetableEnabled is the resolver for the toggleTimetableEnabled field.
+func (r *mutationResolver) ToggleTimetableEnabled(ctx context.Context, enabled bool) (bool, error) {
+	if err := r.ManageSystemSettingUsecase.SetTimetableEnabled(ctx, enabled); err != nil {
+		return false, err
+	}
+	if r.SSEBroker != nil {
+		r.SSEBroker.Broadcast("timetable_status", map[string]any{"enabled": enabled})
+	}
+	return enabled, nil
+}
+
 // RecordSessionData is the resolver for the recordSessionData field.
 func (r *mutationResolver) RecordSessionData(ctx context.Context, input gqlmodel.RecordSessionDataInput) (bool, error) {
 	pageViews := make([]repository.PageViewInput, len(input.PageViews))
@@ -542,6 +553,14 @@ func (r *queryResolver) CourseChatEnabled(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return r.ManageSystemSettingUsecase.IsCourseChatEnabled(ctx)
+}
+
+// TimetableEnabled is the resolver for the timetableEnabled field.
+func (r *queryResolver) TimetableEnabled(ctx context.Context) (bool, error) {
+	if _, err := requireAuth(ctx); err != nil {
+		return false, err
+	}
+	return r.ManageSystemSettingUsecase.IsTimetableEnabled(ctx)
 }
 
 // AdminGetFavoriteUsers is the resolver for the adminGetFavoriteUsers field.

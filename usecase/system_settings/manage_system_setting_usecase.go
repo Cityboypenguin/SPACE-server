@@ -53,3 +53,25 @@ func (u *ManageSystemSettingUsecase) IsCourseChatEnabled(ctx context.Context) (b
 	}
 	return value == "true", nil
 }
+
+func (u *ManageSystemSettingUsecase) SetTimetableEnabled(ctx context.Context, enabled bool) error {
+	if _, err := authz.RequireAdmin(ctx); err != nil {
+		return err
+	}
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	return u.settingRepo.Update(ctx, repository.SystemSettingTimetableEnabled, value, time.Now().Unix())
+}
+
+func (u *ManageSystemSettingUsecase) IsTimetableEnabled(ctx context.Context) (bool, error) {
+	value, err := u.settingRepo.Get(ctx, repository.SystemSettingTimetableEnabled)
+	if err != nil {
+		return false, err
+	}
+	if value == "" {
+		return true, nil
+	}
+	return value == "true", nil
+}

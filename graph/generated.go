@@ -664,6 +664,7 @@ type ComplexityRoot struct {
 		SkipCommunityJoinGreeting           func(childComplexity int, roomID string) int
 		ToggleCourseChat                    func(childComplexity int, enabled bool) int
 		ToggleMaintenanceMode               func(childComplexity int, enabled bool) int
+		ToggleTimetableEnabled              func(childComplexity int, enabled bool) int
 		UnfreezeUser                        func(childComplexity int, id string) int
 		UnlikeAnswer                        func(childComplexity int, id string) int
 		UpdateAdministrator                 func(childComplexity int, id string, input model.UpdateAdministratorInput) int
@@ -939,6 +940,7 @@ type ComplexityRoot struct {
 		SuggestHashtags                  func(childComplexity int, prefix string, limit *int32) int
 		SuggestUsers                     func(childComplexity int, prefix string, limit *int32) int
 		ThemePreference                  func(childComplexity int) int
+		TimetableEnabled                 func(childComplexity int) int
 		TimetableProfileVisibility       func(childComplexity int) int
 		TopLevelPosts                    func(childComplexity int, limit *int32, offset *int32) int
 		UserTimetable                    func(childComplexity int, userID string, year *int32, semester *string) int
@@ -1263,6 +1265,7 @@ type MessageResolver interface {
 type MutationResolver interface {
 	ToggleMaintenanceMode(ctx context.Context, enabled bool) (bool, error)
 	ToggleCourseChat(ctx context.Context, enabled bool) (bool, error)
+	ToggleTimetableEnabled(ctx context.Context, enabled bool) (bool, error)
 	CreateAdministrator(ctx context.Context, input model.CreateAdministratorInput) (*model.Administrator, error)
 	DeleteAdministrator(ctx context.Context, id string) (bool, error)
 	UpdateAdministrator(ctx context.Context, id string, input model.UpdateAdministratorInput) (*model.Administrator, error)
@@ -1429,6 +1432,7 @@ type PostResolver interface {
 type QueryResolver interface {
 	MaintenanceMode(ctx context.Context) (bool, error)
 	CourseChatEnabled(ctx context.Context) (bool, error)
+	TimetableEnabled(ctx context.Context) (bool, error)
 	AdminSearchUsers(ctx context.Context, keyword string, limit *int32, offset *int32) (*model.UserAccountPage, error)
 	Administrators(ctx context.Context, limit *int32, offset *int32) (*model.AdministratorPage, error)
 	GetAdministratorByID(ctx context.Context, id string) (*model.Administrator, error)
@@ -4909,6 +4913,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ToggleMaintenanceMode(childComplexity, args["enabled"].(bool)), true
+	case "Mutation.toggleTimetableEnabled":
+		if e.ComplexityRoot.Mutation.ToggleTimetableEnabled == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_toggleTimetableEnabled_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ToggleTimetableEnabled(childComplexity, args["enabled"].(bool)), true
 	case "Mutation.unfreezeUser":
 		if e.ComplexityRoot.Mutation.UnfreezeUser == nil {
 			break
@@ -6816,6 +6831,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ThemePreference(childComplexity), true
+	case "Query.timetableEnabled":
+		if e.ComplexityRoot.Query.TimetableEnabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.TimetableEnabled(childComplexity), true
 	case "Query.timetableProfileVisibility":
 		if e.ComplexityRoot.Query.TimetableProfileVisibility == nil {
 			break
@@ -12195,6 +12216,20 @@ func (ec *executionContext) field_Mutation_toggleCourseChat_args(ctx context.Con
 }
 
 func (ec *executionContext) field_Mutation_toggleMaintenanceMode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["enabled"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_toggleTimetableEnabled_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "enabled",
@@ -23392,6 +23427,50 @@ func (ec *executionContext) fieldContext_Mutation_toggleCourseChat(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_toggleTimetableEnabled(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_toggleTimetableEnabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ToggleTimetableEnabled(ctx, fc.Args["enabled"].(bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_toggleTimetableEnabled(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_toggleTimetableEnabled_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createAdministrator(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31464,6 +31543,29 @@ func (ec *executionContext) _Query_courseChatEnabled(ctx context.Context, field 
 	)
 }
 func (ec *executionContext) fieldContext_Query_courseChatEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Query_timetableEnabled(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_timetableEnabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().TimetableEnabled(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_timetableEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
@@ -47812,6 +47914,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "toggleTimetableEnabled":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_toggleTimetableEnabled(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createAdministrator":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createAdministrator(ctx, field)
@@ -50378,6 +50487,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_courseChatEnabled(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "timetableEnabled":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_timetableEnabled(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

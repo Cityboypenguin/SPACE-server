@@ -5,6 +5,9 @@ import "context"
 // SystemSettingCourseChatEnabled は授業チャットの一括停止の設定キー。
 const SystemSettingCourseChatEnabled = "course_chat_enabled"
 
+// SystemSettingTimetableEnabled は時間割の一時停止設定キー。
+const SystemSettingTimetableEnabled = "timetable_enabled"
+
 type SystemSettingRepository interface {
 	Get(ctx context.Context, key string) (string, error)
 	GetBool(ctx context.Context, key string) (bool, error)
